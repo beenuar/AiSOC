@@ -2,7 +2,7 @@
 #
 # Why this exists
 # ---------------
-# GHSA-qcgm-c945-q96h: `PATCH /api/v1/tenants/me/users/{id}` authorised the
+# GHSA-hrc5-w9r3-2g8r: `PATCH /api/v1/tenants/me/users/{id}` authorised the
 # *new* role and never asked whether the caller holds what the target
 # currently holds. The last-administrator guard beside it counted only the
 # wildcard roles, which `never_grantable` refuses to every API caller — so on

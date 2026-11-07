@@ -321,7 +321,7 @@ async def update_user(
         # and this guard could never fire for it: one `tenant_admin` could
         # demote every peer and then itself, leaving nobody able to promote
         # anyone back and no route to recovery short of database credentials
-        # (GHSA-qcgm-c945-q96h).
+        # (GHSA-hrc5-w9r3-2g8r).
         administrative = sorted(role_grants.administrative_roles())
         losing_authority = "role" in updates and updates["role"] not in administrative
         deactivating = updates.get("is_active") is False

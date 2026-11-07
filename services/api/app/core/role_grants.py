@@ -161,7 +161,7 @@ def administrative_roles() -> frozenset[str]:
     API caller, so a tenant created through the product is administered by
     ``tenant_admin`` and the guard could not fire. One administrator could then
     demote every peer and finally itself, leaving a tenant nobody can
-    administer (GHSA-qcgm-c945-q96h).
+    administer (GHSA-hrc5-w9r3-2g8r).
     """
     return frozenset(role for role in ROLE_PERMISSIONS if _covers(permissions_for(role), ADMINISTRATIVE_PERMISSION))
 
@@ -316,7 +316,7 @@ def authorize_role_change(
     ending the only principal able to undo it.
 
     And the symmetric form of the grant rule, which was missing
-    (GHSA-qcgm-c945-q96h): **a caller may not strip authority it does not
+    (GHSA-hrc5-w9r3-2g8r): **a caller may not strip authority it does not
     itself hold.** Conferring was bounded by what the granter holds while
     removing was bounded by nothing, so a database-backed role carrying
     ``users:write`` and little else could re-role a ``tenant_admin`` to

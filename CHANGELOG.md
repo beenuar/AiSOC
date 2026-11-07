@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Re-roling a principal was bounded in one direction only, and a tenant
   could be left with nobody able to administer it.**
-  ([GHSA-qcgm-c945-q96h](https://github.com/beenuar/AiSOC/security/advisories/GHSA-qcgm-c945-q96h),
+  ([GHSA-hrc5-w9r3-2g8r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-hrc5-w9r3-2g8r),
   reported by [pavancharak](https://github.com/pavancharak).)
   `PATCH /api/v1/tenants/me/users/{id}` ran `authorize_role_change`, which
   checked that the caller may confer the *new* role and never that it holds

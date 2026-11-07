@@ -4,8 +4,10 @@ Both subjects here were reported as code review with no proof of concept, so
 every assertion below was first run against the unfixed tree and watched to
 fail for the reason its name gives.
 
-GHSA-qcgm-c945-q96h / GHSA-hrc5-w9r3-2g8r — re-roling is not bounded
---------------------------------------------------------------------
+GHSA-hrc5-w9r3-2g8r — re-roling is not bounded
+----------------------------------------------
+(Reported twice, 28 seconds apart and byte-identical; GHSA-qcgm-c945-q96h is
+the duplicate and was closed naming this one.)
 ``PATCH /api/v1/tenants/me/users/{id}`` authorises the *new* role through
 ``authorize_role_change`` and never asks whether the caller holds what the
 target currently holds. Three consequences, and they are not equally severe:
@@ -357,7 +359,7 @@ async def test_a_service_token_still_reaches_the_reads_it_exists_for(client):  #
 
 
 # ---------------------------------------------------------------------------
-# GHSA-qcgm-c945-q96h — a tenant must not be reducible to zero administrators
+# GHSA-hrc5-w9r3-2g8r — a tenant must not be reducible to zero administrators
 # ---------------------------------------------------------------------------
 
 
