@@ -93,6 +93,11 @@ def test_normalize_finding_critical(findings):
     assert out["severity"] == "critical"
     assert out["external_id"].startswith("finding-")
     assert "Gitleaks" in out["event_type"] or out["event_type"].endswith("Gitleaks")
+    # The engine flattens `raw_event` one level, so a rule clausing on the
+    # project or the scanner needs these at the top level.
+    assert out["project_name"] == "payments-api"
+    assert out["scanner_name"] == "Gitleaks"
+    assert out["created_at"] == "2026-06-28T09:55:00Z"
 
 
 def test_normalize_finding_high_severity(findings):
@@ -150,35 +155,52 @@ async def test_test_connection_bad_token():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_alerts_merges_audit_and_findings(audit_events, findings):
+async def test_fetch_alerts_merges_audit_and_vulnerabilities(audit_events, findings):
+    """Both streams land in one poll.
+
+    This test used to mock ``/groups/acme/security/vulnerability_findings``
+    and answer it 200, which is what let a route GitLab serves 404 for look
+    healthy for the connector's whole life. The vulnerability half is now a
+    GraphQL POST, and the REST route below is deliberately *not* registered:
+    respx fails any request it does not recognise, so a regression that
+    re-adds the dead call fails here rather than passing quietly.
+    """
     c = GitLabConnector(group="acme", token="t")
     respx.get(f"{_BASE}/api/v4/groups/acme/audit_events").respond(200, json=audit_events)
-    respx.get(f"{_BASE}/api/v4/groups/acme/security/vulnerability_findings").respond(200, json=findings)
+    respx.post(f"{_BASE}/api/graphql").respond(
+        200,
+        json={
+            "data": {
+                "group": {
+                    "vulnerabilities": {
+                        "pageInfo": {"hasNextPage": False, "endCursor": None},
+                        "nodes": findings,
+                    }
+                }
+            }
+        },
+    )
 
-    out = await c.fetch_alerts(since_seconds=24 * 60 * 60)
+    # The fixture timestamps are fixed, so the window has to reach them.
+    out = await c.fetch_alerts(since_seconds=10 * 365 * 24 * 60 * 60)
 
-    # 5 audit events + 3 findings (all within a 1-day window relative to the
-    # fixture timestamps which are at "now"-ish from a CI clock perspective).
-    # We can't depend on real "now" here, so just assert both streams are
-    # present, the source tag is uniform, and severities are sane.
-    sources = {e["source"] for e in out}
-    assert sources == {"gitlab"}
+    assert {e["source"] for e in out} == {"gitlab"}
+    assert len([e for e in out if e["external_id"].startswith("finding-")]) == len(findings)
     severities = {e["severity"] for e in out}
     assert "high" in severities  # the audit stream has multiple highs
-    # If the finding window filter didn't drop the criticals, we expect
-    # to see a critical too.
-    assert any(s in {"critical", "high"} for s in severities)
+    assert "critical" in severities  # and the vulnerability stream a critical
 
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_fetch_alerts_handles_403_on_findings(audit_events):
+async def test_fetch_alerts_survives_a_group_without_the_security_dashboard(audit_events):
     c = GitLabConnector(group="acme", token="t")
     respx.get(f"{_BASE}/api/v4/groups/acme/audit_events").respond(200, json=audit_events)
-    respx.get(f"{_BASE}/api/v4/groups/acme/security/vulnerability_findings").respond(403, json={"message": "403 Forbidden"})
+    # Below Ultimate the field itself is absent rather than an error.
+    respx.post(f"{_BASE}/api/graphql").respond(200, json={"data": {"group": {"vulnerabilities": None}}})
 
     out = await c.fetch_alerts(since_seconds=24 * 60 * 60)
-    # We still get the audit events — Ultimate-tier-only findings don't
-    # block the rest of the poll.
+    # We still get the audit events — an Ultimate-only stream being absent
+    # doesn't block the rest of the poll.
     assert len(out) >= 1
     assert all(e["source"] == "gitlab" for e in out)

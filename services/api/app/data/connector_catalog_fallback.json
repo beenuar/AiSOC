@@ -1782,7 +1782,7 @@
     "category": "vcs",
     "connector_id": "gitlab",
     "connector_name": "GitLab",
-    "description": "GitLab group audit events and security vulnerability findings. Requires a Personal Access Token with the 'api' scope; the authenticating user must own the group. Self-managed GitLab works too \u2014 set gitlab_url to your instance base URL.",
+    "description": "GitLab group audit events and security vulnerabilities. Requires a Personal Access Token with the 'api' scope; the authenticating user must own the group. Vulnerabilities are read from the group security dashboard and need Ultimate \u2014 without it you get audit events only. Self-managed GitLab works too \u2014 set gitlab_url to your instance base URL.",
     "docs_url": "/docs/connectors/gitlab",
     "fields": [
       {
@@ -1801,7 +1801,7 @@
         "type": "string"
       },
       {
-        "help_text": "PAT with the 'api' scope. The authenticating user must be a group Owner to read audit events. Security findings require Ultimate.",
+        "help_text": "PAT with the 'api' scope. The authenticating user must be a group Owner to read audit events. Vulnerabilities additionally require Ultimate; on any lower plan the connector still polls audit events and says so in its logs.",
         "label": "Personal Access Token (scope: api)",
         "name": "token",
         "required": true,

@@ -324,16 +324,26 @@ async def test_github_code_scanning_stops_requesting_once_a_page_passes_the_wind
 
 def _gitlab_handler(
     audit_rows: list[dict[str, Any]],
-    findings: list[dict[str, Any]],
     requested: list[httpx.Request],
 ) -> Callable[[httpx.Request], httpx.Response]:
+    """Serve group audit events 100 at a time behind a keyset ``Link`` cursor.
+
+    The vulnerability half of this connector is no longer a ``Link``-header
+    read — it polled a route GitLab does not serve and now goes through
+    ``Group.vulnerabilities`` on GraphQL (issue #1754), covered by
+    ``test_gitlab_vulnerabilities.py``. It is answered here with an empty
+    connection so this file stays about the audit stream.
+    """
+
     def handler(request: httpx.Request) -> httpx.Response:
         requested.append(request)
-        rows = audit_rows if request.url.path.endswith("/audit_events") else findings
+        if request.url.path.endswith("/api/graphql"):
+            empty = {"pageInfo": {"hasNextPage": False, "endCursor": None}, "nodes": []}
+            return httpx.Response(200, json={"data": {"group": {"vulnerabilities": empty}}})
         start = int(_query(request).get("cursor", 0))
-        page = rows[start : start + 100]
+        page = audit_rows[start : start + 100]
         headers = {}
-        if start + 100 < len(rows):
+        if start + 100 < len(audit_rows):
             headers["link"] = f'<{_GITLAB}{request.url.path}?pagination=keyset&cursor={start + 100}>; rel="next"'
         return httpx.Response(200, json=page, headers=headers)
 
@@ -344,7 +354,7 @@ def _gitlab_handler(
 async def test_gitlab_audit_events_open_a_keyset_read_and_follow_it(monkeypatch: pytest.MonkeyPatch) -> None:
     rows = [{"id": i, "created_at": "2099-01-01T00:00:00Z", "details": {"action_name": "user_add"}} for i in range(250)]
     requested: list[httpx.Request] = []
-    _mock_client(monkeypatch, gitlab, _gitlab_handler(rows, [], requested))
+    _mock_client(monkeypatch, gitlab, _gitlab_handler(rows, requested))
 
     out = await GitLabConnector(group="acme", token="tok", gitlab_url=_GITLAB).fetch_alerts()
 
@@ -353,17 +363,3 @@ async def test_gitlab_audit_events_open_a_keyset_read_and_follow_it(monkeypatch:
     opening = _query(audit[0])
     assert (opening["pagination"], opening["order_by"], opening["sort"]) == ("keyset", "id", "desc")
     assert len(out) == 250
-
-
-@pytest.mark.asyncio
-async def test_gitlab_findings_read_the_window_and_no_further(monkeypatch: pytest.MonkeyPatch) -> None:
-    now = datetime.now(UTC)
-    findings = [{"id": i, "created_at": _iso(now), "severity": "high", "name": f"f-{i}"} for i in range(150)]
-    findings += [{"id": i, "created_at": _iso(now - timedelta(days=30)), "severity": "high", "name": f"f-{i}"} for i in range(150, 900)]
-    requested: list[httpx.Request] = []
-    _mock_client(monkeypatch, gitlab, _gitlab_handler([], findings, requested))
-
-    out = await GitLabConnector(group="acme", token="tok", gitlab_url=_GITLAB).fetch_alerts()
-
-    assert sum(request.url.path.endswith("/vulnerability_findings") for request in requested) == 2
-    assert len(out) == 150
