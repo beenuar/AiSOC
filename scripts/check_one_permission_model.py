@@ -228,10 +228,15 @@ def inspect(root: pathlib.Path) -> Report:
     # `ROLE_PERMISSIONS["api_service"]` described the same principal in
     # `core/security.py`. They disagreed in both directions, and whichever
     # check a route used decided which one applied.
-    service_decl = None
+    service_decl: ast.expr | None = None
     for node in deps.body:
-        targets = node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
-        if any(isinstance(t, ast.Name) and t.id == "SERVICE_PRINCIPAL_PERMISSIONS" for t in targets):
+        if isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+        else:
+            continue
+        if "SERVICE_PRINCIPAL_PERMISSIONS" in names:
             service_decl = node.value
     if service_decl is None:
         report.findings.append("SERVICE_PRINCIPAL_PERMISSIONS is no longer declared at module level in deps.py")
