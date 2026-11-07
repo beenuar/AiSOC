@@ -132,11 +132,23 @@ def test_an_incumbent_app_is_restored_after_the_block() -> None:
 
 
 def test_the_namespace_is_handed_back_when_the_block_raises() -> None:
-    """A failing test must not leave the name borrowed for the next one."""
+    """A failing test must not leave the name borrowed for the next one.
+
+    The raise sits in a nested function rather than directly inside a
+    combined ``with pytest.raises(...), service_app_tree(...)``. Both forms
+    work; this one is also readable by static analysis, which does not model
+    ``pytest.raises`` as swallowing the exception and so reports everything
+    after the combined form as unreachable and ``before`` as unused.
+    """
     before = dict(sys.modules)
-    with pytest.raises(RuntimeError, match="deliberate"), service_app_tree("api"):
-        importlib.import_module("app.core.version")
-        raise RuntimeError("deliberate")
+
+    def borrow_then_fail() -> None:
+        with service_app_tree("api"):
+            importlib.import_module("app.core.version")
+            raise RuntimeError("deliberate")
+
+    with pytest.raises(RuntimeError, match="deliberate"):
+        borrow_then_fail()
     _assert_restored(before)
 
 
