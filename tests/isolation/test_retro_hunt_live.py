@@ -39,7 +39,12 @@ behind has previously broken 21 unrelated tests in this repository while
 every test in its own file passed.
 
 Skips when no ClickHouse is reachable, the same way the rest of this directory
-does. It runs for real in ``isolation-live.yml``.
+does — unless ``RETRO_HUNT_LAKE_LIVE_REQUIRED`` is set, in which case the same
+absence is a failure. ``isolation-live.yml`` sets it, because that job is a
+required status check and a step that can skip is a step that can report
+success having proven nothing. Without the variable a local run stays usable,
+which is the same bargain ``test_backtest_lake_live.py`` strikes one step
+later in the same job.
 """
 
 from __future__ import annotations
@@ -52,12 +57,35 @@ import re
 import sys
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 import pytest
 from service_packages import service_app_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+
+#: When set, an unreachable warehouse fails instead of skipping. Same spelling
+#: and same meaning as `BACKTEST_LAKE_LIVE_REQUIRED` in the sibling file,
+#: because the two run as steps of one job and a reader comparing them should
+#: not have to work out whether they differ.
+REQUIRED = os.getenv("RETRO_HUNT_LAKE_LIVE_REQUIRED", "").strip() not in ("", "0", "false")
+
+
+def _unavailable(detail: str) -> NoReturn:
+    """Name what is missing, and decide whether missing is allowed.
+
+    One helper so the skip reason and the required-mode failure can never
+    drift apart or describe different things.
+    """
+    if REQUIRED:
+        pytest.fail(f"RETRO_HUNT_LAKE_LIVE_REQUIRED is set and {detail}")
+    pytest.skip(detail)
+    # Both calls above raise. Written out rather than left implicit because
+    # the type-check runs with `--no-site-packages`, so pytest's own
+    # `NoReturn` annotations are not visible to it and the declared return
+    # type would otherwise be unprovable.
+    raise AssertionError("unreachable")
+
 
 # Two tenants. A has the indicator in its recorded data; B does not. The
 # done-when clause is a statement about the pair, so neither is meaningful
@@ -157,7 +185,14 @@ def _ocsf_event(*, tenant: uuid.UUID, src_ip: str, sha256: str | None = None, ds
 
 @pytest.fixture(scope="module")
 def clickhouse_client() -> Any:
-    driver = pytest.importorskip("clickhouse_driver", reason="clickhouse-driver not installed")
+    # Probed rather than `importorskip`ed: that helper cannot express
+    # "required here, optional there", and the driver being absent is one of
+    # the two ways this step could have gone green without a warehouse.
+    if importlib.util.find_spec("clickhouse_driver") is None:  # pragma: no cover - environment-specific
+        _unavailable("clickhouse-driver is not installed")
+
+    import clickhouse_driver as driver  # noqa: PLC0415 - soft dependency, probed on the line above
+
     # `ISOLATION_*` is what `isolation-live.yml` sets, and is preferred so this
     # file behaves identically to the rest of the directory in CI. The
     # unprefixed names are the fallback so a developer can point it at a local
@@ -175,8 +210,9 @@ def clickhouse_client() -> Any:
             connect_timeout=5,
         )
         client.execute("SELECT 1")
-    except Exception as exc:  # noqa: BLE001 - absence is a skip, not a failure
-        pytest.skip(f"no ClickHouse at {host}:{port} ({type(exc).__name__})")
+    except Exception as exc:  # noqa: BLE001 - absence is a skip unless the job requires the store
+        _unavailable(f"no ClickHouse at {host}:{port} ({type(exc).__name__}: {exc})")
+        raise exc from None  # unreachable: `_unavailable` always raises
     return client
 
 
