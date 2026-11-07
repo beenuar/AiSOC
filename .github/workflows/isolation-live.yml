@@ -7,40 +7,57 @@ name: Tenant Isolation (live containers)
 # returns zero B data. ClickHouse runs the production lake_sql rewriter against
 # a live warehouse. A leak fails the build.
 
-# The filter names *directories*, not the individual modules the suites
-# import, and that is a correction rather than a style choice. It used to
-# name three API files — `backtest.py`, `lake_sql.py`, `db/clickhouse.py` —
-# which is three of the eleven `services/api` files the backtest suite
-# actually loads. `app/core/config.py` is one of the other eight, so the
-# commit that added `from app.core.version import …` to it never triggered
-# this job, merged ungraded, and left twelve tenant-scoping assertions
-# erroring at setup on `main`.
+# Deliberately NOT path-filtered, on either trigger.
 #
-# A suite's import closure is free to grow; an enumeration of it goes stale
-# silently and the only symptom is a job that stops grading. The three
-# directories below contain the whole measured closure of all three steps,
-# so a new sibling is covered without anyone remembering to add it.
+# It was, twice over, and each shape failed in its own direction.
+#
+# The first named three API files — `backtest.py`, `lake_sql.py`,
+# `db/clickhouse.py` — against a suite that loads far more. `app/core/config.py`
+# was not among them, so the commit that added `from app.core.version import …`
+# to it never triggered this job, merged ungraded, and left twelve
+# tenant-scoping assertions erroring at setup on `main`.
+#
+# The second widened the filter to directories covering the measured closure.
+# That was a real correction and it would have caught that regression. It is
+# still the wrong mechanism *for a required check*, which is what this job is
+# now, and the reason is categorical rather than a matter of getting the list
+# right: a workflow filtered by `paths:` creates no check run at all on a
+# pull request that misses the filter, and a required context that never
+# reports blocks the pull request forever. That is why `integration.yml`
+# dropped its workflow-level filter, and the same reasoning applies here.
+#
+# The remaining question was whether to keep the condition and push it into
+# the job. No — for the reason recorded against `Previous minor to this tree,
+# with data present` in `.github/required-checks.json`: a job-level `if:`
+# yields a check run whose conclusion is `skipped`, and GitHub counts a
+# skipped check as passing. The pull request would merge having never run the
+# assertion, which is the same ungraded merge as before wearing a different
+# costume. A job-level condition is worth that cost only when the job is
+# expensive; `integration.yml` carries one because a disaster-recovery
+# rehearsal costs 15 minutes.
+#
+# This job is not expensive. Measured over its 40 most recent successful job
+# executions: min 46s, median 52s, p90 70s, max 137s, none within an order of
+# magnitude of the 20-minute budget below. (Run wall-clock has a median of
+# 758s, but that is the shared runner pool's queue, which no filter here can
+# change and which a skipped job pays too.) So it carries no filter anywhere
+# and no job-level or step-level `if:` on any assertive step — a property a
+# reader can check by looking, rather than a behaviour someone has to go and
+# measure. `scripts/check_required_check_substance.py` checks it both ways.
+#
+# The closure that the directory filter was sized against is still worth
+# recording, because it is what made the enumeration untenable: measured by
+# recording every module the import system resolves across all three steps
+# against live stores, the suites load 13 files under `services/api/app` plus
+# `services/fusion/app/services/lake_writer.py`, and six of those arrive
+# through lazy call-time imports inside `fetch_lake_events` that no static
+# reading of the test files reveals. An import closure is free to grow; an
+# enumeration of one goes stale silently and the only symptom is a job that
+# stops grading.
 on:
   push:
     branches: [main]
-    paths: &isolation_live_paths
-      - "tests/isolation/**"
-      - "services/api/app/__init__.py"
-      - "services/api/app/core/**"
-      - "services/api/app/db/**"
-      - "services/api/app/services/**"
-      - "services/api/app/api/v1/endpoints/detection_rules.py"
-      - "services/api/app/api/v1/endpoints/detection_proposals.py"
-      - "services/api/clickhouse/**"
-      - "services/fusion/app/services/lake_writer.py"
-      - "services/ingest/internal/graph_ws/**"
-      - ".github/workflows/isolation-live.yml"
   pull_request:
-    # Anchored to the push list rather than repeated. The two copies had not
-    # drifted, but a filter that has to be edited in two places is one edit
-    # away from grading pushes and not pull requests, which is the direction
-    # that lets a change merge ungraded.
-    paths: *isolation_live_paths
   workflow_dispatch:
 
 concurrency:
@@ -148,6 +165,15 @@ jobs:
             sleep 1
           done
 
+      # The four assertions this check is named after. `LIVE_STORES_REQUIRED`
+      # turns an unset address or an uninstalled client into a failure, for
+      # the same reason the backtest step below carries its own flag: measured
+      # with this job's exact dependency set and no containers running, this
+      # file reported **4 skipped, exit 0** — every one of the four stores in
+      # the check's own title, green having connected to nothing. The stores
+      # themselves were already covered, because an unreachable one raises
+      # here rather than being caught; the env var and the client import were
+      # the two ways left to pass vacuously.
       - name: Run live isolation replay
         env:
           ISOLATION_REDIS_URL: redis://localhost:6379/0
@@ -157,6 +183,7 @@ jobs:
           ISOLATION_CLICKHOUSE_HOST: localhost
           ISOLATION_CLICKHOUSE_PORT: "9000"
           ISOLATION_KAFKA_BROKERS: localhost:9092
+          LIVE_STORES_REQUIRED: "1"
         run: python -m pytest tests/isolation/test_live_stores.py -v --tb=short
 
       # Gap-closure Phase 8.1's done-when clause, which is a statement about a
@@ -164,10 +191,18 @@ jobs:
       # for the tenant whose recorded lake rows hold it and not for the one
       # whose do not. The rows come from the production lake writer and the
       # query from the production generator, so a wrong column fails here.
+      #
+      # `RETRO_HUNT_LAKE_LIVE_REQUIRED` for the same reason as the other two
+      # steps: with the dependency set installed and no warehouse, this file
+      # reported **2 passed, 17 skipped, exit 0** — the two that passed are
+      # pure-function checks on the writer's column mapping, so every
+      # assertion that needs a pair of tenants in a real warehouse was among
+      # the seventeen.
       - name: Retro-hunt sweep matches recorded lake data
         env:
           ISOLATION_CLICKHOUSE_HOST: localhost
           ISOLATION_CLICKHOUSE_PORT: "9000"
+          RETRO_HUNT_LAKE_LIVE_REQUIRED: "1"
         run: python -m pytest tests/isolation/test_retro_hunt_live.py -v --tb=short
 
       # The backtest's lake fetch, which had no coverage at all: its unit suite
