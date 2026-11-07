@@ -235,6 +235,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a server answers with, so without this a server at a permitted `gitlab_url`
   could point the loop at a metadata address with the vendor credential attached.
 
+- **Slack audit logs read 200 entries per poll and lost the rest.**
+  `SlackAuditConnector.fetch_alerts` sent `limit=200` and ignored
+  `response_metadata.next_cursor`, which Slack documents as the way to reach more
+  results. Entries come back most-recent-first and a poll window opens where the
+  last one closed, so a busy window lost its oldest entries for good, and those
+  are the start of whatever caused the burst. It now reads through
+  `read_token_pages`, whose `token_field` accepts a dotted path for a vendor that
+  nests its token.
+  This is one of the connectors the paging gate's changelog entry recorded as
+  unconfirmed against a vendor document; the cursor contract is
+  [documented](https://docs.slack.dev/apis/web-api/pagination), and
+  `MAX_UNCLASSIFIED` falls from 55 to 54.
+
 - **The reproducible-builds gate failed `services/escalations` for being
   correct, and would have passed an `api` image missing most of itself.**
   Each build leg carried a fixed floor — more than fifty packages for `api`,
