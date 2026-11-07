@@ -29,7 +29,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.deps import SERVICE_PRINCIPAL_PERMISSIONS, CurrentUser, get_current_user
 from app.api.v1.endpoints import community, feedback, marketplace, phishing, stix_taxii
 from app.db.database import get_db
 from fastapi import FastAPI
@@ -267,9 +267,41 @@ class TestEntitledCallersStillWork:
         )
         assert status != 403
 
-    def test_automated_ingestion_may_still_submit_phishing(self) -> None:
-        """`cases:write` is held by `api_service`, which the module needs."""
-        status, _ = _request(phishing, "api_service", "POST", "/api/v1/phishing/submit", {"artifact_kind": "email", "raw_content": "hi"})
+    def test_a_service_token_is_refused_the_phishing_write(self) -> None:
+        """This asserted the opposite, on a premise the real path never had.
+
+        It read "`cases:write` is held by `api_service`, which the module
+        needs", and it held because ``_user`` builds a principal with no
+        resolved set, so the check fell through to ``ROLE_PERMISSIONS`` —
+        where the role row granted ``cases:write`` and
+        ``SERVICE_PRINCIPAL_PERMISSIONS``, what a real service token actually
+        resolves to, never did (GHSA-ghpm-vc6j-hp5r).
+
+        Driven against the resolved set the shipped resolver hands out, the
+        route answered **403** both before and after that row was corrected,
+        and nothing in the tree calls it as a service. So the capability this
+        protected did not exist; the test double was simply more capable than
+        the credential.
+        """
+        app = FastAPI()
+        app.include_router(phishing.router, prefix="/api/v1")
+        app.dependency_overrides[get_db] = _db
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+            user_id=uuid.uuid4(),
+            tenant_id=TENANT,
+            role="api_service",
+            email="service@tenant.example",
+            resolved_permissions=SERVICE_PRINCIPAL_PERMISSIONS,
+        )
+        response = TestClient(app, raise_server_exceptions=False).post(
+            "/api/v1/phishing/submit", json={"artifact_kind": "email", "raw_content": "hi"}
+        )
+
+        assert response.status_code == 403, f"a service token reached a case write: {response.status_code}"
+
+    def test_an_analyst_may_still_submit_phishing(self) -> None:
+        """The positive control the test above used to stand in for."""
+        status, _ = _request(phishing, "soc_analyst", "POST", "/api/v1/phishing/submit", {"artifact_kind": "email", "raw_content": "hi"})
         assert status != 403
 
     def test_a_viewer_may_still_browse_the_community_catalogue(self) -> None:

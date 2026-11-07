@@ -9,6 +9,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Re-roling a principal was bounded in one direction only, and a tenant
+  could be left with nobody able to administer it.**
+  ([GHSA-qcgm-c945-q96h](https://github.com/beenuar/AiSOC/security/advisories/GHSA-qcgm-c945-q96h),
+  reported by [pavancharak](https://github.com/pavancharak).)
+  `PATCH /api/v1/tenants/me/users/{id}` ran `authorize_role_change`, which
+  checked that the caller may confer the *new* role and never that it holds
+  what the target currently holds. Conferring authority was bounded by what
+  the granter has; removing it was bounded by nothing. `authorize_role_change`
+  now applies the same subset test to the role being taken away, so a
+  database-backed role carrying `users:write` and little else can no longer
+  strip a `tenant_admin`.
+
+  **The symmetric check is not what bites on the reported scenario, and
+  saying so matters.** Two `tenant_admin` principals hold identical
+  permissions, so no subset test separates them — administrators managing
+  administrators is what the role is for. What must be unreachable is the end
+  state. The last-administrator guard beside this handler counted only the
+  *wildcard* roles, and `never_grantable` refuses those to every API caller,
+  so on a tenant created through the product the guard protected nothing: one
+  `tenant_admin` could demote every peer and then itself. Reproduced against
+  real Postgres and the real application — both demotions answered **200**,
+  leaving a tenant with no principal holding `users:write` and no route to
+  recovery short of database credentials. The guard now counts
+  `role_grants.administrative_roles()`, derived from `ROLE_PERMISSIONS` so a
+  role that gains `users:write` later is covered without anyone remembering,
+  and the second demotion answers **409** with the row unwritten.
+
+  **That guard had also never once worked.** Its count bound `:t` and `:keep`
+  as bare parameters against `uuid` columns, which asyncpg answers with
+  `operator does not exist: uuid = character varying` — so on every
+  deployment it raised a **500** the moment it fired rather than the 409 it
+  exists to return. Measured on the unmodified tree by deactivating the last
+  wildcard administrator; the statement now casts every bind, the same
+  `CAST(:name AS type)` spelling `check_text_bind_casts.py` enforces
+  elsewhere. Nobody had noticed because the only branch reaching it needed a
+  wildcard role, which no API caller can hold.
+
+  Two more corrections in the same handler. The role change now invalidates
+  the tenant's cached permissions (`bump_version`); without it a principal
+  resolved before the change kept its old set on every replica until the
+  fallback TTL lapsed, which for a revocation is the wrong direction.
+  And the audit row records `from` correctly: the `UPDATE` synchronises the
+  loaded object, so reading `user.role` afterwards returned the *new* value
+  and the trail read `{"from": "viewer", "to": "viewer"}`, telling an auditor
+  nothing about what was removed. It also now carries
+  `effective_permissions_follow_role`, because a tenant running
+  database-backed RBAC resolves permissions from `user_roles` — `users.role`
+  is not what any check reads, the demotion withdraws nothing, and the log
+  was asserting a withdrawal that never happened.
+
+  Sessions are deliberately **not** revoked. An access token carries no
+  permissions: `resolve_jwt_principal` re-reads the user row and re-resolves
+  the set on every request, which a test pins by demoting a principal and
+  replaying a token minted beforehand. The stale channel was the cache, and
+  that is what this invalidates. Letting every `tenant_admin` terminate a
+  peer's sessions would be a new capability, not a fix.
+
+- **Two declarations of one service principal's authority, and the more
+  permissive one governed 27 routes.**
+  ([GHSA-ghpm-vc6j-hp5r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-ghpm-vc6j-hp5r),
+  reported by [pavancharak](https://github.com/pavancharak).)
+  `SERVICE_PRINCIPAL_PERMISSIONS` in `deps.py` was the read-only list a
+  service token resolves to; `ROLE_PERMISSIONS["api_service"]` in
+  `core/security.py` described the same principal and granted `alerts:write`
+  and `cases:write` besides, while withholding four reads the other allowed.
+  `has_permission_db` consulted neither the resolved set nor the scopes — it
+  ran its own `user_roles` join and fell back to the static map — so on the
+  27 in-body `require_permission_db` call sites the second declaration won.
+  The two are now one object: `SERVICE_PRINCIPAL_PERMISSIONS` is derived from
+  the role row, and the rationale lives with the row.
+
+  **The same blindness reopened a defect the resolver had already closed, and
+  that half is reachable today.** `resolve_permissions` distinguishes "this
+  tenant has no RBAC" from "this tenant has RBAC and gave this user none",
+  returning the empty set for the second so that removing every grant does
+  not restore a static role. `has_permission_db` saw the same zero rows and
+  could not tell the two apart. Reproduced against real Postgres: a
+  deprovisioned `tenant_admin` answered **403** at every `require_permission`
+  route and **200** at `GET /api/v1/mcp-servers`. `require_permission_db` now
+  delegates to the one check, so elevation and the tenant's attribute
+  conditions bind there too — both previously applied on one path and not the
+  other, making the same principal allowed or refused depending only on which
+  factory a route happened to use.
+
+  `check_one_permission_model.py` gains the arm that would have caught this:
+  it asserted everything about the dependency factory and nothing about the
+  in-body method, so the second model this gate exists to prevent sat one
+  method over with every check printing OK. Run against the pre-fix tree the
+  new arm exits 1 naming all three defects.
+
+  **Found while unifying the two lists, and left open deliberately:** the
+  shared service token holds `lake:query`, and `lake:query` is what gates the
+  hunt *write* routes, so a real service token reaches `POST /api/v1/hunts`
+  and `POST /api/v1/saved-hunts` — measured at **422**, past authorization,
+  on the unmodified tree. A test asserted the opposite and passed only
+  because it built a principal with no resolved set and so read the narrower
+  of the two lists. Closing it means splitting authoring from running into a
+  write permission, which changes what four human roles hold and needs its
+  own change; the exposure is recorded as a strict `xfail` so whoever does
+  that is told to remove the marker.
+
 - **The ingest graph-update WebSocket ran no authentication and took its
   tenant from the query string.**
   ([GHSA-cvfr-9r25-gqpf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-cvfr-9r25-gqpf),

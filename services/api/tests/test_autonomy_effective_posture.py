@@ -88,6 +88,12 @@ def _db(*, maturity_row: dict[str, Any] | None = None, granted_verbs: tuple[str,
 
     db = AsyncMock()
     db.execute = AsyncMock(side_effect=execute)
+    # The tenant has no RBAC grants, which is what a bootstrap tenant answers
+    # and what sends the resolver to the static role map. Left unstubbed, an
+    # `AsyncMock` returns a truthy `MagicMock` here — so the double claimed
+    # this tenant administers access through `user_roles` and gave the
+    # principal the empty set every deprovisioned user gets.
+    db.scalar = AsyncMock(return_value=0)
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
     return db
