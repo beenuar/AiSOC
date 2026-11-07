@@ -8,6 +8,19 @@
 #   4. Neo4j entity graph (APOC cypher export → gzip → encrypt → upload)
 #   5. Qdrant vector store (per-collection snapshot → encrypt → upload)
 #   6. Redis (RDB → encrypt → upload)
+#   7. Credential key (AISOC_CREDENTIAL_KEY → encrypt → upload)
+#
+# Why (7) is here, and why it is the one component that cannot be unencrypted:
+# the Postgres dump carries `vault:v1:` tokens for every connector credential
+# in the deployment, and AISOC_CREDENTIAL_KEY is the only thing that decrypts
+# them. Without it a complete, verified, restorable backup still brings a
+# deployment back with every connector dead — `CredentialVault` raises
+# "ciphertext failed integrity check (key rotated without re-encrypt?)" and
+# nothing short of re-entering every vendor credential by hand recovers it.
+# Capturing it means the key and the ciphertext it opens now live in the same
+# bucket, so the AES-256-GCM envelope is the only thing separating them, and
+# BACKUP_ENCRYPTION=off refuses to capture it rather than writing it in the
+# clear. See `backup_credential_key` below.
 #
 # Every artifact is encrypted with AES-256-GCM before it leaves the host, and
 # every artifact is recorded in a SHA-256 manifest uploaded alongside it. The
@@ -41,7 +54,7 @@
 #
 # Usage:
 #   ./scripts/backup.sh [--dry-run]
-#     [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|all]
+#     [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|credential_key|all]
 
 set -euo pipefail
 
@@ -108,6 +121,34 @@ require() {
   command -v "$1" &>/dev/null || { echo "Missing required command: $1" >&2; exit 1; }
 }
 
+# Reads one assignment out of a .env file. Last one wins, which is how both a
+# shell sourcing the file and compose's own interpolation resolve a duplicate.
+#
+# python3 rather than sed, and that is not a style preference: BSD sed — which
+# is what `sed` is on macOS — does not accept `\+` or `\?` in a basic regex, so
+# the obvious one-liner matches nothing and returns empty. An empty answer here
+# reads as "no key is configured", which is the benign-looking branch, so a
+# live run overwrote a .env key it should have refused to touch. python3 is
+# already a hard dependency of this script.
+env_value() {
+  python3 - "$1" "$2" <<'PYEOF'
+import sys
+path, key = sys.argv[1:3]
+found = ""
+with open(path, encoding="utf-8", errors="replace") as handle:
+    for raw in handle:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == key:
+            found = value.strip().strip("\"'")
+print(found)
+PYEOF
+}
+
 s3_upload() {
   local src="$1" dest="$2"
   if [[ "$DRY_RUN" == "true" ]]; then
@@ -116,7 +157,7 @@ s3_upload() {
   fi
   local args=()
   [[ -n "${AWS_ENDPOINT_URL:-}" ]] && args+=(--endpoint-url "$AWS_ENDPOINT_URL")
-  aws s3 cp "${args[@]}" "$src" "$dest"
+  aws s3 cp ${args[@]+"${args[@]}"} "$src" "$dest"
 }
 
 s3_delete_old() {
@@ -131,16 +172,16 @@ s3_delete_old() {
   cutoff=$(date -u -d "${BACKUP_RETENTION_DAYS} days ago" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null \
            || date -u -v"-${BACKUP_RETENTION_DAYS}d" +"%Y-%m-%dT%H:%M:%SZ")
   log "Pruning backups older than $cutoff in $prefix"
-  aws s3 ls "${args[@]}" "$prefix/" \
+  aws s3 ls ${args[@]+"${args[@]}"} "$prefix/" \
     | awk '{print $4}' \
     | while read -r key; do
         local ts
-        ts=$(aws s3api head-object "${args[@]}" \
+        ts=$(aws s3api head-object ${args[@]+"${args[@]}"} \
           --bucket "${BACKUP_S3_BUCKET#s3://}" \
           --key "${prefix#"${BACKUP_S3_BUCKET}/"}/${key}" \
           --query 'LastModified' --output text 2>/dev/null || echo "")
         if [[ -n "$ts" ]] && [[ "$ts" < "$cutoff" ]]; then
-          aws s3 rm "${args[@]}" "${prefix}/${key}"
+          aws s3 rm ${args[@]+"${args[@]}"} "${prefix}/${key}"
           log "Deleted old backup: $key"
         fi
       done
@@ -545,14 +586,133 @@ backup_redis() {
   log "Redis backup complete"
 }
 
+# ── 7. Credential key ─────────────────────────────────────────────────────────
+# The key that decrypts every `vault:v1:` token in the Postgres dump. Without
+# it the dump restores a deployment whose connectors all raise
+# CredentialVaultError on their first poll, and the only recovery is to
+# re-enter every vendor credential by hand.
+#
+# Threat model, stated because capturing a key is not a neutral act:
+#
+#   * the key and the ciphertext it opens are now in one bucket, so the
+#     AES-256-GCM envelope is the single control between a bucket reader and
+#     every connector credential in the deployment. BACKUP_ENCRYPTION=off is
+#     therefore refused here and only here — "it is encrypted at rest by the
+#     provider" is not the same claim as "it is encrypted before it leaves
+#     the host", and the second is the one this script makes;
+#   * it is uploaded under its own `credential-key/` prefix, so a bucket
+#     policy can grant read on the dumps without granting read on the key.
+#     That is defence in depth rather than a control on its own — a reader
+#     with blanket access still has both — but it makes the separation
+#     expressible, which it was not when the key was simply absent;
+#   * the plaintext exists on local disk for the moment between writing and
+#     sealing, so it is written under `umask 077` into the backup directory
+#     the EXIT trap removes. `rm` is not a secure erase and this does not
+#     claim to be one;
+#   * the value is never logged. Only its presence and length class are.
+#
+# Rotation is captured too: AISOC_CREDENTIAL_KEY_ROTATION_FROM is what
+# decrypts tokens written before the last rotation, and a restore that has
+# only the current key cannot read them.
+backup_credential_key() {
+  log "--- Credential key backup ---"
+
+  # Refuses rather than downgrading. This is the only component where
+  # unencrypted upload turns the backup itself into the vulnerability.
+  #
+  # A dry run reports it and does not fail, for the same reason unreachable()
+  # exists: a dry run is a configuration check, and nothing was going to be
+  # uploaded either way, so exiting 1 would make --dry-run useless for the
+  # thing it is for. A live run is a genuine failure — the operator asked for
+  # a backup and one component of it cannot be taken safely.
+  if [[ "$BACKUP_ENCRYPTION" == "off" ]]; then
+    local verdict="[ERROR]"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      verdict="[skip]"
+      SKIPS=$((SKIPS + 1))
+      echo "[skip] BACKUP_ENCRYPTION=off: the credential vault key would NOT be captured." >&2
+    else
+      fail "BACKUP_ENCRYPTION=off: refusing to upload the credential vault key in plaintext."
+    fi
+    echo "        The Postgres dump beside it holds the vault:v1: tokens this key opens," >&2
+    echo "        so writing both unencrypted makes the bucket's read ACL the only thing" >&2
+    echo "        protecting every connector credential in the deployment." >&2
+    echo "        Set BACKUP_ENCRYPTION_KEY_FILE and retry, or accept that a restore" >&2
+    echo "        will not be able to decrypt any stored credential." >&2
+    [[ "$verdict" == "[skip]" ]] && log "  (dry run: reported, not failed)"
+    return
+  fi
+
+  # The deployment's own .env is the fallback: the key lives there on a
+  # compose install, and a cron-driven backup does not inherit the operator's
+  # shell. Read with the same last-assignment-wins rule compose uses.
+  local repo_root key rotation_from
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  key="${AISOC_CREDENTIAL_KEY:-}"
+  rotation_from="${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}"
+  if [[ -f "${repo_root}/.env" ]]; then
+    [[ -z "$key" ]] && key=$(env_value "${repo_root}/.env" AISOC_CREDENTIAL_KEY)
+    [[ -z "$rotation_from" ]] && rotation_from=$(env_value "${repo_root}/.env" AISOC_CREDENTIAL_KEY_ROTATION_FROM)
+  fi
+
+  if [[ -z "$key" ]]; then
+    # Not a failure: a deployment with no connectors configured has no key
+    # and nothing to lose. Said out loud, because a silent skip here is
+    # indistinguishable from the defect this component exists to fix.
+    log "  AISOC_CREDENTIAL_KEY is not set in the environment or ${repo_root}/.env."
+    log "  Nothing to capture. If this deployment HAS stored connector credentials,"
+    log "  stop: the restore will not be able to decrypt any of them."
+    return
+  fi
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would capture the credential key (${#key} chars) and 1 rotation key: $([[ -n "$rotation_from" ]] && echo yes || echo no)"
+    return
+  fi
+
+  local outfile="${BACKUP_DIR}/credential-key-${TIMESTAMP}.json"
+  # 077 for the window between writing and sealing. seal_artifact removes the
+  # plaintext once the .enc exists.
+  (
+    umask 077
+    AISOC_BACKUP_KEY="$key" AISOC_BACKUP_ROTATION="$rotation_from" \
+      python3 - "$outfile" "$TIMESTAMP" <<'PYEOF'
+import json, os, pathlib, sys
+path, ts = sys.argv[1:3]
+doc = {
+    "format_version": 1,
+    "timestamp": ts,
+    "AISOC_CREDENTIAL_KEY": os.environ["AISOC_BACKUP_KEY"],
+}
+rotation = os.environ.get("AISOC_BACKUP_ROTATION") or ""
+if rotation:
+    doc["AISOC_CREDENTIAL_KEY_ROTATION_FROM"] = rotation
+pathlib.Path(path).write_text(json.dumps(doc, indent=2, sort_keys=True) + "\n")
+PYEOF
+  )
+  chmod 600 "$outfile"
+
+  if [[ ! -s "$outfile" ]]; then
+    fail "Credential key capture produced an empty file; refusing to upload it."
+    rm -f "$outfile"
+    return
+  fi
+
+  log "  Captured the vault key (${#key} chars)$([[ -n "$rotation_from" ]] && echo " and 1 rotation key")."
+  upload_sealed "$outfile" "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/credential-key"
+  s3_delete_old "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/credential-key"
+  log "Credential key backup complete"
+}
+
 # ── run selected components ───────────────────────────────────────────────────
 case "$COMPONENT" in
-  postgres)   backup_postgres ;;
-  clickhouse) backup_clickhouse ;;
-  plugins)    backup_plugins ;;
-  neo4j)      backup_neo4j ;;
-  qdrant)     backup_qdrant ;;
-  redis)      backup_redis ;;
+  postgres)       backup_postgres ;;
+  clickhouse)     backup_clickhouse ;;
+  plugins)        backup_plugins ;;
+  neo4j)          backup_neo4j ;;
+  qdrant)         backup_qdrant ;;
+  redis)          backup_redis ;;
+  credential_key) backup_credential_key ;;
   all)
     backup_postgres
     backup_clickhouse
@@ -560,10 +720,11 @@ case "$COMPONENT" in
     backup_neo4j
     backup_qdrant
     backup_redis
+    backup_credential_key
     ;;
   *)
     echo "Unknown component: $COMPONENT" >&2
-    echo "  choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|all" >&2
+    echo "  choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|credential_key|all" >&2
     exit 1
     ;;
 esac

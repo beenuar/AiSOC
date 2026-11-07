@@ -10,6 +10,12 @@ name: Version source
 # version in the published OpenAPI document and the one the root route serves
 # — and it read `0.1.0` on a tree that was several majors past that.
 #
+# That defect is fixed (#1732 made `APP_VERSION` derive from
+# `app/core/version.py`), so this gate is green on arrival and its job is to
+# keep it that way. Green-on-arrival is the normal state for a prevention
+# gate, not a sign it is measuring nothing: `--self-test` runs first, and
+# reverting the one line it guards makes it exit 1.
+#
 # Deliberately not path-filtered. The defect this catches is a literal going
 # stale while nothing edits it, so a trigger that fires only when one of the
 # surfaces changes would be switched off at exactly the moment it is needed:

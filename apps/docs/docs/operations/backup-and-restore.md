@@ -6,10 +6,19 @@ sidebar_label: Backup and restore
 
 # Backup and restore
 
-AiSOC keeps state in six places, and they do not fail the same way or
-recover the same way. This page says what each backup contains, how to
-put it back, and — for the two cases where the honest answer is "do
-not" — why.
+AiSOC keeps state in six places, plus the one secret that makes a
+restore of it mean anything. They do not fail the same way or recover
+the same way. This page says what each backup contains, how to put it
+back, and — for the two cases where the honest answer is "do not" — why.
+
+:::tip Upgrading? Start here
+The API migration runner is **forward-only**. There is no downgrade and
+no `alembic downgrade`, so a backup is the only thing between an
+operator and an unrecoverable schema. `make upgrade` takes a local
+Postgres dump for you and refuses to continue if it comes back empty;
+this page is the off-host copy and the other six components.
+See [Upgrades](./upgrades.md).
+:::
 
 :::info What changed
 `backup.sh` has backed up five stores for some time. Until recently
@@ -38,17 +47,51 @@ direction this drifts — the backup is the part that feels urgent.
 | **Qdrant** | IOC and actor embeddings | Per-collection snapshot | Similarity search until re-embedded |
 | **Redis** | Cache, OIDC sign-in state, rate-limit counters | RDB | Nothing durable |
 | **Plugins** | Installed marketplace content | Tarball | Reinstallable from the marketplace |
+| **Credential key** | `AISOC_CREDENTIAL_KEY` (and its rotation predecessor) | JSON | Every connector credential in the deployment |
 
 Every artefact is encrypted with AES-256-GCM through
 `scripts/backup_crypt.py` and recorded in a SHA-256 manifest. `openssl
 enc` is not used because it **refuses AEAD ciphers** — a detail worth
 knowing if you are reimplementing this.
 
+### The credential key, and why it is the one component that cannot be unencrypted
+
+The Postgres dump carries a `vault:v1:` token for every connector
+credential, and `AISOC_CREDENTIAL_KEY` is the only thing that opens
+them. Without it a complete, verified, restorable backup brings the
+deployment back with **every connector dead**: `CredentialVault` raises
+`ciphertext failed integrity check (key rotated without re-encrypt?)`
+and nothing short of re-entering every vendor credential by hand
+recovers it. The restore reports success throughout.
+
+Capturing the key means the key and the ciphertext it opens now live in
+one bucket, so the AES-256-GCM envelope is the only thing separating
+them. `BACKUP_ENCRYPTION=off` is therefore **refused for this component
+and only this one** — a live run fails rather than writing the key in
+the clear; a `--dry-run` reports it as a skip, because a dry run is a
+configuration check and nothing was going to be uploaded either way. It
+is uploaded under its own `credential-key/` prefix so a bucket policy
+*can* grant read on the dumps without granting read on the key. That is
+defence in depth rather than a control on its own: a reader with
+blanket access still has both.
+
+`AISOC_CREDENTIAL_KEY_ROTATION_FROM` is captured too. It is what
+decrypts tokens written before the last rotation, and a restore holding
+only the current key cannot read them.
+
+On the way back in, `restore.sh` writes the key into `.env` when none is
+set, **no-ops** when the one already there is identical, and **refuses**
+when a *different* key is present — overwriting that would orphan
+whatever the running deployment had been encrypting with.
+
+A deployment with no connectors configured has no key and nothing to
+lose; the backup says so rather than skipping silently.
+
 ## Restoring
 
 ```bash
 ./scripts/restore.sh --timestamp 20260503T120000Z \
-    --component postgres|clickhouse|plugins|neo4j|qdrant|redis|all
+    --component postgres|clickhouse|plugins|neo4j|qdrant|redis|credential_key|all
 ```
 
 `--dry-run` fetches and verifies every artefact without writing, and
@@ -116,3 +159,11 @@ against real containers in CI.
 - **A measured RPO.** The window depends on your schedule and your
   object store, and publishing a figure from one laptop's timings
   would not describe your deployment.
+- **Grafana, Prometheus and Alertmanager state.** `backup.sh` does not
+  touch them. They now have named volumes so a container recreate no
+  longer discards them, but there is no artefact to restore from if the
+  volume itself is lost. Keep dashboards as files under
+  `infra/docker/grafana/dashboards/` — provisioning reloads them, and a
+  file is backed up by whatever backs up your checkout. [Upgrades
+  → Recovering lost Grafana dashboards](./upgrades.md#recovering-lost-grafana-dashboards)
+  covers the case where a recreate already took them.

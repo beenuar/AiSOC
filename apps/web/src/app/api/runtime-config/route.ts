@@ -36,7 +36,15 @@ export function GET() {
       // 'build'   — NEXT_PUBLIC_DEMO_MODE, fixed when the image was built.
       // 'default' — neither was set.
       demoModeSource: demo.source,
-      consoleVersion: process.env.NEXT_PUBLIC_APP_VERSION ?? 'unknown',
+      // Trimmed, and `||` rather than `??`. next.config.js substitutes this
+      // at build time, so by the time this runs the variable is always
+      // *present* and the only question is whether it has content — which is
+      // what `??` gets wrong, publishing "" as though it were an answer. It
+      // used to substitute "0.0.0", which made this fallback dead code and
+      // put a version-shaped placeholder on two console surfaces. The trim
+      // is not theoretical: a VERSION file read into a build arg can arrive
+      // as whitespace, and " " is truthy.
+      consoleVersion: process.env.NEXT_PUBLIC_APP_VERSION?.trim() || 'unknown',
     },
     { headers: { 'cache-control': 'no-store' } },
   );

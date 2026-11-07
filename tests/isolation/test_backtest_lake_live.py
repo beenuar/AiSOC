@@ -54,58 +54,47 @@ trivially, which would make this file worse than nothing. Three guards:
   skipping. Without it the file skips with the host named, the way the rest of
   this directory does, so a local run stays usable.
 
-Every module is loaded by path and unregistered afterwards, because
-``services/api``, ``services/agents`` and ``services/fusion`` all package
-their code as a top-level ``app`` and only one of them can own that name in
-one interpreter. Putting ``services/api`` on ``sys.path`` was tried first and
-it works for this file while breaking ``test_route_auth_default_deny.py`` ten
-tests later with ``No module named 'app.api.contextual'`` — the API's ``app``
-stays cached in ``sys.modules`` and the agents service never gets to load its
-own. Each file in ``isolation-live.yml`` is its own pytest invocation, so CI
-would not have shown it; ``pytest tests/isolation`` would.
+The API service's ``app`` tree is borrowed through ``service_packages``
+rather than imported, because ``services/api``, ``services/agents`` and
+``services/fusion`` all package their code as a top-level ``app`` and only
+one of them can own that name in one interpreter. Putting ``services/api``
+on ``sys.path`` was tried first and it works for this file while breaking
+``test_route_auth_default_deny.py`` ten tests later with ``No module named
+'app.api.contextual'`` — the API's ``app`` stays cached in ``sys.modules``
+and the agents service never gets to load its own. Each file in
+``isolation-live.yml`` is its own pytest invocation, so CI would not have
+shown it; ``pytest tests/isolation`` would.
 """
 
 from __future__ import annotations
 
 import ast
 import asyncio
+import importlib
 import importlib.util
 import os
 import re
 import sys
-import types
 import uuid
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, NoReturn
 
 import pytest
+from service_packages import service_app_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-API_ROOT = REPO_ROOT / "services" / "api"
 
-#: Parent packages the dotted names below need to resolve through. Created as
-#: empty modules only when the name is free, and handed back afterwards.
-API_PACKAGES: tuple[str, ...] = ("app", "app.core", "app.db", "app.services")
-
-#: Every module the call under test reaches, in dependency order, under the
-#: real dotted name so the ``from app...`` statements inside them resolve.
-#: ``fetch_lake_events`` imports two of these *inside* the function body, so
-#: they have to stay registered while the call runs, not just while it loads.
-API_MODULES: tuple[tuple[str, str], ...] = (
-    ("app.core.config", "app/core/config.py"),
-    # `rule_engine` grew a top-level `from app.services.lucene_eval import …`
-    # after this list was written. `app.services` here is a synthetic
-    # namespace holding only what is registered below, so an unlisted sibling
-    # does not resolve — the error reads `'app.services' is not a package`,
-    # which points at the namespace rather than at the missing entry. Anything
-    # a listed module imports at module scope has to be listed above it.
-    ("app.services.lucene_eval", "app/services/lucene_eval.py"),
-    ("app.services.rule_engine", "app/services/rule_engine.py"),
-    ("app.services.lake_sql", "app/services/lake_sql.py"),
-    ("app.db.clickhouse", "app/db/clickhouse.py"),
-    ("app.services.backtest", "app/services/backtest.py"),
-)
+#: The one module this file asks for by name. Everything it reaches —
+#: ``rule_engine``, ``lucene_eval``, ``lake_sql``, and the two
+#: ``fetch_lake_events`` imports inside its own body — is resolved from disk
+#: by the import system, because ``service_app_tree`` registers ``app`` as a
+#: real package rather than as a namespace holding a hand-written list.
+#:
+#: That list used to live here, and a module added to ``app/core`` with no
+#: connection to this test broke every assertion below at fixture setup. The
+#: entry point is named; its dependency graph is not this file's to track.
+ENTRY_POINT = "app.services.backtest"
 
 # `ISOLATION_*` is what `isolation-live.yml` sets, so this file behaves like
 # the rest of the directory in CI; the unprefixed names are the local
@@ -350,9 +339,11 @@ def api_modules(clickhouse_client: Any) -> Any:
 
     Module-scoped because the two lazy imports inside ``fetch_lake_events``
     resolve at call time, so the registration has to outlive module import and
-    still be gone before the next file runs. Names that were already taken are
-    saved and restored rather than overwritten, so this works whichever
-    service loaded ``app`` first.
+    still be gone before the next file runs. ``service_app_tree`` saves and
+    restores whatever held ``app`` first, so this works whichever service
+    loaded it, and restores by snapshot rather than by a list of names —
+    which it has to, now that the import system registers submodules nobody
+    enumerated.
 
     It takes ``clickhouse_client`` so the skip is decided before any of this
     is imported. ``isolation.yml`` runs this whole directory offline with only
@@ -362,34 +353,19 @@ def api_modules(clickhouse_client: Any) -> Any:
     tests — a live-store test has to be absent-tolerant in the same job the
     rest of the directory is.
     """
-    installed: list[str] = []
-    saved = {name: sys.modules[name] for name, _rel in API_MODULES if name in sys.modules}
-    try:
-        for package in API_PACKAGES:
-            if package not in sys.modules:
-                sys.modules[package] = types.ModuleType(package)
-                installed.append(package)
-        for dotted, rel in API_MODULES:
-            spec = importlib.util.spec_from_file_location(dotted, API_ROOT / rel)
-            if spec is None or spec.loader is None:  # pragma: no cover - paths are fixed
-                raise RuntimeError(f"cannot load {rel}")
-            module = importlib.util.module_from_spec(spec)
-            # Registered before exec so the from-imports inside each module
-            # find their siblings, and so `@dataclass` can resolve annotations.
-            sys.modules[dotted] = module
-            installed.append(dotted)
-            try:
-                spec.loader.exec_module(module)
-            except ImportError as exc:
-                # A dependency of the service, not of the test. Named either
-                # way: skipped where the warehouse is optional, failed where
-                # the job declares it is not.
-                _unavailable(f"{rel} needs a dependency this environment lacks ({exc})")
-        yield sys.modules["app.services.backtest"]
-    finally:
-        for name in reversed(installed):
-            sys.modules.pop(name, None)
-        sys.modules.update(saved)
+    with service_app_tree("api") as package:
+        assert package.__path__, "the borrowed tree must be a package or nothing under it resolves"
+        try:
+            entry = importlib.import_module(ENTRY_POINT)
+        except ImportError as exc:
+            # A dependency of the service, not of the test. Named either
+            # way: skipped where the warehouse is optional, failed where
+            # the job declares it is not. Caught around the import alone:
+            # wrapping the `yield` too would report a test's own ImportError
+            # as a missing service dependency, which is a diagnosis that
+            # sends the reader to the wrong file.
+            _unavailable(f"{ENTRY_POINT} needs a dependency this environment lacks ({exc})")
+        yield entry
 
 
 def _backtest() -> Any:

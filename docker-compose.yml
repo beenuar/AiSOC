@@ -86,6 +86,29 @@ volumes:
   # ~2 GB of model weights. Named so `make down` keeps them and only
   # `make clean` re-downloads.
   ollama_data:
+  # Plugin state lived in the API container's *writable layer*, so every
+  # `docker compose pull && up -d` deleted it. `AISOC_PLUGINS_DIR` defaults to
+  # /opt/aisoc/plugins and plugin_manager.py extracts OCI plugin layers there;
+  # /opt/aisoc/plugin-keys holds the Ed25519 public keys an operator installs
+  # to make signed third-party plugins loadable at all, so losing it turns
+  # every signed plugin into a refusal.
+  #
+  # Two leaf volumes rather than one on the parent /opt/aisoc. A named volume
+  # is seeded from the image only while it is empty, so mounting the parent
+  # would mean a future image that ships something under /opt/aisoc never
+  # delivers it to an existing deployment.
+  aisoc_plugins:
+  aisoc_plugin_keys:
+  # Monitoring state. These three sit behind `profiles: monitoring`, so they
+  # are not the default surface — but an operator who turned the profile on
+  # got no warning that a recreate discards the lot, and Alertmanager's
+  # `--storage.path=/alertmanager` reads like persistence to anyone checking.
+  # Grafana's is the one that hurts: dashboards, users, annotations and
+  # UI-created alert rules are operator work with no other copy, and the
+  # service comes back up with its provisioned dashboards looking fine.
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
 
 services:
 
@@ -560,6 +583,12 @@ services:
       timeout: 5s
       retries: 30
       start_period: 60s
+    volumes:
+      # Installed plugins and the keys that make signed ones loadable. Both
+      # paths were in the container's writable layer, so every image pull
+      # deleted them — see the `aisoc_plugins` note in the volumes block.
+      - aisoc_plugins:/opt/aisoc/plugins
+      - aisoc_plugin_keys:/opt/aisoc/plugin-keys
     networks:
       - aisoc
     restart: unless-stopped
@@ -1424,12 +1453,39 @@ services:
     restart: unless-stopped
 
   honeytokens:
-    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
-    # `aisoc serve` skips it by default. Opt in with `--profile extras`.
-    # `pull_policy: build` used to be the only thing that worked here,
-    # because the image this names had never been published; it is in the
-    # publish matrix now, so `--profile extras` pulls like every other
-    # service instead of spending ten minutes building one.
+    # Opt in with `--profile extras`, and deliberately so. The note that used
+    # to sit here justified the profile with "image isn't published to GHCR
+    # yet" and then contradicted itself three lines later; the image is
+    # published, multi-arch (linux/amd64 and linux/arm64) at `latest` and at
+    # every version tag, so `--profile extras` pulls like every other service
+    # rather than spending ten minutes building one.
+    #
+    # GHSA-9q6p-m345-h3hj (F57) named this profile alongside an alerting
+    # defect. The alerting half is fixed and is where the security content
+    # was: a trip now defaults into the ingest spine and becomes an alert
+    # with no configuration at all (app/services/delivery.py), so an operator
+    # who turns this on gets the signal. What remains is a placement
+    # decision, taken on the grounds the ADR-0006 / ADR-0007 series uses:
+    #
+    #   * It is a leaf. Nothing `depends_on` it and no other service calls
+    #     it, unlike `connectors` and `actions`, which ADR-0007 moved into
+    #     CORE because the agent's tool surface could not reach them there.
+    #   * Nothing seeds a token, in this file or in the service, so on a
+    #     fresh CORE install it would be a capability pointed at nothing —
+    #     the failure ADR-0007 set out to avoid — until an operator plants
+    #     one, by which point they are configuring deliberately anyway.
+    #   * It is not hidden. `/honeytokens` renders the CapabilityUnavailable
+    #     panel naming this profile and the command, so an analyst reads an
+    #     absent capability rather than a clean zero.
+    #   * infra/helm ships the same posture (`honeytokens.enabled: false`),
+    #     so both deployment paths agree on the default.
+    #
+    # Cost is deliberately not the argument: the image is 86 MB on disk,
+    # which would no more move the 8 GB CORE figure than the 124.8 MiB
+    # ADR-0007 measured did. Moving it in would change all three published
+    # counts — core 16 to 17, full 22 to 23 and prod:full 21 to 22, because
+    # `extras` sits outside `full` as well — and every figure registered in
+    # scripts/check_profile_service_counts.py.
     profiles: ["extras"]
     build:
       context: ./services/honeytokens
@@ -1791,6 +1847,9 @@ services:
       # new rule file under `infra/docker/alerts/` is picked up on
       # next `docker compose restart prometheus` (or a SIGHUP).
       - ./infra/docker/alerts:/etc/prometheus/alerts:ro
+      # All metrics history. Without this a recreate starts an empty TSDB,
+      # so every before-and-after an operator was keeping is gone.
+      - prometheus_data:/prometheus
     # Phase 2.4 — Prometheus needs to reach the Alertmanager service
     # before it can forward alerts. The `depends_on` keeps `docker
     # compose up monitoring` healthy on cold boot — without it,
@@ -1820,6 +1879,11 @@ services:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:9094:9093"
     volumes:
       - ./infra/docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Silences. `--storage.path=/alertmanager` below names the directory
+      # and nothing kept it, so a deliberately muted alert came back firing
+      # after a recreate — most likely mid-incident, which is when silences
+      # get set.
+      - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
@@ -1899,6 +1963,12 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - ./infra/docker/grafana:/etc/grafana/provisioning:ro
+      # Dashboards built in the UI, users, annotations and UI-created alert
+      # rules. The provisioning mount above is read-only config that comes
+      # back from the image; this is the operator's own work, which does not.
+      # The loss was silent: Grafana returns with its provisioned dashboards
+      # intact and nothing saying the rest ever existed.
+      - grafana_data:/var/lib/grafana
     networks:
       - aisoc
     profiles:

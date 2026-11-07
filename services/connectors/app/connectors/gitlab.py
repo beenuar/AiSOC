@@ -33,6 +33,7 @@ from urllib.parse import quote
 import httpx
 import structlog
 
+from app.connectors._paging import created_before, read_link_header_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 
 logger = structlog.get_logger()
@@ -190,7 +191,7 @@ class GitLabConnector(BaseConnector):
         # on the endpoint, so we don't need post-hoc filtering for that
         # stream. Vulnerability findings don't expose a ``since`` param,
         # so we sort by ``created_at desc`` and stop client-side once we
-        # pass the window.
+        # pass the window. Both streams page through the ``Link`` header.
         start = datetime.now(UTC) - timedelta(seconds=since_seconds)
         start_iso = start.strftime("%Y-%m-%dT%H:%M:%SZ")
         start_ms = int(start.timestamp() * 1000)
@@ -204,10 +205,15 @@ class GitLabConnector(BaseConnector):
                 params={
                     "created_after": start_iso,
                     "per_page": _PER_PAGE,
+                    # Offset pagination on this endpoint is deprecated. These
+                    # are the only ordering values it allows under keyset.
+                    "pagination": "keyset",
+                    "order_by": "id",
+                    "sort": "desc",
                 },
             )
             if audit_resp.status_code == 200:
-                for entry in audit_resp.json() or []:
+                for entry in await read_link_header_pages(client, audit_resp, headers=self._headers(), feed="gitlab.audit_events"):
                     entry["_aisoc_stream"] = "audit_events"
                     events.append(entry)
             elif audit_resp.status_code in (403, 404):
@@ -237,17 +243,18 @@ class GitLabConnector(BaseConnector):
                 },
             )
             if vf_resp.status_code == 200:
-                for finding in vf_resp.json() or []:
-                    created_at = finding.get("created_at")
-                    if created_at:
-                        try:
-                            created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                            if created_dt.timestamp() * 1000 < start_ms:
-                                # Sorted desc — first too-old result means
-                                # all remaining ones are also too old.
-                                break
-                        except ValueError:
-                            pass  # unparseable timestamp; keep event
+                # Sorted desc — first too-old result means all remaining ones
+                # are also too old, so stop requesting at the page showing one.
+                findings = await read_link_header_pages(
+                    client,
+                    vf_resp,
+                    headers=self._headers(),
+                    feed="gitlab.vulnerability_findings",
+                    stop_when=lambda page: created_before(page[-1], start_ms),
+                )
+                for finding in findings:
+                    if created_before(finding, start_ms):
+                        break
                     finding["_aisoc_stream"] = "vulnerability_finding"
                     events.append(finding)
             elif vf_resp.status_code in (403, 404):

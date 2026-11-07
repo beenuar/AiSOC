@@ -178,6 +178,76 @@ def inspect(root: pathlib.Path) -> Report:
                 "`privilege_grants` row confers nothing and `expires_at` governs nothing"
             )
 
+    # 7. the in-body check is the same check
+    #
+    # The gate's own blind spot until GHSA-ghpm-vc6j-hp5r. Everything above
+    # asks about `require_permission`, the factory 275 routes bind as a
+    # dependency — and said nothing about `require_permission_db`, which 27
+    # routes `await` in their body. That one kept its own `user_roles` join,
+    # read neither the resolved set nor elevation nor conditions, and fell
+    # back to the static map when the join came back empty. So the second
+    # model this file exists to prevent was still there, one method over,
+    # with every check printing OK.
+    db_check = None
+    db_bool = None
+    for node in ast.walk(deps):
+        if isinstance(node, ast.ClassDef) and node.name == "CurrentUser":
+            db_check = _function(node, "require_permission_db")
+            db_bool = _function(node, "has_permission_db")
+    if db_check is None:
+        report.findings.append("CurrentUser.require_permission_db is gone")
+    else:
+        calls = _calls(db_check)
+        if "require_permission" not in calls:
+            report.findings.append(
+                "CurrentUser.require_permission_db does not delegate to require_permission, so the "
+                "27 in-body call sites are back on a second permission model"
+            )
+        if "has_permission" in calls:
+            report.findings.append(
+                "CurrentUser.require_permission_db reads the static map directly; it must ask the "
+                "one check, which falls back to the map itself when nothing resolved a set"
+            )
+        if "select" in calls:
+            report.findings.append(
+                "CurrentUser.require_permission_db builds its own RBAC query. `resolve_permissions` "
+                "is the resolver, and it is the only one that can tell a bootstrap tenant from a "
+                "deprovisioned user"
+            )
+    if db_bool is None:
+        report.findings.append("CurrentUser.has_permission_db is gone")
+    elif "require_permission_db" not in _calls(db_bool):
+        report.findings.append(
+            "CurrentUser.has_permission_db no longer answers from require_permission_db, so the "
+            "boolean and raising forms can reach different verdicts"
+        )
+
+    # 8. the service principal is declared once
+    #
+    # `SERVICE_PRINCIPAL_PERMISSIONS` was a literal set here while
+    # `ROLE_PERMISSIONS["api_service"]` described the same principal in
+    # `core/security.py`. They disagreed in both directions, and whichever
+    # check a route used decided which one applied.
+    service_decl: ast.expr | None = None
+    for node in deps.body:
+        if isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names = [node.target.id]
+        else:
+            continue
+        if "SERVICE_PRINCIPAL_PERMISSIONS" in names:
+            service_decl = node.value
+    if service_decl is None:
+        report.findings.append("SERVICE_PRINCIPAL_PERMISSIONS is no longer declared at module level in deps.py")
+    elif not any(
+        isinstance(n, ast.Subscript) and isinstance(n.value, ast.Name) and n.value.id == "ROLE_PERMISSIONS" for n in ast.walk(service_decl)
+    ):
+        report.findings.append(
+            "SERVICE_PRINCIPAL_PERMISSIONS is written out rather than derived from "
+            'ROLE_PERMISSIONS["api_service"], so one principal has two declarations of its authority again'
+        )
+
     elevated = None
     for node in ast.walk(deps):
         if isinstance(node, ast.ClassDef) and node.name == "CurrentUser":
@@ -378,6 +448,44 @@ def self_test() -> int:
     probe(
         "detects a second condition evaluator replacing the shared one",
         deps=deps_source.replace("verdict = narrow_by_conditions(permission, applicable, self.attributes)", "verdict = _local_evaluator()"),
+    )
+
+    # GHSA-ghpm-vc6j-hp5r. Each probe below is the shape the second model
+    # actually had, not a hypothetical: the exact code that shipped.
+    delegation = """        await self._ensure_resolved(db)
+        self.require_permission(permission)"""
+    assert delegation in deps_source, (
+        "require_permission_db no longer delegates the way this probe assumes, so the two cases "
+        "below would modify nothing and report PASS for a tree they never touched"
+    )
+    probe(
+        "detects the in-body check going back to its own RBAC join",
+        deps=deps_source.replace(
+            delegation,
+            """        result = await db.execute(select(1))
+        if result.all():
+            return
+        if not has_permission(self.role, permission):
+            raise HTTPException(status_code=403, detail=permission)""",
+        ),
+    )
+    probe(
+        "detects the in-body check reading the static map instead of the one check",
+        deps=deps_source.replace(
+            delegation,
+            """        if not has_permission(self.role, permission):
+            raise HTTPException(status_code=403, detail=permission)""",
+        ),
+    )
+
+    derived = 'SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(ROLE_PERMISSIONS["api_service"])'
+    assert derived in deps_source, "the service-principal probe no longer matches deps.py and would prove nothing"
+    probe(
+        "detects the service principal acquiring a second declaration",
+        deps=deps_source.replace(
+            derived,
+            'SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset({"alerts:read", "cases:read"})',
+        ),
     )
 
     # And a direction it must not fire in.

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 
 from fastapi import FastAPI
@@ -78,12 +80,31 @@ async def _startup() -> None:
     # immediately serviceable.
     app.state.mark_ready()
 
+    # GHSA-9q6p-m345-h3hj (F58). A trip whose delivery failed is journalled
+    # rather than lost, and this is the awaited path that empties the
+    # journal. Without it the table is a record of signals nobody received,
+    # which is a more honest version of the same defect but not a fix.
+    from app.api.routes import _session_factory
+    from app.services.outbox import drain_forever
+
+    app.state.outbox_drain = asyncio.create_task(drain_forever(_session_factory))
+
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
     # Phase 2.6 — drain readiness so the orchestrator stops
     # routing traffic to a draining pod.
     app.state.mark_not_ready()
+
+    task = getattr(app.state, "outbox_drain", None)
+    if task is not None:
+        task.cancel()
+        # Bounded rather than a bare `await task`: a drain wedged on an
+        # unresponsive receiver must not hold the pod open through its whole
+        # shutdown grace period. Losing the wait costs nothing — the journal
+        # is durable and the next replica drains it.
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=5.0)
 
 
 @app.get("/health")

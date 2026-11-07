@@ -11,6 +11,7 @@ from sqlalchemy import select, text, update
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.limits import refuse_if_over_limit
 from app.core import role_grants
+from app.core.permission_cache import bump_version, tenant_uses_rbac
 from app.core.role_grants import RoleGrantDenied, authorize_role_change, authorize_role_grant
 from app.core.security import get_password_hash
 from app.models.tenant import Tenant, User
@@ -278,27 +279,69 @@ async def update_user(
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    # Captured before anything is written. `db.execute(update(...))` below
+    # synchronises the loaded object, so reading `user.role` afterwards
+    # returns the *new* value — which is how the audit trail came to record
+    # `{"from": "viewer", "to": "viewer"}` and tell an auditor nothing about
+    # what was removed.
+    previous_role = str(user.role)
+
     updates: dict = {}
     for field in ["username", "role", "is_active"]:
         val = getattr(request, field, None)
         if val is not None:
             updates[field] = val
 
+    if "role" in updates:
+        # Authorized first, before the tenant is counted. A caller who may not
+        # make this change is refused for that reason and is not told how many
+        # administrators somebody else's tenant has — the same ordering
+        # `create_user` uses above, for the same reason.
+        try:
+            updates["role"] = authorize_role_change(
+                granter_role=current_user.role,
+                granter_scopes=current_user.scopes,
+                granter_permissions=current_user.resolved_permissions,
+                current_role=previous_role,
+                requested_role=updates["role"],
+            )
+        except RoleGrantDenied as exc:
+            # Raised before the UPDATE, so a refused promotion leaves the
+            # username and is_active fields in the same request unwritten too.
+            raise _refuse(exc) from exc
+
     if "role" in updates or "is_active" in updates:
-        # Last-admin lockout guard, evaluated against the live table before
-        # anything is written — this endpoint is one of the few doors that
-        # can empty a tenant of admins, and the same check runs at every
-        # door that removes management authority.
-        demoting = "role" in updates and str(user.role) in role_grants.wildcard_roles()
-        deactivating = bool(updates.get("is_active") is False) and str(user.role) in role_grants.wildcard_roles()
-        if demoting or deactivating:
+        # Last-administrator lockout guard, evaluated against the live table
+        # before anything is written — this endpoint is one of the few doors
+        # that can empty a tenant of administrators.
+        #
+        # It counts the roles that can *restore* access rather than the
+        # wildcard roles. Those are refused to every API caller by
+        # `never_grantable`, so a tenant created through the product has none
+        # and this guard could never fire for it: one `tenant_admin` could
+        # demote every peer and then itself, leaving nobody able to promote
+        # anyone back and no route to recovery short of database credentials
+        # (GHSA-hrc5-w9r3-2g8r).
+        administrative = sorted(role_grants.administrative_roles())
+        losing_authority = "role" in updates and updates["role"] not in administrative
+        deactivating = updates.get("is_active") is False
+        if previous_role in administrative and (losing_authority or deactivating):
+            # Every bind is cast explicitly. The previous spelling compared a
+            # bare `:t` against a `uuid` column, which asyncpg answers with
+            # `operator does not exist: uuid = character varying` — so this
+            # guard raised a 500 on every deployment the moment it fired,
+            # instead of the 409 it exists to return. It was never noticed
+            # because the only branch that could reach it needed a wildcard
+            # role, and those are refused to API callers anyway.
             remaining = (
                 await db.execute(
                     text(
-                        "SELECT count(*) FROM users WHERE tenant_id = :t AND is_active = TRUE AND role = ANY(:wild) AND id <> :keep"
+                        "SELECT count(*) FROM users "
+                        "WHERE tenant_id = CAST(:t AS uuid) AND is_active = TRUE "
+                        "AND role = ANY(CAST(:admins AS text[])) AND id <> CAST(:keep AS uuid)"
                     ).bindparams(
                         t=str(current_user.tenant_id),
-                        wild=sorted(role_grants.wildcard_roles()),
+                        admins=administrative,
                         keep=str(user_id),
                     )
                 )
@@ -308,20 +351,6 @@ async def update_user(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="this is the last active administrator in the tenant; promote another admin before removing this one",
                 )
-
-    if "role" in updates:
-        try:
-            updates["role"] = authorize_role_change(
-                granter_role=current_user.role,
-                granter_scopes=current_user.scopes,
-                granter_permissions=current_user.resolved_permissions,
-                current_role=str(user.role),
-                requested_role=updates["role"],
-            )
-        except RoleGrantDenied as exc:
-            # Raised before the UPDATE, so a refused promotion leaves the
-            # username and is_active fields in the same request unwritten too.
-            raise _refuse(exc) from exc
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
@@ -339,9 +368,27 @@ async def update_user(
                 action="users:role_changed",
                 resource="user",
                 resource_id=str(user_id),
-                changes={"from": str(user.role), "to": updates["role"], "reason": (request.reason or "")[:500]},
+                changes={
+                    "from": previous_role,
+                    "to": updates["role"],
+                    "reason": (request.reason or "")[:500],
+                    # Whether this changed any access, which is not the same
+                    # question as whether it changed the row. A tenant running
+                    # database-backed RBAC resolves permissions from
+                    # `user_roles`, so `users.role` is not what any check
+                    # reads and the demotion withdraws nothing. Recording the
+                    # row change alone let an audit log assert a withdrawal
+                    # that never happened.
+                    "effective_permissions_follow_role": not await tenant_uses_rbac(db, current_user.tenant_id),
+                },
             )
         await db.commit()
+        # After the commit, so a rolled-back change does not invalidate a set
+        # that is still correct. Without it the old permissions stayed cached
+        # on every replica until the fallback TTL lapsed, and for a
+        # revocation that is the wrong direction.
+        if "role" in updates or "is_active" in updates:
+            await bump_version(str(current_user.tenant_id))
         await db.refresh(user)
 
     return UserResponse.model_validate(user)

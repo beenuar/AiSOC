@@ -56,7 +56,17 @@ def test_the_connectors_this_wave_fixed_are_classified_as_paging() -> None:
     """A regression here means a fix was reverted, not that the gate drifted."""
     gate = _load()
     _, paging, _ = gate.audit()
-    for name in ("azure_entra", "azure_defender", "microsoft_sentinel", "gcp_cloud_audit", "gcp_scc", "google_workspace"):
+    for name in (
+        "azure_entra",
+        "azure_defender",
+        "microsoft_sentinel",
+        "gcp_cloud_audit",
+        "gcp_scc",
+        "google_workspace",
+        "okta",
+        "github",
+        "gitlab",
+    ):
         assert name in paging, f"{name} no longer reads its poll window to the end"
 
 
@@ -69,3 +79,8 @@ def test_the_ceiling_is_a_debt_balance_that_only_falls() -> None:
         "continuation, or record in _REVIEWED what the vendor's documentation says it returns.\n"
         + "\n".join(f"  {name}: {why}" for name, why in unclassified)
     )
+
+
+def test_slack_audit_reads_its_window_to_the_end() -> None:
+    _, paging, _ = _load().audit()
+    assert "slack_audit" in paging

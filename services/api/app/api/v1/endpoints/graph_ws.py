@@ -3,24 +3,44 @@
 The browser opens ``wss://api.../v1/graph_ws/stream`` with the user's
 session bearer token. This endpoint authenticates the token, derives
 the tenant_id from the resolved user, then dials the *internal*
-ingest broadcaster at ``$AISOC_INGEST_GRAPH_WS_URL`` with the
-tenant_id bound in the URL. Every envelope the upstream sends is
-relayed verbatim to the browser; the browser cannot subscribe to
-another tenant because the proxy controls the upstream URL.
+ingest broadcaster at ``$AISOC_INGEST_GRAPH_WS_URL`` presenting a
+service credential and the resolved tenant as a header. Every
+envelope the upstream sends is relayed verbatim to the browser; the
+browser cannot subscribe to another tenant because it never supplies
+the tenant and never holds the upstream credential.
 
 Why a proxy and not direct?
 ---------------------------
 Two reasons:
 
-  1. **Auth boundary.** The ingest WebSocket runs on the internal
-     service network and has no notion of users. The API service
-     already owns the auth path (``app.api.v1.deps.get_current_user``)
-     and the RBAC model. Re-implementing JWT/API-key validation
-     inside the Go broadcaster would duplicate state and risk drift.
+  1. **User identity.** The ingest WebSocket has no notion of users,
+     sessions or RBAC. The API service already owns the auth path
+     (``app.api.v1.deps.get_current_user``) and the permission model.
+     Re-implementing JWT/API-key validation inside the Go broadcaster
+     would duplicate state and risk drift.
   2. **Tenant binding.** A browser-facing endpoint that respects an
      attacker-supplied ``?tenant_id=...`` query param is a
      cross-tenant leak waiting to happen. We rebind the tenant
      server-side from ``current_user.tenant_id``.
+
+What this module is *not*
+-------------------------
+It is not ingest's authentication. It used to be described that way,
+and ingest's own handler said so too, which is how the upstream came
+to accept any connection that named a tenant in its query string —
+a protection asserted in two comments and enforced in neither, on a
+port the root compose file publishes. Ingest now runs the same
+``internal/ingestauth`` authenticator its ingest routes run, and this
+proxy is defence in depth in front of it: it decides *which user* may
+tail *which tenant*, and ingest independently decides whether the
+caller holds a credential for that tenant at all.
+
+Upgrade ordering
+----------------
+The credential is required by ingest and presented here, so a new API
+against an old ingest is fine (the extra header is ignored) while an
+old API against a new ingest is refused. Roll ingest last, or roll
+both together.
 
 Registration
 ------------
@@ -47,7 +67,7 @@ import logging
 import os
 import uuid
 from typing import Annotated, Any
-from urllib.parse import quote, urlsplit, urlunsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 from fastapi import (
@@ -82,15 +102,50 @@ router = APIRouter(prefix="/graph_ws", tags=["graph", "realtime"])
 _DEFAULT_UPSTREAM = "ws://ingest:8080/v1/graph_ws/stream"
 
 
-def _upstream_url(tenant_id: uuid.UUID) -> str:
-    """Build the upstream URL with the resolved tenant bound."""
+def _upstream_url() -> str:
+    """Return the internal broadcaster URL.
 
-    base = os.environ.get("AISOC_INGEST_GRAPH_WS_URL", _DEFAULT_UPSTREAM)
-    parts = urlsplit(base)
-    qs = parts.query
-    binding = f"tenant_id={quote(str(tenant_id), safe='')}"
-    qs = f"{qs}&{binding}" if qs else binding
-    return urlunsplit((parts.scheme, parts.netloc, parts.path, qs, parts.fragment))
+    The tenant is deliberately *not* in it. This used to append
+    ``?tenant_id=<resolved>`` and the ingest handler used to read it,
+    which meant the only thing standing between any caller who could
+    reach that port and any tenant's graph stream was the assumption
+    that nobody could reach the port. It is published by the root
+    compose file. The tenant now travels as a header alongside a
+    service credential, where ingest intersects it with what the
+    credential authorises (GHSA-cvfr-9r25-gqpf / F65).
+    """
+
+    return os.environ.get("AISOC_INGEST_GRAPH_WS_URL", _DEFAULT_UPSTREAM)
+
+
+def _upstream_headers(tenant_id: uuid.UUID) -> dict[str, str] | None:
+    """Build the credential ingest requires on the graph websocket.
+
+    Returns ``None`` when no service token is configured, which the
+    caller renders as a refusal rather than dialling anyway — ingest
+    would answer 401 and the browser would see an unexplained close.
+
+    The variable names are the ones ingest *accepts*, in its own
+    precedence order (``config.go``: ``AISOC_INGEST_SERVICE_TOKEN``
+    then ``AISOC_SERVICE_TOKEN``), not a third spelling invented here.
+    Both the api and ingest-worker containers already receive
+    ``AISOC_SERVICE_TOKEN`` and ``make env`` generates it, so a stock
+    deployment pairs up with no extra configuration.
+
+    ``X-Tenant-ID`` is ingest's own spelling and is always among its
+    accepted tenant headers. Ingest treats it as a *declaration* and
+    intersects it with the service token's scope; it is authoritative
+    here only because the value comes from the authenticated user
+    resolved above, never from anything the browser sent.
+    """
+
+    token = (os.environ.get("AISOC_INGEST_SERVICE_TOKEN") or os.environ.get("AISOC_SERVICE_TOKEN") or "").strip()
+    if not token:
+        return None
+    return {
+        "Authorization": f"Bearer {token}",
+        "X-Tenant-ID": str(tenant_id),
+    }
 
 
 async def _authenticate_ws(
@@ -202,7 +257,22 @@ async def graph_updates_stream(
         )
         return
 
-    upstream_url = _upstream_url(user.tenant_id)
+    upstream_url = _upstream_url()
+    upstream_headers = _upstream_headers(user.tenant_id)
+    if upstream_headers is None:
+        # Say which variable is missing. Dialling anyway would produce a
+        # 401 from our own service, which reads to an operator as the
+        # stream being broken rather than unconfigured.
+        logger.error(
+            "graph_ws: no ingest service token configured; set AISOC_SERVICE_TOKEN "
+            "(or AISOC_INGEST_SERVICE_TOKEN) on this service and on ingest"
+        )
+        await websocket.close(
+            code=status.WS_1011_INTERNAL_ERROR,
+            reason="graph stream is not configured on this deployment",
+        )
+        return
+
     logger.info(
         "graph_ws: proxying for tenant=%s upstream=%s user=%s",
         user.tenant_id,
@@ -211,7 +281,7 @@ async def graph_updates_stream(
     )
 
     try:
-        await _relay(websocket, upstream_url)
+        await _relay(websocket, upstream_url, upstream_headers)
     except WebSocketDisconnect:
         logger.debug("graph_ws: client disconnected tenant=%s", user.tenant_id)
     except Exception as exc:  # pragma: no cover — defensive
@@ -230,7 +300,11 @@ async def graph_updates_stream(
             pass
 
 
-async def _relay(websocket: WebSocket, upstream_url: str) -> None:
+async def _relay(
+    websocket: WebSocket,
+    upstream_url: str,
+    upstream_headers: dict[str, str],
+) -> None:
     """Pipe envelopes from the internal broadcaster to the browser.
 
     We use ``httpx`` for the upstream WebSocket because the existing
@@ -254,7 +328,7 @@ async def _relay(websocket: WebSocket, upstream_url: str) -> None:
         return
 
     try:
-        async with aconnect_ws(upstream_url) as upstream:
+        async with aconnect_ws(upstream_url, headers=upstream_headers) as upstream:
             done: asyncio.Event = asyncio.Event()
 
             async def client_to_upstream() -> None:

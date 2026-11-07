@@ -125,6 +125,18 @@ CRITICAL: dict[str, str] = {
         "and the security audit exports with one while the images install "
         "with another"
     ),
+    "vaid-mint": (
+        "the Ed25519 badge verifier behind the optional VAID plugin "
+        "(beenuar/AiSOC#1739), which gates `ToolRegistry.execute` in agents "
+        "and `live_actions.dispatch()` in actions — so on a deployment that "
+        "enables it, this library decides whether a containment action runs. "
+        "Two reasons it is pinned exactly rather than ranged. It is 0.x, "
+        "where any minor may change verification behaviour and Dependabot's "
+        "`update-types: semver-major` hold cannot apply at all. And agents "
+        "mints what actions verifies: a skew between the two services is a "
+        "signature one half writes and the other half rejects, surfacing as "
+        "'dispatch intermittently refuses' with nothing naming a dependency"
+    ),
 }
 
 
@@ -268,12 +280,19 @@ def satisfies(version: str, spec: str) -> bool:
     for clause in spec.replace(" ", "").split(","):
         if not clause:
             continue
-        match = re.fullmatch(r"(?P<op>[<>=!]+)(?P<ver>[0-9][0-9.]*)", clause)
+        # A bare version with no operator is poetry's shorthand for `==`
+        # (`version = "0.11.0"` and `version = "==0.11.0"` are one constraint),
+        # and without this the gate reported `vaid-mint 0.11.0` as "outside the
+        # declared range 0.11.0" — a correct tree failing on a legal spelling.
+        # A false positive is the failure mode that gets a gate switched off,
+        # so it is worth more than the keystrokes it saves. Caret and tilde
+        # stay unreasonable-about and keep failing closed below.
+        match = re.fullmatch(r"(?P<op>[<>=!]*)(?P<ver>[0-9][0-9.]*)", clause)
         if not match:
             return False  # an operator this gate cannot reason about is not a pass
         bound = version_tuple(match.group("ver"))
         left, right = _pad(actual, bound)
-        operator = match.group("op")
+        operator = match.group("op") or "=="
         ok = {
             ">=": left >= right,
             ">": left > right,

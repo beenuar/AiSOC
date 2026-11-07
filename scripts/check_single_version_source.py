@@ -3,12 +3,18 @@
 
 Why this exists
 ---------------
-The root ``VERSION`` file is the single source of truth. Several surfaces
-restate it instead of reading it, and a restated number is only correct until
-the next release — at which point nothing notices, because agreeing with a
-constant is not something anyone checks.
+The root ``VERSION`` file is the single source of truth. A surface that
+restates it instead of reading it is only correct until the next release — at
+which point nothing notices, because agreeing with a constant is not something
+anyone checks.
 
-Measured on this tree when this gate was written (``VERSION`` = 22.2.0):
+**This gate is green on arrival, and that is the point.** It was written
+against a live defect; #1732 fixed the defect before this landed. What
+remains is prevention, so read the paragraph below as history rather than as
+a finding — a stale problem statement read as a live one is a mistake this
+repository has made before.
+
+The defect, measured when this gate was written (``VERSION`` = 22.2.0):
 
     services/api/app/core/config.py   APP_VERSION = "0.1.0"
     services/api/app/core/config.py   VERSION     = "0.1.0"
@@ -19,6 +25,11 @@ document, and it is served as a JSON field by the root route. A deployment
 running 22.2.0 therefore told every client it was **0.1.0**, and had done since
 the literal was written. No gate compared the two, because no gate existed that
 knew they were the same number.
+
+``APP_VERSION`` now reads ``Field(default_factory=resolve_version)`` against
+``app/core/version.py``. Re-measured on this tree: all five registered
+surfaces derive, none restates. Reverting that one line to the literal is the
+gate's negative control and it exits 1 naming both numbers.
 
 The console reaches the same number by two independent routes: the repo-root
 ``VERSION`` file inlined at build time as ``NEXT_PUBLIC_APP_VERSION``, and
@@ -33,9 +44,9 @@ Two rules over a registry of surfaces that report the application's version.
 
 ``agreement``
     A surface that resolves to a concrete version must resolve to the tree's
-    ``VERSION``. This is the arm that is red today and names the real number
-    on both sides, so the failure says what is wrong rather than only that
-    something is.
+    ``VERSION``. This is the arm that caught the ``0.1.0`` defect above, and
+    it names the real number on both sides, so the failure says what is wrong
+    rather than only that something is.
 
 ``single-origin``
     A surface may not *restate* the version. Deriving it is fine however it is

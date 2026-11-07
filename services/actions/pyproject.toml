@@ -23,6 +23,23 @@ aiokafka = ">=0.10,<0.16"
 python-dateutil = "^2.8.2"
 cryptography = ">=46,<51"
 
+# Optional VAID badge plugin (beenuar/AiSOC#1739), off by default
+# (AISOC_VAID_PLUGIN_ENABLED). `app.security.vaid_verifier` imports this
+# lazily, only when the plugin is actually used — this service verifies a
+# badge with the issuer's public key alone, never the agents service's
+# private signing key.
+#
+# Pinned exactly, and held equal with services/agents by
+# `scripts/check_dependency_pins.py`. The two services are the mint and
+# the verify halves of one signature: a version skew between them is a
+# deployment where badges one process issues the other cannot read, which
+# surfaces as "dispatch intermittently refuses" rather than as anything
+# naming a dependency.
+vaid-mint = {version = "==0.11.0", optional = true}
+
+[tool.poetry.extras]
+vaid = ["vaid-mint"]
+
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
 # pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two

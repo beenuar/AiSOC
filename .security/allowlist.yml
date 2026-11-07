@@ -320,7 +320,26 @@ ceilings:
     #
     # `error` is unchanged at 44, which is the other half of the test --
     # the scanner's drift moves `error` and `total` together.
-    total: 113
+    #
+    # 113 -> 112 (error unchanged at 44). GHSA-9q6p-m345-h3hj added a
+    # honeytoken delivery journal whose five log events read "honeytoken
+    # alert for trigger ..." and were all counted as
+    # `python-logger-credential-disclosure`: the heuristic keys on the
+    # substring `token`, and no secret is logged on any of those lines --
+    # they carry a trip id and an error string. The events were reworded to
+    # say "trip", which is the remedy this file already records for the two
+    # log events renamed for the same reason, rather than raising the number
+    # to accommodate a false positive.
+    #
+    # The net is one *below* the old ceiling rather than level with it,
+    # because the honeytokens service's previous alerting module was deleted
+    # in the same change (the path is deliberately not spelled out here: it
+    # no longer exists, and `check_comment_paths` rightly fails a comment
+    # naming a file that is gone). It had no callers left once delivery
+    # moved, and a dead `send_alert` returning False is the shape the
+    # advisory is about. CI measured 112/44, so the ceiling comes down with
+    # it -- a shrink that is not banked drifts back up for free.
+    total: 112
     error: 44
     measured_with: "1.86.0"
     rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"

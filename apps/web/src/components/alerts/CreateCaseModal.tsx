@@ -11,6 +11,7 @@ import {
   type Case,
   type CaseSeverity,
 } from '@/lib/api';
+import { useLocale } from '@/components/i18n/LocaleProvider';
 
 // Alerts carry an extra `info` severity that cases don't model; fold it into
 // the lowest case severity so promotion never sends an invalid value.
@@ -38,6 +39,7 @@ interface CreateCaseModalProps {
  * so they can run a playbook against it.
  */
 export function CreateCaseModal({ open, onClose, alert }: CreateCaseModalProps) {
+  const { t } = useLocale();
   const router = useRouter();
   const [mode, setMode] = useState<Mode>('new');
   const [title, setTitle] = useState(alert.title ?? '');
@@ -247,7 +249,7 @@ export function CreateCaseModal({ open, onClose, alert }: CreateCaseModalProps) 
             onClick={onClose}
             className="rounded-lg px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
           >
-            Cancel
+            {t('common.cancel')}
           </button>
           <button
             type="button"

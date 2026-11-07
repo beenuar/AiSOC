@@ -434,8 +434,8 @@ All variables use the `HONEYTOKEN_` prefix.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HONEYTOKEN_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for token metadata and triggers |
-| `HONEYTOKEN_ALERT_WEBHOOK_URL` | — | Webhook called when a token is triggered |
-| `HONEYTOKEN_ALERT_WEBHOOK_SECRET` | `changeme` | **Rotate before going live.** HMAC-SHA256 secret for webhook signing |
+| `HONEYTOKEN_ALERT_WEBHOOK_URL` | — | Webhook called when a token is tripped. **Unset is not "no alerting":** with no webhook the trip is pushed into the ingest spine (`INGEST_SERVICE_URL`, default `http://ingest-worker:8080`) and becomes an alert through the same path every other signal takes. Set this only when you want the trip delivered somewhere else *instead* |
+| `HONEYTOKEN_ALERT_WEBHOOK_SECRET` | — (empty) | HMAC-SHA256 secret for webhook signing, required whenever `HONEYTOKEN_ALERT_WEBHOOK_URL` is set. Empty by default **on purpose**: this once defaulted to the literal `changeme`, so every deployment signed its alerts with a public value and a verifier could not tell a real trip from a forged one. With a URL set and no secret the service refuses to send rather than sending unsigned |
 | `HONEYTOKEN_TOKEN_TTL_DAYS` | `365` | Default token expiry |
 | `HONEYTOKEN_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `HONEYTOKEN_SERVICE_NAME` | `aisoc-honeytokens` | OTel service name |

@@ -12,6 +12,7 @@ import { InvestigationRail } from './InvestigationRail';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
+import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
 
 // Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
@@ -139,16 +140,46 @@ function ConfidencePill({ label }: { label: ConfidenceLabel }) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
+/**
+ * The translated name of a severity tier, or `null` for a value the ladder
+ * does not have.
+ *
+ * Spelled out as a switch over literal keys rather than
+ * ``t(`severity.${severity}`)``. The template form would work and
+ * `check_i18n_keys.py` would credit the whole surface for it, but
+ * `severity` arrives from the API typed as `string`, so an unexpected value
+ * would render the key `severity.sev1` on screen as a label. Enumerating
+ * the five tiers means an unknown one falls back to the English config
+ * instead, which is the behaviour the ladder already had.
+ */
+function severityLabel(severity: string, t: (key: string) => string): string | null {
+  switch (severity) {
+    case 'critical':
+      return t('severity.critical');
+    case 'high':
+      return t('severity.high');
+    case 'medium':
+      return t('severity.medium');
+    case 'low':
+      return t('severity.low');
+    case 'info':
+      return t('severity.info');
+    default:
+      return null;
+  }
+}
+
 function SeverityDot({ severity }: { severity: string }) {
   const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
   return <span className={clsx('w-2 h-2 rounded-full shrink-0', cfg.dot)} />;
 }
 
 function SeverityBadge({ severity }: { severity: string }) {
+  const { t } = useLocale();
   const cfg = SEVERITY_CONFIG[severity as keyof typeof SEVERITY_CONFIG] || SEVERITY_CONFIG.info;
   return (
     <span className={clsx('text-xs px-2 py-0.5 rounded border', cfg.text, cfg.bg)}>
-      {cfg.label}
+      {severityLabel(severity, t) ?? cfg.label}
     </span>
   );
 }
@@ -233,6 +264,7 @@ function AlertRow({
   checked: boolean;
   onToggleChecked: (id: string) => void;
 }) {
+  const { t } = useLocale();
   return (
     <Link
       href={`/alerts/${alert.id}`}
@@ -286,7 +318,11 @@ function AlertRow({
           {alert.assignee && (
             <>
               <span className="text-gray-700">·</span>
-              <span className="text-xs text-gray-600">{alert.assignee}</span>
+              {/* The row shows a bare email with nothing saying what it
+                  is. Labelling it for assistive tech costs no pixels. */}
+              <span className="text-xs text-gray-600" title={t('alerts.assignee')}>
+                {alert.assignee}
+              </span>
             </>
           )}
         </div>
@@ -320,6 +356,7 @@ export function AlertsView() {
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.
   const [viewMode, setViewMode] = useState<ViewMode>('entities');
+  const { t } = useLocale();
 
   const { data, error, isLoading } = useSWR(
     ['alerts', filters],
@@ -358,7 +395,7 @@ export function AlertsView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-100">Alerts</h1>
+          <h1 className="text-xl font-semibold text-gray-100">{t('alerts.title')}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {viewMode === 'entities'
               ? 'Risk-Based Alerting · entity-centric triage queue'
@@ -587,6 +624,7 @@ function AlertsTableGrid({
   onToggleChecked: (id: string) => void;
   onSetChecked: (next: Set<string>) => void;
 }) {
+  const { t } = useLocale();
   const pageIds = alerts.map((a) => a.id);
   const allOnPageChecked = pageIds.length > 0 && pageIds.every((id) => checkedIds.has(id));
 
@@ -612,20 +650,32 @@ function AlertsTableGrid({
           className="accent-blue-500"
         />
         <span className="text-xs text-gray-500 flex-1">ALERT</span>
-        <span className="text-xs text-gray-500 w-20">SEVERITY</span>
-        <span className="text-xs text-gray-500 w-24">STATUS</span>
-        <span className="text-xs text-gray-500 w-24 text-right">TIME</span>
+        {/* `uppercase` keeps the column heading looking like a column
+            heading now that the text comes from the catalogue in sentence
+            case — and it is what makes the Arabic render correctly too,
+            since a hardcoded ALL-CAPS English string could not. */}
+        <span className="text-xs uppercase text-gray-500 w-20">{t('alerts.severity')}</span>
+        <span className="text-xs uppercase text-gray-500 w-24">{t('alerts.status')}</span>
+        <span className="text-xs text-gray-500 w-24 text-end">TIME</span>
       </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center h-32">
           <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          {/* A bare spinning div announces nothing. */}
+          <span className="sr-only">{t('common.loading')}</span>
         </div>
       ) : error ? (
         <div className="p-4">
+          {/*
+            The catalogue's wording, which is deliberately sharper than what
+            stood here: "we could not read the queue" and "the queue is
+            empty" are different facts about a SOC and only one of them
+            means there is nothing to do.
+          */}
           <ErrorState
-            title="Couldn't load alerts"
-            description="The alerts feed didn't respond. Check the API service or try again."
+            title={t('alerts.loadFailed')}
+            description={t('alerts.loadFailedHint')}
             error={error}
           />
         </div>
@@ -653,8 +703,8 @@ function AlertsTableGrid({
           ) : (
             <EmptyState
               icon={EmptyStateIcons.alert}
-              title="No alerts yet"
-              description="Once a connector ingests events that trip a detection, alerts will appear here. Connect a data source from Settings → Connectors to start streaming."
+              title={t('alerts.empty')}
+              description={t('alerts.emptyHint')}
             />
           )}
         </div>
@@ -687,9 +737,16 @@ function AlertsPagination({
   filters: AlertFilters;
   onFilterChange: (f: AlertFilters) => void;
 }) {
+  const { t } = useLocale();
+  // One key for the plural and one for the singular, chosen here. The
+  // catalogue is a lookup, not an ICU plural engine — two keys covers the
+  // two forms English and Arabic both need for this sentence, and a
+  // language with more of them is the point at which a plural library
+  // earns its place rather than a reason to add one now.
+  const count = total === 1 ? t('alerts.countOne') : t('alerts.count', { count: total });
   return (
     <div className="flex items-center justify-between text-xs text-gray-500">
-      <span>Showing {alerts.length} of {total} alerts</span>
+      <span>Showing {alerts.length} of {count}</span>
       <div className="flex items-center gap-1">
         <button
           onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}

@@ -9,9 +9,9 @@
   "counts": {
     "aliases": 2,
     "canonical-fold": 5,
-    "profile": 6,
+    "profile": 7,
     "registry": 91,
-    "total": 102
+    "total": 103
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -66,6 +66,7 @@
     "google_chronicle",
     "google_workspace",
     "greynoise",
+    "honeytoken",
     "ibm_qradar",
     "imperva",
     "jira",
@@ -170,6 +171,7 @@
     "google_chronicle": "canonical-fold",
     "google_workspace": "registry",
     "greynoise": "registry",
+    "honeytoken": "profile",
     "ibm_qradar": "canonical-fold",
     "imperva": "registry",
     "jira": "registry",

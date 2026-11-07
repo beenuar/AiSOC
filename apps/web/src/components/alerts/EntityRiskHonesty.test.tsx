@@ -111,7 +111,7 @@ describe('EntityRiskQueue — first paint', () => {
     render(<EntityRiskQueue />);
 
     expect(screen.getByText(/No entities are currently being tracked/i)).toBeTruthy();
-    expect(screen.queryByText('not measured')).toBeNull();
+    expect(screen.queryByText('Not measured')).toBeNull();
   });
 });
 
@@ -123,7 +123,10 @@ describe('EntityRiskQueue — the disclosure covers the KPI cards', () => {
     render(<EntityRiskQueue />);
 
     // Four cards, each explicitly unmeasured rather than confidently zero.
-    expect(screen.getAllByText('not measured').length).toBe(4);
+    // The literal is sentence case because these labels now render through
+    // the translation catalogue (`common.notMeasured`); the property under
+    // test — four cards, all of them explicitly unmeasured — is unchanged.
+    expect(screen.getAllByText('Not measured').length).toBe(4);
     expectNothingFabricated();
   });
 

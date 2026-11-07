@@ -54,7 +54,10 @@ import { BrandingPanel } from './BrandingPanel';
 import { RetentionPanel } from './RetentionPanel';
 import { RulePacksPanel } from './RulePacksPanel';
 import { DelegationsPanel } from './DelegationsPanel';
+import { LanguagePanel } from './LanguagePanel';
+import { useLocale } from '@/components/i18n/LocaleProvider';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
+import { useConsoleVersion } from '@/hooks/useConsoleVersion';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { rbacApi, authApi } from '@/lib/api';
 
@@ -380,15 +383,47 @@ const TABS: { id: TabId; label: string; description: string }[] = [
   },
 ];
 
+/**
+ * The translated label for a settings tab, or its English one.
+ *
+ * `TABS` is module-level, so it cannot call a hook; the translation has to
+ * happen where the tab renders. Written as a switch over literal keys
+ * rather than a `Record<TabId, string>` lookup because `t(MAP[id])` passes
+ * a computed key — it renders correctly and `check_i18n_keys.py` credits
+ * nothing for it, which is the right answer: a gate that accepts an
+ * indirection it cannot resolve is a gate that can be switched off by
+ * adding one.
+ *
+ * No exhaustive `never` check in the default, deliberately. The catalogue
+ * covers four of the fifteen tabs; requiring a key for every new one would
+ * make adding a settings tab a translation task, and the English fallback
+ * is the designed behaviour rather than an oversight.
+ */
+function tabLabel(id: TabId, t: (key: string) => string, english: string): string {
+  switch (id) {
+    case 'branding':
+      return t('settings.branding');
+    case 'retention':
+      return t('settings.retention');
+    case 'rule-packs':
+      return t('settings.rulePacks');
+    case 'delegations':
+      return t('settings.delegations');
+    default:
+      return english;
+  }
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SettingsView() {
   const [tab, setTab] = useState<TabId>('profile');
+  const { t } = useLocale();
 
   return (
     <div className="space-y-5">
       <header className="flex flex-col gap-2">
-        <h1 className="text-2xl font-semibold text-gray-100">Settings</h1>
+        <h1 className="text-2xl font-semibold text-gray-100">{t('settings.title')}</h1>
         <p className="max-w-2xl text-sm text-gray-500">
           Configure your account, the workspace, and the integrations that feed
           the SOC. Most preferences sync across devices; appearance and
@@ -403,23 +438,25 @@ export function SettingsView() {
           className="lg:sticky lg:top-4 lg:w-64 lg:shrink-0"
         >
           <ul className="space-y-1 rounded-xl border border-gray-800 bg-gray-900/40 p-2">
-            {TABS.map((t) => {
-              const active = tab === t.id;
+            {/* `entry`, not `t` — the loop variable used to be `t`, which
+                now shadows the translator this component binds. */}
+            {TABS.map((entry) => {
+              const active = tab === entry.id;
               return (
-                <li key={t.id}>
+                <li key={entry.id}>
                   <button
                     type="button"
-                    onClick={() => setTab(t.id)}
+                    onClick={() => setTab(entry.id)}
                     className={clsx(
-                      'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+                      'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-start text-sm transition-colors',
                       active
                         ? 'bg-gray-800/80 text-gray-50 ring-1 ring-blue-500/40'
                         : 'text-gray-300 hover:bg-gray-800/50 hover:text-gray-100',
                     )}
                   >
-                    <span className="font-medium">{t.label}</span>
+                    <span className="font-medium">{tabLabel(entry.id, t, entry.label)}</span>
                     <span className="text-xs text-gray-500">
-                      {t.description}
+                      {entry.description}
                     </span>
                   </button>
                 </li>
@@ -1506,6 +1543,11 @@ function AppearancePanel() {
           checked={prefs.motion === 'reduced'}
           onChange={(v) => update('motion', v ? 'reduced' : 'full')}
         />
+
+        {/* Language. Beside theme and density because it is the same kind
+            of thing: a display preference, per device, synced to the
+            profile. It carries its own scope disclosure — see the panel. */}
+        <LanguagePanel />
       </div>
     </div>
   );
@@ -2588,6 +2630,11 @@ function AuditPanel() {
 // ─── Panel: About ─────────────────────────────────────────────────────────────
 
 function AboutPanel() {
+  // Was `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, inlined when the
+  // image was built. Same runtime source as the sidebar footer now, and an
+  // unanswered version says so instead of reading v0.0.0.
+  const { version } = useConsoleVersion();
+
   return (
     <div>
       <PanelHeader
@@ -2595,7 +2642,10 @@ function AboutPanel() {
         description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value={`v${process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'}`} />
+        <InfoTile
+          label="Version"
+          value={version === null ? 'Loading…' : version === 'unknown' ? 'Unknown' : `v${version}`}
+        />
         <InfoTile label="Build" value="Self-hosted • Docker Compose" />
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />

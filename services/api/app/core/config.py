@@ -15,6 +15,8 @@ from typing import Any, Final
 from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.version import resolve_version
+
 # Default placeholders shipped in source. Anything matching these in a
 # non-development environment triggers a hard startup warning (see
 # ``warn_if_insecure_defaults`` below). Exposed as a constant so tests
@@ -224,10 +226,12 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "AiSOC API"
-    APP_VERSION: str = "0.1.0"
+    # Resolved, never defaulted: the build arg the image was stamped with,
+    # then the repo-root VERSION file, then the string "unknown". See
+    # app/core/version.py for why "unknown" rather than a numeric fallback.
+    APP_VERSION: str = Field(default_factory=resolve_version)
     ENV: str = "development"
     ENVIRONMENT: str = "development"  # alias for ENV
-    VERSION: str = "0.1.0"  # alias for APP_VERSION
     DEBUG: bool = False
     API_PREFIX: str = "/api/v1"
 
@@ -1030,6 +1034,20 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         """True if this is a non-dev (i.e. real) environment."""
         return not self.is_dev
+
+    @property
+    def VERSION(self) -> str:  # noqa: N802 — long-standing public name
+        """Alias for :attr:`APP_VERSION`, read by ``/health`` and the spec.
+
+        A property rather than a second field, because two fields holding one
+        fact is two chances to disagree about it. It was a field defaulting to
+        the same stale literal, which also meant pydantic-settings would bind
+        a bare ``VERSION`` environment variable to it — and ``VERSION`` is a
+        name five steps in ``.github/workflows/release.yml`` already export
+        for their own purposes. Nothing should be able to move the version
+        this process reports except the build arg and the tree.
+        """
+        return self.APP_VERSION
 
 
 @lru_cache

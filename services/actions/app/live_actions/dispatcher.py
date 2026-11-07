@@ -46,6 +46,7 @@ import structlog
 
 from app.models.action import ActionRequest, ActionType
 from app.security.ssrf_guard import SSRFError, validate_outbound_url
+from app.security.vaid_verifier import BadgeDenied, verify_badge_for_dispatch
 from app.services.approval_matrix import evaluate_contract
 from app.services.asset_lookup import asset_criticality_for_target
 from app.services.autonomy_safety import (
@@ -611,6 +612,41 @@ async def dispatch(request: LiveActionRequest) -> LiveActionResult:
             reason=switch.reason,
         )
         return _stopped_by_kill_switch(request, switch)
+
+    # ── The VAID badge (beenuar/AiSOC#1739), before anything else that
+    # would spend a vendor call ──────────────────────────────────────────
+    #
+    # A no-op when the plugin is disabled (the default) — see
+    # `app.security.vaid_verifier.vaid_plugin_enabled`. When enabled, this
+    # is the response-dispatch half of the two boundaries named on the
+    # issue; the other half is `ToolRegistry.execute` in the agents
+    # service, which cannot be reached from here because that is a
+    # different process.
+    # The `except Exception` is deliberate and matches the agents service's
+    # own hook in `ToolRegistry.execute`. `BadgeDenied` alone was not enough:
+    # vaid-mint 0.11.0's `assemble_lineage` opens with a bare
+    # `leaf["vaid_id"]`, so a request body carrying `"vaid_badge": {}` raised
+    # `KeyError` straight out of this function — past a route that documents
+    # it "never returns 5xx for executor failures" because "the agent loop
+    # relies on a uniform success-shape". `vaid_verifier` now refuses a
+    # malformed badge properly; this stays as the backstop, because the thing
+    # that made that reachable was a verifier promise about a third-party
+    # library, and the next version of that library is not bound by it.
+    try:
+        verify_badge_for_dispatch(request.vaid_badge, request.capability, tenant_id=request.tenant_id)
+    except Exception as denied:  # noqa: BLE001 — fail closed, name the reason
+        if not isinstance(denied, BadgeDenied):
+            log.exception("live_action.vaid_verifier_raised", error_type=type(denied).__name__)
+            denied = BadgeDenied(f"VAID badge check failed unexpectedly ({type(denied).__name__}); refusing fail-closed")
+        log.warning("live_action.vaid_badge_denied", reason=str(denied))
+        return LiveActionResult(
+            request_id=request.request_id,
+            status=LiveActionStatus.FAILED,
+            capability=request.capability,
+            vendor_id=request.vendor_id,
+            summary=f"'{request.capability}' on {request.target or 'target'}: refused — {denied}",
+            error=str(denied),
+        )
 
     # ── Where the caller may point this service ──────────────────────────
     #

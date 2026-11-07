@@ -27,7 +27,10 @@ import {
   formatPercent,
   hasTranslation,
   isLocaleCode,
+  localeBootstrapScript,
+  localeCoverage,
   negotiateLocale,
+  surfaceCoverage,
   translate,
 } from './index';
 
@@ -142,5 +145,69 @@ describe('formatting', () => {
     const out = formatDate('en', '2026-07-12T08:00:00Z', { dateStyle: 'medium' });
     expect(out).toContain('2026');
     expect(out).not.toContain('T08:00');
+  });
+});
+
+describe('coverage', () => {
+  // These numbers are what the language switcher renders. They exist so the
+  // switcher can state its own scope by measuring the catalogue rather than
+  // by a sentence somebody wrote once, which goes stale the first time a
+  // surface is added — in the direction nobody checks.
+
+  it('counts a locale against the base catalogue', () => {
+    const { total, translated } = localeCoverage('ar');
+    expect(total).toBeGreaterThan(0);
+    // The pilot locale is a deep partial on purpose: `settings.*` is left
+    // untranslated so the fallback runs on a real screen.
+    expect(translated).toBeLessThan(total);
+  });
+
+  it('reports the base locale as complete against itself', () => {
+    const { total, translated } = localeCoverage('en');
+    expect(translated).toBe(total);
+  });
+
+  it('counts one surface at a time, so the switcher can name the gap', () => {
+    const alerts = surfaceCoverage('ar', 'alerts');
+    expect(alerts.total).toBeGreaterThan(0);
+    expect(alerts.translated).toBe(alerts.total);
+
+    const settings = surfaceCoverage('ar', 'settings');
+    expect(settings.total).toBeGreaterThan(0);
+    expect(settings.translated).toBe(0);
+  });
+
+  it('reports a surface the catalogue has never heard of as empty, not as complete', () => {
+    // Zero of zero is not full coverage. Rendering 100% here would be the
+    // confident-zero defect with a percent sign on it — the console has an
+    // Explore page and the catalogue has no keys for it.
+    const { total, translated } = surfaceCoverage('ar', 'explore');
+    expect(total).toBe(0);
+    expect(translated).toBe(0);
+  });
+});
+
+describe('the pre-paint bootstrap script', () => {
+  // The script is injected into a `<script>` that runs before any module
+  // loads, so it cannot import `LOCALES` and duplicates it instead. The
+  // drift this repository keeps finding is the copy nobody checked.
+
+  it('knows every locale the console ships, and its direction', () => {
+    for (const meta of Object.values(LOCALES)) {
+      expect(localeBootstrapScript).toContain(`${meta.code}: '${meta.dir}'`);
+    }
+  });
+
+  it('writes both the language and the direction before paint', () => {
+    // Setting `lang` alone is the failure this guards: Arabic glyphs in a
+    // left-to-right page, reflowed once React hydrates.
+    expect(localeBootstrapScript).toContain("setAttribute('lang'");
+    expect(localeBootstrapScript).toContain("setAttribute('dir'");
+  });
+
+  it('falls back to the base locale rather than throwing', () => {
+    // localStorage throws in iOS private browsing.
+    expect(localeBootstrapScript).toContain('catch');
+    expect(localeBootstrapScript).toContain(BASE_LOCALE);
   });
 });

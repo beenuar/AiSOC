@@ -13,10 +13,10 @@ got.
 import uuid
 from datetime import UTC, datetime
 from enum import Enum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.v1.deps import AuthUser, require_permission
 
@@ -41,28 +41,31 @@ class LLMProvider(str, Enum):
     none = "none"
 
 
-class UpdateChannel(str, Enum):
-    stable = "stable"
-    beta = "beta"
-    nightly = "nightly"
-    manual = "manual"
-
-
 class DeploymentConfig(BaseModel):
     mode: DeploymentMode
     llm_provider: LLMProvider
-    update_channel: UpdateChannel
-    telemetry_enabled: bool
-    auto_update: bool
+    telemetry_enabled: Literal[False] = Field(
+        default=False,
+        description=(
+            "Always false. AiSOC has no phone-home and no model-improvement "
+            "callback; see docs/trust/data-flows.md. Reported rather than removed "
+            "so a consumer asking the question gets an answer, and typed as a "
+            "constant so the published spec cannot drift back to claiming "
+            "otherwise."
+        ),
+    )
     last_updated: str
 
 
 class DeploymentConfigUpdate(BaseModel):
+    # An unknown key is refused rather than ignored. Pydantic drops extras by
+    # default, so a client still sending `auto_update: true` would get a 200
+    # and believe it had configured self-updates. A field that was removed
+    # because nothing reads it must not be silently accepted.
+    model_config = ConfigDict(extra="forbid")
+
     mode: DeploymentMode | None = None
     llm_provider: LLMProvider | None = None
-    update_channel: UpdateChannel | None = None
-    telemetry_enabled: bool | None = None
-    auto_update: bool | None = None
 
 
 class AirgapStatus(BaseModel):
@@ -84,14 +87,28 @@ class BundleJob(BaseModel):
     includes: list[str]
 
 
-# ── Mock state ───────────────────────────────────────────────────────────────
-
+# ── Process-local configuration ──────────────────────────────────────────────
+#
+# This block was headed "Mock state" and held three fields nothing read:
+# `update_channel`, `auto_update` and a `telemetry_enabled` that defaulted to
+# true.
+#
+# The first two are gone rather than wired, because AiSOC does not update
+# itself. A settable channel and an auto-update flag are a promise that some
+# code acts on them; none does, and none is planned. Upgrades are an operator
+# action — see the upgrade runbook and `GET /api/v1/system/version`, which is
+# how a deployment reports which build it is actually on.
+#
+# `telemetry_enabled` is kept and pinned to false. It was the damaging one:
+# `true` was published into `docs/openapi.yaml`, so an API consumer reading
+# the spec concluded this platform phones home by default. It does not —
+# `docs/trust/data-flows.md` says so and three CI gates hold it there. The
+# field answers the question honestly instead of disappearing, and it is no
+# longer writable, because accepting `true` would have the API assert
+# something no code here can do.
 _config = DeploymentConfig(
     mode=DeploymentMode.cloud,
     llm_provider=LLMProvider.openai,
-    update_channel=UpdateChannel.stable,
-    telemetry_enabled=True,
-    auto_update=True,
     last_updated=datetime(2025, 6, 1, 12, 0, 0, tzinfo=UTC).isoformat(),
 )
 

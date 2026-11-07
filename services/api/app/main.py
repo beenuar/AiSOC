@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 
-from app._health import install_health_routes
+from app._health import install_health_routes, register_dependency
 from app.api.v1.endpoints.scim import ScimAuthFailed
 from app.api.v1.endpoints.scim import router as scim_router
 from app.api.v1.router import api_router
@@ -34,6 +34,7 @@ from app.middleware.audit_middleware import AuditMiddleware
 from app.middleware.demo_mode import DemoModeMiddleware
 from app.models import Base
 from app.services.plugin_manager import get_plugin_manager
+from app.services.schema_skew import readyz_probe
 from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.approval_expiry import run_forever as run_approval_expiry
@@ -805,6 +806,19 @@ def create_application() -> FastAPI:
     mark_ready, mark_not_ready = install_health_routes(app, service_name="aisoc-api")
     app.state.mark_ready = mark_ready
     app.state.mark_not_ready = mark_not_ready
+
+    # Is the live schema the one this build was written against? Nothing
+    # asked before: `aisoc_schema_migrations` was read only by the runner
+    # that writes it, so a deployment whose migration step failed or was
+    # skipped ran new code on an old schema while /readyz answered ready and
+    # the first symptom was an UndefinedColumnError on a random request.
+    #
+    # Registered as NOT required, deliberately. A required probe answers 503
+    # and the orchestrator stops routing — which, for a schema that is merely
+    # behind, takes an operator's console away in the middle of the incident
+    # they need it for. Non-required reports `ready_degraded` with the detail
+    # and keeps serving: loud, and not load-bearing.
+    register_dependency(app, "schema_migrations_current", readyz_probe, required=False)
 
     # OpenTelemetry auto-instrumentation (FastAPI + SQLAlchemy + httpx)
     instrument_app(app)
