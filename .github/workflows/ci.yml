@@ -365,6 +365,18 @@ jobs:
         run: python scripts/check_connector_paging.py --self-test
       - name: Verify every connector reads its poll window to the end
         run: python scripts/check_connector_paging.py
+      # The sibling defect to the one above, and it has now shipped three
+      # times: a connector polls a URL the vendor does not serve, and the
+      # 404 is handled in the same branch as a 403, so "our path is wrong"
+      # is reported as "the customer has not bought this" and nobody
+      # debugs it. Cloudflare WAF (#1686), the decommissioned CrowdStrike
+      # Detects API, and GitLab vulnerability findings (#1754) each ran
+      # that way for their whole life. A pairing is allowed only when the
+      # vendor publishes 404 in that endpoint's own response list.
+      - name: 404 is not 403 — self-test
+        run: python scripts/check_connector_404_conflation.py --self-test
+      - name: Verify no connector files a 404 as a permissions problem
+        run: python scripts/check_connector_404_conflation.py
       # Two permission models shipped side by side: 275 route dependencies
       # read the hardcoded ROLE_PERMISSIONS map while 27 read the
       # user_roles / role_permissions tables the console's RBAC screen

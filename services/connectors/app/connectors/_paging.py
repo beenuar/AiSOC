@@ -49,11 +49,28 @@ logger = structlog.get_logger()
 DEFAULT_MAX_PAGES = 25
 
 
-def _page_rows(body: Any, items_field: str) -> list[dict[str, Any]]:
-    if not isinstance(body, dict):
-        return []
-    rows = body.get(items_field)
+def _at(body: Any, path: str) -> Any:
+    """The value at a dotted ``path``, or None if any segment is missing.
+
+    A bare key is a one-segment path, so a vendor that returns its rows at
+    the top level and one that nests them under a GraphQL connection are read
+    by the same function rather than by two that can drift apart.
+    """
+    node = body
+    for key in path.split("."):
+        node = node.get(key) if isinstance(node, dict) else None
+    return node
+
+
+def _rows_at(body: Any, path: str) -> list[dict[str, Any]]:
+    rows = _at(body, path)
     return [row for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+
+
+def _token_at(body: Any, path: str) -> str | None:
+    """The continuation token at a dotted ``path``, or None when the collection has ended."""
+    node = _at(body, path)
+    return node if isinstance(node, str) and node else None
 
 
 def _next_link(body: Any, link_field: str) -> str | None:
@@ -86,7 +103,7 @@ async def read_linked_pages(
         logger.warning("connector.paging.first_page_unparseable", feed=feed)
         return []
 
-    rows = _page_rows(body, items_field)
+    rows = _rows_at(body, items_field)
     for _ in range(max_pages - 1):
         link = _next_link(body, link_field)
         if not link:
@@ -112,7 +129,7 @@ async def read_linked_pages(
         except ValueError:
             logger.warning("connector.paging.next_page_unparseable", feed=feed, rows=len(rows))
             return rows
-        rows.extend(_page_rows(body, items_field))
+        rows.extend(_rows_at(body, items_field))
 
     if _next_link(body, link_field):
         logger.warning(
@@ -125,20 +142,13 @@ async def read_linked_pages(
     return rows
 
 
-def _token_at(body: Any, path: str) -> str | None:
-    """The continuation token at a dotted ``path``, or None when the collection has ended."""
-    node = body
-    for key in path.split("."):
-        node = node.get(key) if isinstance(node, dict) else None
-    return node if isinstance(node, str) and node else None
-
-
 async def read_token_pages(
     *,
     request: Callable[[str | None], Awaitable[httpx.Response]],
     items_field: str,
     feed: str,
     token_field: str = "nextPageToken",
+    stop_when: Callable[[list[dict[str, Any]]], bool] | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
 ) -> list[dict[str, Any]]:
     """Every row of a collection paged by an opaque continuation token.
@@ -149,7 +159,16 @@ async def read_token_pages(
     POST. ``request`` is the caller's own closure so it keeps ownership of
     authentication, the retry-on-401 and where the token belongs; it is called
     with ``None`` for the opening page and with the token thereafter.
-    ``token_field`` is a dotted path, for a vendor that nests its token.
+    ``token_field`` and ``items_field`` are dotted paths, for a vendor that
+    nests either — a GraphQL connection puts its rows at
+    ``data.<field>.nodes`` and its cursor at ``data.<field>.pageInfo.endCursor``.
+    A bare key is a one-segment path, so existing callers are unchanged.
+
+    ``stop_when`` receives each **non-empty** page and ends the read when it
+    answers True, as in :func:`read_link_header_pages`. It is how a
+    newest-first collection with no server-side time filter stops once a page
+    has passed the start of the window, instead of walking back to the oldest
+    row the vendor holds.
 
     One rule here is not shared with the link-following version, and getting
     it wrong is worse than the truncation this exists to fix. **An empty page
@@ -163,7 +182,10 @@ async def read_token_pages(
     So the loop ends on the *token*, never on an empty page. A connector that
     stops at the first empty response can return nothing at all from a window
     that was full of events, which reads downstream as a quiet estate rather
-    than as a failed read.
+    than as a failed read. GitLab's GraphQL connections behave the same way —
+    a request this reviewer sent to the live endpoint came back with
+    ``nodes: []`` beside ``hasNextPage: true``, because authorization filters
+    rows out of a page without shortening the connection.
     """
     rows: list[dict[str, Any]] = []
     token: str | None = None
@@ -192,10 +214,13 @@ async def read_token_pages(
             logger.warning("connector.paging.token_page_unparseable", feed=feed, page=page, rows=len(rows))
             return rows
 
-        rows.extend(_page_rows(body, items_field))
+        page_rows = _rows_at(body, items_field)
+        rows.extend(page_rows)
 
         token = _token_at(body, token_field)
         if token is None:
+            return rows
+        if page_rows and stop_when is not None and stop_when(page_rows):
             return rows
 
     logger.warning(
