@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_link_header_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 
 logger = structlog.get_logger()
@@ -166,11 +167,14 @@ class OktaConnector(BaseConnector):
                     params={
                         "since": since,
                         "eventType": event_type,
-                        "limit": 50,
+                        # Okta's documented maximum. Each page spends a request
+                        # from the org's System Log rate limit, so a burst is
+                        # read in the fewest of them.
+                        "limit": 1000,
                     },
                 )
                 if resp.status_code == 200:
-                    events.extend(resp.json())
+                    events.extend(await read_link_header_pages(client, resp, headers=self._headers(), feed=f"okta.{event_type}"))
 
         return [self.normalize(e) for e in self.apply_checkpoint(events)]
 

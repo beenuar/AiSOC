@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import created_before, read_link_header_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 from app.connectors.posture import POSTURE_SNAPSHOT_ID
 from app.connectors.posture import github as github_posture
@@ -174,7 +175,7 @@ class GitHubConnector(BaseConnector):
                 },
             )
             if audit_resp.status_code == 200:
-                for entry in audit_resp.json() or []:
+                for entry in await read_link_header_pages(client, audit_resp, headers=self._headers(), feed="github.audit_log"):
                     entry["_aisoc_stream"] = "audit_log"
                     events.append(entry)
             elif audit_resp.status_code == 404:
@@ -206,20 +207,19 @@ class GitHubConnector(BaseConnector):
                 },
             )
             if cs_resp.status_code == 200:
-                for alert in cs_resp.json() or []:
-                    # Client-side filter on creation time. GitHub doesn't
-                    # accept ``since`` on this endpoint, and pulling >100
-                    # results just to filter would be wasteful at scale.
-                    created_at = alert.get("created_at")
-                    if created_at:
-                        try:
-                            created_dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
-                            if created_dt.timestamp() * 1000 < start_ms:
-                                # Sorted desc → first too-old result means
-                                # all subsequent ones are also too old.
-                                break
-                        except ValueError:
-                            pass  # unparseable timestamp; keep event without age filter
+                # GitHub doesn't accept ``since`` on this endpoint. Sorted desc,
+                # so the first too-old result means all subsequent ones are
+                # also too old: stop requesting at the page that shows one.
+                alerts = await read_link_header_pages(
+                    client,
+                    cs_resp,
+                    headers=self._headers(),
+                    feed="github.code_scanning",
+                    stop_when=lambda page: created_before(page[-1], start_ms),
+                )
+                for alert in alerts:
+                    if created_before(alert, start_ms):
+                        break
                     alert["_aisoc_stream"] = "code_scanning"
                     events.append(alert)
             elif cs_resp.status_code in (403, 404):
