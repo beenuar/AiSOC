@@ -1438,6 +1438,31 @@ jobs:
           password: aisoc_ci_secret
           tag: "16"
 
+      # The dump and the replay must speak the server's dialect, and the
+      # runner image's client tools are whatever ubuntu-latest ships this
+      # week: the 24.04 -> 26.04 rotation (2026-11-09) moved them to
+      # PostgreSQL 18, whose pg_dump writes `SET transaction_timeout` — a
+      # parameter the pinned 16 server does not recognise, so the
+      # --single-transaction replay aborted wholesale and only the probe-row
+      # count below noticed. Shimming pg_dump/psql to the server container's
+      # own binaries makes client and server the same version by
+      # construction, whichever image the runner rotates to next. Both
+      # scripts stream over stdin/stdout, so `docker exec -i` carries them.
+      - name: Use the server's own client tools
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/pgbin"
+          # `-e PGPASSWORD` forwards the caller's value into the container, so
+          # the seed and verify steps' `PGPASSWORD=… psql -h localhost` keeps
+          # authenticating exactly as it did against the apt client.
+          for tool in pg_dump psql pg_restore; do
+            printf '#!/bin/sh\nexec docker exec -i -e PGPASSWORD aisoc-ci-postgres %s "$@"\n' "$tool" > "$RUNNER_TEMP/pgbin/$tool"
+            chmod +x "$RUNNER_TEMP/pgbin/$tool"
+          done
+          echo "$RUNNER_TEMP/pgbin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/pgbin/psql" --version
+          "$RUNNER_TEMP/pgbin/pg_dump" --version
+
       - name: Generate this run's backup encryption key
         run: |
           set -euo pipefail
@@ -1458,11 +1483,13 @@ jobs:
             echo "required check that never reports blocks the pull request forever."
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Install tooling (awscli + postgres client)
+      # No apt postgres client here any more: the shim step above provides
+      # pg_dump/psql at the server's own version, and the apt package tracks
+      # the runner image's release instead (18 on ubuntu-26.04, the mismatch
+      # that broke this job).
+      - name: Install tooling (awscli)
         if: needs.changes.outputs.backup == 'true'
-        run: |
-          pip install --quiet awscli "cryptography>=46,<51"
-          sudo apt-get update -q && sudo apt-get install -y -q postgresql-client
+        run: pip install --quiet awscli "cryptography>=46,<51"
 
       # The S3 endpoint is a fixture: what this job tests is backup.sh and
       # restore.sh, not the object store. It still has to be a real S3 server,
