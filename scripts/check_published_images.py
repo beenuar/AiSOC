@@ -75,8 +75,19 @@ What it checks
     * *Ahead* of it — not a finding. A newer commit publishing while this run
       was asking is a race this gate wins by losing, and reading it as drift
       would red the ``verify`` job of the very workflow that just published.
-    * Behind it — a finding once either bound is crossed, and the two catch
-      different shapes:
+    * Behind it, by commits that could not have produced a publish — not a
+      finding, and said out loud rather than passed silently. ``publish-images``
+      runs only when a push touches its ``on.push.paths`` filter, so a
+      docs-only commit leaves every ``:latest`` one commit "behind" while the
+      artefacts it holds are byte-for-byte what a build of the head would
+      produce. The lag below therefore counts commits touching that filter —
+      read from the workflow itself (:data:`PUBLISH_WORKFLOW_REL`), never
+      repeated here — and the publish window runs from the newest such commit,
+      not from the head, so a docs push cannot hand a failed publish a fresh
+      window. When the filter cannot be read faithfully, every commit counts,
+      which is the stricter pre-existing behaviour.
+    * Behind it otherwise — a finding once either bound is crossed, and the
+      two catch different shapes:
 
       ``time``   the head commit is older than :data:`PUBLISH_GRACE_SECONDS`.
                  Below that the publish for it may genuinely still be running,
@@ -185,6 +196,15 @@ COMPOSE_FILES: tuple[Path, ...] = (
 
 CHART_REL = Path("infra/helm/aisoc")
 VERSION_REL = Path("VERSION")
+
+#: The workflow that moves the moving tags. Its ``on.push.paths`` filter is the
+#: repository's own definition of which commits produce a publish at all, and
+#: the currency comparison reads it from here rather than repeating the list —
+#: two copies of "what feeds an image" is how the gate and the trigger would
+#: drift into disagreeing, which is exactly what happened before this existed:
+#: a docs-only commit landed, the filter correctly skipped the publish, and the
+#: raw commit count still called every ``:latest`` stale.
+PUBLISH_WORKFLOW_REL = Path(".github/workflows/publish-images.yml")
 
 #: The registry this project publishes to. A reference anywhere else belongs
 #: to somebody else and is reported rather than resolved — see the docstring.
@@ -324,6 +344,18 @@ class Freshness:
     #: state names. Zero when the two are equal or the question is moot.
     distance: int = 0
     detail: str = ""
+    #: Of those commits, how many touch the paths ``publish-images.yml``
+    #: triggers on — the only commits whose publish could have moved the tag.
+    #: ``None`` means the question was not asked (no workflow to read, or a
+    #: shape its reader refuses), in which case every commit counts, which is
+    #: the stricter pre-existing behaviour: it can false-red a docs-only push
+    #: but can never tolerate a genuinely stale artefact.
+    publish_relevant: int | None = None
+    #: Seconds since the newest publish-triggering commit in the gap landed.
+    #: This is the clock the publish window runs on when it is known: a docs
+    #: push on top must not restart the clock for a publish that failed, and
+    #: measured from the head it would.
+    relevant_age_seconds: int | None = None
 
 
 # --------------------------------------------------------------------------
@@ -444,6 +476,14 @@ def collect_helm_references(root: Path) -> list[Reference]:
                     walk(item, f"{trail}[{index}]")
             return
         repository = node.get("repository")
+        if isinstance(repository, str) and not repository.strip() and "tag" in node:
+            # An optional component ships `repository: ""` on purpose — the
+            # template `required`s a value at render time, so enabling it
+            # without one fails with a sentence rather than a pull backoff.
+            # An empty name is not a reference an operator can pull, and
+            # emitting it here put a nameless ":vX.Y.Z" in the third-party
+            # list, which reads as a parse failure.
+            return
         if isinstance(repository, str) and "tag" in node:
             declared = str(node.get("tag") or "")
             # `tag: ""` is not "no tag": every template that reads one of these
@@ -551,6 +591,42 @@ def version_at(root: Path, commit: str) -> str:
 # --------------------------------------------------------------------------
 # Placing a published commit against the branch a moving tag has to track
 # --------------------------------------------------------------------------
+def publish_trigger_pathspecs(root: Path) -> tuple[str, ...]:
+    """The paths a push must touch before a publish runs, as git pathspecs.
+
+    Read from ``publish-images.yml``'s own ``on.push.paths`` so the gate asks
+    the same question the trigger answers. GitHub's filter globs and git's
+    ``:(glob)`` magic agree on the shapes used here: ``*`` stops at ``/``,
+    ``**`` crosses it, and a bare filename is anchored to the repository root.
+
+    Returns ``()`` — meaning "count every commit", the stricter behaviour —
+    whenever the list cannot be read faithfully: no workflow file, unparsable
+    YAML, no ``paths`` filter at all (every push publishes, so every commit
+    counts), or a negation pattern, which flips semantics this reader does not
+    implement and must refuse rather than half-apply.
+    """
+    workflow = root / PUBLISH_WORKFLOW_REL
+    if not workflow.is_file():
+        return ()
+    try:
+        document = yaml.safe_load(workflow.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return ()
+    # YAML 1.1 reads an unquoted `on:` key as the boolean True, so both
+    # spellings of the trigger block have to be consulted.
+    triggers = document.get("on", document.get(True)) if isinstance(document, dict) else None
+    push = triggers.get("push") if isinstance(triggers, dict) else None
+    paths = push.get("paths") if isinstance(push, dict) else None
+    if not isinstance(paths, list) or not paths:
+        return ()
+    specs: list[str] = []
+    for pattern in paths:
+        if not isinstance(pattern, str) or not pattern or pattern.startswith("!"):
+            return ()
+        specs.append(f":(glob){pattern}")
+    return tuple(specs)
+
+
 def _git(root: Path, *argv: str) -> tuple[int, str]:
     """Run git in ``root``. Returns (status, trimmed stdout)."""
     out = subprocess.run(  # noqa: S603 - fixed argv, no shell
@@ -619,7 +695,28 @@ def place_revision(root: Path, revision: str, head: Head) -> Freshness:
         status, count = _git(root, "rev-list", "--count", f"{commit}..{head.commit}")
         if status != 0 or not count.isdigit():
             return Freshness(UNPLACEABLE, detail=f"git could not count the commits between {revision[:9]} and {head.short}")
-        return Freshness(BEHIND, distance=int(count))
+        distance = int(count)
+        relevant: int | None = None
+        relevant_age: int | None = None
+        specs = publish_trigger_pathspecs(root)
+        if specs and distance:
+            status, listed = _git(root, "rev-list", f"{commit}..{head.commit}", "--", *specs)
+            if status == 0:
+                touching = [line for line in listed.splitlines() if line]
+                relevant = len(touching)
+                if touching:
+                    # The publish window runs from the newest commit whose
+                    # publish could have moved the tag, not from the head: a
+                    # docs push on top must not hand a failed publish a fresh
+                    # window every time somebody edits a README.
+                    status, stamp = _git(root, "show", "-s", "--format=%ct", touching[0])
+                    if status == 0 and stamp.isdigit():
+                        relevant_age = max(0, int(time.time()) - int(stamp))
+                    else:
+                        # A count without its clock would fire the ceiling rule
+                        # on one definition and the window rule on another.
+                        relevant = None
+        return Freshness(BEHIND, distance=distance, publish_relevant=relevant, relevant_age_seconds=relevant_age)
     if _git(root, "merge-base", "--is-ancestor", head.commit, commit)[0] == 0:
         status, count = _git(root, "rev-list", "--count", f"{head.commit}..{commit}")
         return Freshness(AHEAD, distance=int(count) if count.isdigit() else 0)
@@ -797,8 +894,23 @@ def currency_findings(
         ]
     if freshness.state != BEHIND:
         return []
+    if freshness.publish_relevant == 0:
+        # Known zero, never None: every commit in the gap misses the paths
+        # publish-images triggers on, so no publish was ever going to move the
+        # tag and a build of the head would produce these same artefacts.
+        # Tolerated out loud by tolerated_lag, not silently.
+        return []
     behind = f"{lead} built {freshness.distance} commit(s) behind {head.short} ({head.ref})"
-    if freshness.distance > max_lag:
+    if freshness.publish_relevant is not None:
+        behind += f", {freshness.publish_relevant} of them touching the paths {PUBLISH_WORKFLOW_REL.name} builds from"
+        lag = freshness.publish_relevant
+        clock = freshness.relevant_age_seconds if freshness.relevant_age_seconds is not None else head.age_seconds
+        landed = "the newest image-affecting commit landed"
+    else:
+        lag = freshness.distance
+        clock = head.age_seconds
+        landed = "which landed"
+    if lag > max_lag:
         return [
             (
                 "revision-stale",
@@ -807,11 +919,11 @@ def currency_findings(
                 "branch is 24. Anyone pulling this tag is running something else.",
             )
         ]
-    if head.age_seconds > grace_seconds:
+    if clock > grace_seconds:
         return [
             (
                 "revision-stale",
-                f"{behind}, which landed {head.age_seconds // 60} minutes ago — past the "
+                f"{behind}, {landed} {clock // 60} minutes ago — past the "
                 f"{grace_seconds // 60}-minute window in which its publish could still be running. The publish "
                 "has had its chance and the tag did not move, so anyone following the documented deployment "
                 "path is pulling an older commit than this branch.",
@@ -844,6 +956,19 @@ def tolerated_lag(
         return ""
     if currency_findings(reference, freshness, head, grace_seconds=grace_seconds, max_lag=max_lag):
         return ""
+    if freshness.publish_relevant == 0:
+        return (
+            f"{reference.ref} is {freshness.distance} commit(s) behind {head.short}, none of which touch the "
+            f"paths {PUBLISH_WORKFLOW_REL.name} builds from — no publish was meant to run, and a build of the "
+            "head would produce these same artefacts. Treated as current until an image-affecting commit lands."
+        )
+    if freshness.publish_relevant is not None and freshness.relevant_age_seconds is not None:
+        return (
+            f"{reference.ref} is {freshness.distance} commit(s) behind {head.short}, "
+            f"{freshness.publish_relevant} of them image-affecting, the newest landing "
+            f"{freshness.relevant_age_seconds // 60} minutes ago. Inside the {grace_seconds // 60}-minute "
+            "publish window, so not yet a finding — it becomes one if the tag is still behind after that."
+        )
     return (
         f"{reference.ref} is {freshness.distance} commit(s) behind {head.short}, which landed "
         f"{head.age_seconds // 60} minutes ago. Inside the {grace_seconds // 60}-minute publish window, so "
@@ -1057,9 +1182,16 @@ def main(argv: list[str] | None = None) -> int:
     print(f"freshness        {'enforced' if args.require_fresh else 'reported only (pass --require-fresh to enforce)'}")
     moving = [r for r in report.first_party if r.moving and r.tracks_tree]
     if report.head is not None:
+        specs = publish_trigger_pathspecs(root)
+        counted = (
+            f"commits touching the {len(specs)} path filter(s) in {PUBLISH_WORKFLOW_REL.name}"
+            if specs
+            else "every commit (no publish paths filter was read)"
+        )
         print(
             f"moving tags      {len(moving)} compared against {report.head.commit} ({report.head.ref}), "
-            f"{report.head.age_seconds // 60}m old; window {PUBLISH_GRACE_SECONDS // 60}m, ceiling {MAX_LAG_COMMITS} commits"
+            f"{report.head.age_seconds // 60}m old; window {PUBLISH_GRACE_SECONDS // 60}m, ceiling {MAX_LAG_COMMITS} commits; "
+            f"lag counts {counted}"
         )
     else:
         print(f"moving tags      {len(moving)} present, currency not enforced (pass --require-current to compare the commit)")
@@ -1209,6 +1341,11 @@ def _commit_graph_checks(record: Callable[..., None]) -> None:
                 (place_revision(tree, first, head).state, place_revision(tree, first, head).distance),
                 (BEHIND, 2),
             ),
+            (
+                "a tree with no publish workflow counts every commit (relevance unknown, strict)",
+                place_revision(tree, first, head).publish_relevant,
+                None,
+            ),
             ("an abbreviated sha places the same as a full one", place_revision(tree, first[:9], head).state, BEHIND),
             ("a revision newer than the head is ahead, never behind", place_revision(tree, third, older).state, AHEAD),
             ("a revision on another branch is neither", place_revision(tree, elsewhere, head).state, DIVERGED),
@@ -1230,6 +1367,88 @@ def _commit_graph_checks(record: Callable[..., None]) -> None:
             record("GIT: a checkout with no main refuses rather than falling back to HEAD", True, str(exc)[:120])
         else:
             record("GIT: a checkout with no main refuses rather than falling back to HEAD", False, f"resolved {resolved!r}")
+
+
+def _publish_paths_checks(record: Callable[..., None]) -> None:
+    """Drive the paths-aware lag against a real commit graph and a real filter.
+
+    A workflow fixture declaring ``paths: [services/**, package.json]``, then
+    commits on either side of that filter, so the counting is performed by the
+    same git pathspec calls the gate makes — and every refusal the reader
+    promises is proven on the same tree before the filter is written.
+    """
+    git = ["git", "-c", "user.name=gate", "-c", "user.email=gate@invalid", "-c", "commit.gpgsign=false"]
+    with scratch_tree() as tree:
+
+        def commit(rel: str, message: str) -> str:
+            path = tree / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(message, encoding="utf-8")
+            subprocess.run(git + ["add", "-A"], cwd=tree, check=True, capture_output=True)  # noqa: S603
+            subprocess.run(git + ["commit", "-qm", message], cwd=tree, check=True, capture_output=True)  # noqa: S603
+            return subprocess.run(  # noqa: S603
+                ["git", "rev-parse", "HEAD"], cwd=tree, check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+        workflow = tree / PUBLISH_WORKFLOW_REL
+        workflow.parent.mkdir(parents=True, exist_ok=True)
+
+        refusals: list[tuple[str, str | None]] = [
+            ("no workflow file reads as no filter", None),
+            ("a push trigger with no paths filter publishes every push, so every commit counts", "on:\n  push:\n    branches: [main]\n"),
+            (
+                "a negation pattern is refused whole rather than half-applied",
+                "on:\n  push:\n    paths:\n      - 'services/**'\n      - '!services/docs/**'\n",
+            ),
+            ("unparsable YAML reads as no filter", "on: ["),
+        ]
+        for description, content in refusals:
+            if content is not None:
+                workflow.write_text(content, encoding="utf-8")
+            got = publish_trigger_pathspecs(tree)
+            record(f"PATHS: {description}", got == (), f"got {got!r}")
+
+        workflow.write_text(
+            "on:\n  push:\n    branches: [main]\n    paths:\n      - 'services/**'\n      - 'package.json'\n",
+            encoding="utf-8",
+        )
+        specs = publish_trigger_pathspecs(tree)
+        record(
+            "PATHS: the filter is read from the workflow itself, as glob pathspecs",
+            specs == (":(glob)services/**", ":(glob)package.json"),
+            f"got {specs!r}",
+        )
+
+        code = commit("services/app/deep/mod.py", "code one")
+        docs_one = commit("docs/guide.md", "docs one")
+        commit("README.md", "docs two")
+        head = resolve_tracking_head(tree)
+        placed = place_revision(tree, code, head)
+        record(
+            "PATHS: a gap of docs-only commits counts zero image-affecting commits",
+            (placed.state, placed.distance, placed.publish_relevant) == (BEHIND, 2, 0),
+            f"got ({placed.state!r}, {placed.distance}, {placed.publish_relevant})",
+        )
+
+        code_two = commit("package.json", "code two")
+        head = resolve_tracking_head(tree)
+        placed = place_revision(tree, docs_one, head)
+        record(
+            "PATHS: a root-anchored filename in the filter counts, and carries its own clock",
+            (placed.state, placed.distance, placed.publish_relevant) == (BEHIND, 2, 1)
+            and placed.relevant_age_seconds is not None
+            and placed.relevant_age_seconds < 600,
+            f"got ({placed.state!r}, {placed.distance}, {placed.publish_relevant}, {placed.relevant_age_seconds})",
+        )
+
+        commit("sub/package.json", "a nested package.json is not the root one")
+        head = resolve_tracking_head(tree)
+        placed = place_revision(tree, code_two, head)
+        record(
+            "PATHS: the filter is anchored to the repository root, exactly as the workflow's is",
+            (placed.distance, placed.publish_relevant) == (1, 0),
+            f"got ({placed.distance}, {placed.publish_relevant})",
+        )
 
 
 def self_test() -> int:
@@ -1385,7 +1604,8 @@ def self_test() -> int:
         (chart / "Chart.yaml").write_text('appVersion: "9.9.9"\n', encoding="utf-8")
         (chart / "values.yaml").write_text(
             'services:\n  api:\n    image:\n      repository: ghcr.io/beenuar/aisoc-core-api\n      tag: ""\n'
-            'ueba:\n  image:\n    repository: ghcr.io/beenuar/aisoc-ueba\n    tag: "1.2.3"\n',
+            'ueba:\n  image:\n    repository: ghcr.io/beenuar/aisoc-ueba\n    tag: "1.2.3"\n'
+            'mcp:\n  enabled: false\n  image:\n    repository: ""\n    tag: ""\n',
             encoding="utf-8",
         )
         parsed = {r.service: (r.repository, r.tag) for r in collect_helm_references(tree)}
@@ -1398,6 +1618,11 @@ def self_test() -> int:
         "CHART: a nested block outside services/ is found by walking, not by being named",
         parsed.get("ueba.image") == ("ghcr.io/beenuar/aisoc-ueba", "1.2.3"),
         f"got {parsed.get('ueba.image')!r}",
+    )
+    record(
+        "CHART: an optional component with repository set to empty-on-purpose emits no reference",
+        "mcp.image" not in parsed,
+        f"got {parsed.get('mcp.image')!r}",
     )
 
     # ── Commit-level currency, in both directions ────────────────────────
@@ -1450,6 +1675,22 @@ def self_test() -> int:
             "revision-unplaceable",
             _currency_codes(None, settled),
         ),
+        (
+            "a docs push on top must not hand a failed publish a fresh window",
+            "revision-stale",
+            # The head landed four minutes ago (a README edit); the image-affecting
+            # commit whose publish failed landed eight hours ago. Clocked off the
+            # head this is tolerated forever on a busy docs day.
+            _currency_codes(Freshness(BEHIND, distance=3, publish_relevant=1, relevant_age_seconds=8 * 3600), just_landed),
+        ),
+        (
+            "the ceiling counts image-affecting commits when they are known",
+            "revision-stale",
+            _currency_codes(
+                Freshness(BEHIND, distance=MAX_LAG_COMMITS + 10, publish_relevant=MAX_LAG_COMMITS + 1, relevant_age_seconds=60),
+                just_landed,
+            ),
+        ),
     ]
     for description, expected, found in must_fail:
         record(f"CURRENCY: {description}", expected in found, f"expected [{expected}]  got {sorted(found) or 'nothing'}")
@@ -1467,6 +1708,21 @@ def self_test() -> int:
         (
             "behind by exactly the ceiling, inside the window, is still a publish in flight",
             _currency_codes(Freshness(BEHIND, distance=MAX_LAG_COMMITS), just_landed),
+        ),
+        (
+            # The 2026-11-08 incident: a credits commit touched .github/CREDITS.md,
+            # publish-images correctly did not run, and sixteen `:latest` tags were
+            # called stale for holding exactly what a build of the head would produce.
+            "THE DOCS-ONLY INCIDENT: one commit behind, and it feeds no image",
+            _currency_codes(Freshness(BEHIND, distance=1, publish_relevant=0), settled),
+        ),
+        (
+            "a wide gap made entirely of docs commits is still not drift",
+            _currency_codes(Freshness(BEHIND, distance=MAX_LAG_COMMITS + 10, publish_relevant=0), settled),
+        ),
+        (
+            "an image-affecting commit inside the window is a publish in flight, however old the head",
+            _currency_codes(Freshness(BEHIND, distance=5, publish_relevant=2, relevant_age_seconds=60), settled),
         ),
         (
             "an immutable version tag is a past snapshot and is never asked to track the head",
@@ -1535,8 +1791,30 @@ def self_test() -> int:
         and not tolerated_lag(_reference(), Freshness(BEHIND, distance=MAX_LAG_COMMITS + 1), just_landed),
         "the note derives from the verdict, so the two cannot contradict each other",
     )
+    docs_only_note = tolerated_lag(_reference(), Freshness(BEHIND, distance=1, publish_relevant=0), settled)
+    record(
+        "CURRENCY: a docs-only lag is tolerated out loud, with the reason",
+        "no publish was meant to run" in docs_only_note,
+        f"got {docs_only_note!r}",
+    )
 
     _commit_graph_checks(record)
+    _publish_paths_checks(record)
+
+    # The counting above is only honest while the fixture filter and the real
+    # one stay the same kind of thing. If this fails because the filter was
+    # deliberately removed (every push publishes), delete the assertion with
+    # it; if it fails because the workflow moved or its shape changed, the
+    # reader has silently stopped reading it and every docs-only push on main
+    # is about to be called drift again.
+    real_root = repo_root()
+    if (real_root / PUBLISH_WORKFLOW_REL).is_file():
+        real_specs = publish_trigger_pathspecs(real_root)
+        record(
+            "PATHS: the repository's own publish workflow filter is readable",
+            bool(real_specs),
+            f"read {len(real_specs)} pathspec(s) from {PUBLISH_WORKFLOW_REL}",
+        )
 
     # The shared floor every gate here answers to, run the way CI runs this one.
     refused, detail = refuses_an_empty_tree(Path(__file__).name, ["--require-fresh"])

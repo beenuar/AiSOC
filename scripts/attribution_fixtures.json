@@ -33,7 +33,13 @@
     "Powered by Claude",
     "Assisted by Cursor",
     "https://cursor.com",
-    "https://claude.com/claude-code"
+    "https://claude.com/claude-code",
+    "Claude-Session: https://claude.ai/code/session_016dzNue8meBxmLrohu2gE4K",
+    "Cursor-Agent-Session: https://cursor.com/agents?id=bc-1234",
+    "chatgpt-conversation: 68f1c2aa",
+    "See https://claude.ai/share/9b2e51cc for the conversation that produced this.",
+    "Transcript at https://chatgpt.com/share/e4a1-22bc.",
+    "Session: https://chat.openai.com/c/0f3d9e12"
   ],
 
   "good": [
@@ -54,6 +60,11 @@
     "This detection fires on anomalous Copilot usage in the customer's estate.",
     "A reference AI-SOC platform reports a comparable figure.",
     "The report was generated with scripts/render_eval_charts.py.",
-    "Fixtures are created by build_positive() from the rule under test."
+    "Fixtures are created by build_positive() from the rule under test.",
+    "claude-3-5-sonnet: {input: 3.00, output: 15.00}",
+    "openai: {api_base: 'http://litellm:4000', api_key: vaulted}",
+    "The session: how a SOC shift hands over an investigation.",
+    "Deep links target /cases?session=abc123 on the console.",
+    "The copilot thread: wiring the chat surface to real evidence."
   ]
 }

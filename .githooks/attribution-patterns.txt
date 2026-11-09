@@ -33,3 +33,17 @@
 
 # --- A bare vendor URL on its own line (the link half of a stripped footer) --
 ^[ \t]*<?https?://(www\.)?(cursor\.(com|sh|so)|claude\.(ai|com)|anthropic\.com|codeium\.com|windsurf\.(com|ai)|githubcopilot\.com)
+
+# --- Tool session trailers: `Claude-Session:`, `Cursor-Conversation:` ... -----
+# One reached main inside a squash message (`Claude-Session: https://claude.ai/
+# code/session_...`): the key names the vendor and the value names the run that
+# produced the work, which is attribution however it is spelled. A model alias
+# (`claude-3-5-sonnet:`) never ends in a session word, so it cannot match.
+^[ \t]*(cursor|claude|anthropic|openai|chatgpt|copilot|codex|gemini|devin|windsurf|aider|codeium)([a-z0-9-]*-)?(session|conversation|transcript|thread)[ \t]*:
+
+# --- An AI-session link anywhere in a line ------------------------------------
+# The bare-URL pattern above is anchored to the line start, so a session URL
+# behind a trailer key or mid-sentence sailed past it. A share/session path on
+# a vendor host points at the tool run that produced the work; a neutral prose
+# mention of a vendor or model carries no such path and is untouched.
+https?://(www\.)?((claude\.(ai|com)|chatgpt\.com|chat\.openai\.com)/(code/)?(session|share|chat|c)(/|_|\?)|cursor\.com/agents)

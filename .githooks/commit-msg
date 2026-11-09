@@ -18,11 +18,17 @@
 #
 # Why this is load-bearing for `main`
 # -----------------------------------
-# The repository squash-merges with squash_merge_commit_message=COMMIT_MESSAGES,
-# which means GitHub composes the squash commit body from the branch commits.
-# A trailer on any branch commit is therefore copied onto `main` at merge time.
-# Stripping it at commit time is what stops it there; scripts/check_attribution.py
-# is the backstop that fails CI if one reaches a PR anyway.
+# The repository squash-merged with squash_merge_commit_message=COMMIT_MESSAGES
+# until 2026-11-08, when GitHub composed a squash body from branch commits and
+# copied a tool session trailer onto `main` — and auto-appended a tool co-author
+# credit derived from a branch commit's *authorship*, a line that existed nowhere
+# a pre-merge scan could see. The default is now PR_BODY, so a squash body comes
+# from the pull request description (which the PR-side gate scans) rather than
+# from branch commits. Stripping at commit time is still the first line: a
+# trailer that never reaches a branch commit cannot be composed or copied from
+# anywhere. Whether GitHub still appends authorship-derived co-author trailers
+# under PR_BODY is merge-time behaviour no client-side hook can reach, which is
+# why the push-to-main leg of scripts/check_attribution.py stays the backstop.
 #
 # This hook NEVER rejects a commit. It rewrites the message and exits 0. A hook
 # that can block is a hook that can halt someone's work on a bad pattern; the
