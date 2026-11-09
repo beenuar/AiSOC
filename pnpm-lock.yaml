@@ -76,7 +76,7 @@ importers:
         version: 3.10.2(@mdx-js/react@3.1.1)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(typescript@6.0.3)
       '@docusaurus/preset-classic':
         specifier: 3.10.2
-        version: 3.10.2(@algolia/client-search@5.60.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3)
+        version: 3.10.2(@algolia/client-search@5.61.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3)
       '@mdx-js/react':
         specifier: ^3.0.0
         version: 3.1.1(@types/react@19.3.0)(react@19.3.1)
@@ -133,8 +133,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       framer-motion:
-        specifier: ^14.0.0
-        version: 14.1.0(react-dom@19.3.1)(react@19.3.1)
+        specifier: ^14.9.1
+        version: 14.9.1(react-dom@19.3.1)(react@19.3.1)
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -158,7 +158,7 @@ importers:
         version: 2.6.1(@types/react-dom@19.3.0)(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)
       recharts:
         specifier: ^3.10.1
-        version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.1)(react-is@19.3.0)(react@19.3.1)(redux@5.0.1)
+        version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.1)(react-is@19.3.1)(react@19.3.1)(redux@5.0.1)
       swr:
         specifier: ^2.5.1
         version: 2.5.1(react@19.3.1)
@@ -252,7 +252,7 @@ importers:
         version: 6.0.3
       vite:
         specifier: ^8.3.5
-        version: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+        version: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
       vitest:
         specifier: ^4.1.12
         version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
@@ -276,7 +276,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
+        version: 4.1.12(@types/node@26.6.5)(vite@8.3.6)
 
   packages/aisoc-lite:
     dependencies:
@@ -298,7 +298,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
+        version: 4.1.12(@types/node@26.6.5)(vite@8.3.6)
 
   packages/ocsf:
     devDependencies:
@@ -316,7 +316,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
+        version: 4.1.12(@types/node@26.6.5)(vite@8.3.6)
 
   packages/sdk-ts:
     dependencies:
@@ -338,7 +338,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
+        version: 4.1.12(@types/node@26.6.5)(vite@8.3.6)
 
   packages/types:
     devDependencies:
@@ -394,7 +394,7 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^4.1.12
-        version: 4.1.12(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@30.1.3)(vite@8.3.5)
+        version: 4.1.12(@types/node@26.6.5)(vite@8.3.6)
 
 packages:
 
@@ -422,80 +422,80 @@ packages:
       '@algolia/requester-node-http': 5.52.0
     dev: false
 
-  /@algolia/autocomplete-core@1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
+  /@algolia/autocomplete-core@1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
     resolution: {integrity: sha512-O7BxrpLDPJWWHv/DLA9DRFWs+iY1uOJZkqUwjS5HSZAGcl0hIVCQ97LTLewiZmZ402JYUrun+8NqFP+hCknlbQ==}
     dependencies:
-      '@algolia/autocomplete-plugin-algolia-insights': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
-      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
+      '@algolia/autocomplete-plugin-algolia-insights': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
+      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
     transitivePeerDependencies:
       - '@algolia/client-search'
       - algoliasearch
       - search-insights
     dev: false
 
-  /@algolia/autocomplete-core@1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
+  /@algolia/autocomplete-core@1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
     resolution: {integrity: sha512-3YEorYg44niXcm7gkft3nXYItHd44e8tmh4D33CTszPgP0QWkaLEaFywiNyJBo7UL/mqObA/G9RYuU7R8tN1IA==}
     dependencies:
-      '@algolia/autocomplete-plugin-algolia-insights': 1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
-      '@algolia/autocomplete-shared': 1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
+      '@algolia/autocomplete-plugin-algolia-insights': 1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
+      '@algolia/autocomplete-shared': 1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
     transitivePeerDependencies:
       - '@algolia/client-search'
       - algoliasearch
       - search-insights
     dev: false
 
-  /@algolia/autocomplete-plugin-algolia-insights@1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
+  /@algolia/autocomplete-plugin-algolia-insights@1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
     resolution: {integrity: sha512-u1fEHkCbWF92DBeB/KHeMacsjsoI0wFhjZtlCq2ddZbAehshbZST6Hs0Avkc0s+4UyBGbMDnSuXHLuvRWK5iDQ==}
     peerDependencies:
       search-insights: '>= 1 < 3'
     dependencies:
-      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
+      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
       search-insights: 2.17.3
     transitivePeerDependencies:
       - '@algolia/client-search'
       - algoliasearch
     dev: false
 
-  /@algolia/autocomplete-plugin-algolia-insights@1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
+  /@algolia/autocomplete-plugin-algolia-insights@1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3):
     resolution: {integrity: sha512-ZvJWO8ZZJDpc1LNM2TTBdmQsZBLMR4rU5iNR2OYvEeFBiaf/0ESnRSSLQbryarJY4SVxtoz6A2ZtDMNM+iQEAA==}
     peerDependencies:
       search-insights: '>= 1 < 3'
     dependencies:
-      '@algolia/autocomplete-shared': 1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
+      '@algolia/autocomplete-shared': 1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
       search-insights: 2.17.3
     transitivePeerDependencies:
       - '@algolia/client-search'
       - algoliasearch
     dev: false
 
-  /@algolia/autocomplete-preset-algolia@1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0):
+  /@algolia/autocomplete-preset-algolia@1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0):
     resolution: {integrity: sha512-Na1OuceSJeg8j7ZWn5ssMu/Ax3amtOwk76u4h5J4eK2Nx2KB5qt0Z4cOapCsxot9VcEN11ADV5aUSlQF4RhGjQ==}
     peerDependencies:
       '@algolia/client-search': '>= 4.9.1 < 6'
       algoliasearch: '>= 4.9.1 < 6'
     dependencies:
-      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
-      '@algolia/client-search': 5.60.0
+      '@algolia/autocomplete-shared': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
+      '@algolia/client-search': 5.61.0
       algoliasearch: 5.52.0
     dev: false
 
-  /@algolia/autocomplete-shared@1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0):
+  /@algolia/autocomplete-shared@1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0):
     resolution: {integrity: sha512-iDf05JDQ7I0b7JEA/9IektxN/80a2MZ1ToohfmNS3rfeuQnIKI3IJlIafD0xu4StbtQTghx9T3Maa97ytkXenQ==}
     peerDependencies:
       '@algolia/client-search': '>= 4.9.1 < 6'
       algoliasearch: '>= 4.9.1 < 6'
     dependencies:
-      '@algolia/client-search': 5.60.0
+      '@algolia/client-search': 5.61.0
       algoliasearch: 5.52.0
     dev: false
 
-  /@algolia/autocomplete-shared@1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0):
+  /@algolia/autocomplete-shared@1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0):
     resolution: {integrity: sha512-h5hf2t8ejF6vlOgvLaZzQbWs5SyH2z4PAWygNAvvD/2RI29hdQ54ldUGwqVuj9Srs+n8XUKTPUqb7fvhBhQrnQ==}
     peerDependencies:
       '@algolia/client-search': '>= 4.9.1 < 6'
       algoliasearch: '>= 4.9.1 < 6'
     dependencies:
-      '@algolia/client-search': 5.60.0
+      '@algolia/client-search': 5.61.0
       algoliasearch: 5.52.0
     dev: false
 
@@ -524,8 +524,8 @@ packages:
     engines: {node: '>= 14.0.0'}
     dev: false
 
-  /@algolia/client-common@5.60.0:
-    resolution: {integrity: sha512-GWW9ilvJJY1tVsyz8CRqRGFnl9WdLjxXXUexSvEBhfgoFf3JvFTPDPClfS4sB36AlIDJ4PnJvffbCyhqXB4l1g==}
+  /@algolia/client-common@5.61.0:
+    resolution: {integrity: sha512-mzrW0KkEiZHB09cU2Sh2vyxUGSi9fVoglCeKnf3wJ3ixo+7ilHH64wLK45eSoX13+CVXA2KTjZJGcEmBS3Z57Q==}
     engines: {node: '>= 14.0.0'}
     dev: false
 
@@ -569,14 +569,14 @@ packages:
       '@algolia/requester-node-http': 5.52.0
     dev: false
 
-  /@algolia/client-search@5.60.0:
-    resolution: {integrity: sha512-MP9hqPQGnE04De15am/MXURtU/OudFkx4jrzlfiB9P+cUkDO/P/Opel0Kqwwwyzbu4OHaU2mIjAXkpaiRic7uQ==}
+  /@algolia/client-search@5.61.0:
+    resolution: {integrity: sha512-npseUJ0UwaiwU4XbKyHiFcZbrS1AbLszbPRxi3W9YUrrqdpvfSeGKMlLv63haH4PZsCog5wG40lJGKXbnrDAEQ==}
     engines: {node: '>= 14.0.0'}
     dependencies:
-      '@algolia/client-common': 5.60.0
-      '@algolia/requester-browser-xhr': 5.60.0
-      '@algolia/requester-fetch': 5.60.0
-      '@algolia/requester-node-http': 5.60.0
+      '@algolia/client-common': 5.61.0
+      '@algolia/requester-browser-xhr': 5.61.0
+      '@algolia/requester-fetch': 5.61.0
+      '@algolia/requester-node-http': 5.61.0
     dev: false
 
   /@algolia/events@4.0.1:
@@ -620,11 +620,11 @@ packages:
       '@algolia/client-common': 5.52.0
     dev: false
 
-  /@algolia/requester-browser-xhr@5.60.0:
-    resolution: {integrity: sha512-nz4eILpuYli7fsbYl5btdm8Gcdef5h38cuF4urKFpi94bFcDTdegJpYthJL3lENNsayJvLcLP3G6/oFT5ToNuQ==}
+  /@algolia/requester-browser-xhr@5.61.0:
+    resolution: {integrity: sha512-7Y7P6Kp+7DQkrOCzmIYjoCpLPQoA8vlxcIzyjpfMrokBNX0LIQSPyR5JY/EdSzCN6CvNlYGJ5SiO7j6lZad5Jw==}
     engines: {node: '>= 14.0.0'}
     dependencies:
-      '@algolia/client-common': 5.60.0
+      '@algolia/client-common': 5.61.0
     dev: false
 
   /@algolia/requester-fetch@5.52.0:
@@ -634,11 +634,11 @@ packages:
       '@algolia/client-common': 5.52.0
     dev: false
 
-  /@algolia/requester-fetch@5.60.0:
-    resolution: {integrity: sha512-3MWvjJXSMIE3tuNJS4WLQuvHgeG56ZFoNKj4WUkOYea0aBU7kGVI4NrTyThagItI+yhQex+fxOjkAaSPRUAffA==}
+  /@algolia/requester-fetch@5.61.0:
+    resolution: {integrity: sha512-WNTNQcrWcGAgLDU3+6IFWs3QPosMCYSlwlPEdEO2ivLnlm8u5HtGQvOz/JnY9d2bhofDBL+S5wdtm9+Uob+dsA==}
     engines: {node: '>= 14.0.0'}
     dependencies:
-      '@algolia/client-common': 5.60.0
+      '@algolia/client-common': 5.61.0
     dev: false
 
   /@algolia/requester-node-http@5.52.0:
@@ -648,11 +648,11 @@ packages:
       '@algolia/client-common': 5.52.0
     dev: false
 
-  /@algolia/requester-node-http@5.60.0:
-    resolution: {integrity: sha512-Cx3D6S8NzSi9es4MIFljvImq+Ae2vo9gHyX+6RMMA0U+xy+C62mYE03X9u+mX+XXkgTWbkURCbMtuFDYRDNRig==}
+  /@algolia/requester-node-http@5.61.0:
+    resolution: {integrity: sha512-CA+6MlgPkjSlGQpx+rLBSnHFy8pyYpGEjs7Yp0kVzOC6RM5jq99Z4KGOuplcNZBjQlM521t0nEvKLxFOv2NSZA==}
     engines: {node: '>= 14.0.0'}
     dependencies:
-      '@algolia/client-common': 5.60.0
+      '@algolia/client-common': 5.61.0
     dev: false
 
   /@alloc/quick-lru@5.2.0:
@@ -2049,8 +2049,8 @@ packages:
       - supports-color
     dev: false
 
-  /@babel/runtime@7.29.10:
-    resolution: {integrity: sha512-NpugTzbKgGrNe45Ui32cN8vCFFMxVtP/9rtfwv0nP5FRDAjvYBxJcLVpYA9mr1jxP6cnIT7x9LUzuDTbWYYNRA==}
+  /@babel/runtime@7.29.13:
+    resolution: {integrity: sha512-v+oN26xP4YIlQsbQ/CbTH1WG5m/l/DjKKZNy/Kp3f/AFvbgt7Em/D0FeMM3O2hX0YzeN2M16W8lOpyhIkfCBcQ==}
     engines: {node: '>=6.9.0'}
 
   /@babel/runtime@7.29.7:
@@ -2747,7 +2747,7 @@ packages:
     resolution: {integrity: sha512-cQbnVbq0rrBwNAKegIac/t6a8nWoUAn8frnkLFW6YARaRmAQr5/Eoe6Ln2fqkUCZ40KpdrKbpSAmgrkviOxuWA==}
     dev: false
 
-  /@docsearch/react@3.9.0(@algolia/client-search@5.60.0)(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3):
+  /@docsearch/react@3.9.0(@algolia/client-search@5.61.0)(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3):
     resolution: {integrity: sha512-mb5FOZYZIkRQ6s/NWnM98k879vu5pscWqTLubLFBO87igYYT4VzVazh4h5o/zCvTIZgEt3PvsCOMOswOUo9yHQ==}
     peerDependencies:
       '@types/react': '>= 16.8.0 < 20.0.0'
@@ -2764,8 +2764,8 @@ packages:
       search-insights:
         optional: true
     dependencies:
-      '@algolia/autocomplete-core': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
-      '@algolia/autocomplete-preset-algolia': 1.17.9(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)
+      '@algolia/autocomplete-core': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
+      '@algolia/autocomplete-preset-algolia': 1.17.9(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)
       '@docsearch/css': 3.9.0
       '@types/react': 19.3.0
       algoliasearch: 5.52.0
@@ -2787,13 +2787,13 @@ packages:
       '@babel/preset-env': 7.29.3(@babel/core@7.29.7)
       '@babel/preset-react': 7.28.5(@babel/core@7.29.7)
       '@babel/preset-typescript': 7.28.5(@babel/core@7.29.7)
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       '@babel/traverse': 7.29.7
       '@docusaurus/logger': 3.10.2
       '@docusaurus/utils': 3.10.2(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       babel-plugin-dynamic-import-node: 2.3.3
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -2824,13 +2824,13 @@ packages:
       '@babel/preset-env': 7.29.3(@babel/core@7.29.7)
       '@babel/preset-react': 7.28.5(@babel/core@7.29.7)
       '@babel/preset-typescript': 7.28.5(@babel/core@7.29.7)
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       '@babel/traverse': 7.29.7
       '@docusaurus/logger': 3.10.2
       '@docusaurus/utils': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       babel-plugin-dynamic-import-node: 2.3.3
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -2879,7 +2879,7 @@ packages:
       postcss-loader: 7.3.4(postcss@8.5.32)(typescript@6.0.3)(webpack@5.108.4)
       postcss-preset-env: 10.6.1(postcss@8.5.32)
       terser-webpack-plugin: 5.5.0(webpack@5.108.4)
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       webpack: 5.108.4(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)
       webpackbar: 7.0.0(webpack@5.108.4)
@@ -2988,7 +2988,7 @@ packages:
       cssnano-preset-advanced: 6.1.2(postcss@8.5.32)
       postcss: 8.5.32
       postcss-sort-media-queries: 5.2.0(postcss@8.5.32)
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@docusaurus/logger@3.10.2:
@@ -2996,7 +2996,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       chalk: 4.1.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@docusaurus/mdx-loader@3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1):
@@ -3026,7 +3026,7 @@ packages:
       remark-frontmatter: 5.0.0
       remark-gfm: 4.0.1
       stringify-object: 3.3.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unified: 11.0.5
       unist-util-visit: 5.1.0
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
@@ -3106,7 +3106,7 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
       srcset: 4.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unist-util-visit: 5.1.0
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
@@ -3158,7 +3158,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
@@ -3200,7 +3200,7 @@ packages:
       fs-extra: 11.3.4
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3234,7 +3234,7 @@ packages:
       '@docusaurus/types': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       '@docusaurus/utils': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3275,7 +3275,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       react-json-view-lite: 2.5.0(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3312,7 +3312,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3349,7 +3349,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3386,7 +3386,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3428,7 +3428,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       sitemap: 7.1.3
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3468,7 +3468,7 @@ packages:
       '@svgr/webpack': 8.1.0(typescript@6.0.3)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3494,7 +3494,7 @@ packages:
       - webpack-cli
     dev: false
 
-  /@docusaurus/preset-classic@3.10.2(@algolia/client-search@5.60.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3):
+  /@docusaurus/preset-classic@3.10.2(@algolia/client-search@5.61.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3):
     resolution: {integrity: sha512-a4B3VczmDl99zK0EufDQYomdJ186WDingjmDXxhN2PNPS9Ty/Y2M5CLFX1KQMRKqRTLiRDKfutzG5IY1FC/ceg==}
     engines: {node: '>=20.0'}
     peerDependencies:
@@ -3514,7 +3514,7 @@ packages:
       '@docusaurus/plugin-svgr': 3.10.2(@mdx-js/react@3.1.1)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(typescript@6.0.3)
       '@docusaurus/theme-classic': 3.10.2(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)(typescript@6.0.3)
       '@docusaurus/theme-common': 3.10.2(@docusaurus/plugin-content-docs@3.10.2)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      '@docusaurus/theme-search-algolia': 3.10.2(@algolia/client-search@5.60.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3)
+      '@docusaurus/theme-search-algolia': 3.10.2(@algolia/client-search@5.61.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3)
       '@docusaurus/types': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
@@ -3586,7 +3586,7 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
       react-router-dom: 5.3.4(react@19.3.1)
       rtlcss: 4.3.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3632,7 +3632,7 @@ packages:
       prism-react-renderer: 2.4.1(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -3651,15 +3651,15 @@ packages:
       - webpack-cli
     dev: false
 
-  /@docusaurus/theme-search-algolia@3.10.2(@algolia/client-search@5.60.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3):
+  /@docusaurus/theme-search-algolia@3.10.2(@algolia/client-search@5.61.0)(@mdx-js/react@3.1.1)(@types/react@19.3.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)(typescript@6.0.3):
     resolution: {integrity: sha512-1msxllyhi/5m77JukXtp5UFnUAriwZIC1oJ7MTnpQpCwLTbclJi5BK5n28CTZuSXpQN2ewbbnqRgAhMM6c6ihg==}
     engines: {node: '>=20.0'}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
     dependencies:
-      '@algolia/autocomplete-core': 1.19.8(@algolia/client-search@5.60.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
-      '@docsearch/react': 3.9.0(@algolia/client-search@5.60.0)(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)
+      '@algolia/autocomplete-core': 1.19.8(@algolia/client-search@5.61.0)(algoliasearch@5.52.0)(search-insights@2.17.3)
+      '@docsearch/react': 3.9.0(@algolia/client-search@5.61.0)(@types/react@19.3.0)(react-dom@19.3.1)(react@19.3.1)(search-insights@2.17.3)
       '@docusaurus/core': 3.10.2(@mdx-js/react@3.1.1)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(typescript@6.0.3)
       '@docusaurus/logger': 3.10.2
       '@docusaurus/plugin-content-docs': 3.10.2(@mdx-js/react@3.1.1)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)(typescript@6.0.3)
@@ -3675,7 +3675,7 @@ packages:
       lodash: 4.18.1
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@algolia/client-search'
@@ -3709,7 +3709,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@docusaurus/types@3.10.2(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1):
@@ -3786,7 +3786,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       '@docusaurus/types': 3.10.2(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -3811,7 +3811,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       '@docusaurus/types': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -3842,7 +3842,7 @@ packages:
       joi: 17.13.9
       js-yaml: 4.3.2
       lodash: 4.18.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -3883,7 +3883,7 @@ packages:
       p-queue: 6.6.2
       prompts: 2.4.2
       resolve-pathname: 3.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       utility-types: 3.11.0
       webpack: 5.108.4(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)
@@ -3927,7 +3927,7 @@ packages:
       p-queue: 6.6.2
       prompts: 2.4.2
       resolve-pathname: 3.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
@@ -3955,7 +3955,7 @@ packages:
     requiresBuild: true
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -3964,7 +3964,7 @@ packages:
     requiresBuild: true
     dependencies:
       '@emnapi/wasi-threads': 1.2.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -3973,7 +3973,7 @@ packages:
     requiresBuild: true
     dependencies:
       '@emnapi/wasi-threads': 1.2.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -3981,7 +3981,7 @@ packages:
     resolution: {integrity: sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -3989,7 +3989,7 @@ packages:
     resolution: {integrity: sha512-55coeOFKHv1ywEcUXJtWU5f+Jr/W5tZDvZig8DLKSwUN1JpROQ4rk/SNOQiFWmaR/VKF4zuFyW1B8JduOSv6Pg==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -3997,7 +3997,7 @@ packages:
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
     optional: true
 
@@ -4005,7 +4005,7 @@ packages:
     resolution: {integrity: sha512-3U4+MIWHImeyu1wnmVygh5WlgfYDtyf0k8AbLhMFxOipihf6nrWC4syIm/SwEeec0mNSafiiNnMJwbza/Is6Lw==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -4013,7 +4013,7 @@ packages:
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -4021,7 +4021,7 @@ packages:
     resolution: {integrity: sha512-c95qOXkHdydNKhscBTebqEC1CVAZpyqOfVfBzQ1qgzyl3gfeldUjIggDbIZgDKsHLgnsM+igH7TJ/eAasaVuMA==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -5235,7 +5235,7 @@ packages:
       glob: 14.0.3
       react-docgen-typescript: 2.4.0(typescript@6.0.3)
       typescript: 6.0.3
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
     dev: true
 
   /@jridgewell/gen-mapping@0.3.13:
@@ -5592,13 +5592,13 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
     dev: false
 
-  /@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
-    resolution: {integrity: sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA==}
+  /@napi-rs/wasm-runtime@1.2.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0):
+    resolution: {integrity: sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=23.5.0}
     requiresBuild: true
     peerDependencies:
-      '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
-      '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+      '@emnapi/core': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
+      '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
@@ -5606,13 +5606,13 @@ packages:
     dev: true
     optional: true
 
-  /@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0):
-    resolution: {integrity: sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA==}
+  /@napi-rs/wasm-runtime@1.2.7(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0):
+    resolution: {integrity: sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=23.5.0}
     requiresBuild: true
     peerDependencies:
-      '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
-      '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+      '@emnapi/core': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
+      '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
     dependencies:
       '@emnapi/core': 1.11.0
       '@emnapi/runtime': 1.11.0
@@ -5620,13 +5620,13 @@ packages:
     dev: true
     optional: true
 
-  /@napi-rs/wasm-runtime@1.2.5(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
-    resolution: {integrity: sha512-HshSvXzmBxNzqejd3k/KemgQ3hdREUYFRRrgxOZ+gPljDIsO2SDZrVZMd4Z/HsxudQbE62OVyVFE8z9BCurfjA==}
+  /@napi-rs/wasm-runtime@1.2.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2):
+    resolution: {integrity: sha512-zJccwplOAbgfZju95IUHazLnx9RAPtPN2YGJXI6UbrgeaR9QfPjGrQL6ERkSAtnVCA4Q+83ApGyaX5zdpCaKkQ==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=23.5.0}
     requiresBuild: true
     peerDependencies:
-      '@emnapi/core': ^1.7.1 || ^2.0.0-alpha.4
-      '@emnapi/runtime': ^1.7.1 || ^2.0.0-alpha.4
+      '@emnapi/core': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
+      '@emnapi/runtime': ^1.7.1 || 2.0.0-beta.2 || 2.0.0-beta.3
     dependencies:
       '@emnapi/core': 1.9.2
       '@emnapi/runtime': 1.9.2
@@ -5899,7 +5899,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.9.2
       '@emnapi/runtime': 1.9.2
-      '@napi-rs/wasm-runtime': 1.2.5(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
+      '@napi-rs/wasm-runtime': 1.2.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)
     dev: true
     optional: true
 
@@ -6074,7 +6074,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.11.0
       '@emnapi/runtime': 1.11.0
-      '@napi-rs/wasm-runtime': 1.2.5(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0)
+      '@napi-rs/wasm-runtime': 1.2.7(@emnapi/core@1.11.0)(@emnapi/runtime@1.11.0)
     dev: true
     optional: true
 
@@ -6233,7 +6233,7 @@ packages:
       '@peculiar/asn1-x509': 2.7.0
       '@peculiar/asn1-x509-attr': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-csr@2.7.0:
@@ -6242,7 +6242,7 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/asn1-x509': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-ecc@2.7.0:
@@ -6251,7 +6251,7 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/asn1-x509': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-pfx@2.7.0:
@@ -6262,7 +6262,7 @@ packages:
       '@peculiar/asn1-rsa': 2.7.0
       '@peculiar/asn1-schema': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-pkcs8@2.7.0:
@@ -6271,7 +6271,7 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/asn1-x509': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-pkcs9@2.7.0:
@@ -6284,7 +6284,7 @@ packages:
       '@peculiar/asn1-x509': 2.7.0
       '@peculiar/asn1-x509-attr': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-rsa@2.7.0:
@@ -6293,7 +6293,7 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/asn1-x509': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-schema@2.7.0:
@@ -6301,7 +6301,7 @@ packages:
     dependencies:
       '@peculiar/utils': 2.0.3
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-x509-attr@2.7.0:
@@ -6310,7 +6310,7 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/asn1-x509': 2.7.0
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/asn1-x509@2.7.0:
@@ -6319,13 +6319,13 @@ packages:
       '@peculiar/asn1-schema': 2.7.0
       '@peculiar/utils': 2.0.3
       asn1js: 3.0.10
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/utils@2.0.3:
     resolution: {integrity: sha512-+oL3HPFRIZ1St2K50lWCXiioIgSoxzz7R1J3uF6neO2yl1sgmpgY6XXJH4BdpoDkMWznQTeYF6oWNDZLCdQ4eQ==}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@peculiar/x509@1.14.3:
@@ -6341,7 +6341,7 @@ packages:
       '@peculiar/asn1-x509': 2.7.0
       pvtsutils: 1.3.6
       reflect-metadata: 0.2.2
-      tslib: 2.8.1
+      tslib: 2.9.1
       tsyringe: 4.10.0
     dev: false
 
@@ -7152,7 +7152,7 @@ packages:
       react: ^16.6.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-dom: ^16.6.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       invariant: 2.2.4
       prop-types: 15.8.1
       react: 19.3.1
@@ -7202,7 +7202,7 @@ packages:
     dependencies:
       storybook: 10.6.5(@types/react@19.3.0)(prettier@3.9.10)(react@19.3.1)
       ts-dedent: 2.3.0
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
     dev: true
 
   /@storybook/global@5.0.0:
@@ -7263,7 +7263,7 @@ packages:
       storybook: 10.6.5(@types/react@19.3.0)(prettier@3.9.10)(react@19.3.1)
       tsconfig-paths: 4.2.0
       typescript: 6.0.3
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
     transitivePeerDependencies:
       - '@types/react'
       - '@types/react-dom'
@@ -7641,7 +7641,7 @@ packages:
   /@swc/helpers@0.5.23:
     resolution: {integrity: sha512-5lSsMOTXURePglDfvuAQUqkGek9Hg2kksOYay2m0+XR++b2NWYL/4sWyuvVBIs8oKnJaxkdi9whaL/sqN13afw==}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@swc/jest@0.2.39(@swc/core@1.16.13):
@@ -7831,7 +7831,7 @@ packages:
       '@tailwindcss/node': 4.3.3
       '@tailwindcss/oxide': 4.3.3
       tailwindcss: 4.3.3
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
     dev: true
 
   /@testing-library/dom@10.4.2:
@@ -7839,7 +7839,7 @@ packages:
     engines: {node: '>=18'}
     dependencies:
       '@babel/code-frame': 7.29.7
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       '@types/aria-query': 5.0.4
       aria-query: 5.3.0
       dom-accessibility-api: 0.5.16
@@ -7964,7 +7964,7 @@ packages:
     resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
     requiresBuild: true
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
     optional: true
 
@@ -8673,7 +8673,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@napi-rs/wasm-runtime': 1.2.5(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      '@napi-rs/wasm-runtime': 1.2.7(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     dev: true
     optional: true
 
@@ -8718,7 +8718,7 @@ packages:
         optional: true
     dependencies:
       '@rolldown/pluginutils': 1.0.1
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
     dev: true
 
   /@vitest/coverage-v8@4.1.12(vitest@4.1.12):
@@ -8778,7 +8778,24 @@ packages:
       '@vitest/spy': 4.1.12
       estree-walker: 3.0.3
       magic-string: 0.30.21
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
+    dev: true
+
+  /@vitest/mocker@4.1.12(vite@8.3.6):
+    resolution: {integrity: sha512-fKShNpKZzupWZuY0z7egydvL0sqW4INEZBEExMBMAa6izlENEVHwoXgdaTCaBZ5fwlr4xf2o1wXC83n9RpO+NA==}
+    peerDependencies:
+      msw: ^2.4.9
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      msw:
+        optional: true
+      vite:
+        optional: true
+    dependencies:
+      '@vitest/spy': 4.1.12
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+      vite: 8.3.6(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
     dev: true
 
   /@vitest/pretty-format@3.2.4:
@@ -9236,7 +9253,7 @@ packages:
     resolution: {integrity: sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA==}
     engines: {node: '>=10'}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /aria-query@5.3.0:
@@ -9356,7 +9373,7 @@ packages:
     dependencies:
       pvtsutils: 1.3.6
       pvutils: 1.1.5
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /assertion-error@2.0.1:
@@ -9372,7 +9389,7 @@ packages:
     resolution: {integrity: sha512-FvWoWYfSCM6kRxCSH+MGLHIKKGRL6A6AW7Zek2O32REPQRdg131428uRTKMBYAeRd3XXAaHDS60Wpri7CdKDrA==}
     engines: {node: '>=4'}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
 
   /ast-v8-to-istanbul@1.0.4:
@@ -9825,7 +9842,7 @@ packages:
     resolution: {integrity: sha512-gxGWBrTT1JuMx6R+o5PTXMmUnhnVzLQ9SNutD4YqKtI6ap897t3tKECYla6gCWEkplXnlNybEkZg9GEGxKFCgw==}
     dependencies:
       pascal-case: 3.1.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /camelcase@5.3.1:
@@ -11107,7 +11124,7 @@ packages:
     resolution: {integrity: sha512-Kv5nKlh6yRrdrGvxeJ2e5y2eRUpkUosIW4A2AS38zwSz27zu7ufDwQPi5Jhs3XAlGNetl3bmnGhQsMtkKJnj3w==}
     dependencies:
       no-case: 3.0.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /dot-prop@6.0.1:
@@ -12330,22 +12347,25 @@ packages:
   /fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
 
-  /framer-motion@14.1.0(react-dom@19.3.1)(react@19.3.1):
-    resolution: {integrity: sha512-QsdZSdWoyQfUmgi+GZfow8Du5COG6VRYEo9FlgKUPgH87/Le/fYekHCAKwLdYKHdCZcZfWHg4iOxlD6RoqXciQ==}
+  /framer-motion@14.9.1(react-dom@19.3.1)(react@19.3.1):
+    resolution: {integrity: sha512-WDWNT2ixHdmpvGg02BZWI/SWwRYzPiMUf4aIkTBgrxxD8RYFdZO3fCM4pnLMo6j8mUpj0+BuJRHQBChI4v3Anw==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
+      remix: ^3.1.0
     peerDependenciesMeta:
       react:
         optional: true
       react-dom:
         optional: true
+      remix:
+        optional: true
     dependencies:
-      motion-dom: 14.1.0
-      motion-utils: 14.1.0
+      motion-dom: 14.9.1
+      motion-utils: 14.7.0
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /fresh@0.5.2:
@@ -12827,7 +12847,7 @@ packages:
   /history@4.10.1:
     resolution: {integrity: sha512-36nwAD620w12kuzPAsyINPWJqlNbij+hpK1k9XRloDtym8mxzGYl2c17LnV6IAGB2Dmg4tEa7G7DlawS0+qjew==}
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       loose-envify: 1.4.0
       resolve-pathname: 3.0.0
       tiny-invariant: 1.3.3
@@ -14767,7 +14787,7 @@ packages:
   /lower-case@2.0.2:
     resolution: {integrity: sha512-7fm3l3NAF9WfN6W3JOmf5drwpVqX78JtoGJ3A6W0a6ZnldM41w2fV5D490psKFTpMds8TJse/eHLFFsNHHjHgg==}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /lowercase-keys@3.0.0:
@@ -15716,14 +15736,14 @@ packages:
       marked: 14.0.0
     dev: false
 
-  /motion-dom@14.1.0:
-    resolution: {integrity: sha512-FyFLkNUAAETzCvf851mZcl+v+kaZrKq+UM+XmkY4G8n+ny/WYfiWh9j0fhSQ1KOKVQrM9/cLO11THO2k71HJlg==}
+  /motion-dom@14.9.1:
+    resolution: {integrity: sha512-2eCCGXH2Yv09lM8GHK3TdfChrcvHxzVY19LD9VraoHEaQl5+PuGnTNnmJaBAR+5MdxUVdsLFXygFJjR9RwRSxw==}
     dependencies:
-      motion-utils: 14.1.0
+      motion-utils: 14.7.0
     dev: false
 
-  /motion-utils@14.1.0:
-    resolution: {integrity: sha512-xd4FeWOnnXsJHmAaRCLNbOS7mEaNOangjMt3Pl241H07f1kxW48fADQ/8O5hLLNhf1qdlozgY3PPAHBdOoU7AA==}
+  /motion-utils@14.7.0:
+    resolution: {integrity: sha512-woO0/Nb7ys75f94fjvQi/6leiHGvZUYkeHUPEZ3vxsV+9OpEVhkxp01x8MlRwX0zt31EqgXsKDAoBoJLC148Tw==}
     dev: false
 
   /mrmime@2.0.1:
@@ -15858,7 +15878,7 @@ packages:
     resolution: {integrity: sha512-fgAN3jGAh+RoxUGZHTSOLJIqUc2wmoBwGR4tbpNAKmmovFoWq0OdRkb0VkldReO2a2iBT/OEulG9XSUc10r3zg==}
     dependencies:
       lower-case: 2.0.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /node-addon-api@7.1.1:
@@ -16311,7 +16331,7 @@ packages:
     resolution: {integrity: sha512-RXlj7zCYokReqWpOPH9oYivUzLYZ5vAPIfEmCTNViosC78F8F0H9y7T7gG2M39ymgutxF5gcFEsyZQSph9Bp3A==}
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /parent-module@1.0.1:
@@ -16386,7 +16406,7 @@ packages:
     resolution: {integrity: sha512-uWlGT3YSnK9x3BQJaOdcZwrnV6hPpd8jFH1/ucpiLRPh/2zCVJKS19E4GvYHvaCcACn3foXZ0cLB9Wrx1KGe5g==}
     dependencies:
       no-case: 3.0.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /path-exists@4.0.0:
@@ -16508,7 +16528,7 @@ packages:
       bytestreamjs: 2.0.1
       pvtsutils: 1.3.6
       pvutils: 1.1.5
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /playwright-core@1.63.0:
@@ -17363,7 +17383,7 @@ packages:
       '@jest/schemas': 30.4.1
       ansi-styles: 5.2.0
       react-is-18: /react-is@18.3.1
-      react-is-19: /react-is@19.3.0
+      react-is-19: /react-is@19.3.1
     dev: true
 
   /pretty-format@30.5.1:
@@ -17371,7 +17391,7 @@ packages:
     engines: {node: ^18.14.0 || ^20.0.0 || ^22.0.0 || >=24.0.0}
     dependencies:
       '@jest/react-is-18': /react-is@18.3.1
-      '@jest/react-is-19': /react-is@19.3.0
+      '@jest/react-is-19': /react-is@19.3.1
       '@jest/schemas': 30.5.0
       ansi-styles: 5.2.0
     dev: true
@@ -17459,7 +17479,7 @@ packages:
   /pvtsutils@1.3.6:
     resolution: {integrity: sha512-PLgQXQ6H2FWCaeRak8vvk1GW462lMxB5s3Jm673N82zI4vqtVUPuZdffdZbPDFRoU8kAhItWFtPCWiPpp4/EDg==}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /pvutils@1.1.5:
@@ -17587,8 +17607,8 @@ packages:
     resolution: {integrity: sha512-/LLMVyas0ljjAtoYiPqYiL8VWXzUUdThrmU5+n20DZv+a+ClRoevUzw5JxU+Ieh5/c87ytoTBV9G1FiKfNJdmg==}
     dev: true
 
-  /react-is@19.3.0:
-    resolution: {integrity: sha512-UpMYezM4v5/18F28aC66AEsjXIgE02kyEMH6yLdgLXu/UTfa1Ntwck/nNLrbqJsEXW7gPb0coNO9FQse9WTovA==}
+  /react-is@19.3.1:
+    resolution: {integrity: sha512-RRieF6IyxQBkcK6pP8xOHprLTPW6QjRkbGdImtqNme+/hYVwCZkLQLdlZGOhUqXwkS9IEynaGvPJtv6XB/cz0Q==}
 
   /react-json-view-lite@2.5.0(react@19.3.1):
     resolution: {integrity: sha512-tk7o7QG9oYyELWHL8xiMQ8x4WzjCzbWNyig3uexmkLb54r8jO0yH3WCWx8UZS0c49eSA4QUmG5caiRJ8fAn58g==}
@@ -17606,7 +17626,7 @@ packages:
       react-loadable: '*'
       webpack: '>=4.41.1 || 5.x'
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       react-loadable: /@docusaurus/react-loadable@6.0.0(react@19.3.1)
       webpack: 5.108.4(postcss@8.5.32)
     dev: false
@@ -17643,7 +17663,7 @@ packages:
       '@types/react': 19.3.0
       react: 19.3.1
       react-style-singleton: 2.2.3(@types/react@19.3.0)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /react-remove-scroll@2.7.2(@types/react@19.3.0)(react@19.3.1):
@@ -17660,7 +17680,7 @@ packages:
       react: 19.3.1
       react-remove-scroll-bar: 2.3.8(@types/react@19.3.0)(react@19.3.1)
       react-style-singleton: 2.2.3(@types/react@19.3.0)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       use-callback-ref: 1.3.3(@types/react@19.3.0)(react@19.3.1)
       use-sidecar: 1.1.3(@types/react@19.3.0)(react@19.3.1)
     dev: false
@@ -17671,7 +17691,7 @@ packages:
       react: '>=15'
       react-router: '>=5'
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       react: 19.3.1
       react-router: 5.3.4(react@19.3.1)
     dev: false
@@ -17681,7 +17701,7 @@ packages:
     peerDependencies:
       react: '>=15'
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       history: 4.10.1
       loose-envify: 1.4.0
       prop-types: 15.8.1
@@ -17696,7 +17716,7 @@ packages:
     peerDependencies:
       react: '>=15'
     dependencies:
-      '@babel/runtime': 7.29.10
+      '@babel/runtime': 7.29.13
       history: 4.10.1
       hoist-non-react-statics: 3.3.2
       loose-envify: 1.4.0
@@ -17721,7 +17741,7 @@ packages:
       '@types/react': 19.3.0
       get-nonce: 1.0.1
       react: 19.3.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /react@19.3.1:
@@ -17768,10 +17788,10 @@ packages:
       esprima: 4.0.1
       source-map: 0.6.1
       tiny-invariant: 1.3.3
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
 
-  /recharts@3.10.1(@types/react@19.3.0)(react-dom@19.3.1)(react-is@19.3.0)(react@19.3.1)(redux@5.0.1):
+  /recharts@3.10.1(@types/react@19.3.0)(react-dom@19.3.1)(react-is@19.3.1)(react@19.3.1)(redux@5.0.1):
     resolution: {integrity: sha512-QXFrvt6IVcw7eeZCoyXTwkIJAX3Dv1nyVhMicXJ47GsGDDpcN8z6o644DibE9XjpBTThtsomLKnTV6lc+cVFUA==}
     engines: {node: '>=18'}
     peerDependencies:
@@ -17787,7 +17807,7 @@ packages:
       immer: 11.1.18
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      react-is: 19.3.0
+      react-is: 19.3.1
       react-redux: 9.3.0(@types/react@19.3.0)(react@19.3.1)(redux@5.0.1)
       reselect: 5.2.0
       tiny-invariant: 1.3.3
@@ -18254,7 +18274,7 @@ packages:
   /rxjs@7.8.2:
     resolution: {integrity: sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==}
     dependencies:
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: true
 
   /safe-array-concat@1.1.4:
@@ -18672,7 +18692,7 @@ packages:
     resolution: {integrity: sha512-LAOh4z89bGQvl9pFfNF8V146i7o7/CqFPbqzYgP+yYzDIDeS9HaNFtXABamRW+AQzEVODcvE79ljJ+8a9YSdMg==}
     dependencies:
       dot-case: 3.0.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /sockjs@0.3.24:
@@ -19384,6 +19404,10 @@ packages:
 
   /tslib@2.8.1:
     resolution: {integrity: sha512-oJFu94HQb+KVduSUQL7wnpmqnfmLsOA/nAh6b6EH0wCEoK0/mPeXU6c3wKDV83MkOuHPRHtSXKKU99IBazS/2w==}
+    dev: false
+
+  /tslib@2.9.1:
+    resolution: {integrity: sha512-a4Ux9VKuIMHsOS7ENbEq6hK2ZGYIT27Rtl0E4eD9KqwxhKiQeMZE/9xb3IdYwWaSOyIBQLExhQgXDTYoiCxnWA==}
 
   /tsup@8.5.1(tsx@4.23.15)(typescript@6.0.3):
     resolution: {integrity: sha512-xtgkqwdhpKWr3tKPmCkvYmS9xnQK3m3XgxZHwSUjvfTjp7YfXe5tT3GgWi0F2N+ZSMsOeWeZFh7ZZFg5iPhing==}
@@ -19811,7 +19835,7 @@ packages:
     dependencies:
       '@types/react': 19.3.0
       react: 19.3.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /use-sidecar@1.1.3(@types/react@19.3.0)(react@19.3.1):
@@ -19827,7 +19851,7 @@ packages:
       '@types/react': 19.3.0
       detect-node-es: 1.1.0
       react: 19.3.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /use-sync-external-store@1.7.0(react@19.3.1):
@@ -19920,8 +19944,62 @@ packages:
       d3-timer: 3.0.1
     dev: false
 
-  /vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15):
+  /vite@8.3.5(@types/node@26.6.5)(tsx@4.23.15):
     resolution: {integrity: sha512-z1YpjieJ9g0ebTmQpLBv/oq9E3F9EIlOe+7LahW8SrE3LTiG3udBRUXQOlYXP9b+IC2q2phHeVxj9xGlw34OEQ==}
+    engines: {node: ^20.19.0 || >=22.12.0}
+    hasBin: true
+    peerDependencies:
+      '@types/node': ^20.19.0 || >=22.12.0
+      '@vitejs/devtools': ^0.7.1 || ^0.8.0
+      esbuild: ^0.28.1
+      jiti: '>=1.21.0'
+      less: ^4.0.0
+      sass: ^1.70.0
+      sass-embedded: ^1.70.0
+      stylus: '>=0.54.8'
+      sugarss: ^5.0.0
+      terser: ^5.16.0
+      tsx: ^4.8.1
+      yaml: ^2.4.2
+    peerDependenciesMeta:
+      '@types/node':
+        optional: true
+      '@vitejs/devtools':
+        optional: true
+      esbuild:
+        optional: true
+      jiti:
+        optional: true
+      less:
+        optional: true
+      sass:
+        optional: true
+      sass-embedded:
+        optional: true
+      stylus:
+        optional: true
+      sugarss:
+        optional: true
+      terser:
+        optional: true
+      tsx:
+        optional: true
+      yaml:
+        optional: true
+    dependencies:
+      '@types/node': 26.6.5
+      lightningcss: 1.33.0
+      picomatch: 4.0.7
+      postcss: 8.5.32
+      rolldown: 1.2.16
+      tinyglobby: 0.2.17
+      tsx: 4.23.15
+    optionalDependencies:
+      fsevents: 2.3.3
+    dev: true
+
+  /vite@8.3.6(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15):
+    resolution: {integrity: sha512-UI7dK29NnS54Fk+mmo7o+jI6U8Fp7hDl+X5Q1k45WH+d4dSlbLVUETGQ+hfkNgvLQGyoElPj837nZyv4MBc0VA==}
     engines: {node: ^20.19.0 || >=22.12.0}
     hasBin: true
     peerDependencies:
@@ -20051,7 +20129,73 @@ packages:
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
       tinyrainbow: 3.1.1
-      vite: 8.3.5(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
+      vite: 8.3.5(@types/node@26.6.5)(tsx@4.23.15)
+      why-is-node-running: 2.3.0
+    transitivePeerDependencies:
+      - msw
+    dev: true
+
+  /vitest@4.1.12(@types/node@26.6.5)(vite@8.3.6):
+    resolution: {integrity: sha512-5eWdz2yb3ajxWF3C8C4TjkXl7FGm3n2E/VlazALrQHzK7nYMSGFnCZto0bbPNl77AwkOZVLk0YnBAejUu0NiWA==}
+    engines: {node: ^20.0.0 || ^22.0.0 || >=24.0.0}
+    hasBin: true
+    peerDependencies:
+      '@edge-runtime/vm': '*'
+      '@opentelemetry/api': ^1.9.0
+      '@types/node': ^20.0.0 || ^22.0.0 || >=24.0.0
+      '@vitest/browser-playwright': 4.1.12
+      '@vitest/browser-preview': 4.1.12
+      '@vitest/browser-webdriverio': ^4.1.11
+      '@vitest/coverage-istanbul': 4.1.12
+      '@vitest/coverage-v8': 4.1.12
+      '@vitest/ui': 4.1.12
+      happy-dom: '*'
+      jsdom: '*'
+      vite: ^6.0.0 || ^7.0.0 || ^8.0.0
+    peerDependenciesMeta:
+      '@edge-runtime/vm':
+        optional: true
+      '@opentelemetry/api':
+        optional: true
+      '@types/node':
+        optional: true
+      '@vitest/browser-playwright':
+        optional: true
+      '@vitest/browser-preview':
+        optional: true
+      '@vitest/browser-webdriverio':
+        optional: true
+      '@vitest/coverage-istanbul':
+        optional: true
+      '@vitest/coverage-v8':
+        optional: true
+      '@vitest/ui':
+        optional: true
+      happy-dom:
+        optional: true
+      jsdom:
+        optional: true
+    dependencies:
+      '@types/node': 26.6.5
+      '@vitest/expect': 4.1.12
+      '@vitest/mocker': 4.1.12(vite@8.3.6)
+      '@vitest/pretty-format': 4.1.12
+      '@vitest/runner': 4.1.12
+      '@vitest/snapshot': 4.1.12
+      '@vitest/spy': 4.1.12
+      '@vitest/utils': 4.1.12
+      es-module-lexer: 2.3.2
+      expect-type: 1.4.0
+      magic-string: 0.30.21
+      obug: 2.2.1
+      pathe: 2.0.3
+      picomatch: 4.0.7
+      std-env: 4.2.0
+      tinybench: 2.9.0
+      tinyexec: 1.3.1
+      tinyglobby: 0.2.17
+      tinyrainbow: 3.1.1
+      vite: 8.3.6(@types/node@26.6.5)(esbuild@0.28.1)(tsx@4.23.15)
       why-is-node-running: 2.3.0
     transitivePeerDependencies:
       - msw
