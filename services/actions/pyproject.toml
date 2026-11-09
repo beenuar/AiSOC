@@ -20,7 +20,7 @@ sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
 structlog = ">=24.1,<27.0"
 httpx = ">=0.27,<0.29"
 aiokafka = ">=0.10,<0.16"
-python-dateutil = "^2.8.2"
+python-dateutil = ">=2.8.2,<5.0.0"
 cryptography = ">=46,<51"
 
 # Optional VAID badge plugin (beenuar/AiSOC#1739), off by default
