@@ -451,14 +451,47 @@ jobs:
               sys.exit(1)
 
           def provenance(image: str) -> str:
-              """A pulled image has a RepoDigest; a locally built one does not."""
-              out = subprocess.run(
-                  ["docker", "image", "inspect", image, "--format", "{{len .RepoDigests}}"],
+              """Built here, or the registry's bytes? Ask the registry, not the store.
+
+              This used to be "a pulled image has a RepoDigest; a locally built
+              one does not", which was true of the classic image store and
+              stopped being true on 2026-11-09: Docker 29 (the ubuntu-26.04
+              runner image) defaults to the containerd image store, which
+              records a RepoDigest for locally built images too, so every
+              freshly built service read as "pulled" and the guard below
+              failed a run that had in fact built everything. What cannot
+              drift with a storage backend is agreement with the registry: an
+              image counts as pulled only when a digest the local store holds
+              for it is the digest the registry serves for that reference.
+              The residual race — the tag republished between this job's pull
+              and this step — misreads as "built", which is the rarer and
+              smaller lie than the one this replaces.
+              """
+              local = subprocess.run(
+                  ["docker", "image", "inspect", image, "--format", "{{json .RepoDigests}}"],
                   capture_output=True, text=True, check=False,
               )
-              if out.returncode != 0:
+              if local.returncode != 0:
                   return "unknown"
-              return "pulled" if out.stdout.strip() not in {"0", ""} else "built"
+              try:
+                  digests = {d.split("@", 1)[1] for d in (json.loads(local.stdout.strip()) or []) if "@" in d}
+              except (json.JSONDecodeError, IndexError):
+                  return "unknown"
+              if not digests:
+                  return "built"  # classic image store: built images carry none
+              remote = subprocess.run(
+                  ["docker", "buildx", "imagetools", "inspect", image, "--format", "{{json .Manifest.Digest}}"],
+                  capture_output=True, text=True, check=False,
+              )
+              if remote.returncode != 0:
+                  # The registry does not serve this reference, so there was
+                  # nothing to pull: whatever is running was made here.
+                  return "built"
+              try:
+                  served = json.loads(remote.stdout.strip())
+              except json.JSONDecodeError:
+                  return "unknown"
+              return "pulled" if served in digests else "built"
 
           built, pulled, unknown, running = [], [], [], set()
           print("## What this run actually exercised\n")

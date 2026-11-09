@@ -313,7 +313,13 @@ restore_postgres() {
   log "Download complete ($(du -sh "$local_file" | cut -f1))"
 
   log "Restoring to ${POSTGRES_URL}…"
-  gunzip -c "$local_file" | psql "$POSTGRES_URL" --single-transaction
+  # ON_ERROR_STOP, because without it psql exits 0 after a failed replay.
+  # Measured on 2026-11-09: a pg_dump 18 preamble (`SET transaction_timeout`)
+  # aborted the whole --single-transaction replay into a 16 server, psql
+  # printed hundreds of "current transaction is aborted" lines, exited 0, and
+  # this function logged "restore complete" over a database that held nothing.
+  # A restore that claims success must mean the replay ran to the end.
+  gunzip -c "$local_file" | psql "$POSTGRES_URL" --single-transaction --set ON_ERROR_STOP=on
   log "PostgreSQL restore complete"
 }
 
