@@ -300,6 +300,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Pinned for the same reason checkov itself is. The helm half of this
+      # scan runs whatever `helm` is on PATH, and trusting the runner image
+      # for it ended measurably: when `ubuntu-latest` rolled 24.04 -> 26.04
+      # (2026-11-09), the image's Helm moved 3.22.1 -> 4.3.1, checkov 3.2.334
+      # could not drive Helm 4, and it dropped the entire helm framework from
+      # the report while still exiting 1 — 272 findings quietly became 133,
+      # which only the ratchet's shrink-only arm noticed. Same version the
+      # chart's own render gate (helm.yml) and release.yml pin.
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
@@ -355,6 +366,29 @@ jobs:
         run: |
           echo "::error title=iac-checkov::checkov did not complete, so the count below would describe a partial scan"
           exit 1
+      # A framework can vanish from the report while checkov exits 1 as usual
+      # — that is how the Helm 4 incident above presented, and "a vanished
+      # directory shows up as a count below the ceiling" turned out to be the
+      # truth but not the whole of it: the shrink-only arm fired, and its
+      # remediation text said to lower the ceiling, which would have baked the
+      # broken scan in. Require the frameworks the two scanned directories
+      # must produce, so a lost half fails with its own name instead.
+      - name: Both halves of the scan are in the report
+        run: |
+          python3 - <<'EOF'
+          import json
+          blocks = json.load(open("results_json.json"))
+          blocks = blocks if isinstance(blocks, list) else [blocks]
+          present = {b.get("check_type") for b in blocks}
+          missing = {"helm", "terraform"} - present
+          if missing:
+              raise SystemExit(
+                  f"checkov's report carries no {sorted(missing)} results while infra/ names both — "
+                  "a framework was dropped (helm binary incompatibility, vanished directory), and a "
+                  "shrunken count must not reach the ratchet as though the findings were fixed."
+              )
+          print(f"frameworks in the report: {sorted(p for p in present if p)}")
+          EOF
       - name: Ratchet the checkov finding count
         run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
 
