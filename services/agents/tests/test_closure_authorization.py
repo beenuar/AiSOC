@@ -337,9 +337,7 @@ class TestNothingRoutesAroundTheChokepoint:
         `auto_closed`. Listing them makes a new one a test failure rather
         than a silent fourth path.
         """
-        import pathlib
-
-        root = pathlib.Path(__file__).resolve().parents[1] / "app"
+        root = Path(__file__).resolve().parents[1] / "app"
         callers = {
             path.relative_to(root).as_posix() for path in root.rglob("*.py") if "persist_auto_triage(" in path.read_text(encoding="utf-8")
         }
