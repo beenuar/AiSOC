@@ -300,6 +300,59 @@ async def test_splunk_query_self_hosted_index_is_not_double_prefixed(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_splunk_query_refuses_an_index_value_carrying_spl(monkeypatch):
+    """The federated path holds the same index-token line as ``_dispatch``.
+
+    ``query()`` strips ``index=`` from ``saved_search`` and hands the
+    remainder to ``to_spl``, which renders it unquoted into
+    ``search index=<index> …`` — so a configured value like
+    ``main | collect index=other`` would prepend a pipeline stage to every
+    federated search. Not a trust-boundary crossing (the operator holds the
+    Splunk token already), but nothing downstream re-validates, so anything
+    that is not a bare index token falls back to the default index.
+    """
+    captured: dict[str, Any] = {}
+
+    class _StubResponse:
+        status_code = 200
+
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"results": []}
+
+    class _StubAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, **kwargs):
+            captured["data"] = kwargs.get("data") or {}
+            return _StubResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubAsyncClient)
+
+    connector = SplunkConnector(
+        base_url="https://splunk.example.com:8089",
+        token="fake-token",
+        saved_search="index=main | collect index=other",
+    )
+    await connector.query(_SAMPLE_QUERY)
+
+    spl = str(captured["data"].get("search", ""))
+    assert spl.startswith("search index=notable "), spl
+    assert "collect" not in spl, spl
+
+
+@pytest.mark.asyncio
 async def test_sentinel_query_assembles_loganalytics_call(monkeypatch):
     captured: dict[str, Any] = {}
 
