@@ -18,7 +18,7 @@ from app.keywords import matches, normalise
 
 logger = structlog.get_logger()
 
-_ENRICHMENT_URL = os.getenv("ENRICHMENT_SERVICE_URL", "http://enrichment:8080")
+_ENRICHMENT_URL = os.getenv("ENRICHMENT_SERVICE_URL", "http://enrichment:8082")
 _API_URL = os.getenv("API_SERVICE_URL", "http://api:8000")
 _TIMEOUT = 10.0
 
@@ -37,7 +37,7 @@ async def enrich_ioc(ioc_value: str, ioc_type: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 f"{_ENRICHMENT_URL}/enrich",
-                json={"value": ioc_value, "type": ioc_type},
+                json={"value": ioc_value, "ioc_type": ioc_type},
             )
             resp.raise_for_status()
             return resp.json()
