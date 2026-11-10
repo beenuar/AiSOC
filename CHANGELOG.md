@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The first `make up` on a fresh install built the schema and then refused
+  to start the stack it had just built.** The Postgres initdb hook
+  (`infra/postgres/initdb/10_apply_migrations.sh`) applied the whole migration
+  chain but recorded none of it, so to `scripts/pending_migrations.py` the
+  database it produced — every table present, no `aisoc_schema_migrations` —
+  read as *behind the entire chain*. `make up`'s schema guard then stopped the
+  very first run with "behind — 157 migration(s) pending" and sent the
+  operator to `make upgrade`, which re-applied all ~160 files under strict
+  mode. The hook now records each migration as it lands, in the same table the
+  runtime runner (`app.scripts.run_migrations`) uses, so a fresh install reads
+  as up to date, an interrupted chain leaves an accurate record of what did
+  apply, and the first in-place upgrade starts from the truth instead of from
+  zero. A live regression test boots a container with the repository's own
+  init hooks mounted and asserts the detector's verdict. Reported by
+  @Dhanu188 on #353.
+
 - **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
   `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
   `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as

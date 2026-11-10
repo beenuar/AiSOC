@@ -282,6 +282,92 @@ def test_live_unreadable_database_is_unknown_never_current(live_pg: str) -> None
     assert result.returncode == 4, f"expected exit 4 (unknown); got {result.returncode}\n{result.stdout}\n{result.stderr}"
 
 
+@pytest.fixture(scope="module")
+def live_pg_initdb() -> Iterator[str]:
+    """A throwaway Postgres built the way `make up` builds one.
+
+    The repository's own initdb hooks are mounted, so the migration chain is
+    applied by `infra/postgres/initdb/10_apply_migrations.sh` as the data
+    directory is created — the exact state the detector reads on the first
+    run of a fresh install. The plain `live_pg` fixture above cannot stand in
+    for this: it starts empty, and the defect this exists to catch lives in
+    what the hook does and does not leave behind.
+    """
+    name = f"aisoc-updinfra-initdb-pg-{uuid.uuid4().hex[:8]}"
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            name,
+            "-e",
+            "POSTGRES_PASSWORD=probe",
+            "-e",
+            "POSTGRES_USER=aisoc",
+            "-e",
+            "POSTGRES_DB=aisoc",
+            "-v",
+            f"{ROOT / 'infra' / 'postgres' / 'initdb'}:/docker-entrypoint-initdb.d:ro",
+            "-v",
+            f"{MIGRATIONS}:/aisoc/migrations:ro",
+            "postgres:16-alpine",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        # The hook applies the whole chain before the real server starts, and
+        # `pg_isready` over TCP cannot succeed against the temporary initdb
+        # server (`listen_addresses=''`) — same reasoning as the Makefile's
+        # `_wait_postgres`. So readiness here means "installed", not merely
+        # "booted", which is why the deadline is generous: it waits out ~160
+        # migration files, not a container start.
+        for _ in range(240):
+            ready = subprocess.run(
+                ["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "aisoc"],
+                capture_output=True,
+            )
+            if ready.returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            logs = subprocess.run(["docker", "logs", name], capture_output=True, text=True)
+            pytest.fail(f"initdb Postgres never became ready; container logs:\n{logs.stdout}\n{logs.stderr}")
+        yield name
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+
+
+@requires_docker
+def test_live_initdb_installed_database_is_current(live_pg_initdb: str) -> None:
+    """A database the initdb hook has just fully built must read as current.
+
+    Before the hook recorded what it applied, this state — every table
+    present, no `aisoc_schema_migrations` — read as *behind the entire
+    chain*, so the very first `make up` built the schema and then refused to
+    start the stack it had just built, and the `make upgrade` it suggested
+    re-applied all ~160 files under strict mode. Reported by a community
+    contributor on #353.
+    """
+    # Guard: the hook really ran. Without this, an image that silently skipped
+    # its init hooks would turn the assertion below into the `fresh` case,
+    # which passes for the wrong reason.
+    tables = int(_psql(live_pg_initdb, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'"))
+    assert tables > 50, f"initdb hook does not appear to have applied the chain ({tables} tables)"
+
+    result = _detect(live_pg_initdb)
+    assert result.returncode == 0, f"expected exit 0 (up to date); got {result.returncode}\n{result.stdout}\n{result.stderr}"
+    assert "up to date" in result.stdout.lower(), result.stdout
+
+    # And the record matches the chain exactly, by name — the same names the
+    # runtime runner would have recorded, so an upgrade in place starts from
+    # the truth rather than from zero.
+    recorded = {line.strip() for line in _psql(live_pg_initdb, "SELECT name FROM aisoc_schema_migrations").splitlines() if line.strip()}
+    assert recorded == set(_on_disk())
+
+
 def test_detector_refuses_a_tree_with_no_migrations(tmp_path: Path) -> None:
     """A gate that credits an empty tree credits every tree.
 
