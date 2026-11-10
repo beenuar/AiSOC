@@ -14,7 +14,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.3.0",
-    "express-rate-limit": "^8.7.2",
+    "express-rate-limit": "^8.7.3",
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
     "pino": "^10.4.0",
@@ -28,16 +28,16 @@
     "@types/node": "^22.20.5",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
-    "eslint": "^10.13.0",
+    "eslint": "^10.14.0",
     "tsx": "^4.23.15",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.72.1"
   },
   "optionalDependencies": {
     "@opentelemetry/api": "^1.10.0",
-    "@opentelemetry/exporter-trace-otlp-grpc": "^0.300.0",
-    "@opentelemetry/resources": "^3.0.0",
-    "@opentelemetry/sdk-node": "^0.300.0",
+    "@opentelemetry/exporter-trace-otlp-grpc": "^0.301.0",
+    "@opentelemetry/resources": "^3.1.0",
+    "@opentelemetry/sdk-node": "^0.301.0",
     "@opentelemetry/sdk-trace": "^3.0.0"
   },
   "overrides": {
