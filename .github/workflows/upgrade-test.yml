@@ -340,7 +340,7 @@ jobs:
       - name: Install this tree's migration runner
         run: >-
           python3 -m pip install --quiet
-          "fastapi>=0.117,<0.162" "pydantic[email]" pydantic-settings
+          "fastapi>=0.117,<0.163" "pydantic[email]" pydantic-settings
           "sqlalchemy[asyncio]" "asyncpg>=0.29,<0.31" structlog "PyJWT>=2.8,<3"
           "cryptography>=46,<51" "passlib[bcrypt]" tenacity pyyaml
           prometheus-client "opentelemetry-sdk" "opentelemetry-api"

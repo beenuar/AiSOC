@@ -10,7 +10,7 @@ python = "^3.11"
 # Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
 # "204 must not have a response body" assert at import. One range for
 # every service — see services/api/pyproject.toml for the measurement.
-fastapi = ">=0.117,<0.162"
+fastapi = ">=0.117,<0.163"
 uvicorn = {extras = ["standard"], version = ">=0.27,<0.55"}
 pydantic = "^2.5.0"
 pydantic-settings = "^2.1.0"
@@ -58,7 +58,7 @@ mcp = "1.30.0"
 structlog = ">=24.1,<27.0"
 prometheus-client = ">=0.19,<0.27"
 python-dateutil = "^2.8.2"
-aiokafka = ">=0.10,<0.15"
+aiokafka = ">=0.10,<0.16"
 # No `fastembed` extra. This service computes its embeddings through the
 # OpenAI client and talks to Qdrant with explicit PointStruct upserts and
 # vector search (app/tools/mitre_full.py) — nothing here calls the
