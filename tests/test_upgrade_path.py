@@ -282,6 +282,71 @@ def test_live_unreadable_database_is_unknown_never_current(live_pg: str) -> None
     assert result.returncode == 4, f"expected exit 4 (unknown); got {result.returncode}\n{result.stdout}\n{result.stderr}"
 
 
+@requires_docker
+def test_live_first_boot_through_the_initdb_hook_is_current() -> None:
+    """A first `make up` must pass the guard it runs before starting anything.
+
+    The fixtures above start a bare Postgres, so none of them ever ran the
+    initdb hook — and the hook applied the whole chain without recording it.
+    A brand-new install therefore came up with every table present and no
+    `aisoc_schema_migrations`, which the detector reads, correctly, as a
+    populated database with nothing applied: `make up` refused the very first
+    run and named `make upgrade` as the way out.
+
+    So this boots Postgres the way `docker-compose.yml` does — the same image,
+    the same two mounts, the same owner role — waits for the TCP listener the guard
+    waits for (the image's init server listens on the socket only, so TCP
+    means the hook has finished), and asks the real detector.
+    """
+    name = f"aisoc-updinfra-initdb-{uuid.uuid4().hex[:8]}"
+    subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            name,
+            "-e",
+            "POSTGRES_PASSWORD=probe",
+            "-e",
+            "POSTGRES_USER=aisoc",
+            "-e",
+            "POSTGRES_DB=aisoc",
+            "-v",
+            f"{ROOT / 'infra' / 'postgres' / 'initdb'}:/docker-entrypoint-initdb.d:ro",
+            "-v",
+            f"{MIGRATIONS}:/aisoc/migrations:ro",
+            "postgres:16-alpine",
+        ],
+        check=True,
+        capture_output=True,
+    )
+    try:
+        for _ in range(300):
+            ready = subprocess.run(
+                ["docker", "exec", name, "pg_isready", "-h", "127.0.0.1", "-U", "aisoc"],
+                capture_output=True,
+            )
+            if ready.returncode == 0:
+                break
+            time.sleep(1)
+        else:
+            logs = subprocess.run(["docker", "logs", "--tail", "40", name], capture_output=True, text=True)
+            pytest.fail(f"Postgres never accepted TCP after the initdb hook:\n{logs.stdout}{logs.stderr}")
+
+        # The hook really did build the schema; otherwise "fresh" would pass below for the wrong reason.
+        assert int(_psql(name, "SELECT count(*) FROM pg_tables WHERE schemaname = 'public'")) > 100
+
+        result = _detect(name)
+        assert result.returncode == 0, f"a first boot must not be refused:\n{result.stdout}\n{result.stderr}"
+        assert "up to date" in result.stdout.lower(), result.stdout
+
+        recorded = _psql(name, "SELECT name FROM aisoc_schema_migrations ORDER BY name").splitlines()
+        assert recorded == _on_disk()
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+
+
 def test_detector_refuses_a_tree_with_no_migrations(tmp_path: Path) -> None:
     """A gate that credits an empty tree credits every tree.
 

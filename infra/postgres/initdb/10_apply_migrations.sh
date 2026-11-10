@@ -41,12 +41,36 @@ if [ ${#files[@]} -eq 0 ]; then
     exit 0
 fi
 
+# Record each file as applied, in the same table and under the same name
+# (`path.name`) that `app.scripts.run_migrations` uses. Without this a fresh
+# install had every table and no record of any of them, so `make up`'s schema
+# guard read it as a populated database with the whole chain pending and
+# refused the first run. Keep the DDL identical to CREATE_MIGRATIONS_TABLE
+# in services/api/app/scripts/run_migrations.py.
+psql -v ON_ERROR_STOP=1 --no-psqlrc \
+     --username "${POSTGRES_USER}" \
+     --dbname "${POSTGRES_DB}" \
+     --quiet <<'SQL'
+CREATE TABLE IF NOT EXISTS aisoc_schema_migrations (
+    name        TEXT PRIMARY KEY,
+    applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+SQL
+
 echo "[migrations] applying ${#files[@]} files from ${MIGRATIONS_DIR}"
 for f in "${files[@]}"; do
-    echo "[migrations] $(basename "${f}")"
+    name="$(basename "${f}")"
+    echo "[migrations] ${name}"
     psql -v ON_ERROR_STOP=1 --no-psqlrc \
          --username "${POSTGRES_USER}" \
          --dbname "${POSTGRES_DB}" \
          --quiet -f "${f}"
+    # Only reached when the file applied: `set -e` and ON_ERROR_STOP stop the
+    # boot first otherwise, so a failed migration is never recorded.
+    printf '%s\n' "INSERT INTO aisoc_schema_migrations(name) VALUES (:'name') ON CONFLICT DO NOTHING;" |
+        psql -v ON_ERROR_STOP=1 --no-psqlrc \
+             --username "${POSTGRES_USER}" \
+             --dbname "${POSTGRES_DB}" \
+             --quiet -v name="${name}"
 done
 echo "[migrations] chain applied"
