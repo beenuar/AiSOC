@@ -129,6 +129,47 @@ async def test_fetch_alerts_falls_back_to_notable_index_when_unset():
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_dispatch_refuses_an_index_value_carrying_spl():
+    """An ``index=`` value that is not a bare index token must not reach SPL.
+
+    ``_dispatch`` strips ``index=`` from the operator-supplied value and
+    splices the remainder unquoted into ``search index={index} earliest=…``,
+    so a value like ``main | collect index=other`` would dispatch a two-stage
+    pipeline the configuration never meant to write. Defence in depth — the
+    operator already holds the Splunk token — but nothing downstream
+    re-validates, so the connector holds the line itself: fall back to the
+    default index and log the rejected value.
+    """
+    c = _conn(saved_search="index=main | collect index=other")
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(return_value=httpx.Response(201, json={"sid": "SID3"}))
+    respx.get(url__regex=r".+/services/search/jobs/SID3/results").mock(return_value=httpx.Response(200, json={"results": []}))
+    respx.get(url__regex=r".+/services/search/jobs/SID3(\?.*)?$").mock(return_value=_done_status())
+
+    await c.fetch_alerts()
+    assert jobs.called
+    spl = parse_qs(jobs.calls[0].request.content.decode())["search"][0]
+    assert spl.startswith("search index=notable earliest="), spl
+    assert "collect" not in spl
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_dispatch_accepts_the_full_legitimate_index_charset():
+    """Wildcards, cluster prefixes, underscores and dashes are real index
+    names and must pass through unchanged — a validator that rejects
+    ``sec_ops-*`` trades an injection for a broken deployment."""
+    c = _conn(saved_search="index=cluster:sec_ops-*")
+    jobs = respx.post(url__regex=r".+/services/search/jobs$").mock(return_value=httpx.Response(201, json={"sid": "SID4"}))
+    respx.get(url__regex=r".+/services/search/jobs/SID4/results").mock(return_value=httpx.Response(200, json={"results": []}))
+    respx.get(url__regex=r".+/services/search/jobs/SID4(\?.*)?$").mock(return_value=_done_status())
+
+    await c.fetch_alerts()
+    assert jobs.called
+    assert "cluster:sec_ops-*" in parse_qs(jobs.calls[0].request.content.decode())["search"][0]
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_pagination_collects_all_results_no_head_cap():
     c = _conn(saved_search="", page_size=100)
     total = 250

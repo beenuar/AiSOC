@@ -19,6 +19,31 @@ from app.federated.translators import to_spl
 
 logger = structlog.get_logger()
 
+#: What an ``index=<value>`` token may look like before it is spliced into
+#: SPL: letters, digits, ``_``, ``*`` (wildcard), ``:`` (cluster-prefixed
+#: names), ``-``. Notably absent: whitespace, ``|``, quotes, brackets — the
+#: characters that would let the "index" carry further SPL stages.
+_INDEX_TOKEN_RE = re.compile(r"[A-Za-z0-9_*:\-]+")
+
+
+def _safe_index(value: str) -> str:
+    """An index token that is safe to interpolate into a search string.
+
+    The operator-supplied ``saved_search`` doubles as the index selector, and
+    both ad-hoc search paths splice the stripped token into SPL unquoted. The
+    operator already holds the Splunk token, so this is defence in depth
+    rather than a trust-boundary fix — but nothing downstream re-validates,
+    so hold the same line the AQL translator holds for identifiers: refuse
+    anything that is not a bare index token. On refusal, fall back to the
+    default index and say which value was rejected, rather than dispatching a
+    search the configuration never meant to write.
+    """
+    if _INDEX_TOKEN_RE.fullmatch(value):
+        return value
+    logger.warning("splunk.index_token.rejected", rejected=value, fallback="notable")
+    return "notable"
+
+
 # Page size for the results endpoint. ``head 100`` / ``count=100`` used to cap a
 # poll at 100 notables and silently drop the rest (#529); we now page through
 # every result. _MAX_PAGES bounds a single poll so a misconfigured saved search
@@ -195,7 +220,7 @@ class SplunkConnector(BaseConnector):
             resp.raise_for_status()
             return self._extract_sid(resp)
 
-        index = ss[len("index=") :] if ss.startswith("index=") else "notable"
+        index = _safe_index(ss[len("index=") :]) if ss.startswith("index=") else "notable"
         resp = await client.post(
             f"{self._base_url}/services/search/jobs",
             headers=self._headers(),
@@ -277,7 +302,7 @@ class SplunkConnector(BaseConnector):
         # than the default `notable`) returned zero rows with a swallowed
         # error. Blank, or a saved-search name, falls back to `notable`.
         if self._saved_search.startswith("index="):
-            index = self._saved_search[len("index=") :]
+            index = _safe_index(self._saved_search[len("index=") :])
         else:
             index = "notable"
         spl = to_spl(unified, index=index)

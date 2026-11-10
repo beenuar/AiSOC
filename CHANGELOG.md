@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Hello, hunt tutorial claimed community rules are replay-graded; they
+  are not.** `scripts/validate_detections.py` replays fixtures only for
+  native-tier rules (the ones with a compiled spec) — community-tier fixtures
+  ship alongside the rule and are first replayed at promotion. The tutorial's
+  `enabled` bullet now says exactly that instead of promising a grading that
+  never runs at that tier.
+
 - **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
   `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
   `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
@@ -38,6 +45,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   A failed later page keeps what was read, the 25-page bound is announced when
   it binds, and a refused opening request still raises so the scheduler records
   a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52.
+
+### Security
+
+- **The Splunk connector validates the operator-supplied `index=` token
+  before splicing it into SPL.** Both ad-hoc search paths — `_dispatch()` on
+  the polling side and `query()` on the federated side — strip `index=` from
+  the configured `saved_search` and interpolated the remainder unquoted, so a
+  value like `main | collect index=other` dispatched a two-stage pipeline the
+  configuration never meant to write. Not exploitable across a trust boundary
+  (the operator holds the Splunk token already), but nothing downstream
+  re-validated, so the connector now holds the same line the AQL translator
+  holds: a token outside `[A-Za-z0-9_*:-]` falls back to the default
+  `notable` index with a warning naming the rejected value. Wildcards,
+  cluster prefixes, underscores and dashes pass through unchanged, pinned by
+  tests on both paths.
 
 ## [23.0.0] - 2026-11-10
 
