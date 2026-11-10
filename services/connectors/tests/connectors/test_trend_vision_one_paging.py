@@ -28,7 +28,6 @@ from app.connectors._paging import DEFAULT_MAX_PAGES
 from app.connectors.trend_vision_one import TrendVisionOneConnector
 
 _WORKBENCH = "/v3.0/workbench/alerts"
-_OAT = "/v3.0/oat/detections"
 
 
 def _items(prefix: str, start: int, count: int) -> list[dict[str, Any]]:
