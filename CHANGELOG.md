@@ -309,6 +309,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
+  `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
+  `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
+  "the cursor used to get the next results" and its OpenAPI document declares as
+  the `x-pagination` cursor for `GET /api/v2/security_monitoring/signals`. A poll
+  window opens where the last one closed, so a window holding more than 100
+  signals lost its oldest ones for good, and those are the start of whatever
+  caused the burst. It now reads through `read_token_pages`, sending the cursor
+  back as `page[cursor]` with the window, order and page size unchanged.
+  `read_token_pages` gains `empty_page_ends`, off by default: Datadog's
+  generated Python, Go and TypeScript clients all end this read on an empty page
+  as well as on an absent cursor, so a cursor beside an empty page must not
+  spend the page cap on a quiet window. Every existing caller keeps the rule that
+  an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
+  to 53.
+
 - **The GitLab connector polled a vulnerability route GitLab does not serve, and filed the 404 as the customer's plan.** `fetch_alerts` requested `GET /groups/{id}/security/vulnerability_findings`. There is no such endpoint. Probed against gitlab.com it answers `404 {"error":"404 Not Found"}` — Grape's route-not-found body, byte-identical to a path invented for the control — while the sibling `/groups/{id}/audit_events` answers `403 {"message":…}` and the one documented findings route, `/projects/{id}/vulnerability_findings`, answers `401 {"message":…}`. An existing route refuses you by `message`; a route never served says `error`. So that stream had never returned a row on any deployment, and because its 404 shared a branch with 403 the only symptom was `gitlab.vulnerability_findings_unavailable` at `info` — our wrong URL, reported as a tier limitation nobody debugs ([#1754](https://github.com/beenuar/AiSOC/issues/1754)).
 
   **It now reads `Group.vulnerabilities` over GraphQL, and that choice was made against the alternative rather than instead of it.** The documented REST route is project-scoped. Reaching it from a group-scoped connector means enumerating the group's projects and polling each: `gitlab-org` reports `x-total: 3810` with subgroups, so one poll becomes thousands of requests every five minutes, and a bound on that number silently stops scanning the rest of the group — the unread-window defect the paging work exists to prevent, rebuilt. That endpoint also takes no time filter, returns no `created_at` to window on client-side, defaults `scope` to `dismissed`, and GitLab says of it: "This API is in the process of being deprecated and considered unstable… Use the GraphQL API instead." `Group.vulnerabilities` has none of those problems — group-scoped so there is nothing to enumerate and no bound to get wrong, `sort: detected_desc` with `detectedAt` on every node so a clock-derived window is readable, and a real Relay cursor. The exact query was sent to `gitlab.com/api/graphql` and answered 200 with a live `endCursor`, which is more contract than the REST route ever had. `cloudflare_zt` made the same move for the same reason in [#1686](https://github.com/beenuar/AiSOC/issues/1686).

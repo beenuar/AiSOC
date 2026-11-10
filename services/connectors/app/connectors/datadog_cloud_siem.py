@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_token_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 
 logger = structlog.get_logger()
@@ -113,23 +114,32 @@ class DatadogCloudSIEMConnector(BaseConnector):
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self._base}/api/v2/security_monitoring/signals",
-                    headers=self._headers(),
-                    params={
+                # A page holds at most `page[limit]` signals, newest first, so
+                # a busy window overflows it from the oldest end. Datadog names
+                # `meta.page.after` as the cursor to the rest, sent back with
+                # "the same parameters with the addition of the `page[cursor]`".
+                # Datadog's own clients end the read on an empty page too.
+                async def page(cursor: str | None) -> httpx.Response:
+                    params: dict[str, Any] = {
                         "filter[from]": since,
                         "page[limit]": 100,
                         "sort": "-timestamp",
-                    },
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "datadog_cloud_siem.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
+                    }
+                    if cursor:
+                        params["page[cursor]"] = cursor
+                    return await client.get(
+                        f"{self._base}/api/v2/security_monitoring/signals",
+                        headers=self._headers(),
+                        params=params,
                     )
-                    return []
-                items = (resp.json() or {}).get("data") or []
+
+                items = await read_token_pages(
+                    request=page,
+                    items_field="data",
+                    token_field="meta.page.after",
+                    feed="datadog_cloud_siem.signals",
+                    empty_page_ends=True,
+                )
                 return [self.normalize(i) for i in items]
         except Exception as exc:
             logger.warning("datadog_cloud_siem.fetch_exception", error=str(exc))

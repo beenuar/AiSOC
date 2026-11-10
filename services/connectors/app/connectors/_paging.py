@@ -149,6 +149,7 @@ async def read_token_pages(
     feed: str,
     token_field: str = "nextPageToken",
     stop_when: Callable[[list[dict[str, Any]]], bool] | None = None,
+    empty_page_ends: bool = False,
     max_pages: int = DEFAULT_MAX_PAGES,
 ) -> list[dict[str, Any]]:
     """Every row of a collection paged by an opaque continuation token.
@@ -186,6 +187,12 @@ async def read_token_pages(
     a request this reviewer sent to the live endpoint came back with
     ``nodes: []`` beside ``hasNextPage: true``, because authorization filters
     rows out of a page without shortening the connection.
+
+    ``empty_page_ends`` is the exception, for a vendor whose own client ends
+    the read there. Datadog's generated API clients stop a cursor-paged read
+    on an empty page as well as on an absent cursor, so a Datadog cursor beside
+    an empty page is not a promise of more rows, and following it would spend
+    the page cap on a quiet window. Pass it only on that kind of evidence.
     """
     rows: list[dict[str, Any]] = []
     token: str | None = None
@@ -218,7 +225,7 @@ async def read_token_pages(
         rows.extend(page_rows)
 
         token = _token_at(body, token_field)
-        if token is None:
+        if token is None or (empty_page_ends and not page_rows):
             return rows
         if page_rows and stop_when is not None and stop_when(page_rows):
             return rows
