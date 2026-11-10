@@ -121,7 +121,7 @@ RUNTIMES: dict[str, str] = {
 # rather than inferred from a majority vote: with a vote, flipping enough
 # workflows moves the "correct" answer and the gate ratifies the drift it
 # exists to catch.
-PNPM_ACTION_VERSION = "v6.0.9"
+PNPM_ACTION_VERSION = "v6.1.1"
 
 # Workflows deliberately not on the repo-wide pnpm action version.
 PNPM_ACTION_EXEMPT: dict[str, str] = {
@@ -2156,7 +2156,12 @@ def _fixture(root: Path) -> None:
     (root / ".github" / "workflows" / "ci.yml").write_text(
         "name: CI\njobs:\n"
         "  node:\n    steps:\n"
-        "      - uses: pnpm/action-setup@aaa # v6.0.9\n"
+        # References the declared constant so a fleet-version move can never
+        # leave this fixture behind — bumping PNPM_ACTION_VERSION with a
+        # hardcoded string here failed the clean-fixture pass in both
+        # directions ("uses X while the repository declares Y" plus
+        # "declared version is stale").
+        f"      - uses: pnpm/action-setup@aaa # {PNPM_ACTION_VERSION}\n"
         "      - uses: actions/setup-node@bbb # v6\n"
         "        with:\n          node-version: '22'\n"
         "      - run: pnpm install --frozen-lockfile\n"

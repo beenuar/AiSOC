@@ -49,7 +49,7 @@ jobs:
         # `packageManager: pnpm@8.15.1`. Pinning a different version (was
         # `version: 9`) is a hard error under v6:
         # "Multiple versions of pnpm specified ... ERR_PNPM_BAD_PM_VERSION".
-        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
       - name: Set up Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
