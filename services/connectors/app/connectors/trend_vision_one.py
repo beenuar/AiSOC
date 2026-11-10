@@ -20,6 +20,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_linked_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 
 logger = structlog.get_logger()
@@ -123,38 +124,44 @@ class TrendVisionOneConnector(BaseConnector):
         since_iso = since.strftime("%Y-%m-%dT%H:%M:%SZ")
         events: list[dict[str, Any]] = []
 
+        # Both feeds answer a capped page plus ``nextLink``, the complete URL of
+        # the next one, and Trend's own SDK keeps requesting it until it is no
+        # longer returned. The poll window opens where the last one closed, so a
+        # page left unread here is never requested again.
+        feeds = (
+            (
+                "workbench",
+                "/v3.0/workbench/alerts",
+                {"startDateTime": since_iso, "top": 100, "orderBy": "createdDateTime"},
+            ),
+            ("oat", "/v3.0/oat/detections", {"detectedStartDateTime": since_iso, "top": 100}),
+        )
         async with httpx.AsyncClient(timeout=30.0) as client:
-            try:
-                wb = await client.get(
-                    f"{self._base}/v3.0/workbench/alerts",
-                    headers=self._headers(),
-                    params={"startDateTime": since_iso, "top": 100, "orderBy": "createdDateTime"},
-                )
-                if wb.status_code == 200:
-                    for item in (wb.json() or {}).get("items", []):
-                        item["_aisoc_stream"] = "workbench"
-                        events.append(item)
-                else:
-                    logger.warning(
-                        "trend_vision_one.workbench_failed",
-                        status=wb.status_code,
-                        body=wb.text[:300],
+            for stream, path, params in feeds:
+                try:
+                    first = await client.get(f"{self._base}{path}", headers=self._headers(), params=params)
+                    if first.status_code != 200:
+                        logger.warning(
+                            "trend_vision_one.feed_failed",
+                            stream=stream,
+                            status=first.status_code,
+                            body=first.text[:300],
+                        )
+                        continue
+                    items = await read_linked_pages(
+                        client,
+                        first,
+                        link_field="nextLink",
+                        items_field="items",
+                        headers=self._headers(),
+                        feed=f"trend_vision_one.{stream}",
                     )
-            except Exception as exc:
-                logger.warning("trend_vision_one.workbench_exception", error=str(exc))
-
-            try:
-                oat = await client.get(
-                    f"{self._base}/v3.0/oat/detections",
-                    headers=self._headers(),
-                    params={"detectedStartDateTime": since_iso, "top": 100},
-                )
-                if oat.status_code == 200:
-                    for item in (oat.json() or {}).get("items", []):
-                        item["_aisoc_stream"] = "oat"
-                        events.append(item)
-            except Exception as exc:
-                logger.warning("trend_vision_one.oat_exception", error=str(exc))
+                except Exception as exc:
+                    logger.warning("trend_vision_one.feed_exception", stream=stream, error=str(exc))
+                    continue
+                for item in items:
+                    item["_aisoc_stream"] = stream
+                    events.append(item)
 
         return [self.normalize(e) for e in events]
 
