@@ -269,7 +269,17 @@ class SplunkConnector(BaseConnector):
         flow into the fusion engine. The API layer wraps each row with
         connector identity so downstream consumers can tell sources apart.
         """
-        index = self._saved_search if self._saved_search.startswith("index=") else "notable"
+        # `saved_search` doubles as the federated-search index selector. A
+        # value like "index=main" names the index to search; `to_spl` prepends
+        # "index=" itself, so strip the leading "index=" here — otherwise the
+        # SPL became "search index=index=main", which Splunk refuses to parse,
+        # so every federated search over a self-hosted index (anything other
+        # than the default `notable`) returned zero rows with a swallowed
+        # error. Blank, or a saved-search name, falls back to `notable`.
+        if self._saved_search.startswith("index="):
+            index = self._saved_search[len("index=") :]
+        else:
+            index = "notable"
         spl = to_spl(unified, index=index)
         async with httpx.AsyncClient(timeout=60.0, verify=self._ssl_verify) as client:
             resp = await client.post(

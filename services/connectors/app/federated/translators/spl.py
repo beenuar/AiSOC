@@ -81,5 +81,13 @@ def to_spl(query: UnifiedQuery, *, index: str = "main") -> str:
         parts.append(_spl_quote(query.free_text))
     for indicator in query.indicators:
         parts.append(_indicator_to_spl(indicator))
+    # Force every field into the result rows. `search index=… <filter>` over
+    # /services/search/jobs returns only default fields plus the ones named in
+    # the filter, so an indicator match came back as `_time`/`host`/`src_ip`
+    # and nothing else — the signature, action, URL and hashes that make the
+    # row evidence were silently dropped before the analyst (or the agent) ever
+    # saw them. `| fields *` includes them; the caller projects down to the
+    # signal fields afterwards.
+    parts.append("| fields *")
     parts.append(f"| head {query.limit}")
     return " ".join(parts)

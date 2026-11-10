@@ -99,6 +99,10 @@ def test_spl_translator_renders_indicators_and_time_window():
     assert "earliest" in spl.lower()
     # The free_text should appear somewhere as a search term.
     assert "kerberoasting" in spl
+    # `| fields *` must be present: without it `search index=… <filter>` returns
+    # only default + filtered fields, so the signature/action/url that make a
+    # row evidence are dropped before the caller can project them.
+    assert "| fields *" in spl
 
 
 def test_kql_translator_renders_pipeline_form():
@@ -240,6 +244,59 @@ async def test_splunk_query_assembles_post_body(monkeypatch):
     body_str = str(body)
     assert "user.name" in body_str
     assert "kerberoasting" in body_str
+
+
+@pytest.mark.asyncio
+async def test_splunk_query_self_hosted_index_is_not_double_prefixed(monkeypatch):
+    """A self-hosted index given as ``saved_search='index=main'`` must search
+    ``index=main`` — never ``index=index=main``.
+
+    ``query()`` picks the index from ``saved_search`` and ``to_spl`` renders
+    ``search index=<index>``. Passing the whole ``index=main`` clause through
+    produced ``search index=index=main``, which Splunk refuses to parse, so
+    every federated search against a self-hosted index (anything other than the
+    default ``notable``) returned zero rows with a swallowed parse error. This
+    pins the index to appearing exactly once.
+    """
+    captured: dict[str, Any] = {}
+
+    class _StubResponse:
+        status_code = 200
+
+        @staticmethod
+        def raise_for_status() -> None:
+            return None
+
+        @staticmethod
+        def json() -> dict[str, Any]:
+            return {"results": []}
+
+    class _StubAsyncClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        async def post(self, url, **kwargs):
+            captured["data"] = kwargs.get("data") or {}
+            return _StubResponse()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubAsyncClient)
+
+    connector = SplunkConnector(
+        base_url="https://splunk.example.com:8089",
+        token="fake-token",
+        saved_search="index=main",
+    )
+    await connector.query(_SAMPLE_QUERY)
+
+    spl = str(captured["data"].get("search", ""))
+    assert "index=main" in spl, spl
+    assert "index=index=" not in spl, f"double index= prefix: {spl!r}"
 
 
 @pytest.mark.asyncio
