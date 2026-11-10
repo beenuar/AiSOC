@@ -84,3 +84,8 @@ def test_the_ceiling_is_a_debt_balance_that_only_falls() -> None:
 def test_slack_audit_reads_its_window_to_the_end() -> None:
     _, paging, _ = _load().audit()
     assert "slack_audit" in paging
+
+
+def test_duo_security_reads_its_window_to_the_end() -> None:
+    _, paging, _ = _load().audit()
+    assert "duo_security" in paging
