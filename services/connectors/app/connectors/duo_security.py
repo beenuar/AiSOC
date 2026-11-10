@@ -16,12 +16,44 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import DEFAULT_MAX_PAGES
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 
 logger = structlog.get_logger()
 
 # Duo's documented delay before a new authentication is served by the logs API.
 _AVAILABILITY_DELAY_S = 120
+
+# Duo's documented maximum page size for the authentication log ("Default: 100;
+# Max: 1000"). Asking for the maximum keeps a busy window to the fewest requests.
+_PAGE_LIMIT = 1000
+
+_FEED = "duo_security.authentication"
+
+
+def _response(body: Any) -> dict[str, Any]:
+    """The ``response`` object of a Duo reply, or an empty one if the reply has none."""
+    response = body.get("response") if isinstance(body, dict) else None
+    return response if isinstance(response, dict) else {}
+
+
+def _authlogs(response: dict[str, Any]) -> list[dict[str, Any]]:
+    entries = response.get("authlogs")
+    return [entry for entry in entries if isinstance(entry, dict)] if isinstance(entries, list) else []
+
+
+def _next_offset(response: dict[str, Any]) -> str | None:
+    """The ``next_offset`` to send for the following page, or None when the log has ended.
+
+    Duo returns it as a two-element array — a 13-character millisecond
+    timestamp and the event txid — and takes it back as one parameter with
+    "both of these values ... separated by a comma". Its absence is the end.
+    """
+    metadata = response.get("metadata")
+    offset = metadata.get("next_offset") if isinstance(metadata, dict) else None
+    if isinstance(offset, list) and offset and all(isinstance(part, str) and part for part in offset):
+        return ",".join(offset)
+    return None
 
 
 class DuoSecurityConnector(BaseConnector):
@@ -91,21 +123,71 @@ class DuoSecurityConnector(BaseConnector):
         maxtime = datetime.now(UTC) - timedelta(seconds=_AVAILABILITY_DELAY_S)
         mintime = maxtime - timedelta(seconds=since_seconds)
         path = "/admin/v2/logs/authentication"
-        params = {
+        window = {
             "mintime": str(int(mintime.timestamp()) * 1000),
             "maxtime": str(int(maxtime.timestamp()) * 1000),
+            "limit": str(_PAGE_LIMIT),
         }
 
-        date_str, auth = self._sign("GET", path, params)
-
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"https://{self._host}{path}",
-                headers={"Date": date_str, "Authorization": auth},
-                params=params,
-            )
+
+            async def page(next_offset: str | None) -> httpx.Response:
+                # Every page repeats the window and is signed afresh: the
+                # signature covers the query string and the Date header, so a
+                # page cannot reuse the opening request's.
+                params = {**window, "next_offset": next_offset} if next_offset else dict(window)
+                date_str, auth = self._sign("GET", path, params)
+                return await client.get(
+                    f"https://{self._host}{path}",
+                    headers={"Date": date_str, "Authorization": auth},
+                    params=params,
+                )
+
+            # The opening request still raises, so a refused credential is
+            # recorded by the scheduler as a failed poll rather than a quiet one.
+            resp = await page(None)
             resp.raise_for_status()
-            logs = resp.json().get("response", {}).get("authlogs", [])
+            body = _response(resp.json())
+            logs = _authlogs(body)
+
+            # Duo: "To fetch all results, call repeatedly with the next_offset
+            # paging parameter as long as the result metadata has next_offset
+            # values." The read ends on the offset, never on a short page.
+            for _ in range(DEFAULT_MAX_PAGES - 1):
+                next_offset = _next_offset(body)
+                if next_offset is None:
+                    break
+                try:
+                    resp = await page(next_offset)
+                except httpx.HTTPError as exc:
+                    # Keep what was read; a failure part-way is not a reason
+                    # to discard the pages that succeeded.
+                    logger.warning("connector.paging.next_page_error", feed=_FEED, rows=len(logs), error=str(exc))
+                    break
+                if resp.status_code != 200:
+                    logger.warning(
+                        "connector.paging.next_page_failed",
+                        feed=_FEED,
+                        status=resp.status_code,
+                        rows=len(logs),
+                        body=resp.text[:300],
+                    )
+                    break
+                try:
+                    body = _response(resp.json())
+                except ValueError:
+                    logger.warning("connector.paging.next_page_unparseable", feed=_FEED, rows=len(logs))
+                    break
+                logs.extend(_authlogs(body))
+            else:
+                if _next_offset(body) is not None:
+                    logger.warning(
+                        "connector.paging.page_cap_reached",
+                        feed=_FEED,
+                        pages=DEFAULT_MAX_PAGES,
+                        rows=len(logs),
+                        detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
+                    )
 
         return [self.normalize(entry) for entry in logs]
 
