@@ -240,6 +240,74 @@ async def read_token_pages(
     return rows
 
 
+async def read_offset_pages(
+    first: httpx.Response,
+    *,
+    request: Callable[[int], Awaitable[httpx.Response]],
+    items_field: str,
+    page_size: int,
+    feed: str,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[dict[str, Any]]:
+    """Every row of a collection paged by a numeric offset, from an already-fetched first page.
+
+    For a vendor that hands back neither a link nor a token: the client asks
+    again for the rows from ``page_size`` onward, then from ``2 * page_size``,
+    and so on. ``first`` is the caller's own 200 response for offset 0, as in
+    :func:`read_linked_pages`, so the caller keeps ownership of authentication
+    and of how a refused opening request is reported. ``request`` is called
+    with each following offset and owns where that offset goes in the request;
+    ``items_field`` is a dotted path, as in :func:`read_token_pages`.
+
+    **A page shorter than** ``page_size`` **ends the collection.** There is no
+    continuation to read the end from, and an offset-paged list fills every
+    page but its last. That makes the rule only as good as ``page_size``: it
+    must be the number of rows the request actually asks for, or a full page
+    reads as the last one.
+    """
+    try:
+        page = _rows_at(first.json(), items_field)
+    except ValueError:
+        logger.warning("connector.paging.first_page_unparseable", feed=feed)
+        return []
+
+    rows = list(page)
+    for page_number in range(1, max_pages):
+        if len(page) < page_size:
+            return rows
+        try:
+            resp = await request(page_number * page_size)
+        except httpx.HTTPError as exc:
+            # Keep what was read, as in the other readers.
+            logger.warning("connector.paging.next_page_error", feed=feed, rows=len(rows), error=str(exc))
+            return rows
+        if resp.status_code != 200:
+            logger.warning(
+                "connector.paging.next_page_failed",
+                feed=feed,
+                status=resp.status_code,
+                rows=len(rows),
+                body=resp.text[:300],
+            )
+            return rows
+        try:
+            page = _rows_at(resp.json(), items_field)
+        except ValueError:
+            logger.warning("connector.paging.next_page_unparseable", feed=feed, rows=len(rows))
+            return rows
+        rows.extend(page)
+
+    if len(page) >= page_size:
+        logger.warning(
+            "connector.paging.page_cap_reached",
+            feed=feed,
+            pages=max_pages,
+            rows=len(rows),
+            detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
+        )
+    return rows
+
+
 def created_before(row: dict[str, Any], cutoff_ms: int) -> bool:
     """Is this row's ``created_at`` older than ``cutoff_ms``? An absent or unparseable stamp is not."""
     value = row.get("created_at")

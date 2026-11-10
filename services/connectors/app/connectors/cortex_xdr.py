@@ -14,6 +14,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_offset_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 
 logger = structlog.get_logger()
@@ -28,6 +29,11 @@ _SEVERITY_MAP: dict[str, str] = {
     "high": "high",
     "critical": "critical",
 }
+
+# ``get_incidents`` returns at most 100 incidents per request, the rows from
+# ``search_from`` up to ``search_to``; the rest of the window is read by moving
+# both offsets on.
+_PAGE_SIZE = 100
 
 
 class CortexXDRConnector(BaseConnector):
@@ -102,29 +108,47 @@ class CortexXDRConnector(BaseConnector):
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         since_ms = int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp()) * 1000
 
-        payload = {
-            "request_data": {
-                "filters": [
-                    {
-                        "field": "creation_time",
-                        "operator": "gte",
-                        "value": since_ms,
-                    }
-                ],
-                "search_from": 0,
-                "search_to": 100,
-                "sort": {"field": "creation_time", "keyword": "desc"},
+        def payload(search_from: int) -> dict[str, Any]:
+            return {
+                "request_data": {
+                    "filters": [
+                        {
+                            "field": "creation_time",
+                            "operator": "gte",
+                            "value": since_ms,
+                        }
+                    ],
+                    "search_from": search_from,
+                    "search_to": search_from + _PAGE_SIZE,
+                    # Oldest first: an incident created during the read joins
+                    # the end of the list instead of shifting every offset
+                    # beneath the pages still to be read.
+                    "sort": {"field": "creation_time", "keyword": "asc"},
+                }
             }
-        }
 
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                f"https://{self._fqdn}/public_api/v1/incidents/get_incidents",
-                headers=self._headers(),
-                json=payload,
-            )
+
+            async def page(search_from: int) -> httpx.Response:
+                # The auth headers carry a fresh nonce and timestamp, so every
+                # page is signed for itself.
+                return await client.post(
+                    f"https://{self._fqdn}/public_api/v1/incidents/get_incidents",
+                    headers=self._headers(),
+                    json=payload(search_from),
+                )
+
+            # The opening request still raises, so a refused credential is
+            # recorded by the scheduler as a failed poll rather than a quiet one.
+            resp = await page(0)
             resp.raise_for_status()
-            incidents = resp.json().get("reply", {}).get("incidents", [])
+            incidents = await read_offset_pages(
+                resp,
+                request=page,
+                items_field="reply.incidents",
+                page_size=_PAGE_SIZE,
+                feed="cortex_xdr.incidents",
+            )
 
         return [self.normalize(i) for i in incidents]
 
