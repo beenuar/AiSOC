@@ -42,11 +42,38 @@ if [ ${#files[@]} -eq 0 ]; then
 fi
 
 echo "[migrations] applying ${#files[@]} files from ${MIGRATIONS_DIR}"
+
+# Record what gets applied, in the same table the runtime migration runner
+# (`app.scripts.run_migrations`) records into. Without the record, a database
+# this hook has just fully built reads as *behind the entire chain* to
+# `scripts/pending_migrations.py` — every table present, no
+# `aisoc_schema_migrations` — so the very first `make up` built the schema and
+# then refused to start the stack it had just built, and the `make upgrade` it
+# suggested re-applied all ~160 files under strict mode. Each file is recorded
+# as it lands rather than the whole set at the end: a chain that fails
+# half-way then leaves an accurate record, and the detector names the
+# genuinely-missing remainder instead of the whole chain.
+psql -v ON_ERROR_STOP=1 --no-psqlrc \
+     --username "${POSTGRES_USER}" \
+     --dbname "${POSTGRES_DB}" \
+     --quiet -c "CREATE TABLE IF NOT EXISTS aisoc_schema_migrations (
+                     name        TEXT PRIMARY KEY,
+                     applied_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+                 );"
+
 for f in "${files[@]}"; do
     echo "[migrations] $(basename "${f}")"
     psql -v ON_ERROR_STOP=1 --no-psqlrc \
          --username "${POSTGRES_USER}" \
          --dbname "${POSTGRES_DB}" \
          --quiet -f "${f}"
+    # `:'name'` is psql's own quoting (same pattern as the sibling hook), so
+    # the filename never splices into the statement text.
+    psql -v ON_ERROR_STOP=1 --no-psqlrc \
+         --username "${POSTGRES_USER}" \
+         --dbname "${POSTGRES_DB}" \
+         --quiet --set=name="$(basename "${f}")" <<'SQL'
+INSERT INTO aisoc_schema_migrations(name) VALUES (:'name') ON CONFLICT (name) DO NOTHING;
+SQL
 done
-echo "[migrations] chain applied"
+echo "[migrations] chain applied and recorded in aisoc_schema_migrations"
