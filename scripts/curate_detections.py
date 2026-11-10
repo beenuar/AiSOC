@@ -787,7 +787,10 @@ def build_manifest(
             {
                 "id": r.rule_id,
                 "name": r.name,
-                "path": str(r.path.relative_to(REPO_ROOT)),
+                # POSIX, like every other artefact path: on Windows str(Path)
+                # writes backslashes, which is a 601-line diff against the
+                # committed selection and a permanent --check failure there.
+                "path": r.path.relative_to(REPO_ROOT).as_posix(),
                 "tier": r.tier,
                 "source": r.source,
                 "category": r.category,
@@ -975,9 +978,15 @@ def main() -> int:
     ok = stats["selected"] >= args.min and all(info["covered"] for info in manifest["families"].values())
 
     if args.check:
-        existing = OUT_MANIFEST.read_text(encoding="utf-8") if OUT_MANIFEST.exists() else ""
+        # Bytes, for the same reason `build_marketplace.py` reads bytes: a text
+        # read hides CRLF, so a manifest written on Windows compared equal to
+        # one built on Linux while differing from the committed copy in every
+        # line. The generated files are LF wherever they are built.
+        manifest_bytes = OUT_MANIFEST.read_bytes() if OUT_MANIFEST.exists() else b""
+        report_bytes = OUT_REPORT.read_bytes() if OUT_REPORT.exists() else b""
+        existing = manifest_bytes.decode("utf-8", "replace")
         report = build_report(manifest)
-        existing_report = OUT_REPORT.read_text(encoding="utf-8") if OUT_REPORT.exists() else ""
+        existing_report = report_bytes.decode("utf-8", "replace")
 
         def _strip_generated(s: str) -> str:
             try:
@@ -990,8 +999,11 @@ def main() -> int:
         def _strip_md_generated(s: str) -> str:
             return re.sub(r"Generated: `[^`]+`", "Generated: `<ts>`", s)
 
-        if _strip_generated(existing) != _strip_generated(serialised) or _strip_md_generated(existing_report) != _strip_md_generated(
-            report
+        if (
+            _strip_generated(existing) != _strip_generated(serialised)
+            or _strip_md_generated(existing_report) != _strip_md_generated(report)
+            or b"\r" in manifest_bytes
+            or b"\r" in report_bytes
         ):
             print(
                 "marketplace/curated.json or coverage.md is stale. Run: pnpm marketplace:curate",
@@ -1002,9 +1014,9 @@ def main() -> int:
         return 0 if ok else 1
 
     OUT_MANIFEST.parent.mkdir(parents=True, exist_ok=True)
-    OUT_MANIFEST.write_text(serialised, encoding="utf-8")
+    OUT_MANIFEST.write_text(serialised, encoding="utf-8", newline="\n")
     OUT_REPORT.parent.mkdir(parents=True, exist_ok=True)
-    OUT_REPORT.write_text(build_report(manifest), encoding="utf-8")
+    OUT_REPORT.write_text(build_report(manifest), encoding="utf-8", newline="\n")
 
     uncovered = [info["label"] for info in manifest["families"].values() if not info["covered"]]
     print(

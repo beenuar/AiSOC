@@ -1,12 +1,12 @@
 {
   "executable": 2966,
   "windowed": 76,
-  "onDisk": 7407,
-  "quarantined": 4441,
+  "onDisk": 7408,
+  "quarantined": 4442,
   "plugins": 85,
   "playbookPacks": 64,
   "playbooks": 89,
-  "marketplaceItems": 7581,
+  "marketplaceItems": 7582,
   "categories": {
     "application": 195,
     "cloud": 355,

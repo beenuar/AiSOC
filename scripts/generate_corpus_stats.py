@@ -330,8 +330,8 @@ def render_typescript(payload: dict[str, Any]) -> str:
 
 def write_outputs(payload: dict[str, Any]) -> None:
     JSON_OUT.parent.mkdir(parents=True, exist_ok=True)
-    JSON_OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
-    TS_OUT.write_text(render_typescript(payload), encoding="utf-8")
+    JSON_OUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8", newline="\n")
+    TS_OUT.write_text(render_typescript(payload), encoding="utf-8", newline="\n")
 
 
 def artefact_drift(payload: dict[str, Any], existing_json: str | None, existing_ts: str | None) -> list[str]:
@@ -372,7 +372,7 @@ def reconcile_prose(payload: dict[str, Any], *, check_only: bool) -> list[str]:
             if check_only:
                 drift.append(f"{path.relative_to(REPO_ROOT)}: {figure} count drift (expected {expected})")
             else:
-                path.write_text(after, encoding="utf-8")
+                path.write_text(after, encoding="utf-8", newline="\n")
     return drift
 
 
