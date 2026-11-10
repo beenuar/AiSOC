@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
+  `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
+  `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
+  "the cursor used to get the next results" and its OpenAPI document declares as
+  the `x-pagination` cursor for `GET /api/v2/security_monitoring/signals`. A poll
+  window opens where the last one closed, so a window holding more than 100
+  signals lost its oldest ones for good, and those are the start of whatever
+  caused the burst. It now reads through `read_token_pages`, sending the cursor
+  back as `page[cursor]` with the window, order and page size unchanged.
+  `read_token_pages` gains `empty_page_ends`, off by default: Datadog's
+  generated Python, Go and TypeScript clients all end this read on an empty page
+  as well as on an absent cursor, so a cursor beside an empty page must not
+  spend the page cap on a quiet window. Every existing caller keeps the rule that
+  an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
+  to 53.
+
+- **Duo authentication logs read 100 entries per poll and lost the rest.**
+  `DuoSecurityConnector.fetch_alerts` read the first response of
+  `GET /admin/v2/logs/authentication` and ignored `metadata.next_offset`. Duo
+  documents that endpoint as a paged list, 100 entries by default, and says "to
+  fetch all results, call repeatedly with the next_offset paging parameter as
+  long as the result metadata has next_offset values". A poll window opens where
+  the last one closed, so a window holding more than 100 authentications lost
+  the rest for good. It now asks for Duo's documented maximum of 1,000 per page
+  and follows `next_offset`, sent back as the timestamp and txid "separated by a
+  comma" with the window unchanged and each page signed for its own parameters.
+  A failed later page keeps what was read, the 25-page bound is announced when
+  it binds, and a refused opening request still raises so the scheduler records
+  a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52.
+
 ## [23.0.0] - 2026-11-10
 
 ### BREAKING
@@ -308,22 +340,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The Nov-9 Dependabot wave lands folded, one PR per lockfile family, and fastapi moves to 0.162.x repo-wide** ([#1791](https://github.com/beenuar/AiSOC/pull/1791), [#1792](https://github.com/beenuar/AiSOC/pull/1792), [#1795](https://github.com/beenuar/AiSOC/pull/1795), [#1796](https://github.com/beenuar/AiSOC/pull/1796)). fastapi is a pin-agreement critical package — every range written anywhere must be the same range — so the three queued per-service bumps could never merge alone; the range moves to `>=0.117,<0.163` in all 13 service manifests, the 7 pip-install lines across 5 workflows, and the `reproducible-builds.yml` shipped-matrix entry (0.162.2, what the locks resolve). With it: aiokafka 0.15 (agents), python-dateutil 4.0 (actions — declared but never imported, verified before taking the major), pydantic 2.14.3, sqlalchemy 2.1.8, sqlglot 30.30.0, strawberry-graphql 0.340.1, python-multipart 0.0.33, boto3 1.43.127, openai 3.48.0, langchain-core 1.7.7, markdown 3.11.3; next + eslint-config-next 16.4.5, storybook 10.6.6, framer-motion 14.9.1, tailwindcss 4.3.4; realtime's OpenTelemetry constellation coherently at 0.301.1/3.1.1 with eslint 10.14 and express-rate-limit 8.7.4; pgx/v5 5.12.0 (ingest); cosign-installer 4.1.3, docker/login-action 4.8.0, helm/kind-action 1.15.2 and the codeql-action group across workflows. Every lock delta was audited to contain only the intended packages and their required transitives.
 
 ### Fixed
-
-- **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
-  `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
-  `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
-  "the cursor used to get the next results" and its OpenAPI document declares as
-  the `x-pagination` cursor for `GET /api/v2/security_monitoring/signals`. A poll
-  window opens where the last one closed, so a window holding more than 100
-  signals lost its oldest ones for good, and those are the start of whatever
-  caused the burst. It now reads through `read_token_pages`, sending the cursor
-  back as `page[cursor]` with the window, order and page size unchanged.
-  `read_token_pages` gains `empty_page_ends`, off by default: Datadog's
-  generated Python, Go and TypeScript clients all end this read on an empty page
-  as well as on an absent cursor, so a cursor beside an empty page must not
-  spend the page cap on a quiet window. Every existing caller keeps the rule that
-  an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
-  to 53.
 
 - **The GitLab connector polled a vulnerability route GitLab does not serve, and filed the 404 as the customer's plan.** `fetch_alerts` requested `GET /groups/{id}/security/vulnerability_findings`. There is no such endpoint. Probed against gitlab.com it answers `404 {"error":"404 Not Found"}` — Grape's route-not-found body, byte-identical to a path invented for the control — while the sibling `/groups/{id}/audit_events` answers `403 {"message":…}` and the one documented findings route, `/projects/{id}/vulnerability_findings`, answers `401 {"message":…}`. An existing route refuses you by `message`; a route never served says `error`. So that stream had never returned a row on any deployment, and because its 404 shared a branch with 403 the only symptom was `gitlab.vulnerability_findings_unavailable` at `info` — our wrong URL, reported as a tier limitation nobody debugs ([#1754](https://github.com/beenuar/AiSOC/issues/1754)).
 
