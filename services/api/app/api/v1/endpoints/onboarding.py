@@ -153,7 +153,7 @@ async def onboarding_status(
             label="Connect a data source",
             done=connectors > 0,
             why=("AiSOC triages what your tools already see. Until something is connected there is nothing for it to work on."),
-            href="/onboarding",
+            href="/connectors",
             detail=(f"{connectors} connected" if connectors else "Nothing connected yet"),
         ),
         SetupStep(

@@ -952,7 +952,7 @@ function IntegrationsPanel() {
         description="Manage the connectors that stream telemetry into AiSOC."
         action={
           <Link
-            href="/connectors/new"
+            href="/connectors"
             className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
           >
             + Add connector
@@ -987,7 +987,7 @@ function IntegrationsPanel() {
             description="Add your first integration to start streaming events into AiSOC."
             action={
               <Link
-                href="/connectors/new"
+                href="/connectors"
                 className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
               >
                 Add connector
