@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Trend Vision One read one page of each feed per poll and lost the rest.**
+  `TrendVisionOneConnector.fetch_alerts` read the first response of
+  `GET /v3.0/workbench/alerts` and of `GET /v3.0/oat/detections` and ignored
+  `nextLink`, the complete URL of the next page that both feeds return. Trend's
+  own clients — `get_items` in its API cookbook and the `pytmv1` SDK — keep
+  requesting that URL until a response no longer carries one. A poll window
+  opens where the last one closed, so a window holding more workbench alerts or
+  OAT detections than one page lost the rest for good. Both feeds now read
+  through `read_linked_pages`, which requests the link verbatim with the same
+  token, keeps what was read when a later page fails and announces the 25-page
+  bound when it binds. A refused or failed opening request on either feed is
+  logged as `trend_vision_one.feed_failed` / `trend_vision_one.feed_exception`
+  with the feed named, and the other feed is still read; a refused OAT request
+  was previously dropped without a log line. `MAX_UNCLASSIFIED` falls from 52
+  to 51.
+
 - **The first `make up` on a fresh install built the schema and then refused
   to start the stack it had just built.** The Postgres initdb hook
   (`infra/postgres/initdb/10_apply_migrations.sh`) applied the whole migration

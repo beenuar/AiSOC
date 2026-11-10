@@ -94,3 +94,8 @@ def test_datadog_cloud_siem_reads_its_window_to_the_end() -> None:
 def test_duo_security_reads_its_window_to_the_end() -> None:
     _, paging, _ = _load().audit()
     assert "duo_security" in paging
+
+
+def test_trend_vision_one_reads_its_window_to_the_end() -> None:
+    _, paging, _ = _load().audit()
+    assert "trend_vision_one" in paging
