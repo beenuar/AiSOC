@@ -121,7 +121,7 @@ RUNTIMES: dict[str, str] = {
 # rather than inferred from a majority vote: with a vote, flipping enough
 # workflows moves the "correct" answer and the gate ratifies the drift it
 # exists to catch.
-PNPM_ACTION_VERSION = "v6.0.9"
+PNPM_ACTION_VERSION = "v6.1.1"
 
 # Workflows deliberately not on the repo-wide pnpm action version.
 PNPM_ACTION_EXEMPT: dict[str, str] = {

@@ -87,7 +87,7 @@ jobs:
         # does NOT help (the container's global pnpm still triggers the
         # switch), so keep v4 here until the upstream pnpm store /
         # optional-dep interaction is resolved.
-        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node 22
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
