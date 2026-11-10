@@ -94,3 +94,9 @@ def test_datadog_cloud_siem_reads_its_window_to_the_end() -> None:
 def test_duo_security_reads_its_window_to_the_end() -> None:
     _, paging, _ = _load().audit()
     assert "duo_security" in paging
+
+
+def test_cortex_xdr_and_xsiam_read_their_windows_to_the_end() -> None:
+    _, paging, _ = _load().audit()
+    assert "cortex_xdr" in paging
+    assert "cortex_xsiam" in paging

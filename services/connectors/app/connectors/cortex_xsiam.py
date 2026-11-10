@@ -16,9 +16,14 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_offset_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 
 logger = structlog.get_logger()
+
+# ``get_incidents`` is the Cortex XDR endpoint and keeps its contract: at most
+# 100 incidents per request, the rows from ``search_from`` up to ``search_to``.
+_PAGE_SIZE = 100
 
 
 class CortexXSIAMConnector(BaseConnector):
@@ -97,18 +102,26 @@ class CortexXSIAMConnector(BaseConnector):
         since_ms = int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp() * 1000)
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{self._base}/public_api/v1/incidents/get_incidents/",
-                    headers=self._headers(),
-                    json={
-                        "request_data": {
-                            "search_from": 0,
-                            "search_to": 100,
-                            "filters": [{"field": "creation_time", "operator": "gte", "value": since_ms}],
-                            "sort": {"field": "creation_time", "keyword": "desc"},
-                        }
-                    },
-                )
+
+                async def page(search_from: int) -> httpx.Response:
+                    return await client.post(
+                        f"{self._base}/public_api/v1/incidents/get_incidents/",
+                        headers=self._headers(),
+                        json={
+                            "request_data": {
+                                "search_from": search_from,
+                                "search_to": search_from + _PAGE_SIZE,
+                                "filters": [{"field": "creation_time", "operator": "gte", "value": since_ms}],
+                                # Oldest first: an incident created during the
+                                # read joins the end of the list instead of
+                                # shifting every offset beneath the pages still
+                                # to be read.
+                                "sort": {"field": "creation_time", "keyword": "asc"},
+                            }
+                        },
+                    )
+
+                resp = await page(0)
                 if resp.status_code != 200:
                     logger.warning(
                         "cortex_xsiam.fetch_failed",
@@ -116,8 +129,13 @@ class CortexXSIAMConnector(BaseConnector):
                         body=resp.text[:300],
                     )
                     return []
-                payload = resp.json() or {}
-                incidents = (payload.get("reply") or {}).get("incidents") or []
+                incidents = await read_offset_pages(
+                    resp,
+                    request=page,
+                    items_field="reply.incidents",
+                    page_size=_PAGE_SIZE,
+                    feed="cortex_xsiam.incidents",
+                )
                 return [self.normalize(i) for i in incidents]
         except Exception as exc:
             logger.warning("cortex_xsiam.fetch_exception", error=str(exc))

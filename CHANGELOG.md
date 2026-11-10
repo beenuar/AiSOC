@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cortex XDR and Cortex XSIAM read 100 incidents per poll and lost the
+  rest.** Both connectors asked `POST /public_api/v1/incidents/get_incidents`
+  for `search_from: 0, search_to: 100` and stopped there. The endpoint pages by
+  offset — a request returns the incidents from `search_from` up to
+  `search_to`, at most 100 of them, with no link or token to the next page —
+  and Palo Alto's own integration reads page *n* as `search_from = n * 100`.
+  A poll window opens where the last one closed, so a window holding more than
+  100 incidents lost the rest for good. Both now move the offsets on until a
+  page comes back short, through a new shared `read_offset_pages` in
+  `app/connectors/_paging.py`, which keeps what was read when a later page
+  fails and announces the 25-page bound when it binds, as the link and token
+  readers do. The read is now ordered oldest-first (`creation_time asc`): an
+  incident created during the read joins the end of the list instead of
+  shifting every offset beneath the pages still to be read. A refused opening
+  request behaves as before — Cortex XDR raises so the scheduler records a
+  failed poll, Cortex XSIAM logs `cortex_xsiam.fetch_failed` and returns
+  nothing. The paging gate recognises the new helper, and `MAX_UNCLASSIFIED`
+  falls from 52 to 50.
+
 - **The first `make up` on a fresh install built the schema and then refused
   to start the stack it had just built.** The Postgres initdb hook
   (`infra/postgres/initdb/10_apply_migrations.sh`) applied the whole migration

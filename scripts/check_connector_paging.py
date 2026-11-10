@@ -123,7 +123,7 @@ _CONTINUATION = (
 )
 
 #: The shared helpers. Calling one of these *is* following the contract.
-_PAGING_HELPERS = {"read_link_header_pages", "read_linked_pages", "read_token_pages"}
+_PAGING_HELPERS = {"read_link_header_pages", "read_linked_pages", "read_offset_pages", "read_token_pages"}
 
 #: Connectors established, against the vendor's own documentation, not to need
 #: a continuation on their alert-polling path. Each entry is a reason someone
@@ -310,7 +310,7 @@ def audit(root: Path | None = None) -> tuple[list[tuple[str, str]], list[str], l
 #: connector follow the continuation. It must never be raised: a new connector
 #: that polls a vendor collection without reading it to the end is the defect
 #: this gate exists to stop.
-MAX_UNCLASSIFIED = 52
+MAX_UNCLASSIFIED = 50
 
 
 def main() -> int:
