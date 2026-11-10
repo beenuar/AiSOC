@@ -99,6 +99,10 @@ def test_spl_translator_renders_indicators_and_time_window():
     assert "earliest" in spl.lower()
     # The free_text should appear somewhere as a search term.
     assert "kerberoasting" in spl
+    # `| fields *` must be present: without it `search index=… <filter>` returns
+    # only default + filtered fields, so the signature/action/url that make a
+    # row evidence are dropped before the caller can project them.
+    assert "| fields *" in spl
 
 
 def test_kql_translator_renders_pipeline_form():
