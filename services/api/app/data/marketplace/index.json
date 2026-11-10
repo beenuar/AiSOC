@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-05T15:14:13Z",
+  "generated": "2026-11-10T12:34:13Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,28 +20,28 @@
     }
   ],
   "stats": {
-    "total": 7581,
+    "total": 7582,
     "playbooks": 89,
     "playbook_packs": 64,
-    "detections": 7407,
+    "detections": 7408,
     "plugins": 85,
     "verified": 1460,
-    "community": 1,
+    "community": 2,
     "by_tier": {
       "beta": 7,
-      "community": 1,
+      "community": 2,
       "imported": 6113,
       "stable": 1460
     },
     "detections_by_tier": {
-      "community": 1,
+      "community": 2,
       "imported": 6113,
       "stable": 1293
     },
     "executable": 3140,
-    "quarantined": 4441,
+    "quarantined": 4442,
     "executable_detections": 2966,
-    "reference_only_detections": 4441,
+    "reference_only_detections": 4442,
     "not_a_detection": 174
   },
   "mitre_coverage": {
@@ -776,7 +776,7 @@
       "T1550.003": 9,
       "T1550.004": 2,
       "T1552": 26,
-      "T1552.001": 41,
+      "T1552.001": 42,
       "T1552.002": 7,
       "T1552.003": 3,
       "T1552.004": 14,
@@ -944,7 +944,8 @@
     "measure": "attack_technique_tags_on_executable_rules",
     "by_tier": {
       "community": {
-        "T1078.004": 1
+        "T1078.004": 1,
+        "T1552.001": 1
       },
       "stable": {
         "T1003": 2,
@@ -31507,6 +31508,32 @@
       "path": "detections/community/cloud/hello-hunt-aws-root-login.yaml",
       "quarantine_reason": "field is a dotted path and the matcher has no path traversal (userIdentity.type)",
       "sha256": "e3dc7c9d94f2257ac8e4c5020e8c3df76a950e740a41080d37b36fd848dc452f"
+    },
+    {
+      "id": "community-toufiqtoufiqbo-ai-agent-credential-file-read",
+      "type": "detection",
+      "name": "AI Agent Tool Read a Credential-Bearing File",
+      "description": "An AI agent's tool call read a file that stores long-lived credentials:\nSSH private keys, cloud CLI credential caches, container-registry auth,\npackage-manager tokens, or `/etc/shadow`.\n\nPrompt-level secret scanning does not cover this path. The prompt can be\nclean while the agent's file tool reads a private key, and the disclosure\nhappens on the way *out* \u2014 into the model context, a tool argument, or a\nsecond tool call. This is a credential-access signal (T1552.001), not proof\nof exfiltration; the case should establish where the file content went next.",
+      "version": "1.0.0",
+      "author": "Toufiqtoufiqbo",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1552.001"
+      ],
+      "log_source": "ai_runtime",
+      "playbook": "tpl-credential-access",
+      "verified": false,
+      "source": "community",
+      "tier": "community",
+      "enabled": false,
+      "executable": false,
+      "path": "detections/community/application/ai-agent-credential-file-read.yaml",
+      "quarantine_reason": "catalogue-only: nothing walks detections/community/ into the engine's compiled rule set; promote it into services/fusion/app/data/detection_ruleset.json to make it fire",
+      "sha256": "48c649a4d65145444effb5bc2fd0c903424abb85eab76751f767a8713bde95a8"
     },
     {
       "id": "det-application-001",

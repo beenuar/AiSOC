@@ -426,8 +426,12 @@ def main() -> int:
         if not DOC.exists():
             print(f"ERROR: {DOC.relative_to(ROOT)} does not exist — run scripts/detection_truth_table.py", file=sys.stderr)
             return 1
-        current = DOC.read_text(encoding="utf-8")
-        if current.strip() != rendered.strip():
+        current = DOC.read_bytes()
+        # Bytes, not text: a text read translates CRLF away, so a document
+        # rewritten on Windows matched the Linux-built template and the drift
+        # this check exists to catch stayed invisible. The document is prose;
+        # the CRLF is not prose.
+        if b"\r" in current or current.decode("utf-8").strip() != rendered.strip():
             print(
                 f"ERROR: {DOC.relative_to(ROOT)} is stale. The detection content changed but the "
                 "truth table was not regenerated. Run: python3 scripts/detection_truth_table.py",
@@ -438,7 +442,7 @@ def main() -> int:
         return 0
 
     DOC.parent.mkdir(parents=True, exist_ok=True)
-    DOC.write_text(rendered + "\n", encoding="utf-8")
+    DOC.write_text(rendered + "\n", encoding="utf-8", newline="\n")
     print(f"wrote {DOC.relative_to(ROOT)} — {counts.executable} executable / {counts.total} on disk")
     return 0
 

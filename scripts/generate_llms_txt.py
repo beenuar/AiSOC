@@ -797,7 +797,14 @@ def main(argv: list[str]) -> int:
         return 1
 
     if args.check:
-        drift = [path for path, content in outputs.items() if not path.is_file() or path.read_text(encoding="utf-8") != content]
+        # Bytes, not text: a text read translates CRLF away, so a file written
+        # on Windows matched the Linux-built content and the drift this gate
+        # exists to catch stayed invisible.
+        drift = [
+            path
+            for path, content in outputs.items()
+            if not path.is_file() or path.read_bytes() != content.encode("utf-8") or b"\r" in path.read_bytes()
+        ]
         if drift:
             print("LLMS-TXT GATE FAILED:", file=sys.stderr)
             for path in drift:
@@ -813,7 +820,7 @@ def main(argv: list[str]) -> int:
 
     STATIC_DIR.mkdir(parents=True, exist_ok=True)
     for path, content in outputs.items():
-        path.write_text(content, encoding="utf-8")
+        path.write_text(content, encoding="utf-8", newline="\n")
         print(f"wrote {path.relative_to(REPO_ROOT)} ({len(content.splitlines())} lines)")
     return 0
 

@@ -34,6 +34,7 @@ import json
 import pathlib
 
 import pytest
+import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 COPIES = (
@@ -85,6 +86,32 @@ class TestThePublishedSplitIsTheRealOne:
         assert not silent, (
             f"{len(silent)} entries are not loaded by the engine and state no reason, "
             f"e.g. {silent[:5]}. A reader cannot tell those from executable content."
+        )
+
+    def test_a_reason_that_names_the_rule_file_is_true_of_it(self, index: dict) -> None:
+        """The fallback for a rule the engine skips says `enabled: false` — a
+        claim about a file it never opened. `hello-hunt.md` told contributors to
+        ship community rules with `enabled: true`, which is the one tier where
+        that claim is false by construction: nothing walks
+        `detections/community/` into the engine, so the flag cannot be why the
+        engine skips it. A reason that quotes the file is checkable against the
+        file, so this checks it."""
+        quoted = 0
+        wrong: list[tuple[str, object]] = []
+        for item in _reference_only(index["items"]):
+            if item.get("type") != "detection":
+                continue
+            if "enabled: false" not in (item.get("quarantine_reason") or ""):
+                continue
+            quoted += 1
+            path = REPO / str(item.get("path") or "")
+            assert path.is_file(), f"{item['id']} cites {path}, which does not exist"
+            rule = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            if rule.get("enabled") is not False:
+                wrong.append((item["id"], rule.get("enabled")))
+        assert quoted, "no reference-only rule quotes `enabled: false`; this test has gone blind"
+        assert not wrong, (
+            f"{len(wrong)} entries say the rule file disables them and it does not: {wrong[:5]}. Either the reason is wrong or the file is."
         )
 
     def test_the_split_matches_the_engine_and_the_truth_table(self, index: dict) -> None:

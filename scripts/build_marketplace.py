@@ -314,6 +314,30 @@ def community_plugin_manifests() -> list[Path]:
     return out
 
 
+def _why_not_executable(*, quarantined: bool, tier: str, enabled: bool | None) -> str:
+    """Why the engine skips a rule, in terms the rule file can be checked against.
+
+    The fallback this replaces said every row that was not quarantined carried
+    `enabled: false` — true of the rules that set the flag, and false of the
+    community tier, which is catalogue-only because nothing walks
+    `detections/community/` into the engine's loaded set. A community rule with
+    `enabled: true` in its file therefore reached the catalogue telling the
+    reader its author had disabled it. A reason that names the rule file has to
+    be true of the rule file, and `tests/test_marketplace_executable_split.py`
+    now checks that it is.
+    """
+    if quarantined:
+        return "imported rule; upstream query language not directly executable by the AiSOC engine yet"
+    if tier == "community":
+        return (
+            "community rule; the engine loads the native and imported rule sets, "
+            "not `detections/community/`, so this is catalogue-only until promoted"
+        )
+    if enabled is False:
+        return "disabled in the rule file (`enabled: false`); the engine does not load it"
+    return "not compiled into the engine's rule set"
+
+
 def build_detection_item(
     path: Path,
     *,
@@ -381,16 +405,14 @@ def build_detection_item(
         # than the path, and 2,603 is the figure the README publishes. This
         # reads the same set, so the catalogue cannot disagree with them.
         "executable": executable,
-        "path": str(path.relative_to(REPO_ROOT)),
+        "path": path.relative_to(REPO_ROOT).as_posix(),
     }
     # Every rule that cannot fire says why. The reason used to be written
     # only on the quarantine branch, so a rule the engine skips for any other
     # cause arrived in the catalogue indistinguishable from a working one.
     if not executable:
-        item["quarantine_reason"] = data.get("quarantine_reason") or (
-            "imported rule; upstream query language not directly executable by the AiSOC engine yet"
-            if quarantined
-            else "disabled in the rule file (`enabled: false`); the engine does not load it"
+        item["quarantine_reason"] = data.get("quarantine_reason") or _why_not_executable(
+            quarantined=quarantined, tier=tier, enabled=enabled
         )
     provenance = data.get("provenance")
     if isinstance(provenance, dict):
@@ -459,7 +481,7 @@ def build_playbook_item(path: Path, *, source: str, tier: str, pack: bool = True
         "tier": tier,
         "pack": pack,
         "enabled": True,
-        "path": str(path.relative_to(REPO_ROOT)),
+        "path": path.relative_to(REPO_ROOT).as_posix(),
     }
 
 
@@ -515,7 +537,7 @@ def build_plugin_item(path: Path, *, source: str, tier: str | None = None) -> di
         "verified": resolved_tier == "stable",
         "source": source,
         "tier": resolved_tier,
-        "path": str(path.relative_to(REPO_ROOT)),
+        "path": path.relative_to(REPO_ROOT).as_posix(),
     }
 
 
@@ -768,7 +790,14 @@ def write_index(index: dict[str, Any]) -> None:
     payload = json.dumps(index, indent=2, sort_keys=False) + "\n"
     for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED):
         destination.parent.mkdir(parents=True, exist_ok=True)
-        destination.write_text(payload, encoding="utf-8")
+        # `newline="\n"` is not cosmetic. Text-mode writes on Windows turn
+        # every `\n` into `\r\n`, so this 11 MB file came out with 256k CRLF
+        # line endings and every line of it showed as changed against the
+        # copy CI builds on Linux. `marketplace:check` could not catch it:
+        # it read the file back in text mode, which translates the endings
+        # away, so the two halves agreed on content written by different
+        # rules. The check below now compares bytes for that reason.
+        destination.write_text(payload, encoding="utf-8", newline="\n")
 
 
 def main() -> int:
@@ -800,19 +829,23 @@ def main() -> int:
         # state that made the marketplace answer 503 in every container
         # (discussion #374). A check that verifies fewer places than the
         # writer writes is one that certifies the case it cannot see.
+        # Read bytes, not text. A text read translates CRLF to LF, so a file
+        # written on Windows compared equal to one built here while differing
+        # from the committed copy in every line. Line endings are part of what
+        # this gate publishes, so they are part of what it checks.
         existing = {
-            destination: (destination.read_text(encoding="utf-8") if destination.exists() else "")
+            destination: (destination.read_bytes() if destination.exists() else b"")
             for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED)
         }
 
         # Compare ignoring `generated` timestamp.
-        def _strip_generated(s: str) -> str:
+        def _strip_generated(s: str | bytes) -> str:
             if not s:
-                return s
+                return ""
             try:
                 obj = json.loads(s)
             except Exception:
-                return s
+                return s.decode("utf-8", "replace") if isinstance(s, bytes) else s
             obj.pop("generated", None)
             return json.dumps(obj, indent=2, sort_keys=False) + "\n"
 
@@ -820,7 +853,9 @@ def main() -> int:
         stale = [
             str(destination.relative_to(REPO_ROOT))
             for destination, content in existing.items()
-            if _strip_generated(content) != rebuilt_no_ts
+            # `b"\r"` in the raw bytes: same JSON, different line endings, and
+            # the committed file is LF. Comparing parsed JSON alone accepted it.
+            if _strip_generated(content) != rebuilt_no_ts or b"\r" in content
         ]
         if stale:
             # Named, because "the index is stale" sent people to the one they

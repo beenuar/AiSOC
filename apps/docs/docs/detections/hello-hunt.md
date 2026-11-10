@@ -137,7 +137,7 @@ These fields are optional from the validator's perspective but required for huma
 
 - **`false_positives`** is the field reviewers stare at first. If it's empty, expect a "what does this miss / over-fire on?" question on the PR. Be specific — "documented break-glass access" is a good answer; "noisy" is not.
 - **`playbook`** is a soft binding to a [playbook template](/docs/concepts/playbooks). When a matching alert lands, the case auto-creator uses this hint to suggest a starting playbook. `tpl-credential-access` is the generic credential-access response template that ships with v1.0.
-- **`enabled: true`** controls whether the rule runs in production. Community rules ship as `true` by default; flip to `false` if you need to land the rule but don't want it firing yet (e.g. you're staging a backfill).
+- **`enabled`** is the rule's own flag, not a statement that the engine runs it. A community rule is catalogue-only: the engine loads the compiled native and imported rule sets, and nothing walks `detections/community/` into either, so a rule here is listed in the marketplace and replay-graded against its fixtures but cannot fire until it is promoted. That is why the flag belongs at `false`, with a `quarantine_reason` naming what promotion would take — `scripts/detection_truth_table.py --check` fails a rule that says `enabled: true` while the engine never loads it, and the marketplace shows your `quarantine_reason` to the reader verbatim.
 - **`references`** is what an analyst follows when they're triaging an alert at 2am and have never heard of MITRE T1078.004. Link upstream vendor docs, ATT&CK pages, and (if relevant) the original blog post that prompted the rule.
 
 ## Step 5 — Write the positive fixture
