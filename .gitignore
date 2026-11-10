@@ -28,6 +28,7 @@ out/
 # as a CI artifact rather than committed.
 apps/web/storybook-static/
 *.egg-info/
+*.whl
 __pycache__/
 *.pyc
 *.pyo
