@@ -44,7 +44,8 @@ separately under [agent capabilities](/docs/concepts/capabilities).
 ## Prerequisites
 
 - A reachable **Wazuh indexer** (default `https://wazuh.example.com:9200`).
-- A read-only **indexer user** with permission to search `wazuh-alerts-*`.
+- A read-only **indexer user** with permission to search `wazuh-alerts-*` and
+  the cluster permission `cluster:monitor/health` for **Test connection**.
   See the Wazuh docs for [creating indexer roles and users](https://documentation.wazuh.com/current/user-manual/user-administration/rbac.html).
 - Optional: the CA chain for the indexer's TLS certificate.
 
@@ -52,14 +53,27 @@ separately under [agent capabilities](/docs/concepts/capabilities).
 
 ### 1. Create a read-only indexer user
 
-In the Wazuh dashboard, go to **Security → Roles** and create a role with:
+In the Wazuh dashboard, go to **Indexer management → Security → Roles** and
+create a role with:
 
 - Index permissions on `wazuh-alerts-*`: `read`, `search`, `indices:data/read/search*`.
-- No cluster-level permissions.
+- **Cluster permissions**: `cluster:monitor/health`.
 
-Then **Security → Internal users** → create a user (e.g. `aisoc-reader`)
-and map it to that role. Save the password — you will paste it into the AiSOC
-connector form.
+AiSOC's **Test connection** calls `GET /_cluster/health`, which requires
+[`cluster:monitor/health`](https://docs.opensearch.org/2.19/api-reference/cluster-api/cluster-health/#required-permissions).
+Index read permissions alone do not authorize this probe: a user without the
+health permission can receive HTTP 403 even with valid credentials and access
+to the alert indices.
+
+If you start from [Wazuh's read-only user guide](https://documentation.wazuh.com/current/user-manual/user-administration/rbac.html#creating-and-setting-a-wazuh-read-only-user),
+also add `cluster:monitor/health` to the mapped indexer role. The default
+`cluster_composite_ops_ro` action group used in that guide does **not** include
+cluster health monitoring; see the [OpenSearch action group definitions](https://docs.opensearch.org/2.19/security/access-control/default-action-groups/#cluster-level).
+
+Then **Indexer management → Security → Internal users** → create a user
+(e.g. `aisoc-reader`). Open the role's **Mapped users → Manage mapping** and
+add that user. Save the password — you will paste it into the AiSOC connector
+form.
 
 Reusing the built-in `admin` or `kibanaserver` accounts works for a lab but
 must not be used in production.
@@ -74,6 +88,8 @@ must not be used in production.
    - `min_rule_level`: default `7` keeps low-signal noise out of the lake; set lower for full audit coverage.
    - `verify_tls`: leave **enabled** in production; install the CA chain rather than disabling.
 3. **Test connection** — calls `GET /_cluster/health` against the indexer.
+   A successful probe confirms access to that endpoint; it does not verify
+   search permissions on the configured alert indices.
 4. **Save**.
 
 ## Polling details
@@ -106,6 +122,22 @@ detection rules can still pivot on the exact Wazuh value when they need to.
 **`auth failure 401`** — the indexer rejected basic auth. Check the username and
 password against the **indexer** dashboard (not the Wazuh manager UI — they are
 separate user stores by default).
+
+**HTTP 403 on `GET /_cluster/health`** — if the indexer response contains
+`no permissions for [cluster:monitor/health]`, add `cluster:monitor/health`
+under **Cluster permissions** on the indexer role mapped to the connector user,
+then retry **Test connection**. The connector currently reports both HTTP 401
+and HTTP 403 as `authentication failed; check username/password`, so this
+message can indicate a missing permission rather than an incorrect password.
+
+To inspect the HTTP status and response body, use the same indexer URL and
+username as the connector, with the indexer's trusted CA certificate. This
+command prompts for the password:
+
+```bash
+curl --include --cacert /path/to/root-ca.pem --user aisoc-reader \
+  'https://wazuh.example.com:9200/_cluster/health'
+```
 
 **`network error` on Test connection** — verify the URL points at port 9200, not
 55000 (manager) or 5601 (dashboard). The manager API uses JWT, not basic auth,
