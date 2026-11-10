@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
+  `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
+  `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
+  "the cursor used to get the next results" and its OpenAPI document declares as
+  the `x-pagination` cursor for `GET /api/v2/security_monitoring/signals`. A poll
+  window opens where the last one closed, so a window holding more than 100
+  signals lost its oldest ones for good, and those are the start of whatever
+  caused the burst. It now reads through `read_token_pages`, sending the cursor
+  back as `page[cursor]` with the window, order and page size unchanged.
+  `read_token_pages` gains `empty_page_ends`, off by default: Datadog's
+  generated Python, Go and TypeScript clients all end this read on an empty page
+  as well as on an absent cursor, so a cursor beside an empty page must not
+  spend the page cap on a quiet window. Every existing caller keeps the rule that
+  an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
+  to 53.
+
 - **`make demo` failed before seeding anything — the demo seeder wrote case
   statuses the schema refuses.** The two random case makers in
   `app.scripts.seed_demo` drew from the pre-consolidation `cases` vocabulary
@@ -25,22 +41,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema-complete Postgres (unfixed: `CheckViolationError` on the first batch;
   fixed: 43 cases including `INC-RT-001`, only schema-valid statuses on disk).
   Reported by @Dhanu188 on #353.
-
-- **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
-  `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
-  `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
-  "the cursor used to get the next results" and its OpenAPI document declares as
-  the `x-pagination` cursor for `GET /api/v2/security_monitoring/signals`. A poll
-  window opens where the last one closed, so a window holding more than 100
-  signals lost its oldest ones for good, and those are the start of whatever
-  caused the burst. It now reads through `read_token_pages`, sending the cursor
-  back as `page[cursor]` with the window, order and page size unchanged.
-  `read_token_pages` gains `empty_page_ends`, off by default: Datadog's
-  generated Python, Go and TypeScript clients all end this read on an empty page
-  as well as on an absent cursor, so a cursor beside an empty page must not
-  spend the page cap on a quiet window. Every existing caller keeps the rule that
-  an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
-  to 53.
 
 - **Duo authentication logs read 100 entries per poll and lost the rest.**
   `DuoSecurityConnector.fetch_alerts` read the first response of
