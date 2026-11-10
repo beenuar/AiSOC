@@ -57,10 +57,24 @@ from app.models.investigation import (
 )
 from app.models.published_replay import PublishedReplay
 from app.models.tenant import Tenant, User
+from app.services import case_status
 from app.services.replay_redaction import build_redacted_snapshot
 
 # Deterministic random for reproducible seeds.
 _rng = random.Random(42)
+
+# Generated cases draw from the console's state machine, because `Case` writes
+# `aisoc_cases` and its CHECK admits nothing else. These used to be the old
+# `cases` vocabulary (open / in_progress / pending), which made three of every
+# five draws unwritable and rolled back the whole demo seed in one flush.
+_GENERATED_CASE_STATUSES = (
+    case_status.NEW,
+    case_status.INVESTIGATING,
+    case_status.TRIAGED,
+    case_status.RESOLVED,
+    case_status.CLOSED,
+)
+_GENERATED_CASE_STATUS_WEIGHTS = (30, 35, 10, 15, 10)
 
 
 # ─── Reference data ────────────────────────────────────────────────────────────
@@ -1538,10 +1552,7 @@ def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
 
 def _make_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_ids: list[uuid.UUID]) -> Case:
     severity = _rng.choices(_SEVERITIES, weights=[20, 35, 30, 15])[0]
-    status = _rng.choices(
-        ["open", "in_progress", "pending", "resolved", "closed"],
-        weights=[30, 35, 10, 15, 10],
-    )[0]
+    status = _rng.choices(_GENERATED_CASE_STATUSES, weights=_GENERATED_CASE_STATUS_WEIGHTS)[0]
     techniques = _pick_techniques(2)
     # Human-readable identifier for the stock catalogue (INC-001, INC-002, …).
     # The hot showcase deeplink (/cases/INC-RT-001?tab=ledger) targets the
@@ -1682,10 +1693,7 @@ def _make_synthetic_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_i
     techniques = [{"id": t_id, "name": next((t[3] for t in _TECHNIQUES if t[2] == t_id), t_id)} for t_id in technique_ids]
 
     severity = _rng.choices(_SEVERITIES, weights=[25, 40, 25, 10])[0]
-    status = _rng.choices(
-        ["open", "in_progress", "pending", "resolved", "closed"],
-        weights=[30, 35, 10, 15, 10],
-    )[0]
+    status = _rng.choices(_GENERATED_CASE_STATUSES, weights=_GENERATED_CASE_STATUS_WEIGHTS)[0]
 
     return Case(
         tenant_id=tenant_id,
