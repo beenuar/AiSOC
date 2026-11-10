@@ -61,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as well as on an absent cursor, so a cursor beside an empty page must not
   spend the page cap on a quiet window. Every existing caller keeps the rule that
   an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
-  to 53.
+  to 53. Contributed by @officialasishkumar (#1801).
 
 - **`make demo` failed before seeding anything — the demo seeder wrote case
   statuses the schema refuses.** The two random case makers in
@@ -92,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comma" with the window unchanged and each page signed for its own parameters.
   A failed later page keeps what was read, the 25-page bound is announced when
   it binds, and a refused opening request still raises so the scheduler records
-  a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52.
+  a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52. Contributed by
+  @officialasishkumar (#1802, carried as #1805).
 
 - **The marketplace builder asserted `enabled: false` about rule files it
   never opened.** `build_marketplace.py`'s fallback `quarantine_reason` told
