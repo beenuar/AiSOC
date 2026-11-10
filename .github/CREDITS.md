@@ -58,6 +58,7 @@ People outside the core maintainer team who have shipped code into AiSOC. Ordere
 | [**@prince30121**](https://github.com/prince30121) | Multiple infrastructure & CI commits (including CI restoration work). 9 commits and counting. |
 | [**@ARDA7787**](https://github.com/ARDA7787) | [PR #218](https://github.com/beenuar/AiSOC/pull/218) — Redis-backed scheduler singleton guard + dependency-CVE security-audit CI tooling (`security-audit.yml`, `scripts/security_audit.py`). |
 | [**@TanmayZade**](https://github.com/TanmayZade) | [PR #219](https://github.com/beenuar/AiSOC/pull/219) — prompt sanitiser + untrusted-content wrapping across the five classification agents (fix for [#220](https://github.com/beenuar/AiSOC/issues/220)). |
+| [**@knowlet**](https://github.com/knowlet) | [PR #1794](https://github.com/beenuar/AiSOC/pull/1794) — removed 66 accidentally-committed wheels (62 MB) from the repository root with an ignore rule so the next one cannot land. [PR #1797](https://github.com/beenuar/AiSOC/pull/1797) (landed via [#1799](https://github.com/beenuar/AiSOC/pull/1799)) — fixed the Settings → Integrations "Add connector" links that pointed at a route that has never existed, and the onboarding checklist step that navigated to itself. |
 
 The full, always-up-to-date list of code contributors lives on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
 

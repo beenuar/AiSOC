@@ -7,11 +7,295 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.0.0] - 2026-11-10
+
+### BREAKING
+
+- **`DeploymentConfig` and `DeploymentConfigUpdate` drop the self-update
+  fields, and `telemetry_enabled` becomes read-only.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Removed from the published spec: `DeploymentConfig.update_channel`,
+  `DeploymentConfig.auto_update`, `DeploymentConfigUpdate.update_channel`,
+  `DeploymentConfigUpdate.auto_update`, `DeploymentConfigUpdate.telemetry_enabled`,
+  and the `UpdateChannel` schema.
+
+  They could not be preserved because each was a published promise that
+  something acts on them and nothing does. `update_channel` and `auto_update`
+  are deleted rather than wired: AiSOC does not update itself, so there is no
+  implementation to point them at and leaving them settable would keep
+  advertising one. `telemetry_enabled` was worse than unread — it was
+  published as `true`, so an API consumer reading `docs/openapi.yaml`
+  concluded this platform phones home by default, which
+  `docs/trust/data-flows.md` and three CI gates say it does not. It is kept on
+  the response, typed `Literal[False]`, so the question stays answerable and
+  the spec cannot drift back; it is gone from the update model because
+  accepting `true` would have the API assert something no code here can do.
+
+  Consumers were checked before removal: no reader anywhere in the tree
+  outside the module, and the console never calls `/api/v1/deployment/*`.
+  `DeploymentConfigUpdate` now rejects unknown keys, so a client still sending
+  `auto_update: true` gets a 422 rather than a 200 and a false belief that it
+  configured something.
+
 ### Added
 
 - **One file now says what version a build is, and a gate holds every surface to it.** `scripts/check_single_version_source.py` reads a registry of the five surfaces that report the application's version and asserts two rules: *agreement* — a surface resolving to a concrete version must resolve to the tree's `VERSION`, with the failure naming the real number on both sides — and *single-origin* — a surface may not restate the version, however it chooses to deliver it. A `'0.0.0'` fallback counts as restating, because it renders as a plausible version and turns a failed read into a confident claim; `'unknown'` is accepted as the honest sentinel, which is the shape `runtime-config/route.ts` already used. Importing the number from `apps/web/package.json` is refused as a second origin rather than a second copy. Wired as `Version source` on every pull request and every push to `main`, with no `paths:` filter — deliberately, because the defect is a literal going stale while nothing edits it, so a filter would switch the gate off at exactly the moment it is needed.
 
   **It is green on arrival, and that is the intended end state rather than a sign it measures nothing.** It was written against a live defect — `Settings.APP_VERSION` was the literal `"0.1.0"` on a tree several majors past it, and because that value is the `version=` handed to the FastAPI application it was also the version in the published OpenAPI document and on the root route, three surfaces carrying one wrong number in perfect agreement. That was fixed separately before this landed, so what ships here is prevention. Re-measured on the current tree: all five surfaces derive, none restates. The gate's `--self-test` runs ahead of the tree read, and reverting the one line it guards reproduces the original finding naming both numbers. The script's own docstring, which claimed the agreement arm was "red today", is corrected to read as history — a stale problem statement taken for a live finding is a mistake this repository has made before.
+
+- **A language switcher in Settings, and the parity gate now fails when the
+  catalogue has no reader
+  ([#1729](https://github.com/beenuar/AiSOC/issues/1729), reported by
+  NiuBlibing).** The console was English-only, and the reason was not that
+  i18n had never been built: `apps/web/src/lib/i18n/` shipped a working
+  `translate()`, a `direction()` returning `rtl`, locale-aware `Intl`
+  formatting, two catalogues and a CI gate — and **no component imported any
+  of it**. The gate stayed green throughout because it compared the locales
+  with each other and never asked whether anything rendered them, which is
+  this repository's most-repeated defect shape sitting inside the control
+  that exists to catch it.
+
+  `LocaleProvider` is the reader, mounted in the root layout and shaped like
+  `ThemeProvider` deliberately — same storage-then-profile reconciliation,
+  same pre-paint bootstrap script, same default in `useState` so the first
+  client render matches the server's markup. The switcher lives in Settings
+  beside Theme and Density. **Direction is applied to the document**, by the
+  bootstrap script before first paint and by the provider on every change:
+  `direction()` returning `rtl` while `<html dir>` stays `ltr` renders Arabic
+  glyphs in a left-to-right page, which is the one outcome that looks
+  translated and reads wrong, and it is invisible to any test that only
+  compares text. There is **no automatic negotiation** from
+  `navigator.languages`: coverage is partial, so resolving an Arabic browser
+  into a partly-Arabic console nobody asked for is a worse first impression
+  than English.
+
+  `scripts/check_i18n_keys.py` gained the arm it was missing, and the unit is
+  the **key**, not the module — a count of importers is the same proxy one
+  level up, satisfied by one import while forty-seven keys stay unrendered. A
+  key is read when a non-test file outside the catalogue's own directory
+  passes it to `translate()`, `t()` or `hasTranslation()` as a literal, or
+  names its surface in a template prefix. Three scopes are excluded and each
+  exclusion is the point: the module itself (a module calling itself is what
+  being unread looks like from the inside), tests (a key exercised only by a
+  test is the defect, not the evidence against it), and build output (the one
+  match outside the module on the pre-fix tree was a TypeScript artifact).
+  Unread is **fatal rather than ratcheted**, unlike untranslated: an
+  untranslated key waits on a native speaker who may never arrive, while an
+  unread one waits on nobody who is not already in the commit. Its exemption
+  is a named key with a reason rather than a number, checked in both
+  directions, and holds exactly one entry — `common.unknown`, which
+  `formatDate()` really does render for an unparseable timestamp, from inside
+  the module the scan excludes by design.
+
+  **Four keys were deleted rather than exempted**, and finding them was the
+  more interesting half of the work: `hunt.queryShown`, `hunt.noStore`,
+  `hunt.unsupportedFilters` and `cases.closedAt` named a query-provenance
+  label, a store-unreachable notice, an unsupported-filter disclosure and a
+  case close timestamp that **no component has ever shown**. The catalogue
+  had been written against the surfaces as imagined rather than as built, so
+  roughly a fifth of it could never render. An exemption is for a key that is
+  rendered and cannot be seen; a key that is not rendered at all is not
+  exempt, it is wrong. They return with the UI that needs them.
+
+  **Coverage is a pilot and the switcher says so.** Fifty-two keys is a
+  fraction of the console's text, so the panel states its scope by
+  *measuring* the catalogue rather than by a sentence that goes stale: each
+  navigation destination is listed as translated, falling back to English, or
+  not covered at all, derived per surface, with a note that the counts are
+  catalogue strings and not a share of the product. A surface the catalogue
+  has never heard of reads "not translated" and never 100%, because zero of
+  zero is not full coverage. The deliberate gap is deliberate still —
+  `settings.*` stays untranslated in Arabic so the fallback runs on a real
+  screen — and the switcher now explains that instead of leaving an operator
+  wondering why the page they are standing on stayed English. **The
+  untranslated ceiling did not move**: it is 6, it was 6, and the eight keys
+  added for the switcher's own copy were translated in the same commit so it
+  could not drift.
+
+- **An optional, off-by-default VAID badge plugin for agent identity
+  ([#1741](https://github.com/beenuar/AiSOC/pull/1741), closing
+  [#1739](https://github.com/beenuar/AiSOC/issues/1739)), contributed by
+  Allan Smeyatsky.** `services/agents/app/security/agent_identity.py` gives
+  each agent an identity, a role scope, a short expiry and monotonic
+  narrowing, and contains no cryptography at all — so the Investigation
+  Ledger records what an agent did, and an auditor reading it is trusting
+  AiSOC's account of itself. The plugin mints a signed badge *from* that
+  existing identity rather than introducing a second one, and verifies it at
+  the two boundaries where it would matter: `ToolRegistry.execute` in the
+  agents service, and `live_actions.dispatch()` in `services/actions`, which
+  is a different process and therefore sees only what travels with the
+  request.
+
+  This does not make VAID the project's agent identity format, and nothing
+  in the shipped product depends on it. `AISOC_VAID_PLUGIN_ENABLED` is unset
+  by default; `ToolRegistry.identity_verifier` defaults to `None`;
+  `vaid-mint` is an optional extra that `poetry export --only main` does not
+  install, so it is absent from both service images. With the flag unset,
+  `dispatch()` and `ToolRegistry.execute` were measured byte-identical to
+  the previous commit across a fixed input matrix — including a request
+  carrying a deliberately malformed badge, which is ignored rather than
+  refused — and both suites return the same pass counts with the package
+  absent as with it installed.
+
+  Enabled, it fails closed on every input that is not a currently-valid
+  badge for the calling identity: no badge, an unparseable one, a bad
+  signature, a tampered signed field, an expired badge, a revoked one, a
+  badge issued for a different agent, a badge issued under a different
+  tenant's authority, a delegated child badge this service cannot resolve
+  the ancestry of, and a revocation list that is absent, unreadable or
+  malformed. That last one is three-state rather than two: unavailable is
+  refused, never collapsed into "nothing is revoked" — the posture an
+  air-gapped deployment needs, where the list ships with the deployment and
+  the badge's own one-hour expiry is what bounds exposure between
+  deployments of a fresher one.
+
+  Known gap at the time, closed by the entry below: nothing minted a badge
+  on a real agent path, so `services/agents/app/security/vaid_plugin.py` was
+  allowlisted in `scripts/check_module_reachability.py` with that recorded
+  and with the change that removes the entry named. The actions-service half
+  was reachable from `dispatch()` and was not allowlisted.
+
+- **A VAID badge is minted on the real agent path, and a plugin that cannot
+  do its job now refuses at boot instead of at 3am
+  ([#1746](https://github.com/beenuar/AiSOC/pull/1746), follow-up to the
+  entry above), contributed by solara-associates.**
+  `run_deep_investigation` holds the one production call to
+  `issue_identity` in `services/agents`, and with the plugin enabled it now
+  mints a `VaidBackedIdentity` there. The MCP grant a few lines below
+  re-mints the badge for the widened scope with no branch of its own,
+  because `with_granted_tools` was already duck-typed across both identity
+  types; `IdentityLike`, a `Protocol` in `agent_identity.py`, is what lets
+  `ToolRegistry.execute` and `run_with_tools` accept either without that
+  module importing the optional plugin built on it. `vaid_plugin.py`'s
+  reachability allowlist entry is removed and the gate is green without it.
+
+  With the flag unset — the default — this is the `issue_identity(...)` call
+  it was before. Three fixed-input matrices were run against this tree and
+  against the previous commit under one interpreter and compared byte for
+  byte: `ToolRegistry.execute` (114 lines), `live_actions.dispatch()` (30
+  rows) and `run_deep_investigation` itself (6 rows), the last being where
+  the new branch lives and the one the original proof did not cover. That
+  harness replaces every plugin entry point with one that raises if reached,
+  so identical there also means untouched.
+
+  `vaid_plugin.preflight_or_raise()` and `vaid_verifier.preflight_or_raise()`
+  run unguarded from each service's startup hook and are no-ops when the
+  plugin is disabled. Enabled, the agents side builds the real issuer and
+  reads the revocation list; the actions side reads the kernel public key
+  and the revocation list. Every misconfiguration they catch was already
+  fail-closed at request time — an unreadable revocation list is refused,
+  never read as "nothing is revoked" — so what changes is when a deployment
+  finds out.
+
+  One failure mode had to be measured rather than reasoned about, because
+  it is the likeliest of all and the first draft of the check could not see
+  it: `vaid-mint` is an optional extra and `poetry export --only main` —
+  what both Dockerfiles install from — resolves 130 and 37 packages with
+  none of it, so the stock image carries the flag and not the library. The
+  agents-side preflight catches that because building the issuer reaches
+  the library. The actions-side one read an environment variable and a JSON
+  file, so a fully and correctly configured deployment booted clean and
+  answered the first badge-bearing dispatch with `VAID badge check failed
+  unexpectedly (ModuleNotFoundError); refusing fail-closed` — a refused
+  containment action, blamed on nothing an operator can act on, at exactly
+  the hour the check exists to avoid. It now imports what the verification
+  path imports, and a test reads the module and fails if that path grows a
+  `vaid_mint` import the preflight does not cover, so the two cannot drift.
+
+  Still deliberately unwired, and recorded in `install_into`'s own
+  docstring rather than left for a reader to discover: the module is
+  reachable, which is not the same claim as verified. Nothing in
+  `services/agents` calls `install_into`, so `ToolRegistry.identity_verifier`
+  is `None` on every production registry and a minted badge is carried but
+  not checked in-process; and `app/playbook/action_bridge.py` builds its
+  dispatch payload with no `vaid_badge` member, so `services/actions` is
+  presented no badge by any in-tree caller. Wiring either is a decision
+  about whether VAID is this project's agent identity format, which has not
+  been taken — so no claim-to-gate matrix row was added, because the
+  capability is not reachable end to end and a row would say it is.
+
+- **Upgrading is now a required check, and one leg crosses a major version.**
+  People upgrade, and until now a pull request could break the upgrade path
+  with both upgrade tests red or never run: neither `upgrade-test.yml` nor
+  `integration.yml`'s upgrade leg appeared in `.github/required-checks.json`.
+  `Previous minor to this tree, with data present` is now required.
+
+  Promoting it as it stood would have been worse than leaving it alone.
+  `upgrade-test.yml` was path-filtered on both triggers, and a workflow that
+  does not trigger creates no check run at all — so a required check that
+  never reports blocks the pull request forever, which is the quiet failure
+  rather than a red one. Measured over the 18 most recently merged pull
+  requests, reading every page of `commits/{sha}/check-runs` (113–143 checks
+  each, so the familiar one-page cap was not the cause): the context was
+  absent from **18 of 18**, and none of those 18 had touched a filtered path.
+
+  The filter is gone rather than moved into the jobs. `integration.yml` needs
+  the job-level form because a disaster-recovery rehearsal costs 15 minutes;
+  this workflow runs in 1–3 minutes, so it now carries no path filter and no
+  job-level or step-level `if:` anywhere — 14 unconditional steps, 0
+  change-gated, as `scripts/check_required_check_substance.py --static`
+  reports it. It cannot rehearse nothing the way `Backup → destroy → restore`
+  did on 74 of 100 runs, and that is now a property a reader can confirm by
+  looking rather than a behaviour someone has to go and measure.
+
+- **Two upgrade legs that cross a major version boundary, with real data.**
+  Nothing had ever crossed one. The previous-minor job resolves its starting
+  point with `--previous-minor`, which is same-major by construction, and
+  `integration.yml` pins `v7.3.1`/`v7.5.0` — also same-major, and seeding a
+  throwaway `upgrade_probe` table, so what it proves is that a migration did
+  not drop an unrelated table. Meanwhile `apps/docs/docs/operations/upgrades.md`
+  told operators that crossing more than one major "is supported but untested
+  as a single step", which was true.
+
+  `v21.0.0` is the most recent boundary and the one a supported operator
+  crosses today; it is also the only boundary a *new* migration can still
+  break, since everything below it is frozen history. `v17.0.0` is five majors
+  in one step — the case the documentation admits is untested — and is the
+  oldest release this fixture can seed unmodified, because migration `083`
+  (`cases` → `aisoc_cases`) landed in v16.0.0.
+
+  Both legs are better than either existing one in the two ways that matter.
+  They seed the **real tables** from `scripts/upgrade_fixture.sql` — a tenant,
+  a user, one alert at each of the five severities, a case — and they apply
+  this tree's chain with **this tree's runner**, where the previous-minor job
+  deliberately uses the released image's runner and therefore cannot see a
+  migration that needs a newer runner than the previous release shipped.
+  Both legs pass: row counts identical, the alert and the case readable by id,
+  all five severities intact, every migration recorded as applied, the DML-only
+  runtime role still able to read, and a re-run applying nothing.
+
+- **`GET /api/v1/system/version` — the route the upgrade runbook already told
+  operators to check.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `apps/docs/docs/operations/upgrades.md` has said "check
+  `/api/v1/system/version` and see the same number" since it was written, and
+  the route did not exist, so the documented way to confirm an upgrade landed
+  returned 404. It reports the running version, the stamped commit, the
+  applied-migration high-water mark and the schema-skew verdict below, behind
+  `settings:read`.
+
+- **Schema skew is detected and reported, in three states.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Nothing compared `aisoc_schema_migrations` against the migrations on disk.
+  The table was read in exactly one place — `run_migrations.py`, the runner
+  that writes it — so a deployment whose migration step failed, was skipped or
+  was rolled back ran new code against an old schema while `/health` answered
+  200 and `/readyz` answered ready, and the first symptom was an
+  `UndefinedColumnError` on whichever request happened to touch the missing
+  column.
+
+  `current` means every migration on disk is applied; `skewed` means the two
+  disagree, with `pending` and `applied_not_on_disk` naming which direction;
+  `unknown` means the comparison could not be performed at all — no database,
+  no tracking table, a failed query. **`unknown` is never `current`**, which
+  is the whole point: a check whose unknown bucket is a pass is
+  indistinguishable from one that works. The comparison is on filenames,
+  because `run_migrations.py` tracks and orders by filename and duplicate
+  numeric prefixes are a real occurrence here.
+
+  Surfaced on `/readyz` as a **non-required** dependency, so a schema that is
+  behind is reported loudly without pulling an operator's console out of the
+  load balancer during the incident they need it for: readiness answers
+  `ready_degraded` with the detail and keeps serving.
 
 ### Changed
 
@@ -20,6 +304,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The job had to stop being path-filtered first, and the filter is gone rather than pushed into the job.** A workflow filtered by `paths:` creates no check run at all on a pull request that misses the filter, and a required context that never reports blocks the pull request forever; the same filter is also how the regression above merged ungraded, with its head graded by the *offline* isolation job instead. The obvious alternative is worse than it looks: a job-level `if:` yields a check run whose conclusion is `skipped`, and GitHub counts a skipped check as passing, so the pull request would merge having never run the assertion — the same ungraded merge in a different costume. That trade is only worth making for an expensive job, which is why `integration.yml` carries one for a 15-minute disaster-recovery rehearsal. This job is not expensive: over its 40 most recent successful job executions, min 46s, median 52s, p90 70s, max 137s, none within an order of magnitude of its budget. (Run wall-clock has a median of 758s, but that is the shared runner pool's queue, which no filter changes and which a skipped job pays too.) It now carries no filter anywhere and no `if:` on any assertive step, which `scripts/check_required_check_substance.py --static` reports as 12 unconditional and 0 change-gated.
 
   The enumeration it replaces is worth recording, because it is why one could not be maintained. Measured by recording every module the import system resolves across all three steps against live stores, the suites load **13 files under `services/api/app`** plus `services/fusion/app/services/lake_writer.py` — and six of those arrive through lazy call-time imports inside `fetch_lake_events` that no static reading of the test files reveals, because they do not resolve at all until a warehouse answers.
+
+- **The Nov-9 Dependabot wave lands folded, one PR per lockfile family, and fastapi moves to 0.162.x repo-wide** ([#1791](https://github.com/beenuar/AiSOC/pull/1791), [#1792](https://github.com/beenuar/AiSOC/pull/1792), [#1795](https://github.com/beenuar/AiSOC/pull/1795), [#1796](https://github.com/beenuar/AiSOC/pull/1796)). fastapi is a pin-agreement critical package — every range written anywhere must be the same range — so the three queued per-service bumps could never merge alone; the range moves to `>=0.117,<0.163` in all 13 service manifests, the 7 pip-install lines across 5 workflows, and the `reproducible-builds.yml` shipped-matrix entry (0.162.2, what the locks resolve). With it: aiokafka 0.15 (agents), python-dateutil 4.0 (actions — declared but never imported, verified before taking the major), pydantic 2.14.3, sqlalchemy 2.1.8, sqlglot 30.30.0, strawberry-graphql 0.340.1, python-multipart 0.0.33, boto3 1.43.127, openai 3.48.0, langchain-core 1.7.7, markdown 3.11.3; next + eslint-config-next 16.4.5, storybook 10.6.6, framer-motion 14.9.1, tailwindcss 4.3.4; realtime's OpenTelemetry constellation coherently at 0.301.1/3.1.1 with eslint 10.14 and express-rate-limit 8.7.4; pgx/v5 5.12.0 (ingest); cosign-installer 4.1.3, docker/login-action 4.8.0, helm/kind-action 1.15.2 and the codeql-action group across workflows. Every lock delta was audited to contain only the intended packages and their required transitives.
 
 ### Fixed
 
@@ -122,209 +408,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the opposite operational outcome and the one an operator needs to plan
   for. The row now states the conditional and marks the variable required
   outside development.
-
-### Security
-
-- **Re-roling a principal was bounded in one direction only, and a tenant
-  could be left with nobody able to administer it.**
-  ([GHSA-hrc5-w9r3-2g8r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-hrc5-w9r3-2g8r),
-  reported by [pavancharak](https://github.com/pavancharak).)
-  `PATCH /api/v1/tenants/me/users/{id}` ran `authorize_role_change`, which
-  checked that the caller may confer the *new* role and never that it holds
-  what the target currently holds. Conferring authority was bounded by what
-  the granter has; removing it was bounded by nothing. `authorize_role_change`
-  now applies the same subset test to the role being taken away, so a
-  database-backed role carrying `users:write` and little else can no longer
-  strip a `tenant_admin`.
-
-  **The symmetric check is not what bites on the reported scenario, and
-  saying so matters.** Two `tenant_admin` principals hold identical
-  permissions, so no subset test separates them — administrators managing
-  administrators is what the role is for. What must be unreachable is the end
-  state. The last-administrator guard beside this handler counted only the
-  *wildcard* roles, and `never_grantable` refuses those to every API caller,
-  so on a tenant created through the product the guard protected nothing: one
-  `tenant_admin` could demote every peer and then itself. Reproduced against
-  real Postgres and the real application — both demotions answered **200**,
-  leaving a tenant with no principal holding `users:write` and no route to
-  recovery short of database credentials. The guard now counts
-  `role_grants.administrative_roles()`, derived from `ROLE_PERMISSIONS` so a
-  role that gains `users:write` later is covered without anyone remembering,
-  and the second demotion answers **409** with the row unwritten.
-
-  **That guard had also never once worked.** Its count bound `:t` and `:keep`
-  as bare parameters against `uuid` columns, which asyncpg answers with
-  `operator does not exist: uuid = character varying` — so on every
-  deployment it raised a **500** the moment it fired rather than the 409 it
-  exists to return. Measured on the unmodified tree by deactivating the last
-  wildcard administrator; the statement now casts every bind, the same
-  `CAST(:name AS type)` spelling `check_text_bind_casts.py` enforces
-  elsewhere. Nobody had noticed because the only branch reaching it needed a
-  wildcard role, which no API caller can hold.
-
-  Two more corrections in the same handler. The role change now invalidates
-  the tenant's cached permissions (`bump_version`); without it a principal
-  resolved before the change kept its old set on every replica until the
-  fallback TTL lapsed, which for a revocation is the wrong direction.
-  And the audit row records `from` correctly: the `UPDATE` synchronises the
-  loaded object, so reading `user.role` afterwards returned the *new* value
-  and the trail read `{"from": "viewer", "to": "viewer"}`, telling an auditor
-  nothing about what was removed. It also now carries
-  `effective_permissions_follow_role`, because a tenant running
-  database-backed RBAC resolves permissions from `user_roles` — `users.role`
-  is not what any check reads, the demotion withdraws nothing, and the log
-  was asserting a withdrawal that never happened.
-
-  Sessions are deliberately **not** revoked. An access token carries no
-  permissions: `resolve_jwt_principal` re-reads the user row and re-resolves
-  the set on every request, which a test pins by demoting a principal and
-  replaying a token minted beforehand. The stale channel was the cache, and
-  that is what this invalidates. Letting every `tenant_admin` terminate a
-  peer's sessions would be a new capability, not a fix.
-
-- **Two declarations of one service principal's authority, and the more
-  permissive one governed 27 routes.**
-  ([GHSA-ghpm-vc6j-hp5r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-ghpm-vc6j-hp5r),
-  reported by [pavancharak](https://github.com/pavancharak).)
-  `SERVICE_PRINCIPAL_PERMISSIONS` in `deps.py` was the read-only list a
-  service token resolves to; `ROLE_PERMISSIONS["api_service"]` in
-  `core/security.py` described the same principal and granted `alerts:write`
-  and `cases:write` besides, while withholding four reads the other allowed.
-  `has_permission_db` consulted neither the resolved set nor the scopes — it
-  ran its own `user_roles` join and fell back to the static map — so on the
-  27 in-body `require_permission_db` call sites the second declaration won.
-  The two are now one object: `SERVICE_PRINCIPAL_PERMISSIONS` is derived from
-  the role row, and the rationale lives with the row.
-
-  **The same blindness reopened a defect the resolver had already closed, and
-  that half is reachable today.** `resolve_permissions` distinguishes "this
-  tenant has no RBAC" from "this tenant has RBAC and gave this user none",
-  returning the empty set for the second so that removing every grant does
-  not restore a static role. `has_permission_db` saw the same zero rows and
-  could not tell the two apart. Reproduced against real Postgres: a
-  deprovisioned `tenant_admin` answered **403** at every `require_permission`
-  route and **200** at `GET /api/v1/mcp-servers`. `require_permission_db` now
-  delegates to the one check, so elevation and the tenant's attribute
-  conditions bind there too — both previously applied on one path and not the
-  other, making the same principal allowed or refused depending only on which
-  factory a route happened to use.
-
-  `check_one_permission_model.py` gains the arm that would have caught this:
-  it asserted everything about the dependency factory and nothing about the
-  in-body method, so the second model this gate exists to prevent sat one
-  method over with every check printing OK. Run against the pre-fix tree the
-  new arm exits 1 naming all three defects.
-
-  **Found while unifying the two lists, and left open deliberately:** the
-  shared service token holds `lake:query`, and `lake:query` is what gates the
-  hunt *write* routes, so a real service token reaches `POST /api/v1/hunts`
-  and `POST /api/v1/saved-hunts` — measured at **422**, past authorization,
-  on the unmodified tree. A test asserted the opposite and passed only
-  because it built a principal with no resolved set and so read the narrower
-  of the two lists. Closing it means splitting authoring from running into a
-  write permission, which changes what four human roles hold and needs its
-  own change; the exposure is recorded as a strict `xfail` so whoever does
-  that is told to remove the marker.
-
-- **The ingest graph-update WebSocket ran no authentication and took its
-  tenant from the query string.**
-  ([GHSA-cvfr-9r25-gqpf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-cvfr-9r25-gqpf),
-  high, CVSS 8.6) `internal/graph_ws/server.go` read `?tenant_id=<id>` and
-  subscribed the caller to that tenant's live graph-update stream, so any
-  caller who could reach the port could read any tenant's stream with no
-  credential at all. The handler now runs the same `internal/ingestauth`
-  authenticator the ingest routes run and derives the tenant from the
-  resulting principal, by the same intersection-only rule `/v1/ingest` uses.
-  The query parameter is removed rather than validated.
-
-  The reason this survived is the part worth recording. Two comments — one in
-  the handler, one on the route — stated that authentication was enforced by
-  the Python API proxy and that the server "is expected to listen on the
-  internal service network only". The proxy's authentication is real: it
-  resolves a JWT or API key, enforces `graph:read`, and rebinds the tenant
-  from the resolved user. But nothing made the proxy the only way in, and the
-  proxy presented no credential upstream, so the Go side could not tell a
-  relayed browser from anyone else. A protection asserted in a comment and
-  enforced by an assumption about somebody else's deployment is not a
-  protection, and the identical reasoning was already written down one
-  package away in `internal/ingestauth` as the reason `/v1/ingest` needed a
-  credential. Both comments were corrected in place rather than deleted, and
-  the proxy now presents a service token and the resolved tenant as a header
-  — defence in depth in front of ingest's own check instead of a substitute
-  for it. Nothing in `docker-compose.yml` changes: the api and ingest-worker
-  containers already share `AISOC_SERVICE_TOKEN`, which is what ingest
-  resolves after `AISOC_INGEST_SERVICE_TOKEN`, and `make env` generates it.
-  Roll ingest last or roll both together, since a new ingest refuses an old
-  API while a new API against an old ingest is harmless.
-
-  The reported impact said graph events could be **written**. They cannot:
-  the handler only subscribes and pumps envelopes toward the client, and its
-  reader goroutine discards inbound frames. This is a cross-tenant read, and
-  the published vector says so (`I:N`).
-
-- **`/metrics` on ingest was open while its own compose file promised a
-  token.** `docker-compose.prod.yml` declares `METRICS_TOKEN` required for
-  this service with the message "guards /metrics outside development" and
-  `scripts/ensure_env.py` generates it, but nothing in `services/ingest` read
-  the variable, so the guard the compose file promised existed only in
-  `services/api` and `services/agents`. Ingest now applies the same two
-  rules: a constant-time bearer comparison when `METRICS_TOKEN` is set, and a
-  refusal outside a development-class environment when it is not. `/health`,
-  `/livez` and `/readyz` stay unauthenticated, deliberately — an
-  orchestrator's probe carries no credential, and pulling the pipeline's
-  front door out of a load balancer to protect a scrape endpoint would be a
-  worse trade than the one it buys.
-
-- **A blank HMAC secret skipped signature verification on both ingest push
-  paths.** `ingestauth.VerifySignature` and `inbox.verifyHMACOrFail` both
-  began `if secret == "" { accept }`, so a token that declared a signature
-  requirement accepted unsigned bodies. The cause was one layer down: the
-  resolve query applied `COALESCE(hmac_secret, '')`, which collapsed a NULL
-  column and a blank one into the same empty string. Those are different
-  facts. Migration `033` documents NULL as "no signature verification (still
-  secured by the token in the URL)" — the opt-out every webhook vendor that
-  cannot sign depends on — while a non-NULL blank cannot be created through
-  the mint API at all, which enforces `min_length=16`.
-
-  `inbox.Token` now carries `HMACConfigured` alongside the secret, so the two
-  states are distinguishable, and a blank configured secret is **refused**
-  with an operator-actionable message rather than waived. Verifying against
-  it was considered and rejected: an HMAC keyed on the empty string is a
-  value any caller can compute, so that branch would have accepted forged
-  bodies instead of unsigned ones. A test demonstrates the forgery directly
-  rather than asserting it. Tokens with no secret still push unsigned, which
-  is the behaviour the schema documents and a positive control covers.
-
-  `RequiresSignature()` is the single accessor both call sites ask through,
-  and it reads `configured OR non-empty` so a producer that sets a secret
-  without the flag still gets verification. Only the store builds a `Token`
-  in production and it always sets both, but the one combination that must
-  never mean "skip" is a secret that is present in some form.
-
-  Reported by Jake Davis (`@aptera-motors-it`). Every finding was supplied
-  with a working proof of concept, each of which is now a Go test that was
-  watched failing on the pre-fix tree and watched failing again with the fix
-  reverted.
-
-- **A graph_ws subscriber disconnecting mid-dispatch could panic the ingest
-  consume goroutine.** Not part of the advisory — found by the race detector
-  on the new handler tests above, which are the first to unsubscribe while
-  the consume loop is actively dispatching. `Unsubscribe` closed the
-  subscriber channel *outside* the lock while `dispatch` sent to it *after*
-  releasing the read lock, so a client that disconnected at the wrong moment
-  could have its channel closed between the two. A send on a closed channel
-  panics even inside a `select` with a `default` arm, so the outcome is a
-  crashed consumer rather than a dropped envelope. The close now happens
-  under the same write lock as the delete, and `dispatch` holds the read lock
-  across its sends — which is safe only because that send is non-blocking, so
-  a slow client still costs a dropped envelope and never back-pressure.
-
-  Latent rather than observed: eight race-detector runs of the pre-change
-  tree are clean, because nothing previously exercised that interleaving.
-  Reverting either half alone leaves the race closed, so the negative control
-  reverts both and watches it return.
-
-### Fixed
 
 - **A live tenant-isolation suite stopped running, and the mechanism that
   stopped it would have stopped the next one too.**
@@ -576,230 +659,245 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   value — and the page was telling operators the opposite of what the service
   does.
 
-### Added
+- **The API reported version `0.1.0` on every deployment it has ever shipped.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `Settings.APP_VERSION` was a literal and nothing populated it, so `/health`,
+  the OpenAPI document and the startup log agreed on a version no release has
+  ever carried. `core/telemetry.py` in both `api` and `agents` carried a
+  second stale literal, `4.0.0`, so a trace and a health check named different
+  releases of the same process.
 
-- **A language switcher in Settings, and the parity gate now fails when the
-  catalogue has no reader
-  ([#1729](https://github.com/beenuar/AiSOC/issues/1729), reported by
-  NiuBlibing).** The console was English-only, and the reason was not that
-  i18n had never been built: `apps/web/src/lib/i18n/` shipped a working
-  `translate()`, a `direction()` returning `rtl`, locale-aware `Intl`
-  formatting, two catalogues and a CI gate — and **no component imported any
-  of it**. The gate stayed green throughout because it compared the locales
-  with each other and never asked whether anything rendered them, which is
-  this repository's most-repeated defect shape sitting inside the control
-  that exists to catch it.
+  The version now resolves from the `AISOC_VERSION` build arg (stamped by
+  `publish-images.yml`, since a service build context cannot reach the
+  repo-root `VERSION` file), then from that file on a source checkout, then
+  the string `"unknown"` — deliberately not `0.0.0`. A version-shaped
+  placeholder parses as a release and sorts below every tag that ever shipped,
+  so an operator comparing a deployment against a tag cannot tell "very old"
+  from "nobody told me". `VERSION` is now a read-only alias of `APP_VERSION`,
+  so the two cannot disagree and a stray `VERSION` environment variable cannot
+  move either.
 
-  `LocaleProvider` is the reader, mounted in the root layout and shaped like
-  `ThemeProvider` deliberately — same storage-then-profile reconciliation,
-  same pre-paint bootstrap script, same default in `useState` so the first
-  client render matches the server's markup. The switcher lives in Settings
-  beside Theme and Density. **Direction is applied to the document**, by the
-  bootstrap script before first paint and by the provider on every change:
-  `direction()` returning `rtl` while `<html dir>` stays `ltr` renders Arabic
-  glyphs in a left-to-right page, which is the one outcome that looks
-  translated and reads wrong, and it is invisible to any test that only
-  compares text. There is **no automatic negotiation** from
-  `navigator.languages`: coverage is partial, so resolving an Arabic browser
-  into a partly-Arabic console nobody asked for is a worse first impression
-  than English.
+- **The console had two version surfaces reading two different build-time
+  values.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  The sidebar footer rendered `packageJson.version` and Settings → About
+  rendered `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, both frozen when
+  the bundle was compiled, by separate mechanisms, so one image could show two
+  numbers. Both now read `consoleVersion` from `/api/runtime-config`.
+  `next.config.js` substituted `'0.0.0'` when the `VERSION` file could not be
+  read, which also made that route's own `'unknown'` branch unreachable; it
+  now substitutes an empty string and the route guards with a trim, so a build
+  that carries no version says so.
 
-  `scripts/check_i18n_keys.py` gained the arm it was missing, and the unit is
-  the **key**, not the module — a count of importers is the same proxy one
-  level up, satisfied by one import while forty-seven keys stay unrendered. A
-  key is read when a non-test file outside the catalogue's own directory
-  passes it to `translate()`, `t()` or `hasTranslation()` as a literal, or
-  names its surface in a template prefix. Three scopes are excluded and each
-  exclusion is the point: the module itself (a module calling itself is what
-  being unread looks like from the inside), tests (a key exercised only by a
-  test is the defect, not the evidence against it), and build output (the one
-  match outside the module on the pre-fix tree was a TypeScript artifact).
-  Unread is **fatal rather than ratcheted**, unlike untranslated: an
-  untranslated key waits on a native speaker who may never arrive, while an
-  unread one waits on nobody who is not already in the commit. Its exemption
-  is a named key with a reason rather than a number, checked in both
-  directions, and holds exactly one entry — `common.unknown`, which
-  `formatDate()` really does render for an unparseable timestamp, from inside
-  the module the scan excludes by design.
+- **Dependabot's pnpm/action-setup bump clobbered the two deliberate v4 holds, and the first CI run caught it exactly as documented** ([#1791](https://github.com/beenuar/AiSOC/pull/1791)). `e2e.yml` and `visual-regression.yml` run inside the Playwright container, where action-setup@v6 self-switches pnpm down to the `packageManager` pin and leaves `@tailwindcss/oxide`'s native binding unlinked in the restored store — `check_toolchain_pins.py` exempts both files by name with that reason written beside them, and 'Buyer journey' and 'Storybook visual diff' failed with precisely that signature when the bump reached them. Both stay on v4; the other 19 call sites unify at v6.1.1 and the gate's declared fleet version moves with them. The gate's own self-test fixture hardcoded the old fleet version — moving the declaration stranded the clean fixture in both directions ("uses X while the repository declares Y" and "declared version is stale") — so the fixture now references `PNPM_ACTION_VERSION` and a declaration move can never strand it again.
 
-  **Four keys were deleted rather than exempted**, and finding them was the
-  more interesting half of the work: `hunt.queryShown`, `hunt.noStore`,
-  `hunt.unsupportedFilters` and `cases.closedAt` named a query-provenance
-  label, a store-unreachable notice, an unsupported-filter disclosure and a
-  case close timestamp that **no component has ever shown**. The catalogue
-  had been written against the surfaces as imagined rather than as built, so
-  roughly a fifth of it could never render. An exemption is for a key that is
-  rendered and cannot be seen; a key that is not rendered at all is not
-  exempt, it is wrong. They return with the UI that needs them.
+- **Settings → Integrations' two "Add connector" links pointed at `/connectors/new`, a route that has never existed, and the onboarding checklist's "Connect a data source" step linked back to `/onboarding` itself** ([#1797](https://github.com/beenuar/AiSOC/pull/1797), carried in [#1799](https://github.com/beenuar/AiSOC/pull/1799) with authorship preserved after the original failed its lint check and fork branches cannot be pushed to from this repository). Both now reach `/connectors`, which hosts the real add-connector modal; a component test pins each link's target and a source assertion keeps the checklist step from navigating to itself. Reported and fixed by [@knowlet](https://github.com/knowlet).
 
-  **Coverage is a pilot and the switcher says so.** Fifty-two keys is a
-  fraction of the console's text, so the panel states its scope by
-  *measuring* the catalogue rather than by a sentence that goes stale: each
-  navigation destination is listed as translated, falling back to English, or
-  not covered at all, derived per surface, with a note that the counts are
-  catalogue strings and not a share of the product. A surface the catalogue
-  has never heard of reads "not translated" and never 100%, because zero of
-  zero is not full coverage. The deliberate gap is deliberate still —
-  `settings.*` stays untranslated in Arabic so the fallback runs on a real
-  screen — and the switcher now explains that instead of leaving an operator
-  wondering why the page they are standing on stayed English. **The
-  untranslated ceiling did not move**: it is 6, it was 6, and the eight keys
-  added for the switcher's own copy were translated in the same commit so it
-  could not drift.
+- **`.github/CREDITS.md` carried two overlapping rows for the same security researcher**, each citing GHSA-hrc5-w9r3-2g8r and disagreeing about the fix reference (PR #1750 versus commit `2d034fc`, which is that PR's squash commit — the same change). Two parallel maintenance lanes had each added the credit. One consolidated row now covers both of [@pavancharak](https://github.com/pavancharak)'s advisories with the single fix reference ([#1793](https://github.com/beenuar/AiSOC/pull/1793), carrying [#1755](https://github.com/beenuar/AiSOC/pull/1755) with authorship preserved).
 
-- **An optional, off-by-default VAID badge plugin for agent identity
-  ([#1741](https://github.com/beenuar/AiSOC/pull/1741), closing
-  [#1739](https://github.com/beenuar/AiSOC/issues/1739)), contributed by
-  Allan Smeyatsky.** `services/agents/app/security/agent_identity.py` gives
-  each agent an identity, a role scope, a short expiry and monotonic
-  narrowing, and contains no cryptography at all — so the Investigation
-  Ledger records what an agent did, and an auditor reading it is trusting
-  AiSOC's account of itself. The plugin mints a signed badge *from* that
-  existing identity rather than introducing a second one, and verifies it at
-  the two boundaries where it would matter: `ToolRegistry.execute` in the
-  agents service, and `live_actions.dispatch()` in `services/actions`, which
-  is a different process and therefore sees only what travels with the
-  request.
+### Removed
 
-  This does not make VAID the project's agent identity format, and nothing
-  in the shipped product depends on it. `AISOC_VAID_PLUGIN_ENABLED` is unset
-  by default; `ToolRegistry.identity_verifier` defaults to `None`;
-  `vaid-mint` is an optional extra that `poetry export --only main` does not
-  install, so it is absent from both service images. With the flag unset,
-  `dispatch()` and `ToolRegistry.execute` were measured byte-identical to
-  the previous commit across a fixed input matrix — including a request
-  carrying a deliberately malformed badge, which is ignored rather than
-  refused — and both suites return the same pass counts with the package
-  absent as with it installed.
-
-  Enabled, it fails closed on every input that is not a currently-valid
-  badge for the calling identity: no badge, an unparseable one, a bad
-  signature, a tampered signed field, an expired badge, a revoked one, a
-  badge issued for a different agent, a badge issued under a different
-  tenant's authority, a delegated child badge this service cannot resolve
-  the ancestry of, and a revocation list that is absent, unreadable or
-  malformed. That last one is three-state rather than two: unavailable is
-  refused, never collapsed into "nothing is revoked" — the posture an
-  air-gapped deployment needs, where the list ships with the deployment and
-  the badge's own one-hour expiry is what bounds exposure between
-  deployments of a fresher one.
-
-  Known gap at the time, closed by the entry below: nothing minted a badge
-  on a real agent path, so `services/agents/app/security/vaid_plugin.py` was
-  allowlisted in `scripts/check_module_reachability.py` with that recorded
-  and with the change that removes the entry named. The actions-service half
-  was reachable from `dispatch()` and was not allowlisted.
-
-- **A VAID badge is minted on the real agent path, and a plugin that cannot
-  do its job now refuses at boot instead of at 3am
-  ([#1746](https://github.com/beenuar/AiSOC/pull/1746), follow-up to the
-  entry above), contributed by solara-associates.**
-  `run_deep_investigation` holds the one production call to
-  `issue_identity` in `services/agents`, and with the plugin enabled it now
-  mints a `VaidBackedIdentity` there. The MCP grant a few lines below
-  re-mints the badge for the widened scope with no branch of its own,
-  because `with_granted_tools` was already duck-typed across both identity
-  types; `IdentityLike`, a `Protocol` in `agent_identity.py`, is what lets
-  `ToolRegistry.execute` and `run_with_tools` accept either without that
-  module importing the optional plugin built on it. `vaid_plugin.py`'s
-  reachability allowlist entry is removed and the gate is green without it.
-
-  With the flag unset — the default — this is the `issue_identity(...)` call
-  it was before. Three fixed-input matrices were run against this tree and
-  against the previous commit under one interpreter and compared byte for
-  byte: `ToolRegistry.execute` (114 lines), `live_actions.dispatch()` (30
-  rows) and `run_deep_investigation` itself (6 rows), the last being where
-  the new branch lives and the one the original proof did not cover. That
-  harness replaces every plugin entry point with one that raises if reached,
-  so identical there also means untouched.
-
-  `vaid_plugin.preflight_or_raise()` and `vaid_verifier.preflight_or_raise()`
-  run unguarded from each service's startup hook and are no-ops when the
-  plugin is disabled. Enabled, the agents side builds the real issuer and
-  reads the revocation list; the actions side reads the kernel public key
-  and the revocation list. Every misconfiguration they catch was already
-  fail-closed at request time — an unreadable revocation list is refused,
-  never read as "nothing is revoked" — so what changes is when a deployment
-  finds out.
-
-  One failure mode had to be measured rather than reasoned about, because
-  it is the likeliest of all and the first draft of the check could not see
-  it: `vaid-mint` is an optional extra and `poetry export --only main` —
-  what both Dockerfiles install from — resolves 130 and 37 packages with
-  none of it, so the stock image carries the flag and not the library. The
-  agents-side preflight catches that because building the issuer reaches
-  the library. The actions-side one read an environment variable and a JSON
-  file, so a fully and correctly configured deployment booted clean and
-  answered the first badge-bearing dispatch with `VAID badge check failed
-  unexpectedly (ModuleNotFoundError); refusing fail-closed` — a refused
-  containment action, blamed on nothing an operator can act on, at exactly
-  the hour the check exists to avoid. It now imports what the verification
-  path imports, and a test reads the module and fails if that path grows a
-  `vaid_mint` import the preflight does not cover, so the two cannot drift.
-
-  Still deliberately unwired, and recorded in `install_into`'s own
-  docstring rather than left for a reader to discover: the module is
-  reachable, which is not the same claim as verified. Nothing in
-  `services/agents` calls `install_into`, so `ToolRegistry.identity_verifier`
-  is `None` on every production registry and a minted badge is carried but
-  not checked in-process; and `app/playbook/action_bridge.py` builds its
-  dispatch payload with no `vaid_badge` member, so `services/actions` is
-  presented no badge by any in-tree caller. Wiring either is a decision
-  about whether VAID is this project's agent identity format, which has not
-  been taken — so no claim-to-gate matrix row was added, because the
-  capability is not reachable end to end and a row would say it is.
-
-- **Upgrading is now a required check, and one leg crosses a major version.**
-  People upgrade, and until now a pull request could break the upgrade path
-  with both upgrade tests red or never run: neither `upgrade-test.yml` nor
-  `integration.yml`'s upgrade leg appeared in `.github/required-checks.json`.
-  `Previous minor to this tree, with data present` is now required.
-
-  Promoting it as it stood would have been worse than leaving it alone.
-  `upgrade-test.yml` was path-filtered on both triggers, and a workflow that
-  does not trigger creates no check run at all — so a required check that
-  never reports blocks the pull request forever, which is the quiet failure
-  rather than a red one. Measured over the 18 most recently merged pull
-  requests, reading every page of `commits/{sha}/check-runs` (113–143 checks
-  each, so the familiar one-page cap was not the cause): the context was
-  absent from **18 of 18**, and none of those 18 had touched a filtered path.
-
-  The filter is gone rather than moved into the jobs. `integration.yml` needs
-  the job-level form because a disaster-recovery rehearsal costs 15 minutes;
-  this workflow runs in 1–3 minutes, so it now carries no path filter and no
-  job-level or step-level `if:` anywhere — 14 unconditional steps, 0
-  change-gated, as `scripts/check_required_check_substance.py --static`
-  reports it. It cannot rehearse nothing the way `Backup → destroy → restore`
-  did on 74 of 100 runs, and that is now a property a reader can confirm by
-  looking rather than a behaviour someone has to go and measure.
-
-- **Two upgrade legs that cross a major version boundary, with real data.**
-  Nothing had ever crossed one. The previous-minor job resolves its starting
-  point with `--previous-minor`, which is same-major by construction, and
-  `integration.yml` pins `v7.3.1`/`v7.5.0` — also same-major, and seeding a
-  throwaway `upgrade_probe` table, so what it proves is that a migration did
-  not drop an unrelated table. Meanwhile `apps/docs/docs/operations/upgrades.md`
-  told operators that crossing more than one major "is supported but untested
-  as a single step", which was true.
-
-  `v21.0.0` is the most recent boundary and the one a supported operator
-  crosses today; it is also the only boundary a *new* migration can still
-  break, since everything below it is frozen history. `v17.0.0` is five majors
-  in one step — the case the documentation admits is untested — and is the
-  oldest release this fixture can seed unmodified, because migration `083`
-  (`cases` → `aisoc_cases`) landed in v16.0.0.
-
-  Both legs are better than either existing one in the two ways that matter.
-  They seed the **real tables** from `scripts/upgrade_fixture.sql` — a tenant,
-  a user, one alert at each of the five severities, a case — and they apply
-  this tree's chain with **this tree's runner**, where the previous-minor job
-  deliberately uses the released image's runner and therefore cannot see a
-  migration that needs a newer runner than the previous release shipped.
-  Both legs pass: row counts identical, the alert and the case readable by id,
-  all five severities intact, every migration recorded as applied, the DML-only
-  runtime role still able to read, and a re-run applying nothing.
+- **66 Python wheels (62 MB) tracked at the repository root** ([#1794](https://github.com/beenuar/AiSOC/pull/1794)). Several were macOS-arm64 platform wheels — a local download cache committed by accident — and nothing referenced any of them outside PyPI lock metadata, which names same-named files on PyPI rather than these. `*.whl` is ignored now, and no legitimate tracked wheel exists anywhere the ignore could hide. Contributed by [@knowlet](https://github.com/knowlet).
 
 ### Security
+
+- **Re-roling a principal was bounded in one direction only, and a tenant
+  could be left with nobody able to administer it.**
+  ([GHSA-hrc5-w9r3-2g8r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-hrc5-w9r3-2g8r),
+  reported by [pavancharak](https://github.com/pavancharak).)
+  `PATCH /api/v1/tenants/me/users/{id}` ran `authorize_role_change`, which
+  checked that the caller may confer the *new* role and never that it holds
+  what the target currently holds. Conferring authority was bounded by what
+  the granter has; removing it was bounded by nothing. `authorize_role_change`
+  now applies the same subset test to the role being taken away, so a
+  database-backed role carrying `users:write` and little else can no longer
+  strip a `tenant_admin`.
+
+  **The symmetric check is not what bites on the reported scenario, and
+  saying so matters.** Two `tenant_admin` principals hold identical
+  permissions, so no subset test separates them — administrators managing
+  administrators is what the role is for. What must be unreachable is the end
+  state. The last-administrator guard beside this handler counted only the
+  *wildcard* roles, and `never_grantable` refuses those to every API caller,
+  so on a tenant created through the product the guard protected nothing: one
+  `tenant_admin` could demote every peer and then itself. Reproduced against
+  real Postgres and the real application — both demotions answered **200**,
+  leaving a tenant with no principal holding `users:write` and no route to
+  recovery short of database credentials. The guard now counts
+  `role_grants.administrative_roles()`, derived from `ROLE_PERMISSIONS` so a
+  role that gains `users:write` later is covered without anyone remembering,
+  and the second demotion answers **409** with the row unwritten.
+
+  **That guard had also never once worked.** Its count bound `:t` and `:keep`
+  as bare parameters against `uuid` columns, which asyncpg answers with
+  `operator does not exist: uuid = character varying` — so on every
+  deployment it raised a **500** the moment it fired rather than the 409 it
+  exists to return. Measured on the unmodified tree by deactivating the last
+  wildcard administrator; the statement now casts every bind, the same
+  `CAST(:name AS type)` spelling `check_text_bind_casts.py` enforces
+  elsewhere. Nobody had noticed because the only branch reaching it needed a
+  wildcard role, which no API caller can hold.
+
+  Two more corrections in the same handler. The role change now invalidates
+  the tenant's cached permissions (`bump_version`); without it a principal
+  resolved before the change kept its old set on every replica until the
+  fallback TTL lapsed, which for a revocation is the wrong direction.
+  And the audit row records `from` correctly: the `UPDATE` synchronises the
+  loaded object, so reading `user.role` afterwards returned the *new* value
+  and the trail read `{"from": "viewer", "to": "viewer"}`, telling an auditor
+  nothing about what was removed. It also now carries
+  `effective_permissions_follow_role`, because a tenant running
+  database-backed RBAC resolves permissions from `user_roles` — `users.role`
+  is not what any check reads, the demotion withdraws nothing, and the log
+  was asserting a withdrawal that never happened.
+
+  Sessions are deliberately **not** revoked. An access token carries no
+  permissions: `resolve_jwt_principal` re-reads the user row and re-resolves
+  the set on every request, which a test pins by demoting a principal and
+  replaying a token minted beforehand. The stale channel was the cache, and
+  that is what this invalidates. Letting every `tenant_admin` terminate a
+  peer's sessions would be a new capability, not a fix.
+
+- **Two declarations of one service principal's authority, and the more
+  permissive one governed 27 routes.**
+  ([GHSA-ghpm-vc6j-hp5r](https://github.com/beenuar/AiSOC/security/advisories/GHSA-ghpm-vc6j-hp5r),
+  reported by [pavancharak](https://github.com/pavancharak).)
+  `SERVICE_PRINCIPAL_PERMISSIONS` in `deps.py` was the read-only list a
+  service token resolves to; `ROLE_PERMISSIONS["api_service"]` in
+  `core/security.py` described the same principal and granted `alerts:write`
+  and `cases:write` besides, while withholding four reads the other allowed.
+  `has_permission_db` consulted neither the resolved set nor the scopes — it
+  ran its own `user_roles` join and fell back to the static map — so on the
+  27 in-body `require_permission_db` call sites the second declaration won.
+  The two are now one object: `SERVICE_PRINCIPAL_PERMISSIONS` is derived from
+  the role row, and the rationale lives with the row.
+
+  **The same blindness reopened a defect the resolver had already closed, and
+  that half is reachable today.** `resolve_permissions` distinguishes "this
+  tenant has no RBAC" from "this tenant has RBAC and gave this user none",
+  returning the empty set for the second so that removing every grant does
+  not restore a static role. `has_permission_db` saw the same zero rows and
+  could not tell the two apart. Reproduced against real Postgres: a
+  deprovisioned `tenant_admin` answered **403** at every `require_permission`
+  route and **200** at `GET /api/v1/mcp-servers`. `require_permission_db` now
+  delegates to the one check, so elevation and the tenant's attribute
+  conditions bind there too — both previously applied on one path and not the
+  other, making the same principal allowed or refused depending only on which
+  factory a route happened to use.
+
+  `check_one_permission_model.py` gains the arm that would have caught this:
+  it asserted everything about the dependency factory and nothing about the
+  in-body method, so the second model this gate exists to prevent sat one
+  method over with every check printing OK. Run against the pre-fix tree the
+  new arm exits 1 naming all three defects.
+
+  **Found while unifying the two lists, and left open deliberately:** the
+  shared service token holds `lake:query`, and `lake:query` is what gates the
+  hunt *write* routes, so a real service token reaches `POST /api/v1/hunts`
+  and `POST /api/v1/saved-hunts` — measured at **422**, past authorization,
+  on the unmodified tree. A test asserted the opposite and passed only
+  because it built a principal with no resolved set and so read the narrower
+  of the two lists. Closing it means splitting authoring from running into a
+  write permission, which changes what four human roles hold and needs its
+  own change; the exposure is recorded as a strict `xfail` so whoever does
+  that is told to remove the marker.
+
+- **The ingest graph-update WebSocket ran no authentication and took its
+  tenant from the query string.**
+  ([GHSA-cvfr-9r25-gqpf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-cvfr-9r25-gqpf),
+  high, CVSS 8.6) `internal/graph_ws/server.go` read `?tenant_id=<id>` and
+  subscribed the caller to that tenant's live graph-update stream, so any
+  caller who could reach the port could read any tenant's stream with no
+  credential at all. The handler now runs the same `internal/ingestauth`
+  authenticator the ingest routes run and derives the tenant from the
+  resulting principal, by the same intersection-only rule `/v1/ingest` uses.
+  The query parameter is removed rather than validated.
+
+  The reason this survived is the part worth recording. Two comments — one in
+  the handler, one on the route — stated that authentication was enforced by
+  the Python API proxy and that the server "is expected to listen on the
+  internal service network only". The proxy's authentication is real: it
+  resolves a JWT or API key, enforces `graph:read`, and rebinds the tenant
+  from the resolved user. But nothing made the proxy the only way in, and the
+  proxy presented no credential upstream, so the Go side could not tell a
+  relayed browser from anyone else. A protection asserted in a comment and
+  enforced by an assumption about somebody else's deployment is not a
+  protection, and the identical reasoning was already written down one
+  package away in `internal/ingestauth` as the reason `/v1/ingest` needed a
+  credential. Both comments were corrected in place rather than deleted, and
+  the proxy now presents a service token and the resolved tenant as a header
+  — defence in depth in front of ingest's own check instead of a substitute
+  for it. Nothing in `docker-compose.yml` changes: the api and ingest-worker
+  containers already share `AISOC_SERVICE_TOKEN`, which is what ingest
+  resolves after `AISOC_INGEST_SERVICE_TOKEN`, and `make env` generates it.
+  Roll ingest last or roll both together, since a new ingest refuses an old
+  API while a new API against an old ingest is harmless.
+
+  The reported impact said graph events could be **written**. They cannot:
+  the handler only subscribes and pumps envelopes toward the client, and its
+  reader goroutine discards inbound frames. This is a cross-tenant read, and
+  the published vector says so (`I:N`).
+
+- **`/metrics` on ingest was open while its own compose file promised a
+  token.** `docker-compose.prod.yml` declares `METRICS_TOKEN` required for
+  this service with the message "guards /metrics outside development" and
+  `scripts/ensure_env.py` generates it, but nothing in `services/ingest` read
+  the variable, so the guard the compose file promised existed only in
+  `services/api` and `services/agents`. Ingest now applies the same two
+  rules: a constant-time bearer comparison when `METRICS_TOKEN` is set, and a
+  refusal outside a development-class environment when it is not. `/health`,
+  `/livez` and `/readyz` stay unauthenticated, deliberately — an
+  orchestrator's probe carries no credential, and pulling the pipeline's
+  front door out of a load balancer to protect a scrape endpoint would be a
+  worse trade than the one it buys.
+
+- **A blank HMAC secret skipped signature verification on both ingest push
+  paths.** `ingestauth.VerifySignature` and `inbox.verifyHMACOrFail` both
+  began `if secret == "" { accept }`, so a token that declared a signature
+  requirement accepted unsigned bodies. The cause was one layer down: the
+  resolve query applied `COALESCE(hmac_secret, '')`, which collapsed a NULL
+  column and a blank one into the same empty string. Those are different
+  facts. Migration `033` documents NULL as "no signature verification (still
+  secured by the token in the URL)" — the opt-out every webhook vendor that
+  cannot sign depends on — while a non-NULL blank cannot be created through
+  the mint API at all, which enforces `min_length=16`.
+
+  `inbox.Token` now carries `HMACConfigured` alongside the secret, so the two
+  states are distinguishable, and a blank configured secret is **refused**
+  with an operator-actionable message rather than waived. Verifying against
+  it was considered and rejected: an HMAC keyed on the empty string is a
+  value any caller can compute, so that branch would have accepted forged
+  bodies instead of unsigned ones. A test demonstrates the forgery directly
+  rather than asserting it. Tokens with no secret still push unsigned, which
+  is the behaviour the schema documents and a positive control covers.
+
+  `RequiresSignature()` is the single accessor both call sites ask through,
+  and it reads `configured OR non-empty` so a producer that sets a secret
+  without the flag still gets verification. Only the store builds a `Token`
+  in production and it always sets both, but the one combination that must
+  never mean "skip" is a secret that is present in some form.
+
+  Reported by Jake Davis (`@aptera-motors-it`). Every finding was supplied
+  with a working proof of concept, each of which is now a Go test that was
+  watched failing on the pre-fix tree and watched failing again with the fix
+  reverted.
+
+- **A graph_ws subscriber disconnecting mid-dispatch could panic the ingest
+  consume goroutine.** Not part of the advisory — found by the race detector
+  on the new handler tests above, which are the first to unsubscribe while
+  the consume loop is actively dispatching. `Unsubscribe` closed the
+  subscriber channel *outside* the lock while `dispatch` sent to it *after*
+  releasing the read lock, so a client that disconnected at the wrong moment
+  could have its channel closed between the two. A send on a closed channel
+  panics even inside a `select` with a `default` arm, so the outcome is a
+  crashed consumer rather than a dropped envelope. The close now happens
+  under the same write lock as the delete, and `dispatch` holds the read lock
+  across its sends — which is safe only because that send is non-blocking, so
+  a slow client still costs a dropped envelope and never back-pressure.
+
+  Latent rather than observed: eight race-detector runs of the pre-change
+  tree are clean, because nothing previously exercised that interleaving.
+  Reverting either half alone leaves the race closed, so the negative control
+  reverts both and watches it return.
 
 - **A detection that fired again after its alert was closed produced nothing,
   which made a closed alert into a place to hide.**
@@ -1039,100 +1137,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carries the matrix value and requiring it would orphan a context on the next
   version bump. The page says which two boundaries are exercised and that the
   other four are not.
-
-### BREAKING
-
-- **`DeploymentConfig` and `DeploymentConfigUpdate` drop the self-update
-  fields, and `telemetry_enabled` becomes read-only.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  Removed from the published spec: `DeploymentConfig.update_channel`,
-  `DeploymentConfig.auto_update`, `DeploymentConfigUpdate.update_channel`,
-  `DeploymentConfigUpdate.auto_update`, `DeploymentConfigUpdate.telemetry_enabled`,
-  and the `UpdateChannel` schema.
-
-  They could not be preserved because each was a published promise that
-  something acts on them and nothing does. `update_channel` and `auto_update`
-  are deleted rather than wired: AiSOC does not update itself, so there is no
-  implementation to point them at and leaving them settable would keep
-  advertising one. `telemetry_enabled` was worse than unread — it was
-  published as `true`, so an API consumer reading `docs/openapi.yaml`
-  concluded this platform phones home by default, which
-  `docs/trust/data-flows.md` and three CI gates say it does not. It is kept on
-  the response, typed `Literal[False]`, so the question stays answerable and
-  the spec cannot drift back; it is gone from the update model because
-  accepting `true` would have the API assert something no code here can do.
-
-  Consumers were checked before removal: no reader anywhere in the tree
-  outside the module, and the console never calls `/api/v1/deployment/*`.
-  `DeploymentConfigUpdate` now rejects unknown keys, so a client still sending
-  `auto_update: true` gets a 422 rather than a 200 and a false belief that it
-  configured something.
-
-### Added
-
-- **`GET /api/v1/system/version` — the route the upgrade runbook already told
-  operators to check.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  `apps/docs/docs/operations/upgrades.md` has said "check
-  `/api/v1/system/version` and see the same number" since it was written, and
-  the route did not exist, so the documented way to confirm an upgrade landed
-  returned 404. It reports the running version, the stamped commit, the
-  applied-migration high-water mark and the schema-skew verdict below, behind
-  `settings:read`.
-
-- **Schema skew is detected and reported, in three states.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  Nothing compared `aisoc_schema_migrations` against the migrations on disk.
-  The table was read in exactly one place — `run_migrations.py`, the runner
-  that writes it — so a deployment whose migration step failed, was skipped or
-  was rolled back ran new code against an old schema while `/health` answered
-  200 and `/readyz` answered ready, and the first symptom was an
-  `UndefinedColumnError` on whichever request happened to touch the missing
-  column.
-
-  `current` means every migration on disk is applied; `skewed` means the two
-  disagree, with `pending` and `applied_not_on_disk` naming which direction;
-  `unknown` means the comparison could not be performed at all — no database,
-  no tracking table, a failed query. **`unknown` is never `current`**, which
-  is the whole point: a check whose unknown bucket is a pass is
-  indistinguishable from one that works. The comparison is on filenames,
-  because `run_migrations.py` tracks and orders by filename and duplicate
-  numeric prefixes are a real occurrence here.
-
-  Surfaced on `/readyz` as a **non-required** dependency, so a schema that is
-  behind is reported loudly without pulling an operator's console out of the
-  load balancer during the incident they need it for: readiness answers
-  `ready_degraded` with the detail and keeps serving.
-
-### Fixed
-
-- **The API reported version `0.1.0` on every deployment it has ever shipped.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  `Settings.APP_VERSION` was a literal and nothing populated it, so `/health`,
-  the OpenAPI document and the startup log agreed on a version no release has
-  ever carried. `core/telemetry.py` in both `api` and `agents` carried a
-  second stale literal, `4.0.0`, so a trace and a health check named different
-  releases of the same process.
-
-  The version now resolves from the `AISOC_VERSION` build arg (stamped by
-  `publish-images.yml`, since a service build context cannot reach the
-  repo-root `VERSION` file), then from that file on a source checkout, then
-  the string `"unknown"` — deliberately not `0.0.0`. A version-shaped
-  placeholder parses as a release and sorts below every tag that ever shipped,
-  so an operator comparing a deployment against a tag cannot tell "very old"
-  from "nobody told me". `VERSION` is now a read-only alias of `APP_VERSION`,
-  so the two cannot disagree and a stray `VERSION` environment variable cannot
-  move either.
-
-- **The console had two version surfaces reading two different build-time
-  values.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  The sidebar footer rendered `packageJson.version` and Settings → About
-  rendered `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, both frozen when
-  the bundle was compiled, by separate mechanisms, so one image could show two
-  numbers. Both now read `consoleVersion` from `/api/runtime-config`.
-  `next.config.js` substituted `'0.0.0'` when the `VERSION` file could not be
-  read, which also made that route's own `'unknown'` branch unreachable; it
-  now substitutes an empty string and the route guards with a trim, so a build
-  that carries no version says so.
 
 ## [22.2.0] - 2026-11-05
 
