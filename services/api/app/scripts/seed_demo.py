@@ -57,6 +57,7 @@ from app.models.investigation import (
 )
 from app.models.published_replay import PublishedReplay
 from app.models.tenant import Tenant, User
+from app.services.case_status import CLOSED, INVESTIGATING, NEW, RESOLVED, TRIAGED
 from app.services.replay_redaction import build_redacted_snapshot
 
 # Deterministic random for reproducible seeds.
@@ -1538,8 +1539,13 @@ def _make_alert(tenant_id: uuid.UUID, when: datetime) -> Alert:
 
 def _make_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_ids: list[uuid.UUID]) -> Case:
     severity = _rng.choices(_SEVERITIES, weights=[20, 35, 30, 15])[0]
+    # Drawn from the schema's own vocabulary (`app.services.case_status`,
+    # enforced by the `aisoc_cases` CHECK from migration 012). This used to
+    # pick from the pre-consolidation `cases` words — "open" / "in_progress" /
+    # "pending" — which migration 083's consolidation turned into CHECK
+    # violations, so `make demo` failed on the first such case (75% of picks).
     status = _rng.choices(
-        ["open", "in_progress", "pending", "resolved", "closed"],
+        [NEW, INVESTIGATING, TRIAGED, RESOLVED, CLOSED],
         weights=[30, 35, 10, 15, 10],
     )[0]
     techniques = _pick_techniques(2)
@@ -1682,8 +1688,10 @@ def _make_synthetic_case(tenant_id: uuid.UUID, idx: int, when: datetime, alert_i
     techniques = [{"id": t_id, "name": next((t[3] for t in _TECHNIQUES if t[2] == t_id), t_id)} for t_id in technique_ids]
 
     severity = _rng.choices(_SEVERITIES, weights=[25, 40, 25, 10])[0]
+    # Same vocabulary rule as `_make_case` above: the `aisoc_cases` CHECK
+    # admits only the console's states, not the pre-consolidation words.
     status = _rng.choices(
-        ["open", "in_progress", "pending", "resolved", "closed"],
+        [NEW, INVESTIGATING, TRIAGED, RESOLVED, CLOSED],
         weights=[30, 35, 10, 15, 10],
     )[0]
 
@@ -1745,10 +1753,16 @@ _TECHNIQUE_NAMES: dict[str, str] = {
 
 
 def _alert_status_for_case(case_status: str) -> str:
-    """Map ORM case status to a sensible Alert.status for realistic incidents."""
+    """Map case status to a sensible Alert.status for realistic incidents.
+
+    Keys are the live case vocabulary (`app.services.case_status`); the
+    pre-consolidation words this used to key on ("open", "in_progress") are
+    states no case can carry any more.
+    """
     return {
-        "in_progress": "investigating",
-        "open": "triaged",
+        "new": "new",
+        "triaged": "triaged",
+        "investigating": "investigating",
         "contained": "investigating",
         "resolved": "resolved",
         "closed": "resolved",

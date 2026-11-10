@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`make demo` failed before seeding anything — the demo seeder wrote case
+  statuses the schema refuses.** The two random case makers in
+  `app.scripts.seed_demo` drew from the pre-consolidation `cases` vocabulary
+  ("open" / "in_progress" / "pending", 75% of the weighted draw), while
+  migration 083 repointed the ORM `Case` model at `aisoc_cases`, whose CHECK
+  constraint (migration 012) admits only the console's states. The first
+  invalid case aborted the whole seed transaction, so nothing landed — not the
+  catalogue, not the `INC-RT-001` LockBit showcase the contributor guide tells
+  newcomers to open. The makers now draw from `app.services.case_status`, and
+  `_alert_status_for_case` keys on the live vocabulary instead of answering
+  its default for every real status. New tests pin the seeder's vocabulary to
+  the constants, the constants to the CHECK constraint text in migration 012,
+  and the incident specs to both; verified live both ways against a
+  schema-complete Postgres (unfixed: `CheckViolationError` on the first batch;
+  fixed: 43 cases including `INC-RT-001`, only schema-valid statuses on disk).
+  Reported by @Dhanu188 on #353.
+
 - **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
   `DatadogCloudSIEMConnector.fetch_alerts` sent `page[limit]=100` with
   `sort=-timestamp` and ignored `meta.page.after`, which Datadog documents as
