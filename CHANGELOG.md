@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.1.0] - 2026-11-10
+
+### Added
+
+- **The first community detection rule: an AI agent's file tool reading a
+  credential-bearing file.**
+  `community-toufiqtoufiqbo-ai-agent-credential-file-read` (high,
+  `application`, T1552.001) matches the `ai_runtime` fields the
+  `aisoc-ai-sdk` actually emits (`tool_name`, `resource`), names the files
+  that hold long-lived credentials — `id_rsa`, `.aws/credentials`,
+  `/etc/shadow` and their kin — and excludes public-key reads (`*.pub`,
+  `authorized_keys`). Prompt-level secret scanning cannot see this path: the
+  prompt is clean, and the disclosure happens on the way out — into the
+  model context, a tool argument, or a second call. It ships
+  `enabled: false` with a `quarantine_reason`, which is what the truth-table
+  gate requires of a tier the engine does not load, with positive and
+  negative fixtures alongside. The published counts follow: 7408 rules on
+  disk, and the community tier moves 1 → 2. Contributed by @Toufiqtoufiqbo
+  (#1804).
+
 ### Fixed
 
 - **The first `make up` on a fresh install built the schema and then refused
@@ -22,7 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as up to date, an interrupted chain leaves an accurate record of what did
   apply, and the first in-place upgrade starts from the truth instead of from
   zero. A live regression test boots a container with the repository's own
-  init hooks mounted and asserts the detector's verdict. Reported by
+  init hooks mounted and asserts the detector's verdict — and CI executes it
+  rather than skipping it: the docker guard is for machines without a
+  daemon, and the merge's `Python — Tests` job ran it to a pass. Reported by
   @Dhanu188 on #353.
 
 - **Datadog Cloud SIEM read 100 signals per poll and lost the rest.**
@@ -39,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as well as on an absent cursor, so a cursor beside an empty page must not
   spend the page cap on a quiet window. Every existing caller keeps the rule that
   an empty page carrying a token is followed. `MAX_UNCLASSIFIED` falls from 54
-  to 53.
+  to 53. Contributed by @officialasishkumar (#1801).
 
 - **`make demo` failed before seeding anything — the demo seeder wrote case
   statuses the schema refuses.** The two random case makers in
@@ -70,7 +92,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   comma" with the window unchanged and each page signed for its own parameters.
   A failed later page keeps what was read, the 25-page bound is announced when
   it binds, and a refused opening request still raises so the scheduler records
-  a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52.
+  a failed poll. `MAX_UNCLASSIFIED` falls from 53 to 52. Contributed by
+  @officialasishkumar (#1802, carried as #1805).
+
+- **The marketplace builder asserted `enabled: false` about rule files it
+  never opened.** `build_marketplace.py`'s fallback `quarantine_reason` told
+  every non-quarantined, non-executable row it was "disabled in the rule
+  file (`enabled: false`)" — a claim reached precisely when the builder had
+  not looked. The reason now names the real cause per tier, a rule file's
+  own `quarantine_reason` still wins when it carries one, and a new test
+  walks every published entry whose reason quotes `enabled: false` (99
+  today), reads the rule file it cites, and fails if the flag disagrees — or
+  if it ever ends up checking nothing. (#1804)
+
+- **Five artefact generators' `--check` modes compared text that line-ending
+  translation had already corrected.** The marketplace, curation,
+  corpus-stats, truth-table and llms generators wrote the platform's line
+  endings and `str(Path)` separators, and their checks read in text mode —
+  so a CRLF artefact and an LF template agreed with each other and the drift
+  was invisible, while `pnpm marketplace:curate --check` could never pass on
+  Windows at all (601 backslashed paths, rewritten on every regenerate).
+  Every artefact write is now explicit `\n` with `.as_posix()` manifest
+  paths, and the checks compare bytes and reject `b"\r"`. (#1804)
+
+- **Every in-run IOC enrichment failed during a deep investigation.** The
+  investigator's `enrich_ioc` tool defaulted to `http://enrichment:8080` —
+  the host-published port, not the `8082` the enrichment service listens on
+  inside the compose network — and posted `type` where `POST /enrich`
+  requires `ioc_type`. The agents service sets no `ENRICHMENT_SERVICE_URL`
+  override in compose, so the broken default is what ran: every
+  investigation IOC enrichment raised "All connection attempts failed" and
+  the case recorded "IP enrichment failed", while fusion, which pins the
+  correct URL, enriched the same IP correctly. The tool now defaults to
+  `:8082` like the two other in-process consumers and sends `ioc_type`,
+  pinned by a respx test that drives the module's default URL against the
+  real `/enrich` contract and fails on either the old port or the old field
+  name. Contributed by @43n51c (#1806).
+
+- **A federated Splunk search against a self-hosted index returned nothing
+  useful.** `SplunkConnector.query` kept the configured `saved_search` whole
+  when it began with `index=`, so `index=main` — the common self-hosted case
+  — rendered as `search index=index=main …`, which Splunk parses as a
+  literal and answers with zero rows; a connector on the default `notable`
+  index was unaffected, which is why it slipped through. And the SPL
+  translator emitted no field projection, so even matching events came back
+  carrying only Splunk's default fields, missing the `signature` / `src_ip`
+  / `dest_ip`-class fields the pivot exists to show. The `index=` prefix is
+  now stripped before the name reaches `to_spl` (falling back to `notable`
+  only when none is configured), and the rendered SPL appends `| fields *`
+  before `| head N`. Both halves are pinned by tests that fail on the
+  pre-fix tree. Contributed by @43n51c (#1807).
 
 - **The Hello, hunt tutorial claimed community rules are replay-graded; they
   are not.** `scripts/validate_detections.py` replays fixtures only for
@@ -93,6 +164,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `notable` index with a warning naming the rejected value. Wildcards,
   cluster prefixes, underscores and dashes pass through unchanged, pinned by
   tests on both paths.
+
+### Documentation
+
+- **The Wazuh guide said the connection test needs no cluster permissions;
+  it calls `GET /_cluster/health`.** The connector page now documents the
+  minimal `cluster:monitor/health` permission and the Indexer role-mapping
+  steps that grant it, notes that the default `cluster_composite_ops_ro`
+  does not include health monitoring, explains the 401/403 error message the
+  two causes share, adds a CA-verified cURL probe, and says plainly that a
+  successful health probe does not prove alert-index search permission.
+  Contributed by @knowlet (#1800).
+
+- **The Hello, hunt tutorial told contributors to ship community rules
+  `enabled: true` — the one thing `detection_truth_table.py --check`
+  rejects.** Nothing loads a community rule into the compiled set, so the
+  tutorial's claim that community rules run in production by default was
+  false on both halves. The `enabled` bullet now says what the gate
+  enforces: `enabled: false` plus a `quarantine_reason` naming what
+  promotion would take. (#1804)
 
 ## [23.0.0] - 2026-11-10
 
