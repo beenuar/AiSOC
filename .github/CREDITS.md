@@ -60,6 +60,7 @@ People outside the core maintainer team who have shipped code into AiSOC. Ordere
 | [**@TanmayZade**](https://github.com/TanmayZade) | [PR #219](https://github.com/beenuar/AiSOC/pull/219) — prompt sanitiser + untrusted-content wrapping across the five classification agents (fix for [#220](https://github.com/beenuar/AiSOC/issues/220)). |
 | [**@knowlet**](https://github.com/knowlet) | [PR #1794](https://github.com/beenuar/AiSOC/pull/1794) — removed 66 accidentally-committed wheels (62 MB) from the repository root with an ignore rule so the next one cannot land. [PR #1797](https://github.com/beenuar/AiSOC/pull/1797) (landed via [#1799](https://github.com/beenuar/AiSOC/pull/1799)) — fixed the Settings → Integrations "Add connector" links that pointed at a route that has never existed, and the onboarding checklist step that navigated to itself. |
 | [**@officialasishkumar**](https://github.com/officialasishkumar) (Asish Kumar) | Three connector data-loss fixes in the collection-integrity family: the Slack audit cursor (shipped in v23.0.0), [PR #1801](https://github.com/beenuar/AiSOC/pull/1801) — Datadog Cloud SIEM `meta.page.after`, and [PR #1802](https://github.com/beenuar/AiSOC/pull/1802) (landed via [#1805](https://github.com/beenuar/AiSOC/pull/1805)) — Duo `next_offset`. Each cites the vendor's own paging contract and ships a real transport-level test suite. |
+| [**@Toufiqtoufiqbo**](https://github.com/Toufiqtoufiqbo) | [PR #1804](https://github.com/beenuar/AiSOC/pull/1804) — community detection rule `ai-agent-credential-file-read` (T1552.001: an AI agent's file tool reading credential-bearing paths) with positive and negative fixtures, plus two catalogue fixes the rule exposed (a `quarantine_reason` fallback asserting `enabled: false` about files the builder never opened, and the hunt tutorial contradicting the truth-table gate) and LF/POSIX-path portability for five generators whose `--check` was blind to CRLF drift on Windows. |
 
 The full, always-up-to-date list of code contributors lives on the [GitHub contributors page](https://github.com/beenuar/AiSOC/graphs/contributors).
 
@@ -74,6 +75,7 @@ Folks who took the time to file high-signal issues that drove visible improvemen
 - [**@ThiagoDataEngineer**](https://github.com/ThiagoDataEngineer) — Early platform feedback ([#48](https://github.com/beenuar/AiSOC/issues/48))
 - [**@alvarofraguas**](https://github.com/alvarofraguas) — Connector / setup feedback ([#44](https://github.com/beenuar/AiSOC/issues/44))
 - [**@sonalig-cyble**](https://github.com/sonalig-cyble) — Product feedback ([#131](https://github.com/beenuar/AiSOC/issues/131))
+- [**@Dhanu188**](https://github.com/Dhanu188) — Two verified first-run breakers reported on [#353](https://github.com/beenuar/AiSOC/issues/353): a fresh install read as behind the whole migration chain because the initdb hook recorded nothing it applied (fixed in [#1808](https://github.com/beenuar/AiSOC/pull/1808)), and `make demo` seeding nothing because the seeder wrote pre-consolidation case statuses the schema refuses (fixed in [#1809](https://github.com/beenuar/AiSOC/pull/1809))
 
 ---
 
