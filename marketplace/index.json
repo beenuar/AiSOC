@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-10T12:34:13Z",
+  "generated": "2026-11-11T17:10:01Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7582,
+    "total": 7583,
     "playbooks": 89,
     "playbook_packs": 64,
     "detections": 7408,
-    "plugins": 85,
-    "verified": 1460,
+    "plugins": 86,
+    "verified": 1461,
     "community": 2,
     "by_tier": {
       "beta": 7,
       "community": 2,
       "imported": 6113,
-      "stable": 1460
+      "stable": 1461
     },
     "detections_by_tier": {
       "community": 2,
       "imported": 6113,
       "stable": 1293
     },
-    "executable": 3140,
+    "executable": 3141,
     "quarantined": 4442,
     "executable_detections": 2966,
     "reference_only_detections": 4442,
-    "not_a_detection": 174
+    "not_a_detection": 175
   },
   "mitre_coverage": {
     "unique_techniques": 395,
@@ -255827,6 +255827,32 @@
       "tier": "stable",
       "path": "plugins/snowflake-events/plugin.yaml",
       "sha256": "1b87c80577a4e7c40a581eecd04dca52df7894b79f8b60eed8101c65335f7a3d"
+    },
+    {
+      "id": "sophos-central",
+      "type": "plugin",
+      "name": "Sophos Central Connector",
+      "description": "Sophos Central alerts via the SIEM Integration API: endpoint and server threats, exploit and ransomware protection and intrusion prevention. The tenant and its data region are discovered from the API credential, and a partner or organization credential reads the one tenant it is pointed at. Sophos publishes LOW, MEDIUM and HIGH and no fourth tier, so no alert is ever promoted to critical. Read-only; nothing here changes an alert.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "edr",
+        "endpoint",
+        "sophos",
+        "sophos-central",
+        "alerts"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sophos_central.py",
+      "min_aisoc_version": "23.1.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/sophos-central/plugin.yaml",
+      "sha256": "344365b4d11f39ba2cfa8cb64160f2c1951d647339e4043ae0d5512702ee7927"
     },
     {
       "id": "sublime_security",

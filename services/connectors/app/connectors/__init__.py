@@ -91,6 +91,7 @@ from app.connectors.servicenow import ServiceNowConnector
 from app.connectors.slack_audit import SlackAuditConnector
 from app.connectors.snowflake import SnowflakeConnector
 from app.connectors.snyk import SnykConnector
+from app.connectors.sophos_central import SophosCentralConnector
 from app.connectors.splunk import SplunkConnector
 from app.connectors.sublime_security import SublimeSecurityConnector
 from app.connectors.sumo_logic import SumoLogicConnector
@@ -190,6 +191,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     SlackAuditConnector,
     SnowflakeConnector,
     SnykConnector,
+    SophosCentralConnector,
     SplunkConnector,
     SublimeSecurityConnector,
     SumoLogicConnector,
@@ -310,6 +312,7 @@ __all__ = [
     "SlackAuditConnector",
     "SnowflakeConnector",
     "SnykConnector",
+    "SophosCentralConnector",
     "SplunkConnector",
     "SublimeSecurityConnector",
     "SumoLogicConnector",

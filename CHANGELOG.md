@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Sophos Central connector.** `sophos_central` reads Sophos Central alerts
+  — endpoint and server threats, exploit and ransomware protection, intrusion
+  prevention — through `GET /siem/v1/alerts`, the feed Sophos's own SIEM
+  integration reads (#356). There is no region to configure: the client
+  credential is exchanged at Sophos ID, `whoami` names the tenant and its data
+  region host, and a partner or organization credential reads the one tenant
+  its `tenant_id` names, found through the tenant lookup. A data region host
+  outside `sophos.com` is refused rather than sent the token, because it
+  comes from a response and the egress guard only vets configured values.
+  The window is read to the end through `read_token_pages`, which gains a
+  `more_field`: Sophos returns `next_cursor` on its last page too and says
+  whether more follow with `has_more`, so ending on the token alone would
+  re-request the last page up to the page cap. The SIEM API refuses a
+  `from_date` older than 24 hours, which the scheduler's outage backfill asks
+  for, so a longer window is shortened to fit and logged as
+  `sophos_central.window_shortened`. Severity keeps the vendor's LOW, MEDIUM
+  and HIGH and never emits `critical`; events are filed as OCSF 2001 Security
+  Findings, so the generic-mapping count stays at 42. Setup, partner tenants
+  and troubleshooting are on the new
+  [Sophos Central](apps/docs/docs/connectors/sophos-central.md) page.
+
 - **A released CHANGELOG section is now frozen to its tag.**
   `scripts/check_changelog_frozen.py` compares the newest five released
   sections byte-for-byte against the `CHANGELOG.md` committed at each

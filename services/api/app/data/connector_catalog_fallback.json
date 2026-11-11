@@ -3155,6 +3155,39 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "sophos_central",
+    "connector_name": "Sophos Central",
+    "description": "Sophos Central alerts \u2014 endpoint and server threats, exploit and ransomware protection, intrusion prevention \u2014 via the SIEM Integration API, with the data region discovered from the credential. Read-only.",
+    "docs_url": "/docs/connectors/sophos-central",
+    "fields": [
+      {
+        "label": "Client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Created in Sophos Central under Global Settings \u2192 API Credentials Management.",
+        "label": "Client secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Leave blank for a credential created inside the tenant. Required for a partner or organization credential, which can see many tenants: the ID of the tenant whose alerts this connector reads.",
+        "label": "Tenant ID",
+        "name": "tenant_id",
+        "placeholder": "57ca9a6b-885f-4e36-95ec-290548c26059",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "query_logs",
       "search_siem",

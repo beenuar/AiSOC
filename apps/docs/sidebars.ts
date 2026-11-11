@@ -167,6 +167,7 @@ const sidebars: SidebarsConfig = {
         "connectors/slack-audit",
         "connectors/snowflake",
         "connectors/snyk",
+        "connectors/sophos-central",
         "connectors/splunk",
         "connectors/sublime_security",
         "connectors/sumo-logic",

@@ -4,10 +4,10 @@
 // Every `connector_type` the ingest normalizer resolves, derived from the
 // registry that decides what the platform can ingest:
 //
-//    91  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
+//    92  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
 //     7  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//   103  total
+//   104  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -100,6 +100,7 @@ export const CONNECTOR_TYPES = [
   "slack_audit",        // registry
   "snowflake",          // registry
   "snyk",               // registry
+  "sophos_central",     // registry
   "splunk",             // registry
   "splunk_enterprise",  // profile
   "sublime_security",   // registry

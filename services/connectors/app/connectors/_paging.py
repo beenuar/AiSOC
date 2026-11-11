@@ -150,6 +150,7 @@ async def read_token_pages(
     token_field: str = "nextPageToken",
     stop_when: Callable[[list[dict[str, Any]]], bool] | None = None,
     empty_page_ends: bool = False,
+    more_field: str | None = None,
     max_pages: int = DEFAULT_MAX_PAGES,
 ) -> list[dict[str, Any]]:
     """Every row of a collection paged by an opaque continuation token.
@@ -193,6 +194,16 @@ async def read_token_pages(
     on an empty page as well as on an absent cursor, so a Datadog cursor beside
     an empty page is not a promise of more rows, and following it would spend
     the page cap on a quiet window. Pass it only on that kind of evidence.
+
+    ``more_field`` is for a vendor whose token is never absent. Sophos
+    Central's SIEM API returns ``next_cursor`` on every page, the last one
+    included, because the same value is how a client resumes on its next
+    poll; whether there is anything after this page is said separately, by
+    ``has_more``. Ending on the token alone would re-request the final page
+    until the page cap, so when ``more_field`` names a dotted path the read
+    ends as soon as the value there is not ``True`` — an absent or malformed
+    flag included, because a flag that does not say "more" is not a promise
+    of more rows.
     """
     rows: list[dict[str, Any]] = []
     token: str | None = None
@@ -226,6 +237,8 @@ async def read_token_pages(
 
         token = _token_at(body, token_field)
         if token is None or (empty_page_ends and not page_rows):
+            return rows
+        if more_field is not None and _at(body, more_field) is not True:
             return rows
         if page_rows and stop_when is not None and stop_when(page_rows):
             return rows
