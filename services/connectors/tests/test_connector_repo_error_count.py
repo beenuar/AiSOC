@@ -12,7 +12,6 @@ import uuid
 from unittest.mock import AsyncMock
 
 import pytest
-
 from app.db.connector_repo import record_poll_failure, record_poll_success
 
 
