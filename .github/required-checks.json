@@ -143,6 +143,7 @@
     "Web — Lint & Type-check",
     "Zero open CodeQL alerts",
     "docker compose up — full stack",
-    "security-audit"
+    "security-audit",
+    "Released changelog sections match their tags"
   ]
 }

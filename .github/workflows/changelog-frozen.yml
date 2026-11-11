@@ -1,0 +1,52 @@
+name: Changelog frozen sections
+
+# A released CHANGELOG section must match the tag that published it.
+#
+# A release promotes `[Unreleased]` into `## [X.Y.Z]` and the tag freezes it:
+# the GitHub Release body is extracted from that section as tagged, and its
+# claims describe that tag's tree. Nothing enforced the freeze, and the same
+# drift shipped three times in two days — a fix PR writes its entry under an
+# empty `[Unreleased]`, a release promotes the section, and when the PR
+# merges after the tag the three-way merge anchors the entry by context,
+# inside the released section. Main then claims a fix the tagged artifact
+# does not contain. `scripts/check_changelog_frozen.py` holds the newest five
+# released sections byte-identical to their tags.
+#
+# Deliberately NO `paths:` filter: the drift arrives through merges whose
+# diffs touch only `[Unreleased]` — the released section changes on main as
+# a merge artifact, not in any PR's own diff, so only an unconditional run
+# sees it. The gate is a sub-second read plus up to five shallow tag
+# fetches; there is nothing to buy by skipping it.
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands on
+  # a protected branch must be graded — and `cancel-in-progress: false` alone
+  # does not achieve that, because a run left *pending* in a busy group is
+  # cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changelog-frozen:
+    name: Released changelog sections match their tags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Self-test first: it proves the detector still fires on injected drift
+      # in every direction (entry added, removed, edited; tag unresolvable;
+      # nothing to compare), so a green gate below means the sections are
+      # clean rather than that the comparison stopped comparing.
+      - name: Gate self-test
+        run: python scripts/check_changelog_frozen.py --self-test
+      - name: Released sections match their tags
+        run: python scripts/check_changelog_frozen.py
