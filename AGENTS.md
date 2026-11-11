@@ -96,7 +96,7 @@ of these regenerates:
 | --- | --- | --- |
 | Executable detection rules | 2,966 of 7,407 on disk | `python3 scripts/generate_corpus_stats.py --check` |
 | Rules that cannot fire | 2 | `python3 scripts/check_detection_fields.py` |
-| Connectors | 91 | `python3 scripts/generate_connector_count.py --check` |
+| Connectors | 92 | `python3 scripts/generate_connector_count.py --check` |
 | Services per profile | CORE 16, full 22 (21 under the production overlay) | `python3 scripts/check_profile_service_counts.py` |
 | Claims with a gate behind them | 299 rows | `python3 scripts/check_claim_gate_matrix.py` |
 

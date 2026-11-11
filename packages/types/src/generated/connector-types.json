@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 91,
-    "total": 103
+    "registry": 92,
+    "total": 104
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -102,6 +102,7 @@
     "slack_audit",
     "snowflake",
     "snyk",
+    "sophos_central",
     "splunk",
     "splunk_enterprise",
     "sublime_security",
@@ -207,6 +208,7 @@
     "slack_audit": "registry",
     "snowflake": "registry",
     "snyk": "registry",
+    "sophos_central": "registry",
     "splunk": "registry",
     "splunk_enterprise": "profile",
     "sublime_security": "registry",

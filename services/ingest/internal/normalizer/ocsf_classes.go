@@ -215,6 +215,14 @@ var connectorOCSFClass = map[string]connectorClass{
 	// so, and a class two files assert and this table omits is the drift
 	// this table exists to catch.
 	"extrahop": {classUID: classSecurityFinding},
+	// sophos_central reads /siem/v1/alerts, the alert half of the SIEM
+	// Integration API and not /siem/v1/events: every record is an alert
+	// Sophos itself raised against a device — a threat, a blocked exploit, a
+	// protection failure — so it is a finding. Named rather than left to
+	// the default for the reason extrahop's is, and so the connector arrives
+	// with a decision instead of raising the count of connectors on the
+	// generic mapping.
+	"sophos_central": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},
