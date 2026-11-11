@@ -50,6 +50,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import DEFAULT_MAX_PAGES
 from app.connectors.base import (
     BaseConnector,
     Capability,
@@ -338,9 +339,12 @@ class WazuhConnector(BaseConnector):
 
         Uses the OpenSearch ``_search`` API on ``wazuh-alerts-*`` with a
         time-window filter so we never re-pull historical events.
-        Pagination is bounded to 1000 hits per poll because anything
-        larger means the operator should drop the polling interval, not
-        chase a single huge batch.
+        1000 is the page size, not a cap: the window is read to the end
+        through ``search_after`` (see :meth:`_search`). It used to be a
+        hard bound justified as "drop the polling interval instead" — but
+        the cut was silent, and because the next poll's window opens where
+        this one closed, the overflow was never re-requested by anything
+        (#1820).
 
         In ``vuln_mode=inventory`` (the default) vulnerability-detector hits
         are excluded here and returned by
@@ -378,7 +382,7 @@ class WazuhConnector(BaseConnector):
                 {"terms": {"rule.groups": list(_VULN_RULE_GROUPS)}},
             ]
 
-        hits = await self._search(query)
+        hits = await self._search(query, feed="wazuh.alerts")
         if self._vuln_mode != "inventory":
             return [self.normalize(hit) for hit in hits if isinstance(hit, dict)]
         # belt-and-braces: the must_not above misses custom rule packs that
@@ -396,10 +400,11 @@ class WazuhConnector(BaseConnector):
         ``(tenant, asset, cve, source)`` so repeat scans touch ``last_found``
         instead of multiplying rows.
 
-        The window is wider than the alert poll (1h vs 5min) and bounded by
-        the same 1000-hit page: the detector's own scan interval is hourly,
-        so a narrow window would drop findings between polls if the
-        connector was down, and re-scans are idempotent anyway.
+        The window is wider than the alert poll (1h vs 5min) and read to
+        the end through the same ``search_after`` loop, 1000 hits per page:
+        the detector's own scan interval is hourly, so a narrow window
+        would drop findings between polls if the connector was down, and
+        re-scans are idempotent anyway.
 
         In ``vuln_mode=alerts`` this returns nothing: that mode puts
         detector events in the alert stream (legacy behaviour), and the
@@ -428,7 +433,7 @@ class WazuhConnector(BaseConnector):
             },
         }
 
-        hits = await self._search(query)
+        hits = await self._search(query, feed="wazuh.vulnerability_findings")
         findings: list[dict[str, Any]] = []
         for hit in hits:
             if not isinstance(hit, dict):
@@ -444,40 +449,105 @@ class WazuhConnector(BaseConnector):
         )
         return findings
 
-    async def _search(self, query: dict[str, Any]) -> list[dict[str, Any]]:
-        """POST an OpenSearch DSL query at the alert index; return raw hits.
+    async def _search(self, query: dict[str, Any], *, feed: str) -> list[dict[str, Any]]:
+        """POST an OpenSearch DSL query at the alert index; read it to the end.
 
         Shared by both fetch paths so auth, error handling and the
-        never-raise contract live once: a failed search returns ``[]`` and
-        logs, because the scheduler's failure recorder must see a fetch
-        return, not an exception escaping into the poll loop.
+        never-raise contract live once: a failed opening search returns
+        ``[]`` and logs, because the scheduler's failure recorder must see a
+        fetch return, not an exception escaping into the poll loop.
+
+        The read follows ``search_after`` to the end of the window. Both
+        callers sort ascending on ``@timestamp``; a ``_doc`` tiebreaker is
+        appended here because ``search_after`` needs a total order — on
+        equal timestamps a timestamp-only sort can skip or repeat rows
+        between pages. ``size`` is the page size, not a cap: a page shorter
+        than ``size`` ends the window, a failed later page keeps what was
+        already read, and the page bound announces itself when it binds.
+        Before this, anything past the first page was silently gone, and
+        because the next poll's window opens where this one closed, nothing
+        ever asked for the overflow again (#1820).
         """
+        body = dict(query)
+        sort = [entry for entry in (body.get("sort") or []) if isinstance(entry, dict)]
+        if not any("_doc" in entry for entry in sort):
+            sort.append({"_doc": {"order": "asc"}})
+        body["sort"] = sort
         try:
-            async with httpx.AsyncClient(timeout=30.0, verify=self._verify_tls) as client:
-                resp = await client.post(
-                    f"{self._base_url}/{self._index_pattern}/_search",
-                    headers=self._headers(),
-                    json=query,
-                )
-        except httpx.RequestError as exc:
-            logger.warning("wazuh.fetch_exception", error=str(exc))
-            return []
+            page_size = int(body.get("size") or 0)
+        except (TypeError, ValueError):
+            page_size = 0
+        page_size = page_size or 1000
 
-        if resp.status_code != 200:
+        hits: list[dict[str, Any]] = []
+        page: list[dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_tls) as client:
+            for page_number in range(DEFAULT_MAX_PAGES):
+                try:
+                    resp = await client.post(
+                        f"{self._base_url}/{self._index_pattern}/_search",
+                        headers=self._headers(),
+                        json=body,
+                    )
+                except httpx.RequestError as exc:
+                    if page_number == 0:
+                        logger.warning("wazuh.fetch_exception", error=str(exc))
+                        return []
+                    # Keep what was read; a failure part-way is not a reason
+                    # to discard the pages that succeeded.
+                    logger.warning("connector.paging.next_page_error", feed=feed, rows=len(hits), error=str(exc))
+                    return hits
+
+                if resp.status_code != 200:
+                    if page_number == 0:
+                        logger.warning(
+                            "wazuh.search_failed",
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        return []
+                    logger.warning(
+                        "connector.paging.next_page_failed",
+                        feed=feed,
+                        status=resp.status_code,
+                        rows=len(hits),
+                        body=resp.text[:300],
+                    )
+                    return hits
+
+                try:
+                    payload = resp.json()
+                except ValueError:
+                    if page_number == 0:
+                        logger.warning("wazuh.search_returned_non_json")
+                        return []
+                    logger.warning("connector.paging.next_page_unparseable", feed=feed, rows=len(hits))
+                    return hits
+
+                page = (payload.get("hits") or {}).get("hits") or []
+                hits.extend(page)
+                if len(page) < page_size:
+                    return hits
+
+                last = page[-1] if isinstance(page[-1], dict) else {}
+                last_sort = last.get("sort")
+                if not isinstance(last_sort, list) or not last_sort:
+                    # A full page whose last hit carries no sort values cannot
+                    # be continued safely; keep what was read and say so
+                    # rather than re-reading page one forever.
+                    logger.warning("connector.paging.no_continuation_values", feed=feed, rows=len(hits))
+                    return hits
+                body = {**body, "search_after": last_sort}
+
+        if len(page) >= page_size:
             logger.warning(
-                "wazuh.search_failed",
-                status=resp.status_code,
-                body=resp.text[:300],
+                "connector.paging.page_cap_reached",
+                feed=feed,
+                pages=DEFAULT_MAX_PAGES,
+                rows=len(hits),
+                detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
             )
-            return []
-
-        try:
-            payload = resp.json()
-        except ValueError:
-            logger.warning("wazuh.search_returned_non_json")
-            return []
-
-        return (payload.get("hits") or {}).get("hits") or []
+        return hits
 
     def normalize_vulnerability(self, hit: dict[str, Any]) -> dict[str, Any] | None:
         """Project a detector hit into the ``sync_findings`` finding shape.
