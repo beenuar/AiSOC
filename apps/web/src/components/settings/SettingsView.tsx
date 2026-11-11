@@ -58,6 +58,7 @@ import { LanguagePanel } from './LanguagePanel';
 import { useLocale } from '@/components/i18n/LocaleProvider';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
 import { useConsoleVersion } from '@/hooks/useConsoleVersion';
+import { useUrlTab } from '@/hooks/useUrlTab';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { rbacApi, authApi } from '@/lib/api';
 
@@ -416,8 +417,10 @@ function tabLabel(id: TabId, t: (key: string) => string, english: string): strin
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+const TAB_IDS = TABS.map(({ id }) => id);
+
 export function SettingsView() {
-  const [tab, setTab] = useState<TabId>('profile');
+  const [tab, setTab] = useUrlTab(TAB_IDS, 'profile');
   const { t } = useLocale();
 
   return (
@@ -447,6 +450,7 @@ export function SettingsView() {
                   <button
                     type="button"
                     onClick={() => setTab(entry.id)}
+                    aria-current={active ? 'page' : undefined}
                     className={clsx(
                       'flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2.5 text-start text-sm transition-colors',
                       active

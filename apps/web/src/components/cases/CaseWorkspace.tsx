@@ -45,6 +45,7 @@ import { InvestigationLedger } from "./InvestigationLedger";
 import { WarRoomPanel } from "./WarRoomPanel";
 import { ContextualActions } from "@/components/copilot/ContextualActions";
 import { canUseDemoData } from "@/lib/demoFallback";
+import { useUrlTab } from "@/hooks/useUrlTab";
 
 type WorkspaceTab =
   "overview" | "investigation" | "attack-path" | "attack-chain" | "ledger" | "report";
@@ -57,10 +58,6 @@ const VALID_TABS: readonly WorkspaceTab[] = [
   "ledger",
   "report",
 ];
-
-function isWorkspaceTab(value: string | null): value is WorkspaceTab {
-  return value !== null && (VALID_TABS as readonly string[]).includes(value);
-}
 
 // ─── Demo case ────────────────────────────────────────────────────────────────
 
@@ -304,16 +301,7 @@ function TaskRow({ task, onChangeStatus }: TaskRowProps) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export function CaseWorkspace({ caseId }: { caseId: string }) {
-  // Honor `?tab=…` so the hosted demo deeplink
-  // (`/cases/INC-RT-001?tab=ledger`) lands visitors directly on the live
-  // agent decision feed for the LockBit 3.0 ransomware showcase. Falls back
-  // to the overview when the param is missing or unrecognized.
-  const searchParams = useSearchParams();
-  const initialTab: WorkspaceTab = useMemo(() => {
-    const t = searchParams?.get("tab") ?? null;
-    return isWorkspaceTab(t) ? t : "overview";
-  }, [searchParams]);
-  const [activeTab, setActiveTab] = useState<WorkspaceTab>(initialTab);
+  const [activeTab, setActiveTab] = useUrlTab(VALID_TABS, "overview");
   const { data, error, isLoading, mutate } = useSWR<Case>(
     ["case", caseId],
     () => casesApi.get(caseId),
@@ -570,7 +558,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       setInvestigating(false);
       toast.error(`Investigation could not start: ${message}`);
     }
-  }, [caseRecord, caseId, investigating, stopPolling, connectWs]);
+  }, [caseRecord, caseId, investigating, stopPolling, connectWs, setActiveTab]);
 
   // ─── Local mutations (optimistic) ──────────────────────────────────────────
 
@@ -899,6 +887,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
+            aria-current={activeTab === tab ? "page" : undefined}
             className={clsx(
               "relative px-3 py-2 font-medium capitalize transition-colors",
               activeTab === tab ? "text-emerald-300" : "text-slate-500 hover:text-slate-300"

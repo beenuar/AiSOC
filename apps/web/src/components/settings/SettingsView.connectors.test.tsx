@@ -4,8 +4,10 @@ import userEvent from '@testing-library/user-event';
 import { SWRConfig } from 'swr';
 import { connectorsApi } from '@/lib/api';
 import { SettingsView } from './SettingsView';
+import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/settings');
   vi.spyOn(connectorsApi, 'list').mockResolvedValue({ connectors: [], total: 0 });
 });
 
@@ -23,6 +25,7 @@ describe('Settings integration links', () => {
         <SWRConfig value={{ provider: () => new Map() }}>
           <SettingsView />
         </SWRConfig>,
+        { wrapper: NavigationTestProvider },
       );
       // The sidebar button's accessible name concatenates the label and its
       // description ("IntegrationsManage the connectors…"), so a \b after the
