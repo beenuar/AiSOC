@@ -23,6 +23,7 @@ import {
   type CopilotConversation,
   type CopilotMessage,
 } from '@/lib/api';
+import { presentCopilotResponse } from '@/lib/copilotReply';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { describeApiFailure } from '@/lib/failure';
@@ -44,18 +45,16 @@ const SUGGESTED_PROMPTS: Array<{ label: string; prompt: string }> = [
     prompt: 'Explain MITRE ATT&CK T1078 (Valid Accounts) and how we detect it.',
   },
   {
-    label: 'Tune a noisy rule',
-    prompt:
-      'Show me the noisiest detection rules this week and recommend exceptions to reduce false positives.',
+    label: 'Highest observed host risk',
+    prompt: 'Find the highest-risk observed host and inspect its contributing alerts. State coverage limits.',
   },
   {
-    label: 'MTTR by severity',
-    prompt: 'What is our MTTR by severity over the last 30 days, and what is trending?',
+    label: 'Recent high-severity alerts',
+    prompt: 'Show high-severity alerts ingested in the last 24 hours, citing the alert IDs.',
   },
   {
-    label: 'Threat intel match',
-    prompt:
-      'Has any indicator from the latest threat intel feed matched our telemetry in the last 7 days?',
+    label: 'Host alert history',
+    prompt: 'Ask me for a hostname, then show its ingested alerts from the last 72 hours.',
   },
 ];
 
@@ -467,47 +466,7 @@ export function CopilotView() {
         context: { page: 'copilot' },
       });
       setConversationId(res.conversationId);
-      // A 200 does not mean a model answered. When no LLM key is configured,
-      // or the call fails, the backend falls back to a canned paragraph and
-      // now says so with `source: "template"`. Without this the analyst reads
-      // generic claims — "this IP was seen in 3 other alerts" — as real
-      // analysis of their own environment, and the honest fallback below never
-      // fires because the request technically succeeded.
-      const source = (res as { source?: string }).source;
-      const notice = (res as { notice?: string }).notice;
-      // Parity 3.6: a model answer that names an IP, a hash or a CVE is
-      // making a claim about this estate. The backend grades each such
-      // claim against the records it was given; an analyst has no other
-      // way to tell one drawn from the evidence from one the model
-      // produced because it sounded right.
-      //
-      // The warning is appended rather than used to suppress or edit the
-      // answer. Hiding the unsupported half would show the analyst a
-      // different answer than the model gave, edited by something that
-      // cannot reliably tell which half was wrong.
-      const grounding = (res as { grounding?: { label?: string; uncited?: string[] } }).grounding;
-      const uncited = grounding?.uncited ?? [];
-      const groundingWarning =
-        uncited.length > 0
-          ? `Not supported by anything this answer was given: ${uncited.join(', ')}. Verify before acting.`
-          : null;
-
-      const reply =
-        source === 'template'
-          ? {
-              ...res.reply,
-              content: [
-                notice ??
-                  'This reply came from a built-in template, not a language model, and is not analysis of your environment.',
-                '',
-                '---',
-                '',
-                res.reply.content,
-              ].join('\n'),
-            }
-          : groundingWarning
-            ? { ...res.reply, content: [groundingWarning, '', '---', '', res.reply.content].join('\n') }
-            : res.reply;
+      const reply = presentCopilotResponse(res);
       setMessages((prev) => [...prev, reply]);
       setEverSucceeded(true);
     } catch (err) {

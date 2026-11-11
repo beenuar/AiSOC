@@ -22,7 +22,7 @@ from __future__ import annotations
 from typing import Any
 
 import structlog
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.llm.contract import safe_ainvoke
 from app.prompting.tool_results import render_tool_message
@@ -40,6 +40,8 @@ async def run_with_tools(
     registry: ToolRegistry,
     identity: IdentityLike,
     max_iters: int = 4,
+    history: list[BaseMessage] | None = None,
+    max_tool_calls: int = 16,
 ) -> dict[str, Any]:
     """Run a tool-calling conversation and return the final content + tool trace.
 
@@ -52,7 +54,7 @@ async def run_with_tools(
     defaults to "allow" is a control that protects nothing.
     """
     bound = llm.bind_tools(registry.openai_schemas())
-    messages: list[Any] = [SystemMessage(content=system), HumanMessage(content=user)]
+    messages: list[Any] = [SystemMessage(content=system), *(history or []), HumanMessage(content=user)]
     trace: list[dict[str, Any]] = []
 
     for iteration in range(1, max_iters + 1):
@@ -74,6 +76,8 @@ async def run_with_tools(
                 "truncated": False,
             }
         for call in tool_calls:
+            if len(trace) >= max_tool_calls:
+                return {"content": "", "tool_trace": trace, "iterations": iteration, "truncated": True}
             name = call.get("name", "")
             args = call.get("args", {}) or {}
             call_id = call.get("id", "") or ""
@@ -90,7 +94,9 @@ async def run_with_tools(
             messages.append(ToolMessage(content=render_tool_message(result), tool_call_id=call_id))
 
     logger.info("tool_loop.truncated", iterations=max_iters, tools_called=len(trace))
-    return {"content": _content(messages[-1]), "tool_trace": trace, "iterations": max_iters, "truncated": True}
+    # A tool result is data, not an assistant answer. Returning it here used
+    # to publish the last raw lookup as though the model had concluded.
+    return {"content": "", "tool_trace": trace, "iterations": max_iters, "truncated": True}
 
 
 def _content(message: Any) -> str:

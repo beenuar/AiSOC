@@ -8,8 +8,8 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import and_, func, select, update
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -807,6 +807,9 @@ async def list_alerts(
     min_confidence: int | None = Query(default=None, ge=0, le=100),
     confidence_label: str | None = Query(default=None),
     sort: Literal["newest", "priority"] = Query(default="newest"),
+    event_since: Annotated[AwareDatetime | None, Query(description="Inclusive event_time lower bound")] = None,
+    event_until: Annotated[AwareDatetime | None, Query(description="Exclusive event_time upper bound")] = None,
+    hostname: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
 ) -> AlertListResponse:
     """List alerts for the current tenant with filtering and pagination.
 
@@ -854,6 +857,16 @@ async def list_alerts(
 
     filters = [Alert.tenant_id == current_user.tenant_id]
 
+    if event_since is not None and event_until is not None and event_since >= event_until:
+        raise HTTPException(status_code=400, detail="event_since must precede event_until")
+    if event_since is not None:
+        filters.append(Alert.event_time >= event_since)
+    if event_until is not None:
+        filters.append(Alert.event_time < event_until)
+    if hostname is not None:
+        # Production fusion writes entities; older imports may use affected_hosts.
+        filters.append(or_(Alert.entities.contains([{"type": "host", "value": hostname}]), Alert.affected_hosts.contains([hostname])))
+
     if severity:
         filters.append(Alert.severity == severity)
     if status:
@@ -897,7 +910,7 @@ async def list_alerts(
 
     # Fetch. `created_at` is always the final key so the order is total and
     # paging cannot repeat or skip a row.
-    order_by = [Alert.created_at.desc()]
+    order_by = [Alert.created_at.desc(), Alert.id.desc()]
     if sort == "priority":
         order_by.insert(0, severity_rank_expr().asc())
 

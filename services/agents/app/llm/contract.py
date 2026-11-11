@@ -183,7 +183,11 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     model = _model_name(llm)
     prompt, user_input = _cache_parts(materialised)
     # Only cache plain calls (no per-call kwargs like temperature overrides).
-    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs
+    # A bound tool call includes structured tool_calls, not just content. The
+    # text cache cannot replay it, and a fresh console lookup must not become
+    # a cached prose answer with no read behind it.
+    bound_tools = (getattr(llm, "kwargs", None) or {}).get("tools")
+    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs and not bound_tools
     if use_cache:
         cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input)
         if cached is not None:
