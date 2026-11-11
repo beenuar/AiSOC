@@ -325,6 +325,13 @@ async def record_poll_success(
         # backfill worker will have already read this value before we clear
         # it (see ``record_recovery_for_backfill``).
         "last_outage_at": None,
+        # ``error_count`` means "consecutive failed polls since the last
+        # success", so a success resets it. It used to be a lifetime
+        # cumulative counter that only ever grew, which the fleet panel then
+        # rendered next to a fresh ``last_sync`` as if the connector were
+        # failing right now — a connector with years of uptime and one bad
+        # week would wear that week forever (#1821).
+        "error_count": 0,
     }
     if schema_fingerprint is not None:
         values["schema_fingerprint"] = schema_fingerprint
