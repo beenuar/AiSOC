@@ -7,7 +7,7 @@ settings:
 overrides:
   postcss: ^8.5.23
   decode-uri-component: ^0.5.1
-  node-forge: '>=1.4.1'
+  node-forge: '>=1.4.3'
   uuid: ^11.1.1
   image-size: '>=2.0.4 <3'
   shell-quote: '>=1.11.0'
@@ -1161,7 +1161,7 @@ packages:
       glob: 14.0.3
       lan-network: 0.2.1
       minimatch: 11.0.3
-      node-forge: 1.4.2
+      node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
       picomatch: 4.0.7
@@ -1198,7 +1198,7 @@ packages:
   /@expo/code-signing-certificates@0.0.6:
     resolution: {integrity: sha512-iNe0puxwBNEcuua9gmTGzq+SuMDa0iATai1FlFTMHJ/vUmKvN/V//drXoLJkVb5i5H3iE/n/qIJxyoBnXouD0w==}
     dependencies:
-      node-forge: 1.4.2
+      node-forge: 1.4.3
     dev: false
 
   /@expo/config-plugins@54.0.5:
@@ -5261,8 +5261,8 @@ packages:
     resolution: {integrity: sha512-SrQrok4CATudVzBS7coSz26QRSmlK9TzzoFbeKfcPBUFPjcQM9Rqvr/DlJkOrwI/0KcgvMub1n1g5Jt9EgRn4A==}
     dev: false
 
-  /node-forge@1.4.2:
-    resolution: {integrity: sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==}
+  /node-forge@1.4.3:
+    resolution: {integrity: sha512-P6wzfh6t70avmV8FrVEAd/36sOPJQ+hkaJVX1Laap9J/77m7M0eyozDvc8SwnDf4P7MP94gwbAAo0rg3YVXT+g==}
     engines: {node: '>= 6.13.0'}
     dev: false
 
