@@ -774,6 +774,11 @@ services:
     environment:
       REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
       AISOC_INVESTIGATION_MAX_SECONDS: ${AISOC_INVESTIGATION_MAX_SECONDS:-120}
+      # The agents :15002/metrics gate compares against this token exactly as
+      # the api service's does; without it in this environment every scrape
+      # answered 401 outside development and the triage counters were
+      # unreachable on a default deployment (#1822).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/4
       CORE_API_URL: http://api:8000
