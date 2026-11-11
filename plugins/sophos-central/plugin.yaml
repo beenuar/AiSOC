@@ -14,7 +14,7 @@ author: AiSOC Core Team
 tags: [edr, endpoint, sophos, sophos-central, alerts]
 homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sophos_central.py
 license: MIT
-min_aisoc_version: "23.1.0"
+min_aisoc_version: "23.2.0"
 config_schema:
   type: object
   required: [client_id, client_secret]

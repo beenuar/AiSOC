@@ -36,7 +36,13 @@ Honest-failure rules, in keeping with the other gates here:
 * a verified mismatch names the version and shows a unified diff;
 * a tag that cannot be resolved after a fetch attempt is reported as
   UNVERIFIABLE with the reason — and fails the gate, because "could not
-  check" recorded as clean is how gates in this repository have lied before;
+  check" recorded as clean is how gates in this repository have lied before.
+  The one exception is the release being cut: the newest released section,
+  when its version equals the working tree's ``VERSION`` file and its tag
+  does not exist yet, is reported as an explicit PENDING state instead,
+  since a release PR promotes the section whose tag can only exist after
+  that PR merges — anywhere else, or any other version, stays fatal, and
+  the moment the tag exists the section is compared like any other;
 * verifying zero sections is a failure, never a pass (the vacuous-pass rule).
 
 ``--self-test`` injects drift in every direction (entry added, removed,
@@ -97,13 +103,34 @@ def audit(
     *,
     sections: int,
     tag_reader: Callable[[str], tuple[str | None, str]],
-) -> tuple[list[str], int]:
-    """Returns (problems, verified_count)."""
+    pending_version: str | None = None,
+) -> tuple[list[str], int, str | None]:
+    """Returns (problems, verified_count, pending_note).
+
+    ``pending_version`` is the release being cut: a release PR promotes
+    ``[Unreleased]`` to a ``[X.Y.Z]`` section whose tag can only exist after
+    that PR merges, so without an exception this gate reds every release PR
+    on its own required check. The exception is deliberately narrow — only
+    the *newest* released section, and only when its version equals the
+    working tree's ``VERSION`` file — and it is reported as an explicit
+    PENDING state, never silently skipped. Once the tag exists the section
+    is compared like any other, so a drifted pending section still fails
+    the moment it can be checked, and an untagged section anywhere else
+    (or one not matching ``VERSION``) stays UNVERIFIABLE and fatal.
+    """
     problems: list[str] = []
     verified = 0
-    for version, tree_section in released_sections(text)[:sections]:
+    pending: str | None = None
+    for index, (version, tree_section) in enumerate(released_sections(text)[:sections]):
         tagged_changelog, reason = tag_reader(version)
         if tagged_changelog is None:
+            if index == 0 and version == pending_version:
+                pending = (
+                    f"PENDING [{version}]: matches VERSION and tag v{version} does not exist "
+                    "yet — this is the release being cut; the section is enforced from the "
+                    "moment the tag exists"
+                )
+                continue
             problems.append(f"UNVERIFIABLE [{version}]: {reason}")
             continue
         tagged = dict(released_sections(tagged_changelog))
@@ -132,7 +159,7 @@ def audit(
         verified += 1
     if verified == 0 and not problems:
         problems.append("VACUOUS: no released section could be compared — a gate that verified nothing must not pass")
-    return problems, verified
+    return problems, verified, pending
 
 
 def self_test() -> int:
@@ -153,25 +180,54 @@ def self_test() -> int:
             failures.append(name)
         print(f"  self-test [{status}] {name}")
 
-    clean, n = audit(base, sections=5, tag_reader=reader_for(base))
+    clean, n, _ = audit(base, sections=5, tag_reader=reader_for(base))
     expect("clean fixture passes", clean, should_fail=False)
     assert n == 2, f"expected 2 verified sections, got {n}"
 
     drifted = base.replace("- **B.** b", "- **B.** b\n\n- **C (post-tag).** c")
-    added, _ = audit(drifted, sections=5, tag_reader=reader_for(base))
+    added, _, _ = audit(drifted, sections=5, tag_reader=reader_for(base))
     expect("an entry added after the tag is detected", added, should_fail=True)
 
-    removed, _ = audit(base.replace("- **B.** b\n\n", ""), sections=5, tag_reader=reader_for(base))
+    removed, _, _ = audit(base.replace("- **B.** b\n\n", ""), sections=5, tag_reader=reader_for(base))
     expect("an entry removed after the tag is detected", removed, should_fail=True)
 
-    edited, _ = audit(base.replace("- **B.** b", "- **B.** c"), sections=5, tag_reader=reader_for(base))
+    edited, _, _ = audit(base.replace("- **B.** b", "- **B.** c"), sections=5, tag_reader=reader_for(base))
     expect("an entry edited after the tag is detected", edited, should_fail=True)
 
-    missing, _ = audit(base, sections=5, tag_reader=reader_for(None, "tag v2.0.0 not found"))
+    missing, _, _ = audit(base, sections=5, tag_reader=reader_for(None, "tag v2.0.0 not found"))
     expect("an unresolvable tag refuses rather than passes", missing, should_fail=True)
 
-    vacuous, _ = audit("# Changelog\n\n## [Unreleased]\n", sections=5, tag_reader=reader_for(base))
+    vacuous, _, _ = audit("# Changelog\n\n## [Unreleased]\n", sections=5, tag_reader=reader_for(base))
     expect("a changelog with nothing to compare refuses", vacuous, should_fail=True)
+
+    # The release-PR exception, bounded on every side. A tag reader that
+    # resolves the already-tagged sections but not the one being cut:
+    def release_reader(_version: str) -> tuple[str | None, str]:
+        return (base, "") if _version in {"2.0.0", "1.0.0"} else (None, f"tag v{_version} not found")
+
+    cutting = base.replace("## [Unreleased]\n", "## [Unreleased]\n\n## [3.0.0] - 2026-01-03\n")
+    ok_pending, n2, note = audit(cutting, sections=5, tag_reader=release_reader, pending_version="3.0.0")
+    expect("the newest section matching VERSION may await its tag", ok_pending, should_fail=False)
+    assert n2 == 2 and note is not None and "PENDING [3.0.0]" in note, f"pending note wrong: {note!r}"
+
+    not_version, _, _ = audit(cutting, sections=5, tag_reader=release_reader, pending_version="9.9.9")
+    expect("an untagged newest section not matching VERSION still refuses", not_version, should_fail=True)
+
+    older_missing, _, _ = audit(
+        cutting,
+        sections=5,
+        tag_reader=lambda v: (base, "") if v == "2.0.0" else (None, f"tag v{v} not found"),
+        pending_version="3.0.0",
+    )
+    expect("an untagged section that is not the newest still refuses", older_missing, should_fail=True)
+
+    tagged_and_drifted, _, _ = audit(
+        cutting,
+        sections=5,
+        tag_reader=reader_for(base),  # v3.0.0 resolves to a changelog with no [3.0.0] section
+        pending_version="3.0.0",
+    )
+    expect("a pending version whose tag already exists is compared, not skipped", tagged_and_drifted, should_fail=True)
 
     if failures:
         print(f"check_changelog_frozen --self-test: FAIL ({len(failures)} undetected)")
@@ -190,8 +246,12 @@ def main() -> int:
         return self_test()
 
     text = Path("CHANGELOG.md").read_text(encoding="utf-8")
-    problems, verified = audit(text, sections=args.sections, tag_reader=changelog_at_tag)
+    version_file = Path("VERSION")
+    pending_version = version_file.read_text(encoding="utf-8").strip() if version_file.exists() else None
+    problems, verified, pending = audit(text, sections=args.sections, tag_reader=changelog_at_tag, pending_version=pending_version)
     print(f"check_changelog_frozen: {verified} released section(s) verified against their tags (newest {args.sections} checked)")
+    if pending:
+        print(f"  {pending}")
     for problem in problems:
         print(f"  {problem}")
     if problems:
