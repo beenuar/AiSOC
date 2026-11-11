@@ -20,7 +20,7 @@ import json
 import uuid
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException, status
@@ -35,9 +35,26 @@ from app.security.tenant_scope import (
     require_console_or_service_auth,
     resolve_scoped_tenant,
 )
-from app.tools.copilot import CopilotReads
+
+if TYPE_CHECKING:
+    from app.tools.copilot import CopilotReads
 
 logger = structlog.get_logger()
+
+
+def _copilot_reads(authorization: str | None = None, tenant_id: uuid.UUID | None = None) -> CopilotReads:
+    """Construct read tools for one chat turn without importing them at router load.
+
+    The tenant-isolation route-replay job mounts this router with only the deps
+    listed in `.github/workflows/isolation.yml`. A module-level import of the
+    tool stack pulls ``jsonschema`` (argument validation) before any chat
+    handler runs, which shrinks the gate to setup errors instead of auth
+    failures.
+    """
+    from app.tools.copilot import CopilotReads as Reads
+
+    return Reads(authorization, tenant_id)
+
 
 #: Default-deny. The console reaches this router directly through a Next
 #: rewrite carrying the first-party access token, so the guard resolves
@@ -241,7 +258,7 @@ async def _get_openai_reply(
         from app.security import vaid_plugin
         from app.security.agent_identity import issue_identity
 
-        reads = reads or CopilotReads()
+        reads = reads or _copilot_reads()
         history = [
             (HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"])
             for m in conversation.get("messages", [])[-10:]
@@ -354,7 +371,7 @@ async def chat(
     }
 
     history = {"messages": existing.messages if existing else []}
-    reads = CopilotReads(authorization, tenant_id)
+    reads = _copilot_reads(authorization, tenant_id)
     reply_text, reply_source, reply_reason = await _get_openai_reply(history, req.message, reads=reads, context=req.context)
     grounding = ground_answer(reply_text, reads.sources).as_dict() if reply_source == "llm" else None
     notice = _notice_for(reply_reason)
@@ -423,7 +440,7 @@ async def chat_stream(
     }
     history = {"messages": existing.messages if existing else []}
 
-    reads = CopilotReads(authorization, tenant_id)
+    reads = _copilot_reads(authorization, tenant_id)
     reply_text, reply_source, reply_reason = await _get_openai_reply(history, req.message, reads=reads, context=req.context)
     grounding = ground_answer(reply_text, reads.sources).as_dict() if reply_source == "llm" else None
     notice = _notice_for(reply_reason)
