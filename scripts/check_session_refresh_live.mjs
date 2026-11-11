@@ -19,6 +19,17 @@ assert.ok(process.argv[2], 'Pass the path to an isolated API fixture');
 const fixture = JSON.parse(await readFile(process.argv[2], 'utf8'));
 const origin = new URL(fixture.base_url).origin;
 assert.ok(['127.0.0.1', 'localhost'].includes(new URL(origin).hostname), 'Use an isolated loopback API');
+// The fixture's credentials flow into requests by design: this harness's
+// negative control sends an expired token signed by the isolated API and
+// asserts the 401. The destination cannot leave loopback (asserted above),
+// and the token must at least be a structurally valid JWT — a malformed
+// fixture should fail here with a clear message, not as a confusing
+// assertion three calls later. CodeQL's js/file-access-to-http sees the
+// file-to-request flow and cannot see either constraint; if the alert
+// persists it is dismissed with this reasoning, per the repo's documented
+// disposition for guards the tracker cannot follow.
+const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
+assert.ok(JWT_SHAPE.test(fixture.expired_access_token), 'expired_access_token must be a structurally valid JWT');
 
 const storage = new Map();
 const redirects = [];
