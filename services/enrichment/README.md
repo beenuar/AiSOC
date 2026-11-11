@@ -36,11 +36,14 @@ pipeline, the AI Copilot, the case workspace, and the hunt UI.
 | VirusTotal   | IP, domain, URL, hash   | API key   | `VIRUSTOTAL_API_KEY`                    |
 | AbuseIPDB    | IP                      | API key   | `ABUSEIPDB_API_KEY`                     |
 | GreyNoise    | IP                      | API key   | `GREYNOISE_API_KEY`                     |
+| Shodan       | IP                      | API key   | `SHODAN_API_KEY`                        |
+| IPinfo       | IP                      | API token | `IPINFO_API_KEY`                        |
+| URLScan      | domain, URL             | API key   | `URLSCAN_API_KEY`                       |
 
-Shodan (`SHODAN_API_KEY`), URLScan (`URLSCAN_API_KEY`) and IPinfo
-(`IPINFO_API_KEY`) are read from the environment but have **no client
-implementation yet** — there is no constructor for them and they are not in
-the fan-out, so setting those keys changes nothing today.
+Shodan contributes open ports, service banners, disclosed CVEs and geo/ASN.
+IPinfo adds geolocation and network ownership (context only — no risk score).
+URLScan reports prior-scan visibility and brand-impersonation phishing. As with
+every provider here, an empty key makes that provider a no-op.
 
 ### Commercial
 

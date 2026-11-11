@@ -698,6 +698,8 @@ services:
       ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
       GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
       SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+      IPINFO_API_KEY: ${IPINFO_API_KEY:-}
     networks:
       - aisoc
     restart: unless-stopped

@@ -26,9 +26,12 @@ type Enricher struct {
 	cache *cache.Client
 
 	// Open-source / freemium clients
-	vtClient    *VirusTotalClient
-	abuseClient *AbuseIPDBClient
-	gnClient    *GreyNoiseClient
+	vtClient      *VirusTotalClient
+	abuseClient   *AbuseIPDBClient
+	gnClient      *GreyNoiseClient
+	shodanClient  *ShodanClient
+	ipinfoClient  *IPInfoClient
+	urlscanClient *URLScanClient
 
 	// Commercial clients
 	cybleClient       *CybleClient
@@ -51,6 +54,9 @@ type Config struct {
 	VirusTotalAPIKey string
 	AbuseIPDBAPIKey  string
 	GreyNoiseAPIKey  string
+	ShodanAPIKey     string
+	IPInfoAPIKey     string
+	URLScanAPIKey    string
 
 	// Commercial
 	CybleAPIKey            string
@@ -77,10 +83,13 @@ type Config struct {
 // New creates a new Enricher with all configured data sources.
 func New(cfg Config) *Enricher {
 	return &Enricher{
-		cache:       cfg.Cache,
-		vtClient:    NewVirusTotalClient(cfg.VirusTotalAPIKey),
-		abuseClient: NewAbuseIPDBClient(cfg.AbuseIPDBAPIKey),
-		gnClient:    NewGreyNoiseClient(cfg.GreyNoiseAPIKey),
+		cache:         cfg.Cache,
+		vtClient:      NewVirusTotalClient(cfg.VirusTotalAPIKey),
+		abuseClient:   NewAbuseIPDBClient(cfg.AbuseIPDBAPIKey),
+		gnClient:      NewGreyNoiseClient(cfg.GreyNoiseAPIKey),
+		shodanClient:  NewShodanClient(cfg.ShodanAPIKey),
+		ipinfoClient:  NewIPInfoClient(cfg.IPInfoAPIKey),
+		urlscanClient: NewURLScanClient(cfg.URLScanAPIKey),
 
 		cybleClient: NewCybleClient(CybleConfig{
 			APIKey:  cfg.CybleAPIKey,
@@ -202,6 +211,8 @@ func (e *Enricher) enrichIP(ctx context.Context, ip string) (*EnrichmentResult, 
 		{"virustotal", func() (*EnrichmentResult, error) { return e.vtClient.EnrichIP(ctx, ip) }},
 		{"abuseipdb", func() (*EnrichmentResult, error) { return e.abuseClient.EnrichIP(ctx, ip) }},
 		{"greynoise", func() (*EnrichmentResult, error) { return e.gnClient.EnrichIP(ctx, ip) }},
+		{"shodan", func() (*EnrichmentResult, error) { return e.shodanClient.EnrichIP(ctx, ip) }},
+		{"ipinfo", func() (*EnrichmentResult, error) { return e.ipinfoClient.EnrichIP(ctx, ip) }},
 		{"cyble", func() (*EnrichmentResult, error) { return e.cybleClient.EnrichIP(ctx, ip) }},
 		{"recorded-future", func() (*EnrichmentResult, error) { return e.rfClient.EnrichIP(ctx, ip) }},
 		{"mandiant", func() (*EnrichmentResult, error) { return e.mandiantClient.EnrichIP(ctx, ip) }},
@@ -218,6 +229,7 @@ func (e *Enricher) enrichIP(ctx context.Context, ip string) (*EnrichmentResult, 
 func (e *Enricher) enrichDomain(ctx context.Context, domain string) (*EnrichmentResult, error) {
 	tasks := []fanOutTask{
 		{"virustotal", func() (*EnrichmentResult, error) { return e.vtClient.EnrichDomain(ctx, domain) }},
+		{"urlscan", func() (*EnrichmentResult, error) { return e.urlscanClient.EnrichDomain(ctx, domain) }},
 		{"cyble", func() (*EnrichmentResult, error) { return e.cybleClient.EnrichDomain(ctx, domain) }},
 		{"recorded-future", func() (*EnrichmentResult, error) { return e.rfClient.EnrichDomain(ctx, domain) }},
 		{"mandiant", func() (*EnrichmentResult, error) { return e.mandiantClient.EnrichDomain(ctx, domain) }},
@@ -248,6 +260,7 @@ func (e *Enricher) enrichHash(ctx context.Context, hash string) (*EnrichmentResu
 func (e *Enricher) enrichURL(ctx context.Context, rawURL string) (*EnrichmentResult, error) {
 	tasks := []fanOutTask{
 		{"virustotal", func() (*EnrichmentResult, error) { return e.vtClient.EnrichURL(ctx, rawURL) }},
+		{"urlscan", func() (*EnrichmentResult, error) { return e.urlscanClient.EnrichURL(ctx, rawURL) }},
 		{"cyble", func() (*EnrichmentResult, error) { return e.cybleClient.EnrichURL(ctx, rawURL) }},
 		{"recorded-future", func() (*EnrichmentResult, error) { return e.rfClient.EnrichURL(ctx, rawURL) }},
 		{"mandiant", func() (*EnrichmentResult, error) { return e.mandiantClient.EnrichURL(ctx, rawURL) }},
