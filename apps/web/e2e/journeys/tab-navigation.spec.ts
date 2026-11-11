@@ -3,7 +3,12 @@
  * Only backend HTTP responses are intercepted; navigation, reloads, and
  * Back/Forward use the running application rather than a router substitute.
  */
+import { createRequire } from "node:module";
 import { expect, test, type Page } from "@playwright/test";
+
+const { JSDOM } = createRequire(__filename)("jsdom") as {
+  JSDOM: { fragment(html: string): DocumentFragment };
+};
 
 const CASE_ID = "CASE-TAB-001";
 const CASE = {
@@ -129,11 +134,11 @@ test("Settings server HTML renders every requested section before hydration", as
   ]) {
     const response = await request.get(`/settings?tab=${id}`);
     expect(response.status()).toBe(200);
-    // The stream also embeds component props and module names in scripts.
-    // Match actual rendered headings, not those serialized instructions.
-    const html = (await response.text()).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "");
-    const headings = Array.from(html.matchAll(/<h2\b[^>]*>([^<]*)<\/h2>/g),
-      (match) => match[1].replace(/&amp;/g, "&"));
+    // Parse actual heading elements; serialized instructions inside scripts
+    // remain text, and the inert fragment does not execute or load resources.
+    const document = JSDOM.fragment(await response.text());
+    const headings = Array.from(document.querySelectorAll("h2"),
+      (heading) => heading.textContent);
     expect(headings, `server-rendered section for ?tab=${id}`).toContain(heading);
   }
 });
