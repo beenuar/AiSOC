@@ -31,6 +31,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { __setDemoModeForTests } from '@/lib/demoMode';
 import type { Case } from '@/lib/api';
+import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 const swrData = vi.hoisted(() => new Map<string, unknown>());
 const swrErrors = vi.hoisted(() => new Map<string, unknown>());
@@ -78,12 +79,14 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-vi.mock('next/navigation', () => ({
-  __esModule: true,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
-  usePathname: () => '/cases/INC-2026-0042',
-  useSearchParams: () => new URLSearchParams(),
-}));
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    ...actual,
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+    usePathname: () => '/cases/INC-2026-0042',
+  };
+});
 
 // Both are exercised by their own suites and each opens its own requests.
 vi.mock('./InvestigationLedger', () => ({
@@ -100,6 +103,10 @@ import { CaseWorkspace } from './CaseWorkspace';
 
 /** The route param. `buildDemoCase` copied it, so the invention wore this id. */
 const CASE_ID = 'INC-2026-0042';
+
+function renderWorkspace() {
+  return render(<CaseWorkspace caseId={CASE_ID} />, { wrapper: NavigationTestProvider });
+}
 
 const SWR_KEY = JSON.stringify(['case', CASE_ID]);
 
@@ -160,6 +167,7 @@ function realCase(overrides: Partial<Case> = {}): Case {
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', `/cases/${CASE_ID}`);
   swrData.clear();
   swrErrors.clear();
   swrMutate.mockClear();
@@ -180,7 +188,7 @@ describe('a failed case load does not invent the case', () => {
   it('renders an error naming the failure, not a fabricated incident', () => {
     swrErrors.set(SWR_KEY, new Error('503 Service Unavailable'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
 
     expectNoFabrication(FABRICATED_CASE_STRINGS);
     expect(screen.getByText(/Couldn't load case/i)).toBeTruthy();
@@ -190,7 +198,7 @@ describe('a failed case load does not invent the case', () => {
   it('offers a retry that re-issues the request', async () => {
     swrErrors.set(SWR_KEY, new Error('network down'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.click(screen.getByRole('button', { name: /retry/i }));
 
     expect(swrMutate).toHaveBeenCalled();
@@ -201,7 +209,7 @@ describe('a failed case load does not invent the case', () => {
     __setDemoModeForTests(true);
     swrErrors.set(SWR_KEY, new Error('no backend in the demo'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
 
     expect(screen.getByText('Suspected lateral movement from finance subnet')).toBeTruthy();
   });
@@ -211,8 +219,9 @@ describe('a failed investigation is not reported as a completed one', () => {
   it('surfaces the failure instead of inventing IOCs and a root cause', async () => {
     swrData.set(SWR_KEY, realCase());
     casesApi.investigate.mockRejectedValue(new Error('agents service unreachable'));
+    window.history.replaceState(null, '', `/cases/${CASE_ID}?tab=ledger&window=24h#evidence`);
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.click(screen.getByRole('button', { name: /investigate with agent/i }));
 
     await waitFor(() => {
@@ -220,13 +229,17 @@ describe('a failed investigation is not reported as a completed one', () => {
     });
     expectNoFabrication(FABRICATED_INVESTIGATION_STRINGS);
     expect(screen.getByText(/agents service unreachable/i)).toBeTruthy();
+    const url = new URL(window.location.href);
+    expect(url.searchParams.get('tab')).toBe('investigation');
+    expect(url.searchParams.get('window')).toBe('24h');
+    expect(url.hash).toBe('#evidence');
   });
 
   it('does not claim the investigation completed', async () => {
     swrData.set(SWR_KEY, realCase());
     casesApi.investigate.mockRejectedValue(new Error('502 Bad Gateway'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.click(screen.getByRole('button', { name: /investigate with agent/i }));
 
     await waitFor(() => {
@@ -240,7 +253,7 @@ describe('a failed investigation is not reported as a completed one', () => {
     swrData.set(SWR_KEY, realCase());
     casesApi.investigate.mockRejectedValue(new Error('down'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.click(screen.getByRole('button', { name: /investigate with agent/i }));
     await waitFor(() => {
       expect(screen.getByText(/Investigation failed/i)).toBeTruthy();
@@ -250,6 +263,7 @@ describe('a failed investigation is not reported as a completed one', () => {
 
     expect(screen.getByText(/No report yet/i)).toBeTruthy();
     expect(screen.queryByText(/Incident Report — /i)).toBeNull();
+    expect(new URLSearchParams(window.location.search).get('tab')).toBe('report');
   });
 });
 
@@ -258,7 +272,7 @@ describe('a rejected status write does not stick in the UI', () => {
     swrData.set(SWR_KEY, realCase({ status: 'new' }));
     casesApi.update.mockRejectedValue(new Error('403 Forbidden'));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.selectOptions(screen.getByRole('combobox'), 'resolved');
 
     await waitFor(() => {
@@ -278,7 +292,7 @@ describe('a rejected status write does not stick in the UI', () => {
     swrData.set(SWR_KEY, realCase({ status: 'new' }));
     casesApi.update.mockResolvedValue(realCase({ status: 'resolved' }));
 
-    render(<CaseWorkspace caseId={CASE_ID} />);
+    renderWorkspace();
     await userEvent.selectOptions(screen.getByRole('combobox'), 'resolved');
 
     await waitFor(() => {

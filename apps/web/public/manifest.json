@@ -45,7 +45,7 @@
       "name": "Triage queue",
       "short_name": "Triage",
       "description": "Open the live alert triage queue",
-      "url": "/responder?tab=queue",
+      "url": "/responder/triage",
       "icons": [
         { "src": "/icons/shortcut-triage.svg", "sizes": "96x96", "type": "image/svg+xml" }
       ]
@@ -54,7 +54,7 @@
       "name": "My cases",
       "short_name": "Cases",
       "description": "Cases assigned to me or awaiting my approval",
-      "url": "/responder?tab=cases",
+      "url": "/responder/case",
       "icons": [
         { "src": "/icons/shortcut-cases.svg", "sizes": "96x96", "type": "image/svg+xml" }
       ]
@@ -63,7 +63,7 @@
       "name": "On-call status",
       "short_name": "On-call",
       "description": "Toggle on-call status and review approvals",
-      "url": "/responder?tab=oncall",
+      "url": "/responder/oncall",
       "icons": [
         { "src": "/icons/shortcut-oncall.svg", "sizes": "96x96", "type": "image/svg+xml" }
       ]

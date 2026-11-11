@@ -1,7 +1,9 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import type { AttackChainTimeline, Case } from '@/lib/api';
 import { __setDemoModeForTests } from '@/lib/demoMode';
+import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 // We mock SWR rather than the real network layer so the test stays
 // hermetic and so we can exercise both the loaded and fallback paths.
@@ -76,13 +78,14 @@ vi.mock('next/link', () => ({
   ),
 }));
 
-const searchParamsState = vi.hoisted(() => ({ params: new URLSearchParams() }));
-
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => searchParamsState.params,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  usePathname: () => '/cases/INC-001',
-}));
+vi.mock('next/navigation', async () => {
+  const actual = await vi.importActual<typeof import('next/navigation')>('next/navigation');
+  return {
+    ...actual,
+    useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+    usePathname: () => '/cases/INC-001',
+  };
+});
 
 vi.mock('react-hot-toast', () => {
   const fn = vi.fn();
@@ -115,6 +118,10 @@ vi.mock('@/components/copilot/ContextualActions', () => ({
 
 import { CaseWorkspace } from './CaseWorkspace';
 
+function renderWorkspace() {
+  return render(<CaseWorkspace caseId="INC-001" />, { wrapper: NavigationTestProvider });
+}
+
 const fakeCase: Case = {
   id: 'INC-001',
   title: 'Suspected lateral movement from finance subnet',
@@ -140,7 +147,7 @@ describe('CaseWorkspace', () => {
     swrState.attackChainData = undefined;
     swrState.attackChainError = undefined;
     swrState.attackChainLoading = false;
-    searchParamsState.params = new URLSearchParams();
+    window.history.replaceState(null, '', '/cases/INC-001');
   });
 
   afterEach(() => {
@@ -149,7 +156,7 @@ describe('CaseWorkspace', () => {
   });
 
   it('renders the case header with title, severity, and MITRE chips', () => {
-    render(<CaseWorkspace caseId="INC-001" />);
+    renderWorkspace();
 
     expect(
       screen.getByRole('heading', { level: 1, name: /lateral movement from finance subnet/i }),
@@ -176,7 +183,7 @@ describe('CaseWorkspace', () => {
     swrState.caseData = undefined;
     swrState.caseError = new Error('fetch failed');
 
-    render(<CaseWorkspace caseId="INC-001" />);
+    renderWorkspace();
 
     expect(
       screen.getByRole('heading', { level: 1, name: /lateral movement from finance subnet/i }),
@@ -184,16 +191,66 @@ describe('CaseWorkspace', () => {
     expect(screen.getByText(/demo data — writes disabled/i)).toBeInTheDocument();
   });
 
+  describe('URL-selected tabs', () => {
+    it('opens the linked ledger panel directly', () => {
+      window.history.replaceState(null, '', '/cases/INC-001?tab=ledger');
+
+      renderWorkspace();
+
+      expect(screen.getByTestId('investigation-ledger')).toBeInTheDocument();
+      expect(screen.queryByRole('complementary', { name: 'Linked alerts' })).not.toBeInTheDocument();
+    });
+
+    it.each(['', '?tab=', '?tab=unknown'])('falls back to overview for %s', (query) => {
+      window.history.replaceState(null, '', `/cases/INC-001${query}`);
+
+      renderWorkspace();
+
+      expect(screen.getByRole('complementary', { name: 'Linked alerts' })).toBeInTheDocument();
+      expect(screen.queryByTestId('investigation-ledger')).not.toBeInTheDocument();
+    });
+
+    it('follows query-only navigation without remounting the workspace', () => {
+      renderWorkspace();
+      expect(screen.getByRole('complementary', { name: 'Linked alerts' })).toBeInTheDocument();
+
+      act(() => window.history.pushState(null, '', '/cases/INC-001?tab=ledger'));
+
+      expect(screen.getByTestId('investigation-ledger')).toBeInTheDocument();
+      expect(screen.queryByRole('complementary', { name: 'Linked alerts' })).not.toBeInTheDocument();
+
+      act(() => window.history.replaceState(null, '', '/cases/INC-001?tab=unknown'));
+
+      expect(screen.getByRole('complementary', { name: 'Linked alerts' })).toBeInTheDocument();
+      expect(screen.queryByTestId('investigation-ledger')).not.toBeInTheDocument();
+    });
+
+    it('writes tab clicks to the URL while retaining the lookback, other parameters and hash', async () => {
+      window.history.replaceState(null, '', '/cases/INC-001?tab=ledger&window=72h&source=alerts#notes');
+      renderWorkspace();
+
+      await userEvent.click(screen.getByRole('button', { name: /^report$/i }));
+
+      expect(screen.getByText(/No report yet/i)).toBeInTheDocument();
+      const url = new URL(window.location.href);
+      expect(url.pathname).toBe('/cases/INC-001');
+      expect(url.searchParams.get('tab')).toBe('report');
+      expect(url.searchParams.get('window')).toBe('72h');
+      expect(url.searchParams.get('source')).toBe('alerts');
+      expect(url.hash).toBe('#notes');
+    });
+  });
+
   describe('attack-chain panel', () => {
     beforeEach(() => {
       // Force the attack-chain tab to render by setting ?tab=attack-chain.
-      searchParamsState.params = new URLSearchParams('tab=attack-chain');
+      window.history.replaceState(null, '', '/cases/INC-001?tab=attack-chain');
     });
 
     it('renders an empty state when the backend returns no chain', () => {
       swrState.attackChainData = null;
 
-      render(<CaseWorkspace caseId="INC-001" />);
+      renderWorkspace();
 
       expect(screen.getByText(/no attack chain yet/i)).toBeInTheDocument();
     });
@@ -202,7 +259,7 @@ describe('CaseWorkspace', () => {
       swrState.attackChainData = undefined;
       swrState.attackChainError = new Error('boom');
 
-      render(<CaseWorkspace caseId="INC-001" />);
+      renderWorkspace();
 
       expect(screen.getByText(/failed to load attack chain/i)).toBeInTheDocument();
     });
@@ -256,7 +313,7 @@ describe('CaseWorkspace', () => {
       };
       swrState.attackChainData = timeline;
 
-      render(<CaseWorkspace caseId="INC-001" />);
+      renderWorkspace();
 
       // Both chain links should render.
       expect(screen.getByText(/Seed — Suspicious PowerShell on FIN-WS-01/i)).toBeInTheDocument();
@@ -287,10 +344,10 @@ describe('CaseWorkspace', () => {
       // selection survives reload via ?window=…. Mount with both the
       // tab AND window params set, and assert the WindowSelector is
       // showing the linked value rather than the default `24h`.
-      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=72h');
+      window.history.replaceState(null, '', '/cases/INC-001?tab=attack-chain&window=72h');
       swrState.attackChainData = null;
 
-      render(<CaseWorkspace caseId="INC-001" />);
+      renderWorkspace();
 
       // The window selector must show 72h as the active choice. Since
       // `WindowSelector value={windowParam}` is bound directly to the
@@ -304,20 +361,20 @@ describe('CaseWorkspace', () => {
       // Just the tab, no window param → default `24h` (NOT the previous
       // `1h` default the PR shipped with; switched to 24h per review
       // because 1h showed an empty state for most realistic cases).
-      searchParamsState.params = new URLSearchParams('tab=attack-chain');
+      window.history.replaceState(null, '', '/cases/INC-001?tab=attack-chain');
       swrState.attackChainData = null;
 
-      const { unmount } = render(<CaseWorkspace caseId="INC-001" />);
+      const { unmount } = renderWorkspace();
       expect(readActiveWindow()).toBe('24h');
       unmount();
 
       // An obviously-invalid value must also fall back to the default
       // (defence-in-depth: the type guard refuses anything outside the
       // closed `AttackChainWindow` set), not crash the panel.
-      searchParamsState.params = new URLSearchParams('tab=attack-chain&window=900years');
+      window.history.replaceState(null, '', '/cases/INC-001?tab=attack-chain&window=900years');
       swrState.attackChainData = null;
 
-      render(<CaseWorkspace caseId="INC-001" />);
+      renderWorkspace();
       expect(readActiveWindow()).toBe('24h');
     });
   });

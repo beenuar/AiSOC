@@ -15,6 +15,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 const swrData = vi.hoisted(() => new Map<string, unknown>());
 const swrErrors = vi.hoisted(() => new Map<string, unknown>());
@@ -98,13 +99,14 @@ async function renderWith(llm: LlmStatus) {
   swrData.set(AIRGAP_KEY, airgapFixture);
   swrData.set(LLM_KEY, llm);
   swrData.set(CRED_KEY, undefined);
-  render(<SettingsView />);
+  render(<SettingsView />, { wrapper: NavigationTestProvider });
   await userEvent.click(
     await screen.findByRole('button', { name: /deployment.*ai/i }),
   );
 }
 
 beforeEach(() => {
+  window.history.replaceState(null, '', '/settings');
   swrData.clear();
   swrErrors.clear();
   swrLoadingKeys.clear();

@@ -16,6 +16,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 // ──────────────────────────────────────────────────────────────────────────────
 // SWR mock — keyed cache so we can return per-call data
@@ -173,7 +174,8 @@ async function renderDeploymentTab(options: {
     swrErrors.delete(CRED_KEY);
   }
 
-  render(<SettingsView />);
+  window.history.replaceState(null, '', '/settings');
+  render(<SettingsView />, { wrapper: NavigationTestProvider });
 
   // Navigate to the Deployment & AI tab
   const deploymentTab = await screen.findByRole('button', {
