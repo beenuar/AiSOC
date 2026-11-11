@@ -266,7 +266,18 @@ class CreateConnectorRequest(BaseModel):
 
 
 class UpdateConnectorRequest(BaseModel):
-    name: str | None = None
+    """Partial update of a saved connector.
+
+    ``auth_config`` and ``connector_config`` are merged into what is stored,
+    one top-level key at a time: a key the caller supplies replaces the stored
+    value, a key supplied as ``null`` is removed, and a key the caller omits
+    is left alone. That is what lets the console's edit dialog rotate one
+    secret without re-typing the others, and change a poll knob without
+    clearing the ``checkpoint`` and ``filter_rules`` the connectors service
+    keeps in the same column.
+    """
+
+    name: str | None = Field(default=None, min_length=1, max_length=255)
     is_enabled: bool | None = None
     auth_config: dict[str, Any] | None = None
     connector_config: dict[str, Any] | None = None
@@ -782,6 +793,27 @@ async def list_connectors(
     return [_build_connector_response(c) for c in connectors]
 
 
+def merge_config_patch(stored: Any, patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge one PATCH body into a stored config blob, a top-level key at a time.
+
+    A supplied key replaces the stored value, a key supplied as ``None`` is
+    removed, and every key the patch does not name survives. This is RFC 7396
+    applied at depth one: nested values (a pasted service-account JSON, a
+    ``filter_rules`` list) are replaced as a unit, never merged into.
+
+    A stored value that is not a mapping is treated as empty. The connectors
+    service heals the legacy array shape on its own writes, and a row still in
+    that shape cannot be listed through :class:`ConnectorResponse` anyway.
+    """
+    merged: dict[str, Any] = dict(stored) if isinstance(stored, dict) else {}
+    for key, value in patch.items():
+        if value is None:
+            merged.pop(key, None)
+        else:
+            merged[key] = value
+    return merged
+
+
 def _refuse_internal_destinations(*configs: dict[str, Any] | None) -> None:
     """Refuse connector config whose URL-shaped values point inside the deployment.
 
@@ -892,17 +924,24 @@ async def update_connector(
 ) -> ConnectorResponse:
     """Update a connector's configuration or state.
 
-    The PATCH semantics here are deliberately conservative: only fields
-    the caller actually supplies are touched. Notably, sending an empty
-    ``auth_config`` dict will overwrite all secrets — the wizard must
-    therefore omit the field entirely when the operator hasn't re-typed
-    credentials.
+    Only fields the caller supplies are touched, and the two config blobs
+    are merged key by key rather than replaced (see
+    :class:`UpdateConnectorRequest`). Replacing them wholesale meant an edit
+    that re-typed one secret erased every other one, and an edit to one poll
+    knob erased the checkpoint, so the next poll re-read its whole lookback.
     """
+    # Lock the row for the read-merge-write below. The scheduler advances
+    # ``connector_config.checkpoint`` and the OAuth refresh worker rewrites
+    # ``auth_config`` on their own schedules; without the lock a write of
+    # theirs landing between this read and the update would be overwritten
+    # with the stale copy merged here.
     result = await db.execute(
-        select(Connector).where(
+        select(Connector)
+        .where(
             Connector.id == connector_id,
             Connector.tenant_id == current_user.tenant_id,
         )
+        .with_for_update()
     )
     connector = result.scalar_one_or_none()
     if connector is None:
@@ -917,9 +956,12 @@ async def update_connector(
         val = getattr(request, field, None)
         if val is None:
             continue
+        if field in ("auth_config", "connector_config"):
+            val = merge_config_patch(getattr(connector, field), val)
         if field == "auth_config":
-            # Re-encrypt on every write so a partial PATCH still leaves
-            # all secret leaves under the current primary key.
+            # Stored leaves are already vault tokens, which ``encrypt``
+            # passes through unchanged, so this encrypts only the values
+            # the caller supplied in cleartext.
             try:
                 val = get_vault().encrypt_dict(val)
             except CredentialVaultError as exc:

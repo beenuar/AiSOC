@@ -29,6 +29,7 @@ import {
   type ConnectorHealthSummary,
 } from '@/lib/api';
 import { AddConnectorModal } from './AddConnectorModal';
+import { EditConnectorModal } from './EditConnectorModal';
 import { ConnectorInstanceList } from './ConnectorInstanceList';
 import { InboxTokensPanel } from './InboxTokensPanel';
 import { demoFallback } from '@/lib/demoFallback';
@@ -74,6 +75,7 @@ const DEMO_CONNECTORS: Connector[] = [
 
 export function ConnectorsView() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Connector | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResults, setTestResults] = useState<Record<string, boolean | undefined>>({});
 
@@ -184,13 +186,8 @@ export function ConnectorsView() {
     }
   };
 
-  const handleConfigure = (_connector: Connector) => {
-    // Inline edit dialog ships in a follow-up. For now, surface a hint so
-    // operators don't think the button is broken — the modal already covers
-    // create + test, which is the high-value path for v1.
-    toast('Connector editing UI is coming soon. Delete + re-add for now.', {
-      icon: '🔧',
-    });
+  const handleConfigure = (connector: Connector) => {
+    setEditing(connector);
   };
 
   const handleCreated = () => {
@@ -322,6 +319,12 @@ export function ConnectorsView() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         onCreated={handleCreated}
+      />
+
+      <EditConnectorModal
+        connector={editing}
+        onClose={() => setEditing(null)}
+        onSaved={() => mutate()}
       />
     </div>
   );

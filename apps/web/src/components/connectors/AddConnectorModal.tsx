@@ -58,7 +58,7 @@ import {
  * service, the detail names the status, the service and the variable to set,
  * and the status line alone names none of them.
  */
-function describeApiError(err: unknown, fallback: string): string {
+export function describeApiError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) {
     if (err.body) {
       try {
@@ -153,9 +153,11 @@ interface FieldInputProps {
   field: ConnectorSchemaField;
   value: string | number | boolean;
   onChange: (next: string | number | boolean) => void;
+  /** Set on the control so a `<label htmlFor>` outside it can name it. */
+  id?: string;
 }
 
-function FieldInput({ field, value, onChange }: FieldInputProps) {
+export function FieldInput({ field, value, onChange, id }: FieldInputProps) {
   const baseClass =
     'w-full bg-gray-950/60 border border-gray-800 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-600 focus:outline-none focus:border-blue-500/60 focus:ring-1 focus:ring-blue-500/30 transition-colors';
 
@@ -163,6 +165,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
     case 'secret':
       return (
         <input
+          id={id}
           type="password"
           autoComplete="new-password"
           value={String(value ?? '')}
@@ -175,6 +178,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
     case 'textarea':
       return (
         <textarea
+          id={id}
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           placeholder={field.placeholder}
@@ -186,6 +190,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
     case 'select':
       return (
         <select
+          id={id}
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           className={baseClass}
@@ -203,6 +208,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
       return (
         <label className="flex items-center gap-2 cursor-pointer select-none">
           <input
+            id={id}
             type="checkbox"
             checked={Boolean(value)}
             onChange={(e) => onChange(e.target.checked)}
@@ -214,6 +220,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
     case 'number':
       return (
         <input
+          id={id}
           type="number"
           value={typeof value === 'number' ? value : Number(value ?? 0)}
           onChange={(e) => {
@@ -229,6 +236,7 @@ function FieldInput({ field, value, onChange }: FieldInputProps) {
     default:
       return (
         <input
+          id={id}
           type="text"
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
