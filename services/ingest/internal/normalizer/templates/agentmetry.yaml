@@ -75,6 +75,47 @@ field_map:
   tool.input_hash: finding.evidence.input_sha256
   tool.command: finding.evidence.command
   dlp.rule_id: finding.evidence.dlp_rule_id
+  # Selected vendor context, not a copy of the raw payload. Account claims
+  # stay separate from actor.user: local_config is the last sign-in on the
+  # machine, not proof of who made a call. Full email and opaque account/user
+  # ids are deliberately not mapped, even when present in the source event.
+  schema_version: finding.evidence.agentmetry.schema_version
+  action.type: finding.evidence.agentmetry.event_type
+  source.adapter: finding.evidence.agentmetry.adapter
+  initiator.operator_source: finding.evidence.agentmetry.operator_source
+  account.domain: finding.evidence.agentmetry.account.domain
+  account.source: finding.evidence.agentmetry.account.source
+  account.organization_id: finding.evidence.agentmetry.account.organization_id
+  # Exact supporting event references and the sensor's correlation window.
+  # These are source ids, not AiSOC's generated ingest-envelope ids.
+  detection.event_ids: finding.evidence.agentmetry.detection.event_ids
+  detection.first_seen_utc: finding.evidence.agentmetry.detection.first_seen_utc
+  detection.last_seen_utc: finding.evidence.agentmetry.detection.last_seen_utc
+  # Preserve unknown, missing, false and zero as reported. Health observations
+  # remain 6003 activity; mapping evidence does not create an alert or prove
+  # that every agent action was captured.
+  heartbeat.interval_seconds: finding.evidence.agentmetry.heartbeat.interval_seconds
+  heartbeat.hooks: finding.evidence.agentmetry.heartbeat.hooks
+  heartbeat.hook_profile: finding.evidence.agentmetry.heartbeat.hook_profile
+  heartbeat.hooks_uncovered: finding.evidence.agentmetry.heartbeat.hooks_uncovered
+  heartbeat.hooks_unverified: finding.evidence.agentmetry.heartbeat.hooks_unverified
+  heartbeat.hooks_silent: finding.evidence.agentmetry.heartbeat.hooks_silent
+  heartbeat.spool_depth: finding.evidence.agentmetry.heartbeat.spool_depth
+  heartbeat.mcp_config_digest: finding.evidence.agentmetry.heartbeat.mcp_config_digest
+  heartbeat.mcp_schema_digest: finding.evidence.agentmetry.heartbeat.mcp_schema_digest
+  heartbeat.mcp_schema_servers: finding.evidence.agentmetry.heartbeat.mcp_schema_servers
+  # A failed listing has no fingerprint. A first sighting or rebaseline is
+  # not a schema change; keep status and unverified_baseline explicit.
+  mcp_schema.server_id: finding.evidence.agentmetry.mcp_schema.server_id
+  mcp_schema.server_version: finding.evidence.agentmetry.mcp_schema.server_version
+  mcp_schema.status: finding.evidence.agentmetry.mcp_schema.status
+  mcp_schema.fingerprint: finding.evidence.agentmetry.mcp_schema.fingerprint
+  mcp_schema.tool_count: finding.evidence.agentmetry.mcp_schema.tool_count
+  mcp_schema.list_changed: finding.evidence.agentmetry.mcp_schema.list_changed
+  mcp_schema.tools_changed: finding.evidence.agentmetry.mcp_schema.tools_changed
+  mcp_schema.tools_added: finding.evidence.agentmetry.mcp_schema.tools_added
+  mcp_schema.tools_removed: finding.evidence.agentmetry.mcp_schema.tools_removed
+  mcp_schema.unverified_baseline: finding.evidence.agentmetry.mcp_schema.unverified_baseline
   # MITRE ATLAS ids, in evidence fields — never in mitre_attck (see header).
   # Two sources, two destinations, because a field map with two sources on
   # one destination resolves in Go map iteration order, which is random.
