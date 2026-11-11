@@ -96,6 +96,14 @@ class AlertEnricher:
         if not items:
             return {}
 
+        # The enrichment service's threatintel feed-lookup provider must declare
+        # a tenant to authenticate its service call, and the enrichment cache is
+        # tenant-scoped, so carry the alert's tenant on every bulk item.
+        alert_tenant = str(getattr(alert, "tenant_id", "") or "")
+        if alert_tenant:
+            for item in items:
+                item["tenant_id"] = alert_tenant
+
         # The tenant's own store first, because it works without the
         # `full` profile. Its result is merged under the external one when
         # both answer, so a deployment that runs enrichment is unaffected.

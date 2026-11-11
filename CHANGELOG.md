@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Per-IOC threat-intel feed lookup, wired into scoring and investigation.**
+  The confidence scorer has always recognised feed-sourced TI hits — `misp`,
+  `otx`, `taxii`, `kev` — but nothing populated those slots: the feeds landed
+  in the threat-intel stores while the scorer read `fused.enrichments`, which
+  only the enrichment service writes. A new `ThreatIntelClient` in
+  `services/enrichment` asks `services/threatintel`'s existing per-IOC search
+  on every IP, domain, URL and hash, and a match surfaces under the matching
+  feed's own source name, so a feed hit now moves the alert's confidence and
+  appears in investigations. Two tenant-propagation gaps are closed with it:
+  fusion's `AlertEnricher` carries the alert's tenant on each bulk item, and
+  the investigator's `enrich_ioc` forwards the run's tenant bound by the
+  registry closure — never an LLM-visible argument. The lookup URL is built
+  positionally (`url.URL` + `url.Values`), confining the attacker-influenced
+  IOC value to the encoded query string.
+
 - **Sophos Central connector.** `sophos_central` reads Sophos Central alerts
   — endpoint and server threats, exploit and ransomware protection, intrusion
   prevention — through `GET /siem/v1/alerts`, the feed Sophos's own SIEM
