@@ -249,7 +249,7 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
                     },
                     "required": ["ioc_value", "ioc_type"],
                 },
-                fn=lambda ioc_value, ioc_type: enrich_ioc(ioc_value, ioc_type),
+                fn=lambda ioc_value, ioc_type: enrich_ioc(ioc_value, ioc_type, tenant_id=tenant_id),
             ),
         ]
     )

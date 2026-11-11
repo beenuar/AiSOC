@@ -88,3 +88,19 @@ async def test_enrich_ioc_reaches_service_on_default_url(monkeypatch: pytest.Mon
     assert "error" not in result, f"enrich_ioc returned an error: {result!r}"
     assert result.get("risk_score") == 100
     assert result.get("ioc_type") == "ip"
+
+
+@respx.mock
+async def test_enrich_ioc_forwards_the_bound_tenant(monkeypatch: pytest.MonkeyPatch):
+    """The enrichment service's threatintel feed-lookup provider authenticates
+    its service call with the tenant, so the investigation must forward the run's
+    tenant on every ``enrich_ioc`` call. The tenant is bound by the registry (it
+    is never an LLM-visible argument), so without this the feed-lookup silently
+    no-ops during investigations while it fires on the fuse-time path."""
+    module = _reload_tools(monkeypatch)
+    route = respx.post(f"{_IN_CLUSTER_ENRICHMENT}/enrich").mock(side_effect=_enrichment_contract)
+
+    await module.enrich_ioc("185.220.101.1", "ip", tenant_id="11111111-1111-1111-1111-111111111111")
+
+    sent = json.loads(route.calls.last.request.content)
+    assert sent.get("tenant_id") == "11111111-1111-1111-1111-111111111111", f"enrich_ioc must forward the bound tenant; got {sent!r}"
