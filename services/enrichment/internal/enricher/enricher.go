@@ -41,6 +41,9 @@ type Enricher struct {
 	domainToolsClient *DomainToolsClient
 	riskIQClient      *RiskIQClient
 	csIntelClient     *CrowdstrikeIntelClient
+
+	// Internal: the platform's own threat-intel feed store (services/threatintel)
+	tiClient *ThreatIntelClient
 }
 
 // Config holds Enricher dependency configuration.
@@ -72,6 +75,12 @@ type Config struct {
 	RiskIQAPIKey           string
 	CrowdstrikeIntelID     string
 	CrowdstrikeIntelSecret string
+
+	// Platform threat-intel feed lookup (services/threatintel): the per-IOC
+	// bridge to the OTX / MISP / TAXII / KEV feeds. Needs the in-cluster URL
+	// and a service token to authenticate.
+	ThreatIntelURL string
+	ServiceToken   string
 }
 
 // New creates a new Enricher with all configured data sources.
@@ -99,6 +108,7 @@ func New(cfg Config) *Enricher {
 		domainToolsClient: NewDomainToolsClient(cfg.DomainToolsUsername, cfg.DomainToolsAPIKey),
 		riskIQClient:      NewRiskIQClient(cfg.RiskIQUsername, cfg.RiskIQAPIKey),
 		csIntelClient:     NewCrowdstrikeIntelClient(cfg.CrowdstrikeIntelID, cfg.CrowdstrikeIntelSecret),
+		tiClient:          NewThreatIntelClient(cfg.ThreatIntelURL, cfg.ServiceToken),
 	}
 }
 
@@ -110,6 +120,10 @@ func (e *Enricher) Enrich(ctx context.Context, req EnrichRequest) (*EnrichmentRe
 	// for the other. A shared key would serve tenant A's verdict from a
 	// provider tenant B switched off straight to tenant B.
 	cacheKey := cache.MakeTenantKey(req.TenantID, string(req.IOCType), req.Value)
+
+	// Carry the tenant through the fan-out so the threatintel feed lookup can
+	// declare it on its service call (it rejects a tenant-less service token).
+	ctx = WithTenant(ctx, req.TenantID)
 
 	if !req.Force && e.cache != nil {
 		var cached EnrichmentResult
@@ -211,6 +225,7 @@ func (e *Enricher) enrichIP(ctx context.Context, ip string) (*EnrichmentResult, 
 		{"intel471", func() (*EnrichmentResult, error) { return e.intel471Client.EnrichIP(ctx, ip) }},
 		{"riskiq", func() (*EnrichmentResult, error) { return e.riskIQClient.EnrichIP(ctx, ip) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichIP(ctx, ip) }},
+		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichIP(ctx, ip) }},
 	}
 	return mergeResults(IOCTypeIP, ip, runFanOut(ctx, ip, tasks)), nil
 }
@@ -228,6 +243,7 @@ func (e *Enricher) enrichDomain(ctx context.Context, domain string) (*Enrichment
 		{"domaintools", func() (*EnrichmentResult, error) { return e.domainToolsClient.EnrichDomain(ctx, domain) }},
 		{"riskiq", func() (*EnrichmentResult, error) { return e.riskIQClient.EnrichDomain(ctx, domain) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichDomain(ctx, domain) }},
+		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichDomain(ctx, domain) }},
 	}
 	return mergeResults(IOCTypeDomain, domain, runFanOut(ctx, domain, tasks)), nil
 }
@@ -241,6 +257,7 @@ func (e *Enricher) enrichHash(ctx context.Context, hash string) (*EnrichmentResu
 		{"flashpoint", func() (*EnrichmentResult, error) { return e.flashpointClient.EnrichHash(ctx, hash) }},
 		{"intel471", func() (*EnrichmentResult, error) { return e.intel471Client.EnrichHash(ctx, hash) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichHash(ctx, hash) }},
+		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichHash(ctx, hash) }},
 	}
 	return mergeResults(IOCTypeHash, hash, runFanOut(ctx, hash, tasks)), nil
 }
@@ -251,6 +268,7 @@ func (e *Enricher) enrichURL(ctx context.Context, rawURL string) (*EnrichmentRes
 		{"cyble", func() (*EnrichmentResult, error) { return e.cybleClient.EnrichURL(ctx, rawURL) }},
 		{"recorded-future", func() (*EnrichmentResult, error) { return e.rfClient.EnrichURL(ctx, rawURL) }},
 		{"mandiant", func() (*EnrichmentResult, error) { return e.mandiantClient.EnrichURL(ctx, rawURL) }},
+		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichURL(ctx, rawURL) }},
 	}
 	return mergeResults(IOCTypeURL, rawURL, runFanOut(ctx, rawURL, tasks)), nil
 }

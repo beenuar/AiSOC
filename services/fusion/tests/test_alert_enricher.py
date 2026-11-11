@@ -114,6 +114,20 @@ async def test_enrich_calls_bulk_endpoint(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_enrich_carries_tenant_on_each_bulk_item(monkeypatch):
+    # The enrichment service's threatintel feed-lookup provider authenticates
+    # its service call with the tenant (and the enrichment cache is
+    # tenant-scoped), so every bulk item must declare the alert's tenant.
+    resp = _FakeResp(200, {"results": []})
+    monkeypatch.setattr("app.services.alert_enricher.httpx.AsyncClient", _fake_client_factory(resp))
+    alert = _alert(src_ip="1.2.3.4", domain="evil.test")
+    await _enricher().enrich(alert)
+    items = _fake_client_factory.last["json"]["items"]
+    assert items, "expected bulk items to be posted"
+    assert all(i.get("tenant_id") == str(alert.tenant_id) for i in items)
+
+
+@pytest.mark.asyncio
 async def test_enrich_is_fail_soft_on_error(monkeypatch):
     monkeypatch.setattr("app.services.alert_enricher.httpx.AsyncClient", _fake_client_factory(error=RuntimeError("boom")))
     assert await _enricher().enrich(_alert(src_ip="1.2.3.4")) == {}

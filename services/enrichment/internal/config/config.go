@@ -45,6 +45,10 @@ type Config struct {
 	CrowdstrikeIntelID     string
 	CrowdstrikeIntelSecret string
 
+	// Platform threat-intel feed lookup (services/threatintel)
+	ThreatIntelURL string
+	ServiceToken   string
+
 	// Rate limiting
 	RateLimitRPS   int
 	RateLimitBurst int
@@ -89,6 +93,8 @@ func Load() *Config {
 		RiskIQAPIKey:           getEnv("RISKIQ_API_KEY", ""),
 		CrowdstrikeIntelID:     getEnv("CROWDSTRIKE_INTEL_CLIENT_ID", ""),
 		CrowdstrikeIntelSecret: getEnv("CROWDSTRIKE_INTEL_CLIENT_SECRET", ""),
+		ThreatIntelURL:         getEnv("THREATINTEL_SERVICE_URL", ""),
+		ServiceToken:           getEnv("AISOC_SERVICE_TOKEN", ""),
 		RateLimitRPS:           rateLimitRPS,
 		RateLimitBurst:         rateLimitBurst,
 		LogLevel:               getEnv("LOG_LEVEL", "info"),

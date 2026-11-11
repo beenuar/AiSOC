@@ -69,6 +69,8 @@ func main() {
 		RiskIQAPIKey:           cfg.RiskIQAPIKey,
 		CrowdstrikeIntelID:     cfg.CrowdstrikeIntelID,
 		CrowdstrikeIntelSecret: cfg.CrowdstrikeIntelSecret,
+		ThreatIntelURL:         cfg.ThreatIntelURL,
+		ServiceToken:           cfg.ServiceToken,
 	})
 
 	log.Info().
@@ -85,6 +87,7 @@ func main() {
 		Bool("domaintools", cfg.DomainToolsAPIKey != "").
 		Bool("riskiq", cfg.RiskIQAPIKey != "").
 		Bool("crowdstrike_intel", cfg.CrowdstrikeIntelID != "" && cfg.CrowdstrikeIntelSecret != "").
+		Bool("threatintel_feed_lookup", cfg.ThreatIntelURL != "" && cfg.ServiceToken != "").
 		Msg("Threat intelligence providers configured")
 
 	// Initialize handler and server

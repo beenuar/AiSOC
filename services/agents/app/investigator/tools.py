@@ -28,16 +28,21 @@ _TIMEOUT = 10.0
 # ---------------------------------------------------------------------------
 
 
-async def enrich_ioc(ioc_value: str, ioc_type: str) -> dict[str, Any]:
+async def enrich_ioc(ioc_value: str, ioc_type: str, *, tenant_id: str = "") -> dict[str, Any]:
     """
     Call the AiSOC enrichment micro-service for a single IOC.
     Returns the enrichment result or an error dict.
+
+    ``tenant_id`` is the run's own, bound by the registry — never an
+    LLM-visible argument. The enrichment service's threatintel feed-lookup
+    provider authenticates its service call with it, so the investigation sees
+    the same TAXII/MISP/OTX/KEV feed matches that drive the alert's score.
     """
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.post(
                 f"{_ENRICHMENT_URL}/enrich",
-                json={"value": ioc_value, "ioc_type": ioc_type},
+                json={"value": ioc_value, "ioc_type": ioc_type, "tenant_id": tenant_id},
             )
             resp.raise_for_status()
             return resp.json()

@@ -698,6 +698,8 @@ services:
       ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
       GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
       SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      THREATINTEL_SERVICE_URL: ${THREATINTEL_SERVICE_URL:-http://threatintel:8005}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
     networks:
       - aisoc
     restart: unless-stopped
