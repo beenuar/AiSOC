@@ -6,6 +6,7 @@ FastAPI query validation, permission checks, SQL and response serialization run.
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -32,7 +33,16 @@ async def api():
         if os.environ.get("MSSP_ISOLATION_REQUIRED", "") not in ("", "0", "false"):
             pytest.fail("live PostgreSQL is required")
         pytest.skip("requires live PostgreSQL with the API migration chain")
+    required = os.environ.get("MSSP_ISOLATION_REQUIRED", "") not in ("", "0", "false")
     engine = create_async_engine(dsn)
+    try:
+        async with engine.connect() as probe:
+            await probe.execute(text("SELECT 1"))
+    except Exception as exc:
+        await engine.dispose()
+        if required:
+            pytest.fail(f"MSSP_ISOLATION_REQUIRED is set and no database answered at DATABASE_URL: {type(exc).__name__}: {exc}")
+        pytest.skip(f"no database at DATABASE_URL ({type(exc).__name__}) — runs in integration.yml")
     factory = async_sessionmaker(engine, expire_on_commit=False)
     async with factory() as db:
         try:
@@ -49,8 +59,6 @@ async def api():
                 (TENANT_A, "legacy matching", NOW - timedelta(hours=1), "WS-42", True),
                 (TENANT_B, "other tenant", NOW - timedelta(hours=1), "WS-42", False),
             ]
-            import json
-
             for tenant, title, event, host, legacy in fixtures:
                 await db.execute(
                     text("""INSERT INTO alerts
