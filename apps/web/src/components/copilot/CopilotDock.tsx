@@ -18,12 +18,13 @@ import Link from 'next/link';
 import { clsx } from 'clsx';
 import { motion, AnimatePresence } from 'framer-motion';
 import { copilotApi, type CopilotMessage } from '@/lib/api';
+import { presentCopilotResponse } from '@/lib/copilotReply';
 import { canUseDemoData } from '@/lib/demoFallback';
 
 const QUICK_PROMPTS = [
   'Summarize critical alerts in the last 24h.',
   'Investigate the host most at risk right now.',
-  'Which detection rules are noisiest this week?',
+  'Show high-severity alerts ingested in the last 24 hours.',
 ];
 
 /** What the dock says when the copilot could not be reached. */
@@ -128,7 +129,7 @@ export function CopilotDock() {
         context: { page: pathname },
       });
       setConversationId(res.conversationId);
-      setMessages((prev) => [...prev, res.reply]);
+      setMessages((prev) => [...prev, presentCopilotResponse(res)]);
       setOffline(false);
     } catch (err) {
       // The hosted demo has no LLM behind it and says so in the reply body.
@@ -226,8 +227,8 @@ export function CopilotDock() {
               {messages.length === 0 ? (
                 <div className="flex h-full flex-col justify-center">
                   <p className="px-1 text-xs text-slate-400">
-                    Ask anything about your environment. I have your alerts,
-                    cases, hosts, users, and detection rules.
+                    Ask about ingested alerts, cases, and observed entity risk.
+                    Reads use your permissions; unavailable data is reported explicitly.
                   </p>
                   <ul className="mt-3 space-y-1">
                     {QUICK_PROMPTS.map((p) => (

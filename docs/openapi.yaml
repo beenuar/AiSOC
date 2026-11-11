@@ -827,6 +827,38 @@ paths:
           type: string
           default: newest
           title: Sort
+      - name: event_since
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: Inclusive event_time lower bound
+          title: Event Since
+        description: Inclusive event_time lower bound
+      - name: event_until
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          description: Exclusive event_time upper bound
+          title: Event Until
+        description: Exclusive event_time upper bound
+      - name: hostname
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 255
+          - type: 'null'
+          title: Hostname
       responses:
         '200':
           description: Successful Response
