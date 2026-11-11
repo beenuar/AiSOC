@@ -74,6 +74,50 @@ templates use, so Agentmetry-observed coding agents appear in the AI estate
 inventory and the entity graph with `(:User)-[:OPERATES]->` and
 `(:Endpoint)-[:HOSTS]->` links.
 
+## Investigation context
+
+The template preserves selected optional fields under
+`finding.evidence.agentmetry`. This is vendor-reported evidence, not a new
+OCSF identity object: the ingest declaration remains OCSF `1.1.0`, while
+`finding.evidence.agentmetry.schema_version` records the source schema.
+Existing mapped fields, including `finding.uid` (the source event ID) and
+`finding.evidence.session_id`, keep their paths.
+
+| Context below `finding.evidence.agentmetry` | What it preserves |
+|---|---|
+| `event_type`, `adapter`, `operator_source` | The original event kind, capture adapter and reported origin of the operator ID. |
+| `account.domain`, `account.source`, `account.organization_id` | Selected reported account claims, separate from `actor.user`. The account block's full email and opaque account/user IDs are not mapped, even when present in the source payload. |
+| `detection.event_ids`, `detection.first_seen_utc`, `detection.last_seen_utc` | Supporting source-event references and the sensor's correlation window. |
+| `heartbeat.interval_seconds`, `heartbeat.hooks`, `heartbeat.hook_profile`, `heartbeat.hooks_uncovered`, `heartbeat.hooks_unverified`, `heartbeat.hooks_silent`, `heartbeat.spool_depth` | Recorder cadence, reported hook coverage and backlog. False, zero and empty lists are retained; missing fields stay absent. |
+| `heartbeat.mcp_config_digest`, `heartbeat.mcp_schema_digest`, `heartbeat.mcp_schema_servers` | The recorder's configured and observed MCP surface. |
+| `mcp_schema.server_id`, `mcp_schema.server_version`, `mcp_schema.status`, `mcp_schema.fingerprint`, `mcp_schema.tool_count`, `mcp_schema.list_changed`, `mcp_schema.tools_changed`, `mcp_schema.tools_added`, `mcp_schema.tools_removed`, `mcp_schema.unverified_baseline` | The observed schema state and available change details, without copying tool descriptions. |
+
+Use `detection.event_ids` to find the supporting events by their
+`finding.uid`, scoped to the same tenant and source host. These are
+Agentmetry's event IDs, not AiSOC's generated ingest-envelope IDs. Do not
+require every supporting event to share the finding's correlation ID:
+host-wide findings can reference several sessions. The legacy
+`finding.evidence.session_id` field retains the source `correlation_id`,
+which can identify a host rather than a session for these findings. A
+reference does not establish that its supporting event arrived; missing
+evidence must remain missing. This mapping adds no automatic UI pivot.
+
+Account claims do not establish who used an account or tenant membership.
+`account.source: local_config` means the account last signed in on the
+machine, which may differ from the account used for a call. Missing account
+claims mean unknown. A domain outside an approved list is something to
+review, not proof of a personal account; somebody's own domain can look the
+same as a company domain. This template does not classify domains or add
+account-based detections.
+
+Heartbeat and MCP schema events remain routine `6003` activity with no
+vendor severity. A downstream rule must decide whether they need attention.
+A missing heartbeat can also mean an offline host or a delivery failure.
+An MCP status of `new`, `same` or `rebaselined` is not `changed`; an
+`unavailable` listing has no fingerprint and must not be read as a schema
+change. Legitimate upgrades can also change a schema. These fields do not
+prove complete capture or verify the source trail.
+
 ## Why not the generic-json template?
 
 Agentmetry's events do land through `generic-json` — the POST is accepted
@@ -102,6 +146,15 @@ ATLAS exclusion, malformed-event handling, and the generic-json comparison
 above. The promotion outcomes stated here follow the fusion promoter's
 policy (category 2 always promoted; otherwise `severity_id >= 4`), which is
 pinned by its own cross-service test.
+
+**Additional synthetic mapping coverage:**
+`services/ingest/internal/inbox/agentmetry_context_test.go` extends the
+captured event shapes with invented optional claims and observations. It
+uses the real inbox JSON decoder, embedded template and normalized JSON
+round trip to check supporting-event links, account provenance and selected
+field privacy, unknown account states, zero/false/empty coverage values,
+and MCP schema states. These are mapping tests, not a new live sensor or
+backend run.
 
 **Run once by hand, not gated:** the live leg, on 2026-11-02, by
 Agentmetry's maintainer
