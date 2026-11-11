@@ -269,6 +269,11 @@ const nextConfig = {
         source: '/api/v1/copilot',
         destination: `${AGENTS_HOST}/api/v1/copilot`,
       },
+      // Explain streams are also served by agents.
+      {
+        source: '/api/v1/explain',
+        destination: `${AGENTS_HOST}/api/v1/explain`,
+      },
       // Hunt corpus management (plural /hunts)
       {
         source: '/api/v1/hunts/:path*',

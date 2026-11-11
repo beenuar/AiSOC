@@ -27,14 +27,18 @@ import { AUTH_TOKEN_KEY } from '@/lib/api';
 import type { MarketplaceItem } from './MarketplaceView';
 
 const swrCalls = vi.hoisted(() => new Map<string, unknown>());
+const swrFetchers = vi.hoisted(() => new Map<string, (url: string) => Promise<unknown>>());
 vi.mock('swr', () => ({
   __esModule: true,
-  default: (key: string) => ({
-    data: swrCalls.get(key),
-    error: undefined,
-    isLoading: false,
-    mutate: vi.fn(async () => undefined),
-  }),
+  default: (key: string, fetcher: (url: string) => Promise<unknown>) => {
+    swrFetchers.set(key, fetcher);
+    return {
+      data: swrCalls.get(key),
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(async () => undefined),
+    };
+  },
 }));
 
 import { MarketplaceView } from './MarketplaceView';
@@ -58,6 +62,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   swrCalls.clear();
+  swrFetchers.clear();
   swrCalls.set('/marketplace/index.json', { version: '1', generated: '2026-09-28T00:00:00Z', items: [RULE] });
   swrCalls.set('/api/v1/marketplace/installed', { total: 0, items: [] });
   window.localStorage.setItem(AUTH_TOKEN_KEY, 'a.real.session');
@@ -77,6 +82,30 @@ function card() {
 }
 
 describe('the Install control', () => {
+  it('treats an anonymous installed-set 401 as the static preview', async () => {
+    window.localStorage.clear();
+    const currentPath = window.location.pathname;
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 }));
+    render(<MarketplaceView />);
+
+    const url = '/api/v1/marketplace/installed';
+    await expect(swrFetchers.get(url)!(url)).resolves.toBeNull();
+    expect(window.location.pathname).toBe(currentPath);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not turn a rejected saved session into an empty installed-set', async () => {
+    // Clearing the terminally rejected credential must not make this
+    // response look like the anonymous static-preview case after awaiting it.
+    window.history.replaceState(null, '', '/login');
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 }));
+    render(<MarketplaceView />);
+
+    const url = '/api/v1/marketplace/installed';
+    await expect(swrFetchers.get(url)!(url)).rejects.toThrow('installed: Not authenticated');
+    expect(window.localStorage.getItem(AUTH_TOKEN_KEY)).toBeNull();
+  });
+
   it('does not claim to have installed anything when the API refuses', async () => {
     fetchMock.mockResolvedValue({
       ok: false,

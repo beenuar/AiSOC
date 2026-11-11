@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { apiFetch } from "@/lib/api";
 import { canUseDemoData } from "@/lib/demoFallback";
 
 // ---------------------------------------------------------------------------
@@ -549,7 +550,8 @@ export default function InvestigationTimeline({
     setBundleState('downloading');
     setBundleError(null);
     try {
-      const res = await fetch(`${apiBase}/investigations/${runId}/bundle`, {
+      const res = await apiFetch(`${apiBase}/investigations/${runId}/bundle`, {
+        baseUrl: '',
         credentials: 'include',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -576,7 +578,8 @@ export default function InvestigationTimeline({
   const fetchTimeline = useCallback(async () => {
     if (!runId) return;
     try {
-      const res = await fetch(`${apiBase}/investigations/${runId}/timeline`, {
+      const res = await apiFetch(`${apiBase}/investigations/${runId}/timeline`, {
+        baseUrl: '',
         credentials: "include",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

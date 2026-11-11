@@ -22,7 +22,7 @@
 
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
-import { apiHeaders } from "@/lib/api";
+import { apiFetch, apiHeaders } from "@/lib/api";
 
 const KINDS = [
   { value: "", label: "All kinds" },
@@ -72,7 +72,7 @@ interface AiAssetList {
 }
 
 const fetcher = (url: string) =>
-  fetch(url, { headers: apiHeaders() }).then((r) => {
+  apiFetch(url, { baseUrl: '', headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   });
@@ -116,7 +116,8 @@ export default function AiEstateView() {
   const { data, error, isLoading } = useSWR<AiAssetList>(key, fetcher, { refreshInterval: 30_000 });
 
   const sanction = async (id: string, value: boolean | null) => {
-    await fetch(`/api/v1/ai-assets/${id}/sanction`, {
+    await apiFetch(`/api/v1/ai-assets/${id}/sanction`, {
+      baseUrl: '',
       method: "POST",
       headers: apiHeaders(),
       body: JSON.stringify({ sanctioned: value }),

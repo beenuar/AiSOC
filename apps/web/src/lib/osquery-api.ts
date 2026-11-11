@@ -13,7 +13,7 @@
  * "the caller did not name a tenant".
  */
 
-import { ApiError, AUTH_TOKEN_KEY } from '@/lib/api';
+import { apiFetch, ApiError, AUTH_TOKEN_KEY } from '@/lib/api';
 
 const OSQUERY_BASE =
   (process.env.NEXT_PUBLIC_OSQUERY_TLS_URL ?? '') + '/api/v1/osquery';
@@ -99,7 +99,7 @@ async function get<T>(path: string, params?: Record<string, string | number | un
     typeof window !== 'undefined' ? window.localStorage.getItem(AUTH_TOKEN_KEY) : null;
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(url.toString(), { headers });
+  const res = await apiFetch(url.toString(), { headers, omitTenantHeader: true });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     // `ApiError`, not a bare `Error`: the status is the only thing that

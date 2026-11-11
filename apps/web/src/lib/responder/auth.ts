@@ -1,15 +1,18 @@
 /**
  * Token + session storage for the mobile responder PWA.
  *
- * The desktop console relies on cookies set by the API gateway, but the
- * passkey login on mobile returns the JWT pair in the response body
- * (so we can finish the WebAuthn ceremony in a single fetch). We persist
- * those tokens in `localStorage` and let the global `request()` helper in
- * `lib/api.ts` pick them up via the `Authorization` header.
+ * Desktop and passkey sign-ins share the JWT pair in `localStorage`.
+ * The API client attaches the bearer credential and renews expired access
+ * tokens, so the responder gate must also accept a recoverable session.
  */
 
-const ACCESS_KEY = 'aisoc.responder.accessToken';
-const REFRESH_KEY = 'aisoc.responder.refreshToken';
+import {
+  AUTH_REFRESH_KEY as REFRESH_KEY,
+  AUTH_TOKEN_KEY as ACCESS_KEY,
+  authApi,
+  isTokenExpired,
+} from '../api';
+
 const EXPIRES_KEY = 'aisoc.responder.expiresAt';
 const PROFILE_KEY = 'aisoc.responder.profile';
 
@@ -45,6 +48,9 @@ export function saveSession(args: {
   expires_in: number;
   profile?: ResponderProfile;
 }): void {
+  // Invalidate requests from the previous login before replacing its pair.
+  // A desktop user cache must not describe this newly authenticated responder.
+  authApi.logout();
   const expiresAt = Date.now() + args.expires_in * 1000;
   safeSet(ACCESS_KEY, args.access_token);
   safeSet(REFRESH_KEY, args.refresh_token);
@@ -56,14 +62,9 @@ export function saveSession(args: {
 
 export function getAccessToken(): string | null {
   const token = safeGet(ACCESS_KEY);
-  if (!token) return null;
-  const expires = Number(safeGet(EXPIRES_KEY));
-  if (Number.isFinite(expires) && expires > 0 && Date.now() > expires) {
-    // The token is stale. Leave the refresh token alone so the caller can
-    // attempt a silent re-auth, but don't return the expired access token.
-    return null;
-  }
-  return token;
+  // The JWT may have been renewed by a desktop request after the original
+  // passkey expiresAt was stored. Only the current token's expiry applies.
+  return token && !isTokenExpired(token) ? token : null;
 }
 
 export function getRefreshToken(): string | null {
@@ -81,15 +82,14 @@ export function getProfile(): ResponderProfile | null {
 }
 
 export function clearSession(): void {
-  safeSet(ACCESS_KEY, null);
-  safeSet(REFRESH_KEY, null);
+  authApi.logout();
   safeSet(EXPIRES_KEY, null);
   safeSet(PROFILE_KEY, null);
 }
 
-/** True when we *think* the user is signed in (token present and unexpired). */
+/** A live access token or a refresh token that can recover the session. */
 export function isAuthenticated(): boolean {
-  return getAccessToken() !== null;
+  return authApi.isAuthenticated();
 }
 
 /**

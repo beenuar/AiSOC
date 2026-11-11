@@ -28,11 +28,6 @@ vi.mock('swr', () => ({
   mutate: (...args: unknown[]) => mutateMock(...args),
 }));
 
-vi.mock('@/lib/api', () => ({
-  __esModule: true,
-  apiHeaders: () => ({ 'Content-Type': 'application/json' }),
-}));
-
 import AiEstateView from './AiEstateView';
 
 function asset(overrides: Record<string, unknown> = {}) {
