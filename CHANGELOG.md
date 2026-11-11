@@ -48,6 +48,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to its tag's bytes and the credit lives in `.github/CREDITS.md`, the
   surface built to stay current.
 
+- **A saved connector can be edited from the console.** **Configure** on a
+  connector card was disabled ("planned for v1.1") and its handler answered
+  "Delete + re-add", while the GitHub, GitLab, Falco, Tines, Torq and Entra
+  pages already told operators to rotate credentials through the AiSOC
+  connector edit screen. Re-adding a connector costs its id, its checkpoint
+  (the first poll re-reads the whole lookback), its event counters and, for
+  push connectors, the ingest token the sender is configured with. The new
+  `EditConnectorModal` builds its form from the catalog schema, prefills the
+  stored settings, starts every credential blank and sends only what changed:
+  a typed credential replaces its own key, a blank one is kept, a cleared
+  optional setting is removed. To make that safe,
+  `PATCH /api/v1/connectors/{id}` now merges `auth_config` and
+  `connector_config` into the stored row one top-level key at a time — a
+  supplied key replaces, `null` removes, an omitted key survives — under a
+  row lock, so the scheduler's checkpoint write cannot be overwritten by a
+  concurrent edit. Before this, both blobs were replaced wholesale: re-typing
+  one secret erased the others, a change to one setting erased the
+  `checkpoint` and `filter_rules` beside it, and `{"auth_config": {}}` erased
+  every credential. An API client that relied on the replacement to drop a
+  key now sends that key as `null`. A blank `name` is refused with 422
+  instead of being stored.
+
 ### Fixed
 
 - **Cortex XDR and Cortex XSIAM read 100 incidents per poll and lost the

@@ -122,6 +122,32 @@ The catalog ships with **92 connectors** out of the box, registered in [`service
 4. Click **Test connection**. The pre-save test is stateless — credentials are sent once over TLS, the target API is called, and **nothing is persisted** unless the test passes and you click **Save**.
 5. On save, the credentials are encrypted in the vault, the instance is stored with `is_enabled=true`, and the scheduler picks it up on the next reload (within 30 seconds).
 
+## Editing a connector
+
+Click **Configure** on a connector's card to rename it, change its settings or
+rotate a credential. The form is the same schema-driven one the wizard uses,
+with the instance's stored settings filled in.
+
+- **Credential fields start blank, and blank keeps the stored value.** A
+  credential is never sent back to the browser, so there is nothing to show.
+  Type a new value only into the credential you are rotating; the others are
+  left as they are.
+- **Only the fields you change are saved.** Clearing an optional setting
+  removes it. Everything else the instance keeps in its configuration — the
+  scheduler's `checkpoint` and any `filter_rules` — is untouched, so the next
+  poll resumes where the last one ended instead of re-reading the lookback.
+- The next poll reads the new values; every poll re-reads the row, and a
+  changed poll interval is picked up on the next reload (within 30 seconds).
+  Use **Test** on the card afterwards to check rotated credentials.
+
+Editing keeps the instance's id, event counters and push ingest token, which
+deleting and re-adding the connector does not.
+
+The API call behind it is `PATCH /api/v1/connectors/{id}`. Its `auth_config`
+and `connector_config` are merged into what is stored one top-level key at a
+time: a key you send replaces the stored value, a key sent as `null` is
+removed, and a key you leave out is kept.
+
 ### Where the catalog grid comes from
 
 The wizard's grid is `GET /api/v1/connectors/catalog`, which the API service

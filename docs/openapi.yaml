@@ -2773,15 +2773,15 @@ paths:
       description: 'Update a connector''s configuration or state.
 
 
-        The PATCH semantics here are deliberately conservative: only fields
+        Only fields the caller supplies are touched, and the two config blobs
 
-        the caller actually supplies are touched. Notably, sending an empty
+        are merged key by key rather than replaced (see
 
-        ``auth_config`` dict will overwrite all secrets — the wizard must
+        :class:`UpdateConnectorRequest`). Replacing them wholesale meant an edit
 
-        therefore omit the field entirely when the operator hasn''t re-typed
+        that re-typed one secret erased every other one, and an edit to one poll
 
-        credentials.'
+        knob erased the checkpoint, so the next poll re-read its whole lookback.'
       operationId: update_connector_api_v1_connectors__connector_id__patch
       security:
       - HTTPBearer: []
@@ -43407,6 +43407,8 @@ components:
         name:
           anyOf:
           - type: string
+            maxLength: 255
+            minLength: 1
           - type: 'null'
           title: Name
         is_enabled:
@@ -43435,6 +43437,22 @@ components:
           title: Tags
       type: object
       title: UpdateConnectorRequest
+      description: 'Partial update of a saved connector.
+
+
+        ``auth_config`` and ``connector_config`` are merged into what is stored,
+
+        one top-level key at a time: a key the caller supplies replaces the stored
+
+        value, a key supplied as ``null`` is removed, and a key the caller omits
+
+        is left alone. That is what lets the console''s edit dialog rotate one
+
+        secret without re-typing the others, and change a poll knob without
+
+        clearing the ``checkpoint`` and ``filter_rules`` the connectors service
+
+        keeps in the same column.'
     UpdateHuntRequest:
       properties:
         title:
