@@ -58,6 +58,7 @@ import asyncio
 import os
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 
 import pytest
 import pytest_asyncio
@@ -186,6 +187,80 @@ async def _login(client, email: str, password: str) -> dict:
     r = await client.post("/api/v1/auth/login", json={"email": email, "password": password})
     assert r.status_code == 200, r.text
     return r.json()
+
+
+# ---------------------------------------------------------------------------
+# Refresh — access expiry is not the end of a renewable session
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_refresh_recovers_an_expired_access_token(client, engine, tenant) -> None:  # noqa: ANN001
+    """The console can renew through the real app without a valid access token.
+
+    Keep the refresh credential returned by password login. Only backdate
+    the access token, using the production signer, to reach the expiry
+    boundary without making the suite wait for its full lifetime.
+    """
+    from app.core.security import create_access_token, decode_token
+
+    user_id, email = await _make_user(engine)
+    tokens = await _login(client, email, START_PASSWORD)
+    expired_access = create_access_token(decode_token(tokens["access_token"]), expires_delta=timedelta(seconds=-1))
+    expired_auth = {"Authorization": f"Bearer {expired_access}"}
+
+    expired = await client.get("/api/v1/auth/me", headers=expired_auth)
+    assert expired.status_code == 401, expired.text
+
+    refreshed = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": tokens["refresh_token"]},
+        headers=expired_auth,
+    )
+    assert refreshed.status_code == 200, refreshed.text
+    renewed = refreshed.json()
+    assert decode_token(renewed["refresh_token"])["type"] == "refresh"
+    assert renewed["expires_in"] > 0
+
+    me = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {renewed['access_token']}"})
+    assert me.status_code == 200, me.text
+    assert me.json()["id"] == str(user_id)
+    assert me.json()["tenant_id"] == str(TENANT)
+    assert me.json()["email"] == email
+
+
+@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.parametrize("rejection", ["expired_refresh", "access_token", "inactive_user"])
+async def test_refresh_rejects_unusable_credentials(client, engine, tenant, rejection: str) -> None:  # noqa: ANN001
+    """Renewal does not extend expired credentials or reactivate an account.
+
+    The reset tests below separately pin explicit revocation, including
+    the rejection of a refresh token that has not yet expired.
+    """
+    import jwt
+    import sqlalchemy
+    from app.core.config import settings
+    from app.core.security import decode_token
+
+    user_id, email = await _make_user(engine)
+    tokens = await _login(client, email, START_PASSWORD)
+    refresh = tokens["refresh_token"]
+    if rejection == "expired_refresh":
+        payload = decode_token(refresh)
+        payload["exp"] = datetime.now(UTC) - timedelta(seconds=1)
+        refresh = jwt.encode(payload, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    elif rejection == "access_token":
+        refresh = tokens["access_token"]
+    else:
+        async with engine.begin() as conn:
+            await conn.execute(
+                sqlalchemy.text("UPDATE users SET is_active = false WHERE id = CAST(:i AS uuid)"),
+                {"i": str(user_id)},
+            )
+
+    rejected = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh})
+    assert rejected.status_code == 401, rejected.text
+    assert "access_token" not in rejected.json()
 
 
 # ---------------------------------------------------------------------------

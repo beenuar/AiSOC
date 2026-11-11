@@ -60,7 +60,7 @@ const STATUS_BADGE: Record<string, string> = {
 };
 
 const fetcher = (url: string) =>
-  fetch(url, { headers: apiHeaders() }).then((r) => {
+  apiFetch(url, { baseUrl: '', headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   });

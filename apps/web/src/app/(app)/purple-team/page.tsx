@@ -4,7 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { demoFallback } from '@/lib/demoFallback';
 import { useTenantId } from '@/components/layout/TenantProvider';
-import { apiHeaders } from '@/lib/api';
+import { apiFetch, apiHeaders } from '@/lib/api';
 
 // Same-origin by default — Next.js rewrites proxy `/api/v1/purple-team/*` to
 // the purple-team service. Override with `NEXT_PUBLIC_PURPLE_TEAM_API` for
@@ -125,7 +125,7 @@ interface TabletopSession {
 // below is `null`-gated on it so no request is issued against a guess.
 
 const fetcher = (url: string) =>
-  fetch(url, { headers: apiHeaders() }).then((r) => {
+  apiFetch(url, { baseUrl: '', headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     return r.json()
   })
@@ -244,9 +244,9 @@ function CoverageHeatmap() {
     setCapturing(true)
     setCaptureError(null)
     try {
-      const res = await fetch(
+      const res = await apiFetch(
         `${API}/api/v1/purple-team/drift/snapshot?tenant_id=${tenantId}&trigger=manual`,
-        { method: 'POST', headers: apiHeaders() }
+        { baseUrl: '', method: 'POST', headers: apiHeaders() }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await mutateDrift()
@@ -589,7 +589,8 @@ function TabletopPanel() {
 
   async function createSession() {
     if (!tenantId) return
-    await fetch(`${API}/api/v1/purple-team/tabletop`, {
+    await apiFetch(`${API}/api/v1/purple-team/tabletop`, {
+      baseUrl: '',
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({
@@ -605,21 +606,22 @@ function TabletopPanel() {
   }
 
   async function addFinding(sessionId: string) {
-    await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/findings`, {
+    await apiFetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/findings`, {
+      baseUrl: '',
       method: 'POST',
       headers: apiHeaders(),
       body: JSON.stringify({ finding: newFinding, severity: newFindingSeverity }),
     })
     setNewFinding('')
     mutate()
-    const res = await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}`, { headers: apiHeaders() })
+    const res = await apiFetch(`${API}/api/v1/purple-team/tabletop/${sessionId}`, { baseUrl: '', headers: apiHeaders() })
     if (!res.ok) return
     const updated = await res.json()
     setSelectedSession(updated)
   }
 
   async function completeSession(sessionId: string) {
-    await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/complete`, { method: 'PATCH', headers: apiHeaders() })
+    await apiFetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/complete`, { baseUrl: '', method: 'PATCH', headers: apiHeaders() })
     mutate()
   }
 
@@ -804,7 +806,8 @@ function ReportDetectionModal({
   const [latency, setLatency] = useState('')
 
   async function save() {
-    await fetch(`${API}/api/v1/purple-team/executions/${execution.id}/detection`, {
+    await apiFetch(`${API}/api/v1/purple-team/executions/${execution.id}/detection`, {
+      baseUrl: '',
       method: 'PATCH',
       headers: apiHeaders(),
       body: JSON.stringify({

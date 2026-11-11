@@ -29,7 +29,7 @@
 
 import { useEffect, useState } from "react";
 import useSWR, { mutate } from "swr";
-import { apiHeaders } from "@/lib/api";
+import { apiFetch, apiHeaders } from "@/lib/api";
 
 const CONFIG_URL = "/api/v1/ai-chat-compliance/config";
 const LABELS_URL = "/api/v1/ai-chat-compliance/content-labels";
@@ -71,7 +71,7 @@ const LABEL_COPY: Record<string, string> = {
 };
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { headers: apiHeaders() });
+  const res = await apiFetch(url, { baseUrl: '', headers: apiHeaders() });
   if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
   return (await res.json()) as T;
 }
@@ -102,7 +102,8 @@ export function AiChatCompliancePanel() {
     setSaving(true);
     setSaveError(null);
     try {
-      const res = await fetch(CONFIG_URL, {
+      const res = await apiFetch(CONFIG_URL, {
+        baseUrl: '',
         method: "PUT",
         headers: { ...apiHeaders(), "Content-Type": "application/json" },
         body: JSON.stringify({ provider, accessKey, enabled, contentLabels }),

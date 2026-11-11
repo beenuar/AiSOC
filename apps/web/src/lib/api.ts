@@ -138,6 +138,10 @@ export function setActiveTenantId(tenantId: string | null): void {
 interface FetchOptions extends RequestInit {
   params?: Record<string, string | number | boolean | undefined>;
   baseUrl?: string;
+  /** Sign-in challenges authenticate with their own credential in the body. */
+  skipAuthRefresh?: boolean;
+  /** Services deriving tenancy exclusively from the JWT need no tenant claim. */
+  omitTenantHeader?: boolean;
 }
 
 export class ApiError extends Error {
@@ -155,12 +159,10 @@ export class ApiError extends Error {
 /**
  * The headers every console call to an AiSOC API must carry.
  *
- * Exported because not every call can go through {@link apiRequest}: the
- * NDJSON and SSE endpoints need the raw `Response` so the caller can read
- * `response.body`. Those five call sites used to build their own header
- * object, and every one of them sent `X-Tenant-Id` and no token — which
- * reads like an identity and is not one. The API authenticates a bearer
- * token; a tenant header is a caller-supplied claim.
+ * Used by the shared JSON/raw transport and callers that need to inspect
+ * headers. Requests needing a raw body should use {@link apiFetch} so they
+ * also renew the session. The API authenticates a bearer token; a tenant
+ * header is a caller-supplied claim.
  *
  * `X-Tenant-Id` resolves at call time so the tenant switcher applies to the
  * very next request without a page reload.
@@ -169,8 +171,16 @@ export function apiHeaders(extra?: HeadersInit): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Tenant-Id": getActiveTenantId(),
-    ...(extra as Record<string, string> | undefined),
   };
+  const canonical: Record<string, string> = {
+    authorization: "Authorization",
+    "content-type": "Content-Type",
+    "x-tenant-id": "X-Tenant-Id",
+    accept: "Accept",
+  };
+  new Headers(extra).forEach((value, key) => {
+    headers[canonical[key] ?? key] = value;
+  });
 
   if (typeof window !== "undefined") {
     try {
@@ -216,27 +226,152 @@ export function isTokenExpired(token: string, nowSeconds?: number): boolean {
  * Signing in is where a 401 means "wrong password", not "your session
  * died" — redirecting there would replace the form's error message with a
  * reload of the same form.
- *
- * `/auth/register` was listed here for one commit and the console
- * route-contract gate rejected it: the API serves `login`, `refresh`,
- * `me` and `me/preferences`, and nothing else under `/auth`. An exemption
- * for a route that does not exist is dead weight that reads like a
- * promise.
  */
-const AUTH_EXEMPT_PATHS = ["/api/v1/auth/login", "/api/v1/auth/refresh"];
+const AUTH_EXEMPT_PATHS = [
+  "/api/v1/auth/login",
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/sso/status",
+  "/api/v1/auth/mfa/verify",
+  "/api/v1/auth/mfa/webauthn/challenge",
+  "/api/v1/auth/mfa/webauthn/verify",
+  "/api/v1/passkeys/authenticate/begin",
+  "/api/v1/passkeys/authenticate/finish",
+];
+
+interface StoredSession {
+  access: string | null;
+  refresh: string | null;
+  user: string | null;
+  generation: number;
+}
+
+let sessionGeneration = 0;
+let pendingRefresh: { session: StoredSession; promise: Promise<void> } | null = null;
+
+function storedSession(): StoredSession {
+  let access = null;
+  let refresh = null;
+  let user = null;
+  if (typeof window !== "undefined") {
+    try {
+      access = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      refresh = window.localStorage.getItem(AUTH_REFRESH_KEY);
+      // A cached profile can outlive a passkey sign-in. Bind replays to the
+      // credential's identity, never to stale presentation data. The server
+      // still verifies the signature; this comparison only prevents replay.
+      for (const token of [access, refresh]) {
+        if (!token) continue;
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (typeof payload.sub === "string") {
+            user = JSON.stringify([payload.sub, payload.tenant_id]);
+            break;
+          }
+        } catch {
+          /* Try the refresh credential if access cannot be decoded. */
+        }
+      }
+    } catch {
+      /* Storage is unavailable. */
+    }
+  }
+  return { access, refresh, user, generation: sessionGeneration };
+}
+
+function sameSession(a: StoredSession, b: StoredSession): boolean {
+  return a.access === b.access && a.refresh === b.refresh &&
+    a.user === b.user && a.generation === b.generation;
+}
+
+function sessionChanged(): ApiError {
+  return new ApiError("Session changed while the request was pending", 0, "");
+}
+
+function sessionAfterRefresh(previous: StoredSession): StoredSession {
+  const current = storedSession();
+  if (current.generation !== previous.generation || current.user !== previous.user || !current.access) {
+    throw sessionChanged();
+  }
+  return current;
+}
+
+/** Cancel one caller promptly without cancelling the shared refresh. */
+function waitForRefresh(promise: Promise<void>, signal?: AbortSignal | null): Promise<void> {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    promise.then(
+      () => { signal.removeEventListener("abort", abort); resolve(); },
+      (error) => { signal.removeEventListener("abort", abort); reject(error); }
+    );
+  });
+}
+
+/** One refresh per stored credential, shared by JSON and streaming callers. */
+async function refreshSession(session: StoredSession, path: string): Promise<void> {
+  if (!sameSession(session, storedSession())) throw sessionChanged();
+  if (pendingRefresh && sameSession(pendingRefresh.session, session)) {
+    return pendingRefresh.promise;
+  }
+
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      // Do not use the authenticated client here: a rejected refresh must
+      // never refresh itself. Nor may one cancelled panel cancel its peers.
+      const response = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ refresh_token: session.refresh }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!sameSession(session, storedSession())) throw sessionChanged();
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        if (!sameSession(session, storedSession())) throw sessionChanged();
+        if (response.status === 401) handleUnauthorized(path);
+        throw new ApiError("Session refresh failed", response.status, body);
+      }
+      const tokens = await response.json().catch(() => null) as TokenResponse | null;
+      if (!tokens || typeof tokens.access_token !== "string" || !tokens.access_token ||
+          typeof tokens.refresh_token !== "string" || !tokens.refresh_token) {
+        throw new ApiError("Session refresh returned an invalid token response", 502, "");
+      }
+      if (!sameSession(session, storedSession())) throw sessionChanged();
+      window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+      window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // An outage or a timeout is not evidence that the credential is dead.
+      throw new ApiError(`Session refresh unavailable: ${(error as Error).message}`, 0, "");
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+  const flight = { session, promise };
+  pendingRefresh = flight;
+  try {
+    await promise;
+  } finally {
+    if (pendingRefresh === flight) pendingRefresh = null;
+  }
+}
 
 /**
  * Clear a dead session and send the user to sign in again.
  *
- * Called on a 401 from any route that is not itself part of signing in.
- * Without this a user whose token expired mid-session saw every panel
- * fail with no explanation and no way to recover.
+ * Called only after renewal is unavailable or the renewed session is rejected.
  */
 function handleUnauthorized(path: string): void {
   if (typeof window === "undefined") return;
   if (AUTH_EXEMPT_PATHS.some((exempt) => path.startsWith(exempt))) return;
   // Already on the sign-in page: clearing is right, navigating would loop.
   const onLogin = window.location.pathname.startsWith("/login");
+  sessionGeneration += 1;
   try {
     window.localStorage.removeItem(AUTH_TOKEN_KEY);
     window.localStorage.removeItem(AUTH_REFRESH_KEY);
@@ -251,40 +386,16 @@ function handleUnauthorized(path: string): void {
 }
 
 async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
-  const { params, baseUrl, ...fetchOptions } = options;
-
-  let url = `${baseUrl ?? API_BASE}${path}`;
-  if (params) {
-    const searchParams = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== "") {
-        searchParams.set(key, String(value));
-      }
-    });
-    const qs = searchParams.toString();
-    if (qs) url += `?${qs}`;
-  }
-
-  const headers = apiHeaders(fetchOptions.headers);
-
   let response: Response;
   try {
-    response = await fetch(url, {
-      ...fetchOptions,
-      headers,
-      cache: "no-store",
-    });
+    response = await apiFetch(path, options);
   } catch (err) {
-    throw new ApiError(`Network error talking to ${url}: ${(err as Error).message}`, 0, "");
+    if (err instanceof ApiError || (err as Error).name === "AbortError") throw err;
+    throw new ApiError(`Network error talking to ${path}: ${(err as Error).message}`, 0, "");
   }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
-    if (response.status === 401) {
-      // Self-heal rather than leaving the user on a page where every
-      // panel fails silently and nothing offers a way back.
-      handleUnauthorized(path);
-    }
     throw new ApiError(
       `API ${response.status} ${response.statusText} — ${path}`,
       response.status,
@@ -294,7 +405,7 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 
   if (response.status === 204) return {} as T;
   // Some endpoints (the agent stream, NDJSON) might not be JSON. Callers that
-  // need streams should use fetch() with apiHeaders(). Here we assume JSON.
+  // need streams should use apiFetch(). Here we assume JSON.
   return (await response.json()) as T;
 }
 
@@ -329,13 +440,13 @@ export async function authedFetcher<T>(url: string): Promise<T> {
 /**
  * A credentialed `fetch` that returns the raw `Response`.
  *
- * For the endpoints whose body is not JSON: NDJSON streams, SSE, PDF and
- * Markdown downloads. Identical to `fetch` except that the credential and
- * tenant headers are not optional.
+ * For NDJSON streams, SSE, PDF and Markdown downloads. Attaches the session
+ * and tenant, renews expired access, and retries a protected 401 at most once.
+ * Successful response bodies remain unread for the caller.
  */
 export async function apiFetch(path: string, options: FetchOptions = {}): Promise<Response> {
-  const { params, baseUrl, ...fetchOptions } = options;
-  let url = `${baseUrl ?? API_BASE}${path}`;
+  const { params, baseUrl, skipAuthRefresh, omitTenantHeader, ...fetchOptions } = options;
+  let url = /^https?:\/\//.test(path) ? path : `${baseUrl ?? API_BASE}${path}`;
   if (params) {
     const searchParams = new URLSearchParams();
     Object.entries(params).forEach(([key, value]) => {
@@ -346,11 +457,54 @@ export async function apiFetch(path: string, options: FetchOptions = {}): Promis
     const qs = searchParams.toString();
     if (qs) url += `?${qs}`;
   }
-  return fetch(url, {
-    ...fetchOptions,
-    headers: apiHeaders(fetchOptions.headers),
-    cache: "no-store",
-  });
+  const headers = apiHeaders(fetchOptions.headers);
+  if (omitTenantHeader) delete headers["X-Tenant-Id"];
+  if (typeof FormData !== "undefined" && fetchOptions.body instanceof FormData &&
+      !new Headers(fetchOptions.headers).has("Content-Type")) {
+    delete headers["Content-Type"];
+  }
+  let session = storedSession();
+  const explicitAuth = new Headers(fetchOptions.headers).get("Authorization");
+  const authPath = new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.origin).pathname;
+  const managed = typeof window !== "undefined" && !skipAuthRefresh &&
+    !AUTH_EXEMPT_PATHS.some((exempt) => authPath.startsWith(exempt)) &&
+    (!explicitAuth || explicitAuth === `Bearer ${session.access}`);
+  let refreshed = false;
+  fetchOptions.signal?.throwIfAborted();
+  if (managed && session.refresh && (!session.access || isTokenExpired(session.access))) {
+    await waitForRefresh(refreshSession(session, authPath), fetchOptions.signal);
+    session = sessionAfterRefresh(session);
+    refreshed = true;
+    headers.Authorization = `Bearer ${session.access}`;
+  }
+  const send = () => {
+    fetchOptions.signal?.throwIfAborted();
+    if (managed && !sameSession(session, storedSession())) throw sessionChanged();
+    return fetch(url, { ...fetchOptions, headers: { ...headers }, cache: "no-store" });
+  };
+  let response = await send();
+  if (response.status !== 401 || !managed) return response;
+
+  const current = storedSession();
+  if (current.generation !== session.generation || current.user !== session.user ||
+      (session.access && !current.access) || (current.access !== session.access && !current.user)) {
+    throw sessionChanged();
+  }
+  // Another request (or tab) may already have renewed the credential while
+  // this request's 401 was travelling back. Reuse it instead of refreshing twice.
+  if (current.access !== session.access || (!refreshed && current.refresh)) {
+    if (current.access === session.access) {
+      await waitForRefresh(refreshSession(current, authPath), fetchOptions.signal);
+    }
+    session = sessionAfterRefresh(session);
+    headers.Authorization = `Bearer ${session.access}`;
+    await response.body?.cancel();
+    response = await send();
+  }
+  if (response.status === 401 && sameSession(session, storedSession())) {
+    handleUnauthorized(authPath);
+  }
+  return response;
 }
 
 // ─── Onboarding ──────────────────────────────────────────────────────────────
@@ -440,14 +594,31 @@ export function isMfaChallenge(result: LoginResult | MfaChallenge): result is Mf
 
 function persistAuth(tokens: TokenResponse, user: AuthUser): void {
   if (typeof window === "undefined") return;
+  sessionGeneration += 1;
   try {
     window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
     if (tokens.refresh_token) {
       window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    } else {
+      window.localStorage.removeItem(AUTH_REFRESH_KEY);
     }
     window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
   } catch {
     /* localStorage unavailable; ignore */
+  }
+}
+
+/** Replace the whole credential pair before verifying a new sign-in. */
+function beginSession(tokens: Pick<TokenResponse, "access_token" | "refresh_token">): void {
+  if (typeof window === "undefined") return;
+  sessionGeneration += 1;
+  try {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+    if (tokens.refresh_token) window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    else window.localStorage.removeItem(AUTH_REFRESH_KEY);
+    window.localStorage.removeItem(AUTH_USER_KEY);
+  } catch {
+    /* localStorage unavailable; the server still decides authentication. */
   }
 }
 
@@ -502,15 +673,7 @@ export const authApi = {
         methods: tokens.methods,
       };
     }
-    // Stash the access token now so the `me` request flows through the
-    // standard `Authorization: Bearer …` path in `request()`.
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
-      } catch {
-        /* ignore */
-      }
-    }
+    beginSession(tokens);
     const user = await request<AuthUser>("/api/v1/auth/me");
     persistAuth(tokens, user);
     return { ...tokens, user };
@@ -518,6 +681,7 @@ export const authApi = {
 
   logout(): void {
     if (typeof window === "undefined") return;
+    sessionGeneration += 1;
     try {
       window.localStorage.removeItem(AUTH_TOKEN_KEY);
       window.localStorage.removeItem(AUTH_REFRESH_KEY);
@@ -538,24 +702,14 @@ export const authApi = {
   },
 
   /**
-   * Whether there is a session that can still make a request.
-   *
-   * This used to answer "is a token stored", which is a different
-   * question and produced an inescapable lockout: `/login` saw a stored
-   * token, redirected to `/dashboard`, every call there 401'd, and
-   * nothing sent the user back. The only way out was clearing browser
-   * storage, which is not a thing to ask of an operator.
-   *
-   * An unreadable or unparseable token counts as **not** authenticated:
-   * the pessimistic answer costs a sign-in, the optimistic one costs the
-   * lockout.
+   * Whether the stored session can make a request or renew first.
+   * This is a UI guard only: the API still verifies both credentials.
    */
   isAuthenticated(): boolean {
     if (typeof window === "undefined") return false;
     try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (!token) return false;
-      return !isTokenExpired(token);
+      const { access, refresh } = storedSession();
+      return Boolean((access && !isTokenExpired(access)) || (refresh && !isTokenExpired(refresh)));
     } catch {
       return false;
     }
@@ -612,13 +766,7 @@ export const authApi = {
       method: "POST",
       body: JSON.stringify({ mfa_token: mfaToken, code }),
     });
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
-      } catch {
-        /* ignore */
-      }
-    }
+    beginSession(tokens);
     const user = await request<AuthUser>("/api/v1/auth/me");
     persistAuth(tokens, user);
     return { ...tokens, user };
@@ -632,13 +780,7 @@ export const authApi = {
    * to authenticate a second time with a code they just proved.
    */
   async adoptSession(accessToken: string, refreshToken: string): Promise<AuthUser> {
-    if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
-      } catch {
-        /* ignore */
-      }
-    }
+    beginSession({ access_token: accessToken, refresh_token: refreshToken });
     const user = await request<AuthUser>("/api/v1/auth/me");
     persistAuth(
       {
@@ -654,9 +796,8 @@ export const authApi = {
 
   /** Merge user preferences on the server (theme, layout, etc.). */
   async updateUserPreferences(preferences: Record<string, unknown>): Promise<AuthUser> {
-    const response = await fetch(`${API_BASE}/api/v1/auth/me/preferences`, {
+    const response = await apiFetch("/api/v1/auth/me/preferences", {
       method: "PATCH",
-      headers: apiHeaders(),
       body: JSON.stringify({ preferences }),
     });
     if (!response.ok) throw new Error("Failed to update preferences");
@@ -709,12 +850,14 @@ export const mfaApi = {
     request("/api/v1/auth/mfa/enroll/begin", {
       method: "POST",
       body: JSON.stringify(mfaToken ? { mfa_token: mfaToken } : {}),
+      skipAuthRefresh: Boolean(mfaToken),
     }),
 
   enrollConfirm: (code: string, mfaToken?: string): Promise<MfaConfirmed> =>
     request("/api/v1/auth/mfa/enroll/confirm", {
       method: "POST",
       body: JSON.stringify(mfaToken ? { code, mfa_token: mfaToken } : { code }),
+      skipAuthRefresh: Boolean(mfaToken),
     }),
 
   /** Remove your own factor. The API requires a current code, so a stolen
@@ -865,11 +1008,7 @@ export const brandingApi = {
    * object URL instead.
    */
   async logo(path: string): Promise<Blob> {
-    const headers = apiHeaders();
-    // A GET for image bytes; the JSON content type `apiHeaders` sets by
-    // default describes a body this request does not have.
-    delete headers["Content-Type"];
-    const response = await fetch(`${API_BASE}${path}`, { headers });
+    const response = await apiFetch(path);
     if (!response.ok) {
       throw new ApiError(`branding logo request failed`, response.status, "");
     }
@@ -899,13 +1038,10 @@ export const brandingApi = {
    * cannot parse.
    */
   async uploadAsset(kind: "logo" | "favicon", file: File): Promise<BrandAsset> {
-    const headers = apiHeaders();
-    delete headers["Content-Type"];
     const form = new FormData();
     form.append("file", file);
-    const response = await fetch(`${API_BASE}/api/v1/branding/assets/${kind}`, {
+    const response = await apiFetch(`/api/v1/branding/assets/${kind}`, {
       method: "POST",
-      headers,
       body: form,
     });
     const text = await response.text();
@@ -2809,12 +2945,7 @@ export const casesApi = {
 
   /** Trigger a browser download of the PDF report. */
   downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
-    const resp = await fetch(
-      `${API_BASE}/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`,
-      {
-        headers: apiHeaders(),
-      }
-    );
+    const resp = await apiFetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`);
     if (!resp.ok) {
       const err = await resp.text().catch(() => resp.statusText);
       throw new Error(err);
@@ -2851,10 +2982,9 @@ export const casesApi = {
    * report surfaces behave consistently in the PWA.
    */
   openAutoSummaryHtml: async (caseId: string): Promise<void> => {
-    const headers = apiHeaders({ Accept: "text/html" });
-
-    const url = `${API_BASE}/api/v1/cases/${caseId}/summary?format=html`;
-    const response = await fetch(url, { headers, cache: "no-store" });
+    const response = await apiFetch(`/api/v1/cases/${caseId}/summary?format=html`, {
+      headers: { Accept: "text/html" },
+    });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       throw new ApiError(
@@ -4210,9 +4340,9 @@ export const agentsApi = {
     payload: { alert: Record<string, unknown>; alertId?: string },
     signal?: AbortSignal
   ) =>
-    fetch(`${AGENTS_BASE}/api/v1/explain`, {
+    apiFetch("/api/v1/explain", {
       method: "POST",
-      headers: apiHeaders(),
+      baseUrl: AGENTS_BASE,
       body: JSON.stringify({
         alert: payload.alert,
         alert_id: payload.alertId,
@@ -5923,9 +6053,8 @@ export const copilotApi = {
    * Callers should consume via `Response.body.getReader()`.
    */
   streamChat: (req: CopilotChatRequest, signal?: AbortSignal) =>
-    fetch(`${API_BASE}/api/v1/copilot/chat/stream`, {
+    apiFetch("/api/v1/copilot/chat/stream", {
       method: "POST",
-      headers: apiHeaders(),
       body: JSON.stringify(req),
       signal,
     }),
@@ -6038,9 +6167,9 @@ export const contextualApi = {
    * {@link ContextualStreamFrame} for the per-line shape.
    */
   stream: (req: ContextualActionRequest, signal?: AbortSignal) =>
-    fetch(`${AGENTS_BASE}/api/v1/contextual/action/stream`, {
+    apiFetch("/api/v1/contextual/action/stream", {
       method: "POST",
-      headers: apiHeaders(),
+      baseUrl: AGENTS_BASE,
       body: JSON.stringify(req),
       signal,
     }),
@@ -7107,10 +7236,9 @@ export const reportsApi = {
     if (params.period_start) search.set("period_start", params.period_start);
     if (params.period_end) search.set("period_end", params.period_end);
 
-    const headers = apiHeaders({ Accept: "text/html" });
-
-    const url = `${API_BASE}/api/v1/reports/digest/weekly?${search.toString()}`;
-    const response = await fetch(url, { headers, cache: "no-store" });
+    const response = await apiFetch(`/api/v1/reports/digest/weekly?${search.toString()}`, {
+      headers: { Accept: "text/html" },
+    });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
       throw new ApiError(
@@ -7345,11 +7473,6 @@ function buildAuditExportSearch(
   return search;
 }
 
-function buildAuditExportHeaders(accept: string): Record<string, string> {
-  const headers = apiHeaders({ Accept: accept });
-  return headers;
-}
-
 export const auditApi = {
   /**
    * WS-H3 — download the (filtered) audit trail as RFC 4180 CSV. Returns the
@@ -7361,10 +7484,8 @@ export const auditApi = {
   exportCsv: async (
     filters: AuditExportFilters = {}
   ): Promise<{ body: string; filename: string }> => {
-    const url = `${API_BASE}/api/v1/audit/export?${buildAuditExportSearch(filters, "csv").toString()}`;
-    const response = await fetch(url, {
-      headers: buildAuditExportHeaders("text/csv"),
-      cache: "no-store",
+    const response = await apiFetch(`/api/v1/audit/export?${buildAuditExportSearch(filters, "csv")}`, {
+      headers: { Accept: "text/csv" },
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");
@@ -7391,10 +7512,8 @@ export const auditApi = {
   exportHtml: async (
     filters: AuditExportFilters = {}
   ): Promise<{ html: string; filename: string }> => {
-    const url = `${API_BASE}/api/v1/audit/export?${buildAuditExportSearch(filters, "html").toString()}`;
-    const response = await fetch(url, {
-      headers: buildAuditExportHeaders("text/html"),
-      cache: "no-store",
+    const response = await apiFetch(`/api/v1/audit/export?${buildAuditExportSearch(filters, "html")}`, {
+      headers: { Accept: "text/html" },
     });
     if (!response.ok) {
       const detail = await response.text().catch(() => "");

@@ -618,9 +618,15 @@ async function failureDetail(res: Response): Promise<string> {
  * is a real failure and must not be flattened into an empty list.
  */
 async function fetchInstalled(url: string): Promise<InstalledResponse | null> {
-  const res = await fetch(url, { credentials: 'include', headers: authHeaders() });
+  const hasSession = signedIn();
+  const res = await apiFetch(url, {
+    baseUrl: '',
+    credentials: 'include',
+    headers: authHeaders(),
+    skipAuthRefresh: !hasSession,
+  });
   if (res.status === 404) return null;
-  if (res.status === 401 && !signedIn()) return null;
+  if (res.status === 401 && !hasSession) return null;
   if (!res.ok) throw new Error(`installed: ${await failureDetail(res)}`);
   return (await res.json()) as InstalledResponse;
 }
@@ -731,7 +737,8 @@ export function MarketplaceView() {
         const url = `/api/v1/marketplace/install?type=${encodeURIComponent(
           item.type,
         )}&id=${encodeURIComponent(item.id)}`;
-        const res = await fetch(url, {
+        const res = await apiFetch(url, {
+          baseUrl: '',
           method: 'DELETE',
           credentials: 'include',
           headers: authHeaders(),

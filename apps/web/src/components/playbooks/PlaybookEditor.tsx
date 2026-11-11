@@ -239,7 +239,8 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
         : `/api/v1/playbooks/${playbook.id}`;
       const method = isNew ? 'POST' : 'PUT';
       const body = isNew ? playbook : { ...playbook };
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
+        baseUrl: '',
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),

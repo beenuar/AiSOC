@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The console discarded usable refresh tokens when access expired.**
+  Protected JSON, streaming and download requests now renew the session through
+  the existing refresh endpoint, share concurrent renewal, and retry a rejected
+  access token once. Temporary refresh failures preserve the session; rejected
+  credentials still require sign-in. Late responses cannot restore a logged-out
+  session or replay an action under a different login. Desktop and responder
+  guards recognize recoverable sessions, and the responder no longer lets a
+  stale expiry cache overrule a renewed JWT. The Explain stream also receives
+  its missing proxy rule to the agents service. Token lifetimes and server-side
+  revocation checks are unchanged.
+
 ## [23.1.0] - 2026-11-10
 
 ### Added
