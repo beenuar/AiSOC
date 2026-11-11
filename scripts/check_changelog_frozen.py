@@ -106,7 +106,7 @@ def audit(
         if tagged_changelog is None:
             problems.append(f"UNVERIFIABLE [{version}]: {reason}")
             continue
-        tagged = {v: s for v, s in released_sections(tagged_changelog)}
+        tagged = dict(released_sections(tagged_changelog))
         if version not in tagged:
             problems.append(
                 f"MISMATCH [{version}]: the tag v{version} has no [{version}] section in its "
