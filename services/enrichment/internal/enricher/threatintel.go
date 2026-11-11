@@ -101,8 +101,21 @@ func (c *ThreatIntelClient) lookup(ctx context.Context, iocType IOCType, value s
 		return nil, nil
 	}
 
-	endpoint := fmt.Sprintf("%s%s?value=%s&limit=25", c.baseURL, threatIntelSearchPath, url.QueryEscape(value))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	// Build the URL positionally rather than by string formatting: the IOC
+	// value is attacker-influenced alert data, and this construction confines
+	// it to the encoded query string — it can never reach the scheme, host or
+	// path, which come from operator config and a package constant.
+	base, err := url.Parse(c.baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("threatintel base URL invalid: %w", err)
+	}
+	endpoint := *base
+	endpoint.Path = strings.TrimRight(base.Path, "/") + threatIntelSearchPath
+	query := url.Values{}
+	query.Set("value", value)
+	query.Set("limit", "25")
+	endpoint.RawQuery = query.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
 	if err != nil {
 		return nil, err
 	}
