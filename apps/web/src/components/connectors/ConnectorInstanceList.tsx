@@ -6,7 +6,7 @@
  * The list itself is purely presentational — the parent (`ConnectorsView`)
  * owns data fetching and mutation so SWR cache invalidation lives in one
  * place. This component only knows how to render a `Connector[]` and emit
- * action callbacks (test, delete) when the operator clicks a row.
+ * action callbacks (test, configure, delete) when the operator clicks a row.
  *
  * Layout follows the rest of the AiSOC dashboard: 3-up grid on wide
  * screens, with a trailing "Add Connector" tile that the parent wires to
@@ -316,15 +316,16 @@ function ConnectorCard({
           )}
           Test
         </button>
-        <button
-          type="button"
-          disabled
-          title="Connector editing UI is planned for v1.1"
-          className="flex-1 text-xs bg-gray-800/40 text-gray-500 px-3 py-2 rounded-lg border border-gray-700/40 cursor-not-allowed select-none"
-        >
-          Configure
-          <span className="ml-1.5 text-[10px] font-medium text-amber-400">v1.1</span>
-        </button>
+        {onConfigure && (
+          <button
+            type="button"
+            onClick={() => onConfigure(connector)}
+            aria-label={`Configure ${connector.name}`}
+            className="flex-1 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 rounded-lg transition-colors"
+          >
+            Configure
+          </button>
+        )}
         {onDelete && (
           <button
             type="button"
