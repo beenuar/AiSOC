@@ -7,38 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- **The console discarded usable refresh tokens when access expired.**
-  Protected JSON, streaming and download requests now renew the session through
-  the existing refresh endpoint, share concurrent renewal, and retry a rejected
-  access token once. Temporary refresh failures preserve the session; rejected
-  credentials still require sign-in. Late responses cannot restore a logged-out
-  session or replay an action under a different login. Desktop and responder
-  guards recognize recoverable sessions, and the responder no longer lets a
-  stale expiry cache overrule a renewed JWT. The Explain stream also receives
-  its missing proxy rule to the agents service. Token lifetimes and server-side
-  revocation checks are unchanged.
-
-## [23.1.0] - 2026-11-10
-
 ### Added
 
-- **The first community detection rule: an AI agent's file tool reading a
-  credential-bearing file.**
-  `community-toufiqtoufiqbo-ai-agent-credential-file-read` (high,
-  `application`, T1552.001) matches the `ai_runtime` fields the
-  `aisoc-ai-sdk` actually emits (`tool_name`, `resource`), names the files
-  that hold long-lived credentials — `id_rsa`, `.aws/credentials`,
-  `/etc/shadow` and their kin — and excludes public-key reads (`*.pub`,
-  `authorized_keys`). Prompt-level secret scanning cannot see this path: the
-  prompt is clean, and the disclosure happens on the way out — into the
-  model context, a tool argument, or a second call. It ships
-  `enabled: false` with a `quarantine_reason`, which is what the truth-table
-  gate requires of a tier the engine does not load, with positive and
-  negative fixtures alongside. The published counts follow: 7408 rules on
-  disk, and the community tier moves 1 → 2. Contributed by @Toufiqtoufiqbo
-  (#1804).
+- **A released CHANGELOG section is now frozen to its tag.**
+  `scripts/check_changelog_frozen.py` compares the newest five released
+  sections byte-for-byte against the `CHANGELOG.md` committed at each
+  section's own tag, with a unified diff on mismatch, an explicit refusal
+  when a tag cannot be resolved, and a vacuous-pass refusal when nothing
+  could be compared. It exists because the same drift shipped three times in
+  two days: a fix PR writes its entry under an empty `[Unreleased]`, the
+  release promotes that section, and when the PR merges after the tag the
+  three-way merge anchors the entry by context — inside the released
+  section, claiming a fix the tagged artifact does not contain (Datadog into
+  `[23.0.0]`, then Cortex and Trend into `[23.1.0]`). Run against the
+  pre-fix tree the gate exits 1 naming `[23.1.0]` and showing both drifted
+  entries; this change also moves those entries back where they belong,
+  below. Writing the gate found a fourth, older instance: a post-tag credit
+  line appended to the released `[22.1.0]` section. That section is restored
+  to its tag's bytes and the credit lives in `.github/CREDITS.md`, the
+  surface built to stay current.
 
 ### Fixed
 
@@ -76,6 +63,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with the feed named, and the other feed is still read; a refused OAT request
   was previously dropped without a log line. `MAX_UNCLASSIFIED` falls from 50
   to 49.
+
+- **Settings, Case and Responder deep links now survive navigation.**
+  `/settings?tab=deployment` opened Profile because the section was a
+  hardcoded `useState('profile')`; the case workspace read `?tab=` only as a
+  mount-time initializer, so tab clicks, query changes and browser history
+  drifted apart; and `/responder` redirected every installed-PWA shortcut to
+  Triage, eating the `?tab=queue|cases|oncall` the manifest publishes. A
+  shared `useUrlTab` hook validates tab values against each surface's
+  allowlist in both directions, dedups history entries, and preserves other
+  query parameters and the fragment. Contributed by @knowlet
+  ([#1817](https://github.com/beenuar/AiSOC/pull/1817)).
+
+- **The agents service never received `METRICS_TOKEN`, so `:15002/metrics`
+  answered 401 on every default deployment.** The endpoint gates on the
+  token exactly as the api service's does, but only the api block in
+  `docker-compose.yml` carried the passthrough — the Prometheus triage
+  counters were unreachable out of the box. Reported by @pitimon with the
+  confirming override ([#1822](https://github.com/beenuar/AiSOC/issues/1822),
+  fixed in [#1823](https://github.com/beenuar/AiSOC/pull/1823)).
+
+- **A connector's `error_count` now means "consecutive failed polls since
+  the last success".** `record_poll_failure` incremented it and
+  `record_poll_success` never reset it, so the fleet panel rendered a
+  lifetime total beside a fresh `last_sync` as if the connector were failing
+  right now — the reported case showed a static "19 errors" for days on a
+  connector that ingested 237k events during the observation window.
+  Success writes 0; failure still increments; both writers are pinned by
+  tests. Reported by @pitimon
+  ([#1821](https://github.com/beenuar/AiSOC/issues/1821), fixed in
+  [#1824](https://github.com/beenuar/AiSOC/pull/1824)).
+
+- **The Wazuh indexer reads follow `search_after` to the end of the
+  window.** Both fetch paths sent one `size: 1000` search and stopped,
+  under a docstring calling the bound deliberate — but the cut was silent,
+  and because the next poll's window opens where this one closed, the
+  overflow was never re-requested by anything. The shared `_search` now
+  follows OpenSearch's documented continuation with a `_doc` tiebreaker so
+  equal timestamps cannot skip or repeat rows, keeps partial reads when a
+  later page fails, stops rather than looping when a full page carries no
+  sort values, and announces the 25-page bound when it binds.
+  `MAX_UNCLASSIFIED` falls from 49 to 48. Reported by @pitimon from code
+  inspection, stated as such
+  ([#1820](https://github.com/beenuar/AiSOC/issues/1820), fixed in
+  [#1825](https://github.com/beenuar/AiSOC/pull/1825)).
+
+- **The console discarded usable refresh tokens when access expired.**
+  Protected JSON, streaming and download requests now renew the session through
+  the existing refresh endpoint, share concurrent renewal, and retry a rejected
+  access token once. Temporary refresh failures preserve the session; rejected
+  credentials still require sign-in. Late responses cannot restore a logged-out
+  session or replay an action under a different login. Desktop and responder
+  guards recognize recoverable sessions, and the responder no longer lets a
+  stale expiry cache overrule a renewed JWT. The Explain stream also receives
+  its missing proxy rule to the agents service. Token lifetimes and server-side
+  revocation checks are unchanged.
+
+## [23.1.0] - 2026-11-10
+
+### Added
+
+- **The first community detection rule: an AI agent's file tool reading a
+  credential-bearing file.**
+  `community-toufiqtoufiqbo-ai-agent-credential-file-read` (high,
+  `application`, T1552.001) matches the `ai_runtime` fields the
+  `aisoc-ai-sdk` actually emits (`tool_name`, `resource`), names the files
+  that hold long-lived credentials — `id_rsa`, `.aws/credentials`,
+  `/etc/shadow` and their kin — and excludes public-key reads (`*.pub`,
+  `authorized_keys`). Prompt-level secret scanning cannot see this path: the
+  prompt is clean, and the disclosure happens on the way out — into the
+  model context, a tool argument, or a second call. It ships
+  `enabled: false` with a `quarantine_reason`, which is what the truth-table
+  gate requires of a tier the engine does not load, with positive and
+  negative fixtures alongside. The published counts follow: 7408 rules on
+  disk, and the community tier moves 1 → 2. Contributed by @Toufiqtoufiqbo
+  (#1804).
+
+### Fixed
 
 - **The first `make up` on a fresh install built the schema and then refused
   to start the stack it had just built.** The Postgres initdb hook
@@ -1977,9 +2041,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fetch_alerts` through a transport that emulates Duo's availability cutoff
   and asserts that two back-to-back polls between them read every
   authentication — a path test rather than a source-inspection one.
-
-  Independently diagnosed and fixed by
-  [@rudycelekli](https://github.com/rudycelekli).
 
 - **`cloudflare_zt` WAF mode polled a route that does not exist, so it could
   never have returned an event on any deployment.**
