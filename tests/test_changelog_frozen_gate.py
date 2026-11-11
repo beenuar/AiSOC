@@ -15,6 +15,9 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 _SPEC = importlib.util.spec_from_file_location("check_changelog_frozen", REPO_ROOT / "scripts" / "check_changelog_frozen.py")
+# spec_from_file_location returns None only for an unloadable path; the gate
+# script is tracked right there, so narrow rather than ignore.
+assert _SPEC is not None and _SPEC.loader is not None
 check_changelog_frozen = importlib.util.module_from_spec(_SPEC)
 sys.modules["check_changelog_frozen"] = check_changelog_frozen
 _SPEC.loader.exec_module(check_changelog_frozen)
