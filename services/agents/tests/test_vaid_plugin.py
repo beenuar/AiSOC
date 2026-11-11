@@ -114,7 +114,7 @@ def test_respond_badge_carries_action_dispatch_capabilities_too():
 
 
 def test_only_respond_gets_action_dispatch_capabilities():
-    for agent in ("triage", "investigation", "hunt", "detect"):
+    for agent in ("triage", "investigation", "hunt", "detect", "copilot"):
         wrapped = vaid_plugin.issue_vaid_identity(agent, run_id="run-1", tenant_id="acme")
         assert set(wrapped.badge["capability_set"]) == wrapped.identity.scopes
         assert "isolate_host" not in wrapped.badge["capability_set"]

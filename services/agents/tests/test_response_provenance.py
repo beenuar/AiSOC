@@ -104,10 +104,10 @@ class TestCopilotProvenance:
         """A provider error must degrade visibly, not silently."""
         monkeypatch.setenv("OPENAI_API_KEY", "sk-test-not-a-real-key")
 
-        async def _boom(*args, **kwargs):
+        def _boom(*args, **kwargs):
             raise RuntimeError("provider unreachable")
 
-        monkeypatch.setattr("app.llm.contract.safe_chat_completions_request", _boom, raising=False)
+        monkeypatch.setattr("app.llm.factory.make_chat_model", _boom, raising=False)
         _text, source, reason = await copilot_mod._get_openai_reply({"messages": []}, "hello")
         assert source == "template"
         assert reason == copilot_mod.CALL_FAILED

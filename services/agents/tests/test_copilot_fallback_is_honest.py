@@ -26,7 +26,6 @@ from typing import Any
 
 import pytest
 from app.api import copilot
-from app.llm import contract as llm_contract
 from app.llm import factory as llm_factory
 
 
@@ -49,12 +48,11 @@ class TestTheTwoReasonsAreDistinguished:
         """The exact situation from the report: a model *is* configured and
         the call timed out."""
         monkeypatch.setattr(llm_factory, "resolve_api_key", lambda _m: "sk-present")
-        monkeypatch.setattr(llm_factory, "chat_completions_url", lambda _m=None: "http://local/v1/chat/completions")
 
-        async def _boom(**_kwargs: Any) -> Any:
+        def _boom(*_args: Any, **_kwargs: Any) -> Any:
             raise TimeoutError()
 
-        monkeypatch.setattr(llm_contract, "safe_chat_completions_request", _boom)
+        monkeypatch.setattr(llm_factory, "make_chat_model", _boom)
 
         text, source, reason = await copilot._get_openai_reply({"messages": []}, "what happened?")
 
@@ -68,12 +66,11 @@ class TestTheTwoReasonsAreDistinguished:
         """`str(exc)` is empty for several httpx timeout classes, which is
         why the report saw `copilot.openai_error` with no message."""
         monkeypatch.setattr(llm_factory, "resolve_api_key", lambda _m: "sk-present")
-        monkeypatch.setattr(llm_factory, "chat_completions_url", lambda _m=None: "http://local/v1/chat/completions")
 
-        async def _boom(**_kwargs: Any) -> Any:
+        def _boom(*_args: Any, **_kwargs: Any) -> Any:
             raise TimeoutError()
 
-        monkeypatch.setattr(llm_contract, "safe_chat_completions_request", _boom)
+        monkeypatch.setattr(llm_factory, "make_chat_model", _boom)
 
         text, _source, _reason = await copilot._get_openai_reply({"messages": []}, "q")
         assert "TimeoutError" in text

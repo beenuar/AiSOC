@@ -10,8 +10,8 @@ core API service via the catch-all, so we expose a thin gateway here that:
 
   1. Forwards to the upstream fusion service if FUSION_URL is set in the
      api environment, preserving full functionality.
-  2. Otherwise returns graceful empty payloads so the console renders an
-     empty queue instead of a 500.
+  2. Returns 503 for unavailable risk data rather than fabricating an empty
+     queue, zero counts, or an absent entity. Health probes retain their stub status.
 
 Endpoint surface mirrors services/fusion/app/api/router.py:
     GET  /api/v1/fusion/health
@@ -173,7 +173,6 @@ async def ml_status() -> dict[str, Any]:
 
 # The threshold here mirrors services/fusion/app/services/entity_risk.py
 # default; the UI displays it as "promotion threshold".
-_DEFAULT_THRESHOLD = 100.0
 
 
 # These three routes used to take `tenant_id` as a required query parameter
@@ -203,11 +202,7 @@ async def entity_risk_queue(
     )
     if upstream is not None:
         return upstream
-    return {
-        "tenant_id": str(scoped),
-        "threshold": _DEFAULT_THRESHOLD,
-        "entities": [],
-    }
+    raise HTTPException(status_code=503, detail="Fusion risk data is unavailable; no risk assessment was made.")
 
 
 @router.get("/entity-risk/stats", summary="Entity-risk queue stats")
@@ -220,14 +215,7 @@ async def entity_risk_stats(user: AuthUser, tenant_id: UUID | None = None) -> di
     )
     if upstream is not None:
         return upstream
-    return {
-        "tenant_id": str(scoped),
-        "threshold": _DEFAULT_THRESHOLD,
-        "total": 0,
-        "promoted": 0,
-        "bands": {"critical": 0, "high": 0, "medium": 0, "low": 0},
-        "alerts_total": 0,
-    }
+    raise HTTPException(status_code=503, detail="Fusion risk statistics are unavailable; counts are unknown.")
 
 
 @router.get(
@@ -254,6 +242,4 @@ async def entity_risk_detail(
     )
     if upstream is not None:
         return upstream
-    # No fallback record exists when fusion is offline; surface 404 so the
-    # drawer renders its empty state.
-    raise HTTPException(status_code=404, detail="entity_not_found")
+    raise HTTPException(status_code=503, detail="Fusion risk data is unavailable; the entity could not be checked.")

@@ -248,12 +248,17 @@ def test_every_scoped_tool_name_is_a_tool_something_registers():
 
 
 def _registered_tool_names() -> set[str]:
+    from app.tools.copilot import CopilotReads
     from app.tools.customer_tools import SIEM_SEARCH_TOOL, VENDOR_READ_TOOLS
     from app.tools.investigation import investigation_tools
     from app.tools.registry import default_registry
 
     return (
-        set(default_registry("t").names()) | {tool.name for tool in investigation_tools("t")} | {SIEM_SEARCH_TOOL} | set(VENDOR_READ_TOOLS)
+        set(CopilotReads().registry().names())
+        | set(default_registry("t").names())
+        | {tool.name for tool in investigation_tools("t")}
+        | {SIEM_SEARCH_TOOL}
+        | set(VENDOR_READ_TOOLS)
     )
 
 
