@@ -17,6 +17,7 @@ what failed.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import re
 from typing import Any
 
@@ -271,3 +272,61 @@ async def test_each_dimension_populates_its_own_slot(dimension: str) -> None:
     ctx = await get_incident_context(ALERT, TENANT, session=session)
     assert getattr(ctx, dimension), f"{dimension} query ran but its slot stayed empty"
     assert ctx.dimensions_resolved == 1
+
+
+class SingleFlightSession(FakeSession):
+    """A faithful stand-in for a real Neo4j ``AsyncSession``.
+
+    A real bolt session serves one query at a time: two coroutines calling
+    ``run`` on the *same* session concurrently corrupt its connection buffer
+    and the driver raises ``BufferError``. The base ``FakeSession`` answers any
+    number of concurrent queries happily, which is *more capable than the real
+    thing* — and that is precisely what hid the bug this models: the five
+    dimensions ran under one ``asyncio.gather`` on one shared session, so four
+    of five failed with ``BufferError`` while the tests stayed green.
+    """
+
+    def __init__(self, answers: dict[str, list[dict[str, Any]]] | None = None) -> None:
+        super().__init__(answers)
+        self._busy = False
+
+    async def run(self, cypher: str, **params: Any) -> FakeResult:
+        if self._busy:
+            raise BufferError("Existing exports of data: object cannot be re-sized")
+        self._busy = True
+        try:
+            # Yield so a concurrent caller on a shared session gets a turn to
+            # collide; on a per-dimension session nothing else holds this lock.
+            await asyncio.sleep(0)
+            return await super().run(cypher, **params)
+        finally:
+            self._busy = False
+
+
+async def test_concurrent_dimensions_do_not_share_one_neo4j_session(monkeypatch: Any) -> None:
+    """The five dimensions must each own their Neo4j session.
+
+    They run concurrently under ``asyncio.gather``. A single ``AsyncSession``
+    is not safe for concurrent queries, so sharing one silently failed four of
+    five dimensions with ``BufferError`` — observed live as
+    ``incident_context.{assets,cloud,business,threat} failed err=BufferError``
+    on a freshly promoted alert. Each concurrent leg must acquire its own
+    session from ``get_session()``.
+    """
+    handed_out: list[SingleFlightSession] = []
+
+    @contextlib.asynccontextmanager
+    async def fake_get_session() -> Any:
+        sess = SingleFlightSession()
+        handed_out.append(sess)
+        yield sess
+
+    monkeypatch.setattr(module, "get_session", fake_get_session)
+
+    # session=None exercises the production path that opens its own session(s).
+    ctx = await get_incident_context(ALERT, TENANT)
+
+    assert not ctx.errors, f"dimensions collided on a shared Neo4j session: {ctx.errors}"
+    assert len(handed_out) == len(_DIMENSIONS), (
+        f"each concurrent dimension must own its session; got {len(handed_out)} session(s) for {len(_DIMENSIONS)} dimensions"
+    )
