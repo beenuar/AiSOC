@@ -96,8 +96,16 @@ def _make_app(worker: Any | None) -> FastAPI:
     # and it runs the fusion pipeline. These tests are about the pipeline's
     # response envelope, so they supply a resolved principal; the refusal of
     # an anonymous caller is asserted by scripts/check_route_auth.py.
+    #
+    # The principal covers the tenant `_raw_alert_payload()` names and holds
+    # a role carrying `alerts:write`, because the route now scopes the body's
+    # tenant against the credential and refuses read-only roles
+    # (GHSA-qfvv-rf5p-6h69). The refusals themselves are asserted in
+    # tests/test_process_tenant_scope.py.
     app.dependency_overrides[require_console_or_service_auth] = lambda: TenantPrincipal(
-        tenant_ids=frozenset({UUID("aaaaaaaa-0000-0000-0000-00000000000a")}), subject="test"
+        tenant_ids=frozenset({UUID("11111111-1111-1111-1111-111111111111")}),
+        subject="test",
+        role="soc_analyst",
     )
     return app
 
