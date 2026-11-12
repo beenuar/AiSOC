@@ -47,6 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and troubleshooting are on the new
   [Sophos Central](apps/docs/docs/connectors/sophos-central.md) page.
 
+- **A saved connector can be edited from the console.** `PATCH
+  /api/v1/connectors/{id}` applies an RFC 7396 merge at depth one with the
+  row locked for the read-merge-write, and the vault round-trip keeps stored
+  secret leaves as `vault:` tokens so only newly-typed values are encrypted —
+  which also retires the documented re-add-loses-the-checkpoint footgun.
+  Contributed by [@officialasishkumar](https://github.com/officialasishkumar)
+  ([#1833](https://github.com/beenuar/AiSOC/pull/1833), carried in
+  [#1836](https://github.com/beenuar/AiSOC/pull/1836) with the regenerated
+  OpenAPI document its schema change required; closes
+  [#1832](https://github.com/beenuar/AiSOC/issues/1832)).
+
 - **A released CHANGELOG section is now frozen to its tag.**
   `scripts/check_changelog_frozen.py` compares the newest five released
   sections byte-for-byte against the `CHANGELOG.md` committed at each
