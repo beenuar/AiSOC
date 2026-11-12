@@ -10,7 +10,7 @@ Vendor reference, from Cisco's Secure Endpoint API documentation
       Europe                         https://api.eu.amp.cisco.com
       Asia Pacific, Japan and China  https://api.apjc.amp.cisco.com
 
-  The region is a select rather than a URL, so the credential can only ever
+  The region is a fixed choice of three, not a URL, so the credential can only ever
   be sent to one of Cisco's three hosts.
 
 * **Authentication.** HTTP Basic, with the API client ID as the user name
