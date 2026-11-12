@@ -764,6 +764,52 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "cisco_secure_endpoint",
+    "connector_name": "Cisco Secure Endpoint",
+    "description": "Cisco Secure Endpoint (formerly AMP for Endpoints) detections \u2014 threats, quarantines, exploit prevention, behavioural protection, indicators of compromise and threat hunting incidents \u2014 via the v1 events API. Read-only.",
+    "docs_url": "/docs/connectors/cisco-secure-endpoint",
+    "fields": [
+      {
+        "help_text": "The Secure Endpoint cloud the console and the API credential live in.",
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "North America (api.amp.cisco.com)",
+            "value": "nam"
+          },
+          {
+            "label": "Europe (api.eu.amp.cisco.com)",
+            "value": "eu"
+          },
+          {
+            "label": "Asia Pacific, Japan and China (api.apjc.amp.cisco.com)",
+            "value": "apjc"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "label": "API client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Created in the Secure Endpoint console under Accounts \u2192 API Credentials. Read-only scope is enough.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "query_logs",
       "pivot_domain",

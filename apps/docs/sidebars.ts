@@ -110,6 +110,7 @@ const sidebars: SidebarsConfig = {
         "connectors/box",
         "connectors/carbon-black",
         "connectors/chronicle",
+        "connectors/cisco-secure-endpoint",
         "connectors/cisco-umbrella",
         "connectors/cloudflare",
         "connectors/cloudflare-zt",

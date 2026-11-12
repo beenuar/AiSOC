@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 92,
-    "total": 104
+    "registry": 93,
+    "total": 105
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -38,6 +38,7 @@
     "box",
     "carbon_black",
     "chronicle",
+    "cisco_secure_endpoint",
     "cisco_umbrella",
     "cloudflare",
     "cloudflare_zt",
@@ -144,6 +145,7 @@
     "box": "registry",
     "carbon_black": "registry",
     "chronicle": "registry",
+    "cisco_secure_endpoint": "registry",
     "cisco_umbrella": "registry",
     "cloudflare": "registry",
     "cloudflare_zt": "registry",
