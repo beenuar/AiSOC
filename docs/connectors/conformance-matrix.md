@@ -6,7 +6,7 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**93 / 93 connectors conform** to the runtime contract.
+**94 / 94 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
@@ -54,6 +54,7 @@
 | gitlab | vcs | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | google_workspace | saas | 2 | 1 | 1 | ✅ | ✅ | ✅ |
 | greynoise | saas | 2 | 1 | 2 | ✅ | ✅ | ✅ |
+| huntress | edr | 2 | 2 | 1 | ✅ | ✅ | ✅ |
 | imperva | network | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | jira | saas | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | jumpcloud | iam | 1 | 1 | 2 | ✅ | ✅ | ✅ |

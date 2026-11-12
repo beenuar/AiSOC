@@ -483,7 +483,7 @@ Terraform skeleton equivalent to the existing AWS module.
       off `auditd_key` for sudoers / SSH / kernel-module / systemd
       tampering. 444-test full connectors suite green (excluding
       `test_scheduler.py` which needs the `apscheduler` dev dep).
-- [x] Connector registry now declares **93 first-party connectors**;
+- [x] Connector registry now declares **94 first-party connectors**;
       `pnpm marketplace:sync` rebuilt `marketplace/index.json` +
       `apps/web/public/marketplace/index.json`.
 

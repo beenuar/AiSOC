@@ -61,6 +61,7 @@ from app.connectors.github import GitHubConnector
 from app.connectors.gitlab import GitLabConnector
 from app.connectors.google_workspace import GoogleWorkspaceConnector
 from app.connectors.greynoise import GreyNoiseConnector
+from app.connectors.huntress import HuntressConnector
 from app.connectors.imperva import ImpervaConnector
 from app.connectors.jira_connector import JiraConnector
 from app.connectors.jumpcloud import JumpCloudConnector
@@ -163,6 +164,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     GitLabConnector,
     GoogleWorkspaceConnector,
     GreyNoiseConnector,
+    HuntressConnector,
     ImpervaConnector,
     JiraConnector,
     JumpCloudConnector,
@@ -292,6 +294,7 @@ __all__ = [
     "GCPSCCConnector",
     "GitHubConnector",
     "GoogleWorkspaceConnector",
+    "HuntressConnector",
     "JiraConnector",
     "KubernetesAuditConnector",
     "LaceworkConnector",
