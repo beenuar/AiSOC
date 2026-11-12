@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     # If coverage mapping ever needs it here, take the same local-file route.
 
     # OTel
-    otel_endpoint: str = "http://localhost:4317"
     service_name: str = "aisoc-purple-team"
 
     # API

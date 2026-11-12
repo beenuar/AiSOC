@@ -553,6 +553,12 @@ jobs:
       # `python scripts/sync_vendored_alert_status.py` locally to fix.
       - name: Verify vendored alert-status vocabulary is in sync
         run: python scripts/sync_vendored_alert_status.py --check
+      # The guarded telemetry module ueba/honeytokens/purple-team share
+      # (issue #1848): three copies that can drift silently are worse than
+      # one copy plus a gate. Re-run
+      # `python scripts/sync_vendored_telemetry.py` locally to fix.
+      - name: Verify vendored telemetry guard is in sync
+        run: python scripts/sync_vendored_telemetry.py --check
       # The fifth vendored mirror, and the only one that had no gate. The
       # redactor strips internal IPs, emails, paths and secret-shaped strings
       # before untrusted text reaches a prompt; a copy that silently drifts

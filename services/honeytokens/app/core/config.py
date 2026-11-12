@@ -40,7 +40,6 @@ class Settings(BaseSettings):
     token_ttl_days: int = 365
 
     # OTel
-    otel_endpoint: str = "http://localhost:4317"
     service_name: str = "aisoc-honeytokens"
 
     # API
