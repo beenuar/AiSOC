@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-11T17:10:01Z",
+  "generated": "2026-11-11T20:04:58Z",
   "categories": [
     {
       "id": "playbooks",
@@ -255845,14 +255845,14 @@
       "plugin_type": "connector",
       "license": "MIT",
       "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sophos_central.py",
-      "min_aisoc_version": "23.1.0",
+      "min_aisoc_version": "23.2.0",
       "sdks": [],
       "mitre_techniques": [],
       "verified": true,
       "source": "core",
       "tier": "stable",
       "path": "plugins/sophos-central/plugin.yaml",
-      "sha256": "344365b4d11f39ba2cfa8cb64160f2c1951d647339e4043ae0d5512702ee7927"
+      "sha256": "24008d2e76eb3569fca1b9c2ffc88d56598f6653cb0f29f248256107d7916d67"
     },
     {
       "id": "sublime_security",

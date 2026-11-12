@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.2.0] - 2026-11-11
+
 ### Added
 
 - **Per-IOC threat-intel feed lookup, wired into scoring and investigation.**
@@ -84,6 +86,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every credential. An API client that relied on the replacement to drop a
   key now sends that key as `null`. A blank `name` is refused with 422
   instead of being stored.
+
+- **Shodan, URLScan and IPInfo enrichment is real.** The enrichment service
+  read `SHODAN_API_KEY`, `URLSCAN_API_KEY` and `IPINFO_API_KEY` from its
+  config and did nothing with any of them — an operator setting a key got a
+  silent no-op while `PortInfo` sat documented as "detected by Shodan" with
+  nothing filling it. Three clients now fill that gap: Shodan host lookups
+  (open ports, tags, hostnames), URLScan verdicts and IPInfo geolocation/ASN,
+  each wired into the enricher chain with transport-level tests, compose and
+  env documentation. One correction to the contributed code: Go's
+  `*url.Error` stringifies the full URL it failed on, so a key in the query
+  string reached the logs through any wrapped transport error — IPInfo's
+  token moves to the vendor-supported `Authorization: Bearer` header, and
+  Shodan (whose contract requires `?key=` in the URL) redacts the query
+  before wrapping, both pinned by tests. Contributed by @43n51c
+  ([#1831](https://github.com/beenuar/AiSOC/pull/1831), carried in
+  [#1835](https://github.com/beenuar/AiSOC/pull/1835)).
 
 ### Fixed
 
@@ -176,6 +194,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stale expiry cache overrule a renewed JWT. The Explain stream also receives
   its missing proxy rule to the agents service. Token lifetimes and server-side
   revocation checks are unchanged.
+
+- **Copilot chat is grounded in caller-scoped security data instead of
+  answering from prose alone.** The chat transports bind three read-only
+  tools — alerts, one record by UUID, Fusion entity risk — that forward the
+  caller's own authorization and tenant to the core API, which remains the
+  authority: no LLM argument or page context can choose a URL, credential or
+  tenant; `kind` is enum-bound, `record_id` round-trips `uuid.UUID` with a
+  response-echo check, entity paths are percent-encoded, redirects are
+  disabled and reads bounded. The text cache is disabled when tools are
+  bound (a cached prose answer must not impersonate a live read), a
+  truncated tool loop no longer publishes its last raw lookup as a
+  conclusion, and the Fusion risk endpoints answer 503 instead of
+  fabricating an empty queue. Contributed by @knowlet
+  ([#1819](https://github.com/beenuar/AiSOC/pull/1819), carried in
+  [#1828](https://github.com/beenuar/AiSOC/pull/1828)).
+
+- **The frozen-changelog gate no longer reds the release PR it exists to
+  protect.** Promoting `[Unreleased]` to `[X.Y.Z]` creates a released
+  section whose tag can only exist after the release PR merges, which the
+  two-day-old gate reported as UNVERIFIABLE and fatal — every future
+  release would have failed its own required check. The newest released
+  section, when its version equals the working tree's `VERSION` file and
+  its tag does not resolve, is now reported as an explicit PENDING state
+  instead of a failure; the exception is bounded on every side (an untagged
+  section anywhere else stays fatal, a pending version whose tag already
+  exists is compared like any other, a newest section not matching
+  `VERSION` stays fatal) and each bound is pinned by its own test.
+
+- **The Agentmetry inbox template preserves the context an investigation
+  needs.** Selected account provenance, supporting-event references,
+  recorder coverage and MCP schema observations now survive normalisation
+  under `finding.evidence.agentmetry`, with reported account claims kept
+  separate from `actor.user` and full account emails and opaque account/user
+  IDs excluded. Field paths, the activity/finding split, the severity ladder
+  and the OCSF 1.1.0 declaration are unchanged
+  ([#1826](https://github.com/beenuar/AiSOC/pull/1826), from discussion
+  [#1577](https://github.com/beenuar/AiSOC/discussions/1577)).
+
+### Security
+
+- **The mobile app's `node-forge` floor rises to 1.4.3.** All four advisories
+  against 1.4.2 (Ed25519 small-order acceptance, two TLS-client crash paths,
+  ReDoS in header trimming) name 1.4.3 as the first patched version; the
+  existing override floor moved from `>=1.4.1` and exactly one package moved
+  in the re-resolved lock, at both import sites. Closes Dependabot alerts
+  #232–#235 ([#1829](https://github.com/beenuar/AiSOC/pull/1829)).
+
+- **The session live check validates its fixture token's shape.** The script
+  that exercises session refresh against a live stack now refuses a fixture
+  credential that is not structurally a JWT before sending it anywhere,
+  closing CodeQL alert #1129
+  ([#1830](https://github.com/beenuar/AiSOC/pull/1830)).
 
 ## [23.1.0] - 2026-11-10
 
