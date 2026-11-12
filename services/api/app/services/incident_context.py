@@ -419,53 +419,62 @@ async def get_incident_context(
     # and this shape is the repo's documented convention.
     safe_alert_id = str(alert_id).replace("\r", "").replace("\n", " ")[:120]
 
-    async def _gather(sess: Any) -> None:
-        base = {
-            "alert_id": alert_id,
-            "tenant_id": tenant_id,
-            "global_labels": list(GLOBAL_LABELS),
-        }
+    base = {
+        "alert_id": alert_id,
+        "tenant_id": tenant_id,
+        "global_labels": list(GLOBAL_LABELS),
+    }
 
-        async def one(name: str, cypher: str, extra: dict[str, int]) -> tuple[str, Any]:
-            try:
+    async def one(name: str, cypher: str, extra: dict[str, int]) -> tuple[str, Any]:
+        params = {**base, **extra}
+        try:
+            if session is not None:
+                # A caller-supplied session is used as given: the test seam,
+                # and any caller that owns its own transaction. The production
+                # path below instead gives every dimension its own session —
+                # a real Neo4j AsyncSession serves one query at a time, so
+                # running all five concurrently on a single shared session
+                # corrupts the bolt connection buffer (BufferError) and
+                # silently drops four of the five dimensions.
                 rows = await asyncio.wait_for(
-                    _run_dimension(sess, cypher, {**base, **extra}),
+                    _run_dimension(session, cypher, params),
                     timeout=QUERY_TIMEOUT_SECONDS,
                 )
-                return name, rows
-            except TimeoutError:
-                logger.warning(
-                    "incident_context.%s timed out after %.1fs alert=%s",
-                    name,
-                    QUERY_TIMEOUT_SECONDS,
-                    safe_alert_id,
-                )
-                return name, TimeoutError(f"{name}: timeout")
-            except Exception as exc:
-                logger.warning(
-                    "incident_context.%s failed alert=%s err=%s",
-                    name,
-                    safe_alert_id,
-                    type(exc).__name__,
-                )
-                return name, exc
+            else:
+                async with get_session() as sess:
+                    rows = await asyncio.wait_for(
+                        _run_dimension(sess, cypher, params),
+                        timeout=QUERY_TIMEOUT_SECONDS,
+                    )
+            return name, rows
+        except TimeoutError:
+            logger.warning(
+                "incident_context.%s timed out after %.1fs alert=%s",
+                name,
+                QUERY_TIMEOUT_SECONDS,
+                safe_alert_id,
+            )
+            return name, TimeoutError(f"{name}: timeout")
+        except Exception as exc:
+            logger.warning(
+                "incident_context.%s failed alert=%s err=%s",
+                name,
+                safe_alert_id,
+                type(exc).__name__,
+            )
+            return name, exc
 
+    try:
         results = await asyncio.gather(*(one(name, cypher, extra) for name, cypher, extra in _DIMENSIONS))
         for name, value in results:
             if isinstance(value, Exception):
                 context.errors.append(f"{name} ({type(value).__name__})")
             else:
                 setattr(context, name, value)
-
-    try:
-        if session is not None:
-            await _gather(session)
-        else:
-            async with get_session() as sess:
-                await _gather(sess)
     except Exception as exc:
-        # The graph being unreachable must not be indistinguishable from an
-        # alert with no context.
+        # A failure that is not any single dimension's — the gather itself, or
+        # the event loop. The graph being unreachable must not be
+        # indistinguishable from an alert with no context.
         context.errors.append(f"graph unavailable ({type(exc).__name__})")
         logger.warning("incident_context.unavailable alert=%s err=%s", safe_alert_id, type(exc).__name__)
 
