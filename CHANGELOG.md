@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Fusion `POST /process` no longer trusts the body's `tenant_id`**
+  (GHSA-qfvv-rf5p-6h69). The synchronous fusion entrypoint authenticated its
+  caller but never intersected the submitted alert's `tenant_id` with the
+  credential's scope, and required no role — so any logged-in user of any
+  tenant, including `viewer`, could inject alerts into another tenant's live
+  dedup/correlation/RBA state and register dedup fingerprints under the
+  victim tenant, suppressing their real alerts. The route now resolves the
+  tenant through `scoped_tenant_or_403` (console claim, or the service
+  token's declared `X-AiSOC-Tenant-ID`) and requires a role holding
+  `alerts:write`, mirrored from the API's `ROLE_PERMISSIONS` and pinned by a
+  drift test. The same contract now covers the sibling write routes:
+  `/ml/feedback` (body tenant scoped + role-gated — cross-tenant feedback
+  poisoned the ranker), `/confidence/score` (body tenant scoped),
+  `/ml/retrain` (role-gated), and `/dlq/replay` refuses console sessions
+  outright — its audited operator door is `POST
+  /api/v1/health/dead-letters/replay` on the API, and the fusion-side route
+  accepted any tenant's session with any role while bypassing the permission
+  check and audit row. Reported by 1ceS1amese.
+
 ### Added
 
 - **Cisco Secure Endpoint connector.** `cisco_secure_endpoint` reads Cisco

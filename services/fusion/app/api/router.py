@@ -21,6 +21,46 @@ from app.workers.consumer import FusionWorker
 #: parameter. See app/security/tenant_scope.py.
 ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
+#: Roles that may write alert state through this service, mirroring the
+#: holders of ``alerts:write`` in ``ROLE_PERMISSIONS``
+#: (services/api/app/core/security.py). A mirror rather than an import for
+#: the reason every vendored module here is: this service is built from its
+#: own Docker context and cannot import the API's package.
+#: ``tests/test_process_tenant_scope.py::test_the_role_mirror_matches_the_api``
+#: parses that file and fails if the two drift — a second permission model
+#: that can silently disagree with the first is what this repository refuses.
+_MAY_WRITE_ALERTS: frozenset[str] = frozenset({"admin", "platform_admin", "tenant_admin", "soc_lead", "soc_analyst"})
+
+
+def _require_role(
+    principal: TenantPrincipal,
+    allowed: frozenset[str],
+    *,
+    verb: str,
+    permission: str,
+) -> None:
+    """Refuse a console caller whose role does not carry ``permission``.
+
+    A **service** principal passes. It authenticated with a shared secret,
+    declared its tenant on ``X-AiSOC-Tenant-ID`` and carries no human role,
+    so there is no role to check — refusing it would break the agents
+    service's own synchronous fusion calls while protecting nothing.
+
+    Same shape as the agents service's playbook router (GHSA-8cpf-mchw-jpf2,
+    F15): the vendored principal carries the ``role`` claim precisely so a
+    service without the API's permission engine can still tell a viewer from
+    an analyst.
+    """
+    if principal.delegated:
+        return
+    if principal.role in allowed:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=(f"{verb} requires '{permission}'. Your role ({principal.role or 'unknown'}) does not carry it."),
+    )
+
+
 router = APIRouter()
 
 _worker_ref: FusionWorker | None = None
@@ -94,18 +134,45 @@ async def ml_status(principal: ScopedPrincipal):
 
 @router.post("/ml/feedback")
 async def submit_feedback(feedback: AnalystFeedback, principal: ScopedPrincipal):
-    """Submit analyst feedback to improve ML ranker."""
+    """Submit analyst feedback to improve ML ranker.
+
+    Same contract as ``/process`` (GHSA-qfvv-rf5p-6h69): the body's
+    ``tenant_id`` is validated against the credential, because feedback
+    retrains the ranker — accepting another tenant's id would let any
+    authenticated user poison that tenant's priority model. And it is a
+    write, so ``viewer`` is refused.
+    """
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
+    _require_role(
+        principal,
+        _MAY_WRITE_ALERTS,
+        verb="submitting analyst feedback",
+        permission="alerts:write",
+    )
+    feedback.tenant_id = scoped_tenant_or_403(principal, feedback.tenant_id)
     await _worker_ref.engine.ml_scorer.record_feedback(feedback)
     return {"status": "accepted", "alert_id": str(feedback.alert_id)}
 
 
 @router.post("/ml/retrain")
 async def trigger_retrain(principal: ScopedPrincipal):
-    """Manually trigger ML model retraining."""
+    """Manually trigger ML model retraining.
+
+    Gated on the ``alerts:write`` role set: retraining is an ML-ops action
+    on the models that rank every tenant's queue, and the engine already
+    retrains itself on a sample threshold (``_maybe_retrain``), so the
+    manual trigger is an operator convenience — not something a ``viewer``
+    session should be able to invoke in a loop.
+    """
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
+    _require_role(
+        principal,
+        _MAY_WRITE_ALERTS,
+        verb="triggering ML retraining",
+        permission="alerts:write",
+    )
     result = await _worker_ref.engine.ml_scorer.retrain()
     return result
 
@@ -131,9 +198,33 @@ async def process_alert(alert: RawAlert, principal: ScopedPrincipal) -> FusedAle
     narrative generation all run with the same state as the live
     consumer. A duplicate alert returns a ``FusionDecision.DUPLICATE``
     envelope; a new alert returns a fully scored ``FusedAlert``.
+
+    The body's ``tenant_id`` is a *claim*, not a selector
+    (GHSA-qfvv-rf5p-6h69). This engine instance is shared with the Kafka
+    consumer, so a write lands in the named tenant's live dedup,
+    correlation and RBA state — and the engine attributes the resulting
+    ``FusedAlert`` to that tenant. The route used to accept any
+    authenticated caller's body verbatim, which let a viewer in tenant A
+    inject alerts into tenant B and register dedup fingerprints there,
+    suppressing B's real alerts. The tenant must therefore come from the
+    credential (console claim, or the service token's declared
+    ``X-AiSOC-Tenant-ID``), and the caller must hold a role that carries
+    ``alerts:write`` — submitting an alert is a write, and ``viewer``
+    may not do it even inside its own tenant.
     """
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
+    _require_role(
+        principal,
+        _MAY_WRITE_ALERTS,
+        verb="submitting an alert to the fusion pipeline",
+        permission="alerts:write",
+    )
+    # `tenant_id` is required on `RawAlert`, so this either proves the body
+    # names a tenant the credential covers or refuses with 403. The
+    # assignment is belt-and-braces: the value that reaches the engine is
+    # the resolved one, never the raw body field.
+    alert.tenant_id = scoped_tenant_or_403(principal, alert.tenant_id)
     return await _worker_ref.engine.process(alert)
 
 
@@ -231,6 +322,12 @@ async def score_confidence(alert: RawAlert, principal: ScopedPrincipal):
     """
     if _worker_ref is None or _worker_ref.engine is None:
         raise HTTPException(status_code=503, detail="Fusion worker not ready")
+    # The scorer is pure and writes nothing, so no role gate — but the
+    # tenant named in the body must still be one the credential covers
+    # (GHSA-qfvv-rf5p-6h69): the projection is attributed to that tenant,
+    # and an unchecked id here is the same class of defect as /process even
+    # when today's scorer happens not to read tenant state.
+    alert.tenant_id = scoped_tenant_or_403(principal, alert.tenant_id)
     scorer = _worker_ref.engine.confidence_scorer
 
     fused = FusedAlert(
@@ -289,6 +386,22 @@ async def replay_dead_letters(request: DlqReplayRequest, principal: ScopedPrinci
     than produced. That is the property that stops a replay reproducing the
     outage that filled the queue.
     """
+    if not principal.delegated:
+        # The docstring above is the contract: the operator door is the API,
+        # which holds the permission check, the tenant session and the audit
+        # row. This route accepted any console session too (any role, any
+        # tenant), which let a viewer execute a replay while bypassing all
+        # three. A replay is deployment-scoped (a topic range, not a tenant's
+        # rows), so the only honest console path is the audited one.
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "dead-letter replay is dispatched by the platform API "
+                "(POST /api/v1/health/dead-letters/replay), which holds the "
+                "permission check and the audit row; a console session cannot "
+                "call the fusion service directly"
+            ),
+        )
     try:
         outcome = await replay_from_offset(
             topic=request.topic,
