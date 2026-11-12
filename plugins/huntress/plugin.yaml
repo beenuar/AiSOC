@@ -15,7 +15,10 @@ author: AiSOC Core Team
 tags: [edr, endpoint, huntress, managed-edr, incident-reports]
 homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/huntress.py
 license: MIT
-min_aisoc_version: "23.2.0"
+# The first release that contains this connector. v23.3.0 was cut before it
+# merged; the next release's PR confirms or corrects this value, the same way
+# the v23.3.0 release PR did for cisco_secure_endpoint.
+min_aisoc_version: "23.4.0"
 config_schema:
   type: object
   required: [api_key, api_secret]
