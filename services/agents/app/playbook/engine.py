@@ -62,6 +62,25 @@ _API_URL = os.getenv("API_URL", "http://api:8000")
 _ENRICHMENT_URL = os.getenv("ENRICHMENT_SERVICE_URL", "http://enrichment:8082").rstrip("/")
 
 
+def _enrichment_service_headers(tenant_id: str) -> dict[str, str]:
+    """Headers for a service call to the enrichment service.
+
+    A local helper rather than an import of ``app.tools.enrichment``: the
+    playbook validator in CI imports the ``Playbook`` model from this module
+    with only this module's own dependency closure installed, and
+    ``app.tools.enrichment`` pulls in ``structlog``, which that job does not
+    carry. Mirrors the server's token resolution — per-service override
+    first, then the platform token (GHSA-qf6m-hgwv-65f9).
+    """
+    headers: dict[str, str] = {}
+    token = (os.getenv("AISOC_ENRICHMENT_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if tenant_id.strip():
+        headers["X-AiSOC-Tenant-ID"] = tenant_id.strip()
+    return headers
+
+
 # ---------------------------------------------------------------------------
 # Run status
 # ---------------------------------------------------------------------------
@@ -388,10 +407,14 @@ async def _handle_enrich(step: PlaybookStep, context: dict[str, Any], http: http
     ioc_type = step.params.get("ioc_type", "ip")
     if not ioc:
         return {"skipped": True, "reason": "no indicator in the step parameters or the run context"}
+    tenant_id = str(context.get("tenant_id") or "")
     try:
         r = await http.post(
             f"{_ENRICHMENT_URL}/enrich",
-            json={"value": ioc, "ioc_type": ioc_type},
+            json={"value": ioc, "ioc_type": ioc_type, "tenant_id": tenant_id},
+            # The enrichment service authenticates callers
+            # (GHSA-qf6m-hgwv-65f9): service token + the run's own tenant.
+            headers=_enrichment_service_headers(tenant_id),
             timeout=step.timeout_seconds,
         )
         r.raise_for_status()

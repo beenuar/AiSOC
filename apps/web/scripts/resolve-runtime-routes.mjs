@@ -59,7 +59,10 @@ const UPSTREAM_VARS = [
   'AGENTS_URL',
   'REALTIME_URL',
   'FUSION_URL',
-  'ENRICHMENT_URL',
+  // ENRICHMENT_URL is gone: the enrichment rewrites were removed from
+  // next.config.js (GHSA-qf6m-hgwv-65f9), so the variable configures
+  // nothing and keeping it here would treat setting it as operator intent
+  // this script can satisfy.
   'OSQUERY_TLS_URL',
 ];
 

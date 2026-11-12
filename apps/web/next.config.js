@@ -49,7 +49,8 @@ const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
 // through to the core API catch-all, which exposes a graceful fusion
 // gateway (services/api/app/api/v1/endpoints/fusion.py).
 const FUSION_HOST = process.env.FUSION_URL || '';
-const ENRICHMENT_HOST = process.env.ENRICHMENT_URL || 'http://enrichment:8082';
+// ENRICHMENT_URL is no longer read: the enrichment rewrites were removed
+// (GHSA-qf6m-hgwv-65f9) — see the note in rewrites() below.
 const OSQUERY_TLS_HOST = process.env.OSQUERY_TLS_URL || 'http://localhost:8090';
 // Both services are `extras`-profile, so the default points at the published
 // host port rather than a compose service name: a developer who started them
@@ -288,27 +289,16 @@ const nextConfig = {
         source: '/api/v1/osquery/:path*',
         destination: `${OSQUERY_TLS_HOST}/api/v1/osquery/:path*`,
       },
-      // Enrichment service (Go service; paths differ from /api/v1 prefix).
-      //
-      // Nothing in the console calls these today — `threatIntelApi.lookup`
-      // reads the tenant's own threat-intel store, and the `bulkLookup` that
-      // targeted the second one is gone. They stay because this is how a
-      // console feature reaches enrichment, and `ENRICHMENT_URL` is in
-      // `scripts/resolve-runtime-routes.mjs`, so a pulled image can be
-      // pointed at a real host without a rebuild.
-      //
-      // The fallback below is `http://enrichment:8082`, the Compose service
-      // and the port it listens on. It used to be `http://localhost:8083`,
-      // which inside the web container is the console itself — a rewrite
-      // that answered from the wrong server rather than failing.
-      {
-        source: '/api/v1/enrichment/lookup',
-        destination: `${ENRICHMENT_HOST}/enrich`,
-      },
-      {
-        source: '/api/v1/enrichment/bulk',
-        destination: `${ENRICHMENT_HOST}/enrich/bulk`,
-      },
+      // The enrichment rewrites (`/api/v1/enrichment/lookup` → `/enrich`,
+      // `/api/v1/enrichment/bulk` → `/enrich/bulk`) are gone
+      // (GHSA-qf6m-hgwv-65f9). Nothing in the console called them —
+      // `threatIntelApi.lookup` reads the tenant's own threat-intel store —
+      // but the rewrite made two then-unauthenticated internal routes
+      // same-origin reachable from any browser that could reach the console,
+      // spending the deployment's threat-intel provider quota with no
+      // account. The service authenticates now, but a door nothing uses
+      // stays closed: a future console feature should reach enrichment with
+      // the session bearer token, which the service verifies.
       // Fusion service exposes the Risk-Based Alerting (entity rollup) queue
       // and ML scoring endpoints at its own root (no /api/v1 prefix on the
       // service side). Proxy /api/v1/fusion/:path* → fusion's /:path* so the

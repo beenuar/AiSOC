@@ -39,10 +39,12 @@ class _Recorder:
         self.response = response
         self.url: str | None = None
         self.json: dict | None = None
+        self.headers: dict | None = None
 
-    async def post(self, url, json=None, timeout=None):  # noqa: A002, ANN001
+    async def post(self, url, json=None, headers=None, timeout=None):  # noqa: A002, ANN001
         self.url = str(url)
         self.json = json
+        self.headers = headers or {}
         self.response.request = httpx.Request("POST", url)
         if self.response.status_code >= 400:
             raise httpx.HTTPStatusError("boom", request=self.response.request, response=self.response)
@@ -65,7 +67,22 @@ async def test_it_sends_the_field_names_that_service_reads() -> None:
     http = _Recorder(httpx.Response(200, json={}))
     await engine._handle_enrich(_step(ioc="evil.example", ioc_type="domain"), {}, http)
 
-    assert http.json == {"value": "evil.example", "ioc_type": "domain"}
+    assert http.json == {"value": "evil.example", "ioc_type": "domain", "tenant_id": ""}
+
+
+@pytest.mark.asyncio
+async def test_it_authenticates_with_the_runs_tenant(monkeypatch) -> None:
+    """The enrichment service authenticates callers (GHSA-qf6m-hgwv-65f9):
+    the step presents the service token and declares the run's own tenant."""
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "svc-token-under-test")
+    http = _Recorder(httpx.Response(200, json={}))
+    tenant = "11111111-1111-1111-1111-111111111111"
+    await engine._handle_enrich(_step(ioc="1.2.3.4", ioc_type="ip"), {"tenant_id": tenant}, http)
+
+    assert http.json is not None and http.headers is not None
+    assert http.json["tenant_id"] == tenant
+    assert http.headers.get("Authorization") == "Bearer svc-token-under-test"
+    assert http.headers.get("X-AiSOC-Tenant-ID") == tenant
 
 
 @pytest.mark.asyncio

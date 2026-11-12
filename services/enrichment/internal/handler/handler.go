@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/beenuar/aisoc/enrichment/internal/enricher"
+	"github.com/beenuar/aisoc/enrichment/internal/tenantauth"
 	"github.com/rs/zerolog/log"
 )
 
@@ -29,14 +30,30 @@ func New(e *enricher.Enricher, limiter *enricher.RateLimiter) *Handler {
 
 // rateLimitKey is the bucket a request spends from.
 //
-// Per tenant, with requests carrying no tenant sharing one bucket rather
-// than bypassing the limit. A missing tenant must not be the way around the
-// limiter, which is what an empty-means-unlimited rule would make it.
+// Keyed on the *authenticated* tenant (GHSA-qf6m-hgwv-65f9). It used to be
+// keyed on the body's `tenant_id`, so every previously unseen string minted a
+// fresh token bucket and rotating the field defeated the limiter entirely.
+// The principal's tenant is the one identity the caller cannot choose per
+// request. The `_untenanted` fallback stays for defence in depth, but a
+// resolved principal always carries a tenant.
 func rateLimitKey(tenantID string) string {
 	if strings.TrimSpace(tenantID) == "" {
 		return "_untenanted"
 	}
 	return tenantID
+}
+
+// resolveTenant intersects the body's tenant claim with the authenticated
+// principal, mirroring the Python services' scoped_tenant_or_403: a body
+// naming the principal's own tenant (in any case form) is honoured, an empty
+// body field inherits it, and anything else — another tenant's UUID, or an
+// arbitrary bucket-minting string like "probe-a" — is refused rather than
+// believed. The returned value is always the principal's canonical tenant.
+func resolveTenant(p tenantauth.Principal, bodyTenant string) (string, bool) {
+	if strings.TrimSpace(bodyTenant) == "" || p.Covers(bodyTenant) {
+		return p.TenantID, true
+	}
+	return "", false
 }
 
 // refuse answers 429 with the header a client needs to behave.
@@ -53,11 +70,27 @@ type errorResponse struct {
 
 // EnrichIOC handles POST /enrich - single IOC enrichment.
 func (h *Handler) EnrichIOC(w http.ResponseWriter, r *http.Request) {
+	principal, ok := tenantauth.FromContext(r.Context())
+	if !ok {
+		// The route is registered behind tenantauth.Middleware; reaching
+		// here without a principal is a wiring defect, and the safe answer
+		// to "who is asking" being unanswered is a refusal, not a guess.
+		writeError(w, http.StatusUnauthorized, "request reached the handler without an authenticated principal")
+		return
+	}
+
 	var req enricher.EnrichRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+
+	tenant, covered := resolveTenant(principal, req.TenantID)
+	if !covered {
+		writeError(w, http.StatusForbidden, "request names a tenant this credential does not act for")
+		return
+	}
+	req.TenantID = tenant
 
 	req.Value = strings.TrimSpace(req.Value)
 	if req.Value == "" {
@@ -69,7 +102,7 @@ func (h *Handler) EnrichIOC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.limiter != nil && !h.limiter.Allow(rateLimitKey(req.TenantID)) {
+	if h.limiter != nil && !h.limiter.Allow(rateLimitKey(principal.TenantID)) {
 		refuse(w)
 		return
 	}
@@ -87,6 +120,12 @@ func (h *Handler) EnrichIOC(w http.ResponseWriter, r *http.Request) {
 
 // BulkEnrich handles POST /enrich/bulk - batch IOC enrichment.
 func (h *Handler) BulkEnrich(w http.ResponseWriter, r *http.Request) {
+	principal, ok := tenantauth.FromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "request reached the handler without an authenticated principal")
+		return
+	}
+
 	var bulkReq enricher.BulkEnrichRequest
 	if err := json.NewDecoder(r.Body).Decode(&bulkReq); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid request body")
@@ -113,11 +152,27 @@ func (h *Handler) BulkEnrich(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		// Each item's tenant claim is intersected with the principal, same
+		// as the single route: distinct body tenant ids used to give every
+		// item its own fresh limiter bucket (GHSA-qf6m-hgwv-65f9).
+		tenant, covered := resolveTenant(principal, item.TenantID)
+		if !covered {
+			errCount++
+			results = append(results, enricher.EnrichmentResult{
+				IOCType:          item.IOCType,
+				Value:            item.Value,
+				EnrichmentErrors: []string{"item names a tenant this credential does not act for; not enriched"},
+				EnrichedAt:       time.Now(),
+			})
+			continue
+		}
+		item.TenantID = tenant
+
 		// One token per item, not one per request. A bulk call carrying a
 		// hundred indicators reaches a hundred third-party lookups, so
 		// charging it as a single request would make `/enrich/bulk` the way
 		// around the limit rather than a convenience.
-		if h.limiter != nil && !h.limiter.Allow(rateLimitKey(item.TenantID)) {
+		if h.limiter != nil && !h.limiter.Allow(rateLimitKey(principal.TenantID)) {
 			errCount++
 			results = append(results, enricher.EnrichmentResult{
 				IOCType: item.IOCType,

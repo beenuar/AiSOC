@@ -702,6 +702,16 @@ services:
       IPINFO_API_KEY: ${IPINFO_API_KEY:-}
       THREATINTEL_SERVICE_URL: ${THREATINTEL_SERVICE_URL:-http://threatintel:8005}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # /enrich and /enrich/bulk authenticate their callers
+      # (GHSA-qf6m-hgwv-65f9): SECRET_KEY verifies console sessions, the
+      # service token above authenticates fusion/agents, and the dev-bypass
+      # trio matches what fusion, connectors and threatintel already carry.
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It binds
+      # 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_BIND_ADDR:-127.0.0.1}
     networks:
       - aisoc
     restart: unless-stopped

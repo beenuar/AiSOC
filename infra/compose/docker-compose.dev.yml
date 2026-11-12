@@ -59,6 +59,14 @@ services:
       AISOC_DEV_MODE: 1
       AISOC_DEV_AUTH_BYPASS: 1
 
+  # `enrichment` runs only under `--profile full`; the overlay entry is inert
+  # otherwise. Its /enrich routes authenticate now (GHSA-qf6m-hgwv-65f9) and
+  # honour the same deliberate dev bypass as the Python services.
+  enrichment:
+    environment:
+      AISOC_DEV_MODE: 1
+      AISOC_DEV_AUTH_BYPASS: 1
+
   agents:
     environment:
       AISOC_DEV_MODE: 1
