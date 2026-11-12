@@ -15,7 +15,7 @@ author: AiSOC Core Team
 tags: [edr, endpoint, cisco, secure-endpoint, amp, detections]
 homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cisco_secure_endpoint.py
 license: MIT
-min_aisoc_version: "23.2.0"
+min_aisoc_version: "23.3.0"
 config_schema:
   type: object
   required: [region, client_id, api_key]

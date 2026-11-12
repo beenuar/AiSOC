@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-12T08:01:49Z",
+  "generated": "2026-11-12T19:35:03Z",
   "categories": [
     {
       "id": "playbooks",
@@ -254483,14 +254483,14 @@
       "plugin_type": "connector",
       "license": "MIT",
       "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cisco_secure_endpoint.py",
-      "min_aisoc_version": "23.2.0",
+      "min_aisoc_version": "23.3.0",
       "sdks": [],
       "mitre_techniques": [],
       "verified": true,
       "source": "core",
       "tier": "stable",
       "path": "plugins/cisco-secure-endpoint/plugin.yaml",
-      "sha256": "db3dff38a4c6ecf62a9fd9cc3510e518a3a3fd0a7655f541ab00b6dbb825039b"
+      "sha256": "08966b02655b5b0acad12a18af183aeeac27f9cb2df888c4fa7f0f5927efd0fb"
     },
     {
       "id": "cisco-umbrella",
