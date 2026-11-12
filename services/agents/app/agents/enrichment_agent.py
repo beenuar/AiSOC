@@ -21,7 +21,10 @@ async def run_enrichment(state: InvestigationState) -> InvestigationState:
         state.add_finding("No IOCs to enrich — skipping enrichment phase")
         return state
 
-    results = await bulk_enrich_iocs(pending_iocs)
+    results = await bulk_enrich_iocs(
+        pending_iocs,
+        tenant_id=str(getattr(state, "tenant_id", "") or ""),
+    )
 
     enriched: dict[str, dict] = {}
     malicious_count = 0

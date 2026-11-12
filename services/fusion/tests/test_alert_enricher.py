@@ -37,10 +37,10 @@ def _fake_client_factory(resp=None, *, error: Exception | None = None):
         async def __aexit__(self, *a):
             return False
 
-        async def post(self, url, json=None):
+        async def post(self, url, json=None, headers=None):
             if error is not None:
                 raise error
-            _fake_client_factory.last = {"url": url, "json": json}
+            _fake_client_factory.last = {"url": url, "json": json, "headers": headers or {}}
             return resp
 
     return _FakeClient
@@ -125,6 +125,21 @@ async def test_enrich_carries_tenant_on_each_bulk_item(monkeypatch):
     items = _fake_client_factory.last["json"]["items"]
     assert items, "expected bulk items to be posted"
     assert all(i.get("tenant_id") == str(alert.tenant_id) for i in items)
+
+
+@pytest.mark.asyncio
+async def test_enrich_authenticates_its_service_call(monkeypatch):
+    # The enrichment service authenticates callers (GHSA-qf6m-hgwv-65f9):
+    # the bulk call presents the service token and declares the alert's
+    # tenant on the platform header.
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "svc-token-under-test")
+    resp = _FakeResp(200, {"results": []})
+    monkeypatch.setattr("app.services.alert_enricher.httpx.AsyncClient", _fake_client_factory(resp))
+    alert = _alert(src_ip="1.2.3.4")
+    await _enricher().enrich(alert)
+    headers = _fake_client_factory.last["headers"]
+    assert headers.get("Authorization") == "Bearer svc-token-under-test"
+    assert headers.get("X-AiSOC-Tenant-ID") == str(alert.tenant_id)
 
 
 @pytest.mark.asyncio

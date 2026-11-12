@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/beenuar/aisoc/enrichment/internal/handler"
+	"github.com/beenuar/aisoc/enrichment/internal/tenantauth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
@@ -68,10 +69,22 @@ func New(port string, h *handler.Handler) *Server {
 		MaxAge:           300,
 	}))
 
-	// Routes
+	// Routes. /health stays open — it carries no tenant data and the
+	// compose healthcheck has no credential. The enrichment routes sit
+	// behind tenant auth (GHSA-qf6m-hgwv-65f9): they used to authenticate
+	// nobody, and the console's Next rewrites had made them same-origin
+	// reachable from any browser that could reach the console, spending
+	// the deployment's provider quota with no account at all. CORS is a
+	// browser-origin policy, not authentication; the middleware resolves a
+	// console session or a service token + declared tenant, and the
+	// handlers key the rate limiter on that identity rather than on a
+	// body field the caller invents.
 	r.Get("/health", h.Health)
-	r.Post("/enrich", h.EnrichIOC)
-	r.Post("/enrich/bulk", h.BulkEnrich)
+	r.Group(func(gr chi.Router) {
+		gr.Use(tenantauth.Middleware)
+		gr.Post("/enrich", h.EnrichIOC)
+		gr.Post("/enrich/bulk", h.BulkEnrich)
+	})
 
 	return &Server{
 		httpServer: &http.Server{

@@ -73,6 +73,13 @@ KNOWN_UNRESOLVED: dict[str, str] = {
     "/api/v1/graph_ws/stream": "a WebSocket endpoint, routed by the /ws rewrite",
     # Named inside a code comment explaining where the data comes from.
     "/api/v1/contextual": "a prose reference in a comment in AlertDetailView.tsx, not a call",
+    # The enrichment rewrites were removed with GHSA-qf6m-hgwv-65f9 — they
+    # forwarded two unauthenticated internal routes to any browser that
+    # could reach the console, and nothing in the console called them. The
+    # paths survive only inside the api.ts comments that document why the
+    # threat-intel lookup moved off them; a comment is not a call.
+    "/api/v1/enrichment/lookup": "a prose reference in comments in lib/api.ts, not a call (rewrite removed, GHSA-qf6m-hgwv-65f9)",
+    "/api/v1/enrichment/bulk": "a prose reference in comments in lib/api.ts, not a call (rewrite removed, GHSA-qf6m-hgwv-65f9)",
 }
 
 

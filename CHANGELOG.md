@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The enrichment service authenticates its callers, and the console's
+  unauthenticated enrichment proxy is gone** (GHSA-qf6m-hgwv-65f9). `POST
+  /enrich` and `/enrich/bulk` ran behind no authentication, and two Next
+  rewrites (`/api/v1/enrichment/lookup`, `/api/v1/enrichment/bulk`) made them
+  same-origin reachable from any browser that could reach the console — an
+  unauthenticated client could run enrichment lookups and spend the
+  deployment's threat-intel provider quota (VirusTotal, AbuseIPDB, GreyNoise,
+  …), and because the rate limiter was keyed on the request body's
+  `tenant_id`, rotating that string minted a fresh bucket per request. The Go
+  service now carries `internal/tenantauth`, a behaviour-identical port of
+  the Python services' vendored `tenant_scope` contract: console HS256
+  session tokens (alg-pinned, `type=access`, expiry, tenant claim) or the
+  service token with a declared `X-AiSOC-Tenant-ID`, failing closed when
+  neither is configured, with the same three-condition dev bypass. The rate
+  limiter and cache are keyed on the authenticated tenant; a body naming any
+  other tenant — or an arbitrary bucket-minting string — is refused. The two
+  dead console rewrites were removed (nothing in the console calls them), and
+  the real callers — fusion's fuse-time `AlertEnricher`, the investigator's
+  `enrich_ioc`, the playbook `enrich` step, and the context bundle's
+  threat-intel fetch — authenticate with the service token and the run's own
+  tenant. Compose wires `SECRET_KEY` and the dev-bypass trio into the
+  enrichment service like its Python siblings. Reported by naroSEC.
+
 - **Fusion `POST /process` no longer trusts the body's `tenant_id`**
   (GHSA-qfvv-rf5p-6h69). The synchronous fusion entrypoint authenticated its
   caller but never intersected the submitted alert's `tenant_id` with the

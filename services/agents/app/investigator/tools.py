@@ -15,6 +15,7 @@ import httpx
 import structlog
 
 from app.keywords import matches, normalise
+from app.tools.enrichment import service_headers
 
 logger = structlog.get_logger()
 
@@ -43,6 +44,9 @@ async def enrich_ioc(ioc_value: str, ioc_type: str, *, tenant_id: str = "") -> d
             resp = await client.post(
                 f"{_ENRICHMENT_URL}/enrich",
                 json={"value": ioc_value, "ioc_type": ioc_type, "tenant_id": tenant_id},
+                # The enrichment service authenticates callers
+                # (GHSA-qf6m-hgwv-65f9): service token + declared tenant.
+                headers=service_headers(tenant_id),
             )
             resp.raise_for_status()
             return resp.json()

@@ -564,7 +564,7 @@ class ContextBundleBuilder:
             ),
             self._safe(
                 "threat_intel",
-                self._fetch_threat_intel(bundle.entities),
+                self._fetch_threat_intel(tenant_id, bundle.entities),
                 bundle,
             ),
             self._safe(
@@ -804,8 +804,13 @@ class ContextBundleBuilder:
             errors=payload.get("errors") or [],
         )
 
-    async def _fetch_threat_intel(self, entities: list[EntityRef]) -> dict[str, ThreatIntelMatch]:
-        """Bulk-enrich every IOC-shaped entity in the alert."""
+    async def _fetch_threat_intel(self, tenant_id: str, entities: list[EntityRef]) -> dict[str, ThreatIntelMatch]:
+        """Bulk-enrich every IOC-shaped entity in the alert.
+
+        The run's tenant travels on the service call: the enrichment service
+        authenticates callers and scopes its cache and rate limit to the
+        declared tenant (GHSA-qf6m-hgwv-65f9).
+        """
         try:
             from app.tools.enrichment import bulk_enrich_iocs
         except Exception as exc:  # noqa: BLE001
@@ -819,7 +824,7 @@ class ContextBundleBuilder:
         # Bulk endpoint takes a list of {value, ioc_type} — chunk so a single
         # giant alert can't fan out >1k items.
         batch = [{"value": e.value, "ioc_type": e.type} for e in ioc_entities[:64]]
-        rows = await bulk_enrich_iocs(batch)
+        rows = await bulk_enrich_iocs(batch, tenant_id=tenant_id)
 
         out: dict[str, ThreatIntelMatch] = {}
         for row in rows or []:
