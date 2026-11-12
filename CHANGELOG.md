@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Cisco Secure Endpoint connector.** `cisco_secure_endpoint` reads Cisco
+  Secure Endpoint (formerly AMP for Endpoints) detections — threats,
+  quarantines, exploit prevention, behavioural protection, indicators of
+  compromise and threat hunting incidents — through `GET /v1/events` with
+  HTTP Basic auth (#356). The region is a select over Cisco's three clouds
+  (North America, Europe, Asia Pacific/Japan/China) rather than a URL, so the
+  API key is only ever sent to a Cisco host. The window is read to the end
+  through `read_offset_pages` at the documented 500-event maximum, with each
+  following page built from the configured region rather than taken from
+  `metadata.links.next`; the list is newest first, so a row pushed across a
+  page boundary by an event recorded mid-read is dropped by its `id`. Only
+  events Cisco rates with a severity are returned: policy updates, scans and
+  installs carry none, and since these events are filed as OCSF 2001 Security
+  Findings, which fusion promotes unconditionally, they would otherwise reach
+  the queue as alerts; how many were skipped is logged as
+  `cisco_secure_endpoint.unrated_events_skipped`. Severity keeps Cisco's Low,
+  Medium, High and Critical, and `Critical` stays `critical`. Setup, regions
+  and troubleshooting are on the new
+  [Cisco Secure Endpoint](apps/docs/docs/connectors/cisco-secure-endpoint.md)
+  page.
+
 ## [23.2.0] - 2026-11-11
 
 ### Added

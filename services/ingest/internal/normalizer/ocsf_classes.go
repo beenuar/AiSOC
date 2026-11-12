@@ -223,6 +223,12 @@ var connectorOCSFClass = map[string]connectorClass{
 	// with a decision instead of raising the count of connectors on the
 	// generic mapping.
 	"sophos_central": {classUID: classSecurityFinding},
+	// cisco_secure_endpoint reads /v1/events but returns only the events
+	// Cisco rates with a severity — detections, quarantines, exploit and
+	// behavioural protection, indicators of compromise, threat hunting
+	// incidents. Policy updates, scans and installs carry no severity and
+	// are dropped in the connector, so what reaches ingest is a finding.
+	"cisco_secure_endpoint": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},
