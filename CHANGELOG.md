@@ -55,6 +55,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Huntress connector.** `huntress` reads Huntress Managed EDR incident
+  reports — the footholds, ransomware canaries, process, antivirus, identity
+  and SIEM detections a Huntress SOC analyst has confirmed and delivered —
+  through `GET /v1/incident_reports` with HTTP Basic auth (#1845, part of
+  #356). The API host is fixed, so the credential is only ever sent to
+  Huntress, and both halves of it are vaulted. The list has no time filter,
+  so it is read by `updated_at`, newest first, at the documented 500-report
+  maximum through `read_token_pages`, following `pagination.next_page_token`
+  (never `next_page_url`) until a page passes the start of the window. The
+  window is then applied to `sent_at`, closed at the moment the read began:
+  a report is raised once, when Huntress delivers it, and not again each
+  time it is closed, commented on or remediated; a report never delivered is
+  not raised. A report names its host only by agent id, so each distinct
+  agent is looked up once through `GET /v1/agents/{id}` for its hostname,
+  addresses and OS — at most 20 a poll and stopping on a 429, because the
+  account allows 60 requests a minute — and a failed lookup costs the host,
+  never the report. Severity keeps Huntress's `low`, `high` and `critical`,
+  and `critical` stays `critical`. Setup and troubleshooting are on the new
+  [Huntress](apps/docs/docs/connectors/huntress.md) page.
+
 - **Cisco Secure Endpoint connector.** `cisco_secure_endpoint` reads Cisco
   Secure Endpoint (formerly AMP for Endpoints) detections — threats,
   quarantines, exploit prevention, behavioural protection, indicators of
