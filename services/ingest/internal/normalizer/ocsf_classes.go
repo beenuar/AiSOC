@@ -229,6 +229,11 @@ var connectorOCSFClass = map[string]connectorClass{
 	// incidents. Policy updates, scans and installs carry no severity and
 	// are dropped in the connector, so what reaches ingest is a finding.
 	"cisco_secure_endpoint": {classUID: classSecurityFinding},
+	// huntress reads /v1/incident_reports: each record is an incident a
+	// Huntress SOC analyst confirmed and delivered — a foothold, a tripped
+	// ransomware canary, a malicious process — and undelivered reports are
+	// dropped in the connector, so what reaches ingest is a finding.
+	"huntress": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},

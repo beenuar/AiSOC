@@ -1927,6 +1927,32 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "huntress",
+    "connector_name": "Huntress",
+    "description": "Huntress Managed EDR incident reports \u2014 footholds, ransomware canaries, process, antivirus, identity and SIEM detections a Huntress SOC analyst has confirmed and delivered \u2014 via the v1 REST API, with the affected host resolved from its agent. Read-only.",
+    "docs_url": "/docs/connectors/huntress",
+    "fields": [
+      {
+        "help_text": "The public half of a Huntress API credential. It is half of the credential, so the vault encrypts it too.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "Generated with the API key at <your subdomain>.huntress.io under API Credentials.",
+        "label": "API secret key",
+        "name": "api_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "pivot_ip",
       "block_ip"

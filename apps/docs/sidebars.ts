@@ -137,6 +137,7 @@ const sidebars: SidebarsConfig = {
         "connectors/gitlab",
         "connectors/google-workspace",
         "connectors/greynoise",
+        "connectors/huntress",
         "connectors/imperva",
         "connectors/jira",
         "connectors/jumpcloud",

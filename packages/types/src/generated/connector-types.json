@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 93,
-    "total": 105
+    "registry": 94,
+    "total": 106
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -68,6 +68,7 @@
     "google_workspace",
     "greynoise",
     "honeytoken",
+    "huntress",
     "ibm_qradar",
     "imperva",
     "jira",
@@ -175,6 +176,7 @@
     "google_workspace": "registry",
     "greynoise": "registry",
     "honeytoken": "profile",
+    "huntress": "registry",
     "ibm_qradar": "canonical-fold",
     "imperva": "registry",
     "jira": "registry",

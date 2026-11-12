@@ -172,11 +172,11 @@ Contribution guide: https://beenuar.github.io/AiSOC/docs/contributing/guidelines
 
 ## Connectors
 
-93 first-party connectors ship in the repository, by category:
+94 first-party connectors ship in the repository, by category:
 
 - `ai`: 1
 - `cloud`: 18
-- `edr`: 12
+- `edr`: 13
 - `hr`: 2
 - `iam`: 7
 - `mdm`: 1

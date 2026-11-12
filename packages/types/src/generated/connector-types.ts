@@ -4,10 +4,10 @@
 // Every `connector_type` the ingest normalizer resolves, derived from the
 // registry that decides what the platform can ingest:
 //
-//    93  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
+//    94  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
 //     7  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//   105  total
+//   106  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -66,6 +66,7 @@ export const CONNECTOR_TYPES = [
   "google_workspace",      // registry
   "greynoise",             // registry
   "honeytoken",            // profile
+  "huntress",              // registry
   "ibm_qradar",            // canonical-fold
   "imperva",               // registry
   "jira",                  // registry
