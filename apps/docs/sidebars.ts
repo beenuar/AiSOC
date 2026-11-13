@@ -182,6 +182,7 @@ const sidebars: SidebarsConfig = {
         "connectors/trellix-helix",
         "connectors/trend-vision-one",
         "connectors/vault",
+        "connectors/vectra-ai",
         "connectors/wazuh",
         "connectors/windows_event",
         "connectors/wiz",

@@ -6,7 +6,7 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**94 / 94 connectors conform** to the runtime contract.
+**95 / 95 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
@@ -99,6 +99,7 @@
 | trellix_helix | siem | 3 | 1 | 4 | ✅ | ✅ | ✅ |
 | trend_vision_one | edr | 2 | 1 | 5 | ✅ | ✅ | ✅ |
 | vault | iam | 4 | 1 | 2 | ✅ | ✅ | ✅ |
+| vectra_ai | ndr | 3 | 1 | 1 | ✅ | ✅ | ✅ |
 | wazuh | siem | 7 | 1 | 5 | ✅ | ✅ | ✅ |
 | windows_event | edr | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | wiz | cloud | 7 | 1 | 2 | ✅ | ✅ | ✅ |

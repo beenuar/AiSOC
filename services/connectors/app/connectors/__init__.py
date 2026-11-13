@@ -106,6 +106,7 @@ from app.connectors.torq import TorqConnector
 from app.connectors.trellix_helix import TrellixHelixConnector
 from app.connectors.trend_vision_one import TrendVisionOneConnector
 from app.connectors.vault import VaultConnector
+from app.connectors.vectra_ai import VectraAIConnector
 from app.connectors.wazuh import WazuhConnector
 from app.connectors.windows_event import WindowsEventConnector
 from app.connectors.wiz import WizConnector
@@ -208,6 +209,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     TrellixHelixConnector,
     TrendVisionOneConnector,
     VaultConnector,
+    VectraAIConnector,
     WazuhConnector,
     WindowsEventConnector,
     WizConnector,
@@ -330,6 +332,7 @@ __all__ = [
     "TrellixHelixConnector",
     "TrendVisionOneConnector",
     "VaultConnector",
+    "VectraAIConnector",
     "WazuhConnector",
     "WizConnector",
     "ZscalerConnector",

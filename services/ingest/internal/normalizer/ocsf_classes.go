@@ -215,6 +215,13 @@ var connectorOCSFClass = map[string]connectorClass{
 	// so, and a class two files assert and this table omits is the drift
 	// this table exists to catch.
 	"extrahop": {classUID: classSecurityFinding},
+	// vectra_ai is network-shaped for the same reason and is a finding for
+	// the same reason: it reads /api/v3.4/events/detections, each record a
+	// detection Vectra's models raised against a host or account, not a
+	// flow. It carries no severity (Vectra no longer scores individual
+	// detections), so 2001 is what promotes it at all; 4001 would archive
+	// every one of them to the lake and alert on none.
+	"vectra_ai": {classUID: classSecurityFinding},
 	// sophos_central reads /siem/v1/alerts, the alert half of the SIEM
 	// Integration API and not /siem/v1/events: every record is an alert
 	// Sophos itself raised against a device — a threat, a blocked exploit, a

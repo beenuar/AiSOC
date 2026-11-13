@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Vectra AI Platform connector.** `vectra_ai` reads Vectra AI Platform
+  network, identity and cloud detections through the v3.4 detection events
+  API, `GET /api/v3.4/events/detections`, with OAuth2 client credentials
+  exchanged at the tenant's own portal (#1858, part of #356). The portal URL
+  must be HTTPS and the secret key is vaulted; the bearer token is cached
+  until shortly before it expires and exchanged once more if Vectra refuses
+  a cached one early. The read opens at the window's start through
+  `event_timestamp_gte` and follows `next_checkpoint` while
+  `remaining_count` says there is more, building every request from the
+  configured portal; a refused or unreachable opening request fails the poll,
+  a later page failing keeps the pages already read, and the 25-page bound is
+  logged when it binds. The stream emits a detection again on every update,
+  so `external_id` is the `detection_id` and a poll raises the newest event
+  of each detection once; an event stamped after the read began is left for
+  the next window, and a detection a Vectra triage rule has marked is not
+  raised. A host detection fills the host column and an account detection
+  the user column, never both. Vectra does not score individual detections,
+  so no severity tier is invented from `threat`, `certainty` or the
+  undocumented `severity`: all three stay in `raw_event`, and
+  `ocsf_classes.go` files `vectra_ai` at 2001 Security Finding, which
+  promotes whatever the severity. Setup and troubleshooting are on the new
+  [Vectra AI Platform](apps/docs/docs/connectors/vectra-ai.md) page.
+
 ### Security
 
 - **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`
