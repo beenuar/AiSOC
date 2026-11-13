@@ -6,6 +6,7 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import httpx
@@ -72,37 +73,55 @@ class OtxClient:
                         break
                     page += 1
                 except Exception as exc:
-                    logger.error("OTX fetch failed", page=page, error=str(exc))
+                    # repr, not str: some httpx/transport exceptions stringify
+                    # to "" and logged `error=""` tells an operator nothing.
+                    logger.error("OTX fetch failed", page=page, error=repr(exc))
                     break
 
         logger.info("OTX pulses fetched", count=len(pulses))
         return pulses
 
-    def extract_iocs(self, pulse: dict[str, Any]) -> list[dict[str, Any]]:
-        """Extract IOC indicators from an OTX pulse."""
-        iocs: list[dict[str, Any]] = []
+    def iter_iocs(self, pulse: dict[str, Any]) -> Iterator[dict[str, Any]]:
+        """Yield normalized IOCs from a pulse one at a time.
+
+        A subscribed OTX pulse can be an aggregate feed carrying over a million
+        indicators. Materializing them all into one list (and copying the
+        pulse-level context onto each) is what let a single pulse exhaust memory
+        and stall the poll, so the caller streams and batches these instead.
+        The pulse-level context (tags, malware families, ATT&CK ids, TLP) rides
+        on every IOC so enrichment and scoring can use it.
+        """
         pulse_id = pulse.get("id", "")
         pulse_name = pulse.get("name", "")
+        tags = pulse.get("tags", [])
+        tlp = pulse.get("tlp", "white")
+        malware_families = pulse.get("malware_families", [])
+        attack_ids = pulse.get("attack_ids", [])
 
         for ind in pulse.get("indicators", []):
             ioc_type = self._map_indicator_type(ind.get("type", ""))
             if not ioc_type:
                 continue
-            iocs.append(
-                {
-                    "type": ioc_type,
-                    "value": ind.get("indicator", ""),
-                    "description": ind.get("description", ""),
-                    "tags": pulse.get("tags", []),
-                    "source": "otx",
-                    "source_ref": f"otx:{pulse_id}",
-                    "pulse_name": pulse_name,
-                    "tlp": pulse.get("tlp", "white"),
-                    "malware_families": pulse.get("malware_families", []),
-                    "attack_ids": pulse.get("attack_ids", []),
-                }
-            )
-        return iocs
+            yield {
+                "type": ioc_type,
+                "value": ind.get("indicator", ""),
+                "description": ind.get("description", ""),
+                "tags": tags,
+                "source": "otx",
+                "source_ref": f"otx:{pulse_id}",
+                "pulse_name": pulse_name,
+                "tlp": tlp,
+                "malware_families": malware_families,
+                "attack_ids": attack_ids,
+            }
+
+    def extract_iocs(self, pulse: dict[str, Any]) -> list[dict[str, Any]]:
+        """Extract IOC indicators from an OTX pulse (eager).
+
+        Prefer :meth:`iter_iocs` for large pulses; this is kept for callers that
+        want the whole list at once and for small pulses where it does not matter.
+        """
+        return list(self.iter_iocs(pulse))
 
     @staticmethod
     def _map_indicator_type(otx_type: str) -> str:
