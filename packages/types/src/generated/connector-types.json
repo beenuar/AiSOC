@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 94,
-    "total": 106
+    "registry": 95,
+    "total": 107
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -119,6 +119,7 @@
     "trellix_helix",
     "trend_vision_one",
     "vault",
+    "vectra_ai",
     "wazuh",
     "windows_event",
     "wiz",
@@ -227,6 +228,7 @@
     "trellix_helix": "registry",
     "trend_vision_one": "registry",
     "vault": "registry",
+    "vectra_ai": "registry",
     "wazuh": "registry",
     "windows_event": "registry",
     "wiz": "registry",

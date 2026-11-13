@@ -3795,6 +3795,40 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "ndr",
+    "connector_id": "vectra_ai",
+    "connector_name": "Vectra AI Platform",
+    "description": "Network, identity and cloud detections from the Vectra AI Platform via the v3.4 detection events API, one alert per detection with its host or account. Read-only: nothing here closes, tags or triages a detection.",
+    "docs_url": "/docs/connectors/vectra-ai",
+    "fields": [
+      {
+        "help_text": "The address of your Vectra AI Platform console. HTTPS only.",
+        "label": "Portal URL",
+        "name": "base_url",
+        "placeholder": "https://123456789012.uw2.portal.vectra.ai",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Created under Configuration > Access > API Clients, with a role that can read detections.",
+        "label": "API client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Shown once, when the API client is created.",
+        "label": "API client secret key",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "pull_vulnerabilities",
       "query_logs",
