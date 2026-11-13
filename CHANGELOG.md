@@ -42,6 +42,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A Wazuh source-side outage no longer deletes its window from the lake**
+  (#1860). The connector's poll window was `[now - since, now]`: when the
+  indexer ran behind the manager — a flood-stage watermark blocking filebeat
+  for eight hours in the reporting deployment — every poll succeeded on an
+  empty window, the outage-backfill worker never fired (it keys on the
+  connector's *own* failures), and the backlog that drained later carried
+  original timestamps inside windows already polled, so nothing ever
+  requested it again. Canary events proved the loss end to end. The wazuh
+  alert stream now carries a durable event-time cursor (the platform's
+  existing checkpoint machinery, persisted only after ingest accepts) and —
+  new in the base contract — `checkpointed_since_seconds()` *opens the
+  request window at the cursor*: successful-but-empty polls hold the left
+  edge in place and the window grows over the gap instead of sliding past
+  it, bounded by a 7-day lookback cap that logs when it binds. Rows the
+  overlap re-reads are dropped by the cursor before resubmission, and the
+  paging fix from #1820 composes into incremental backfill: a backlog
+  larger than the page cap advances the cursor as far as it read and the
+  next poll resumes there. Manual backfill is the same knob: patch
+  `connector_config.checkpoint.time` back and the next poll re-reads from
+  there. The vulnerability stream deliberately stays on the clock window —
+  one instance persists one cursor, and splitting it across two streams
+  would let whichever read last drag the other's left edge forward.
+  Reported by @pitimon with production canary evidence and the fix
+  direction this follows.
+
 - **An OTX mega-pulse no longer stalls the threat-intel poll** (#1861). A
   subscribed pulse can be an aggregate feed carrying over a million
   indicators (observed live: 1,263,473 in one pulse); `handle_otx_feed`
