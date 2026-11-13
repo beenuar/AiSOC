@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`
+  and `>=2.1.6` (Dependabot #236–#242; both ride in transitively through
+  `@modelcontextprotocol/sdk`). Within-major moves of existing floors in the
+  root `pnpm.overrides`, re-resolved to 4.13.18 / 2.1.8 — the scoped-range
+  discipline from the minimatch incident, not a blanket pin.
+
 ## [23.4.0] - 2026-11-13
 
 ### Added
