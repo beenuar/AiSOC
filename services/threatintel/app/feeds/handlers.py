@@ -10,6 +10,7 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 import structlog
@@ -25,6 +26,45 @@ if TYPE_CHECKING:
     from app.feeds.pipeline import ThreatIntelPipeline
 
 logger = structlog.get_logger(__name__)
+
+
+# ─── Bounded ingest ───────────────────────────────────────────────────────────
+
+
+_INGEST_BATCH = 1000
+
+
+async def _ingest_in_batches(
+    pipeline: ThreatIntelPipeline,
+    iocs: Iterable[dict[str, Any]],
+    *,
+    source: str,
+) -> tuple[int, int]:
+    """Flush an IOC stream to the pipeline in bounded batches.
+
+    ``ingest_iocs`` does per-item work — a Redis dedup round-trip and a Qdrant
+    embedding — for every indicator in a call. Accumulating a whole feed into
+    one list and handing it over in a single call holds the feed in memory and
+    stalls the poll; a busy MISP instance or a large OpenCTI export is easily
+    tens of thousands of attributes in a 24-hour window. Consuming the stream
+    and flushing every ``_INGEST_BATCH`` items keeps both memory and each
+    ingest call bounded. Returns ``(total_new, total_ingested)``.
+    """
+    buffer: list[dict[str, Any]] = []
+    total_new = 0
+    total = 0
+    for ioc in iocs:
+        buffer.append(ioc)
+        if len(buffer) >= _INGEST_BATCH:
+            stats = await pipeline.ingest_iocs(buffer, source=source)
+            total_new += stats.get("new", 0)
+            total += len(buffer)
+            buffer = []
+    if buffer:
+        stats = await pipeline.ingest_iocs(buffer, source=source)
+        total_new += stats.get("new", 0)
+        total += len(buffer)
+    return total_new, total
 
 
 # ─── TAXII Feed Handler ───────────────────────────────────────────────────────
@@ -84,13 +124,14 @@ async def handle_misp_feed(
 
     try:
         events = await client.get_recent_events(since_hours=since_hours)
-        all_iocs: list[dict[str, Any]] = []
-        for event in events:
-            all_iocs.extend(client.extract_iocs(event))
+        total_new, total = await _ingest_in_batches(
+            pipeline,
+            (ioc for event in events for ioc in client.extract_iocs(event)),
+            source="misp",
+        )
 
-        if all_iocs:
-            stats = await pipeline.ingest_iocs(all_iocs, source="misp")
-            logger.info("MISP IOCs ingested", **stats, event_count=len(events))
+        if total:
+            logger.info("MISP IOCs ingested", new=total_new, total=total, event_count=len(events))
 
     except Exception as exc:
         logger.error("MISP feed handler failed", error=str(exc))
@@ -161,13 +202,14 @@ async def handle_opencti_feed(
 
     try:
         nodes = await client.get_recent_indicators(since_hours=since_hours)
-        all_iocs: list[dict[str, Any]] = []
-        for node in nodes:
-            all_iocs.extend(client.extract_iocs(node))
+        total_new, total = await _ingest_in_batches(
+            pipeline,
+            (ioc for node in nodes for ioc in client.extract_iocs(node)),
+            source="opencti",
+        )
 
-        if all_iocs:
-            stats = await pipeline.ingest_iocs(all_iocs, source="opencti")
-            logger.info("OpenCTI IOCs ingested", **stats, indicator_count=len(nodes))
+        if total:
+            logger.info("OpenCTI IOCs ingested", new=total_new, total=total, indicator_count=len(nodes))
 
     except Exception as exc:
         logger.error("OpenCTI feed handler failed", error=str(exc))
