@@ -56,7 +56,9 @@ class _RecordingPipeline:
 @pytest.mark.asyncio
 async def test_a_mega_pulse_is_ingested_in_bounded_batches() -> None:
     pipe = _RecordingPipeline()
-    await handle_otx_feed(client=_FakeOtx([_pulse(2500)]), pipeline=pipe)
+    # The fake satisfies the one method the handler calls; same idiom as the
+    # sink fakes in test_pipeline_sink_reporting.py.
+    await handle_otx_feed(client=_FakeOtx([_pulse(2500)]), pipeline=pipe)  # type: ignore[arg-type]
 
     assert pipe.batches, "nothing was ingested"
     assert max(pipe.batches) <= 1000, f"a batch exceeded the cap: max={max(pipe.batches)}"
@@ -83,7 +85,7 @@ async def test_pulse_context_rides_on_each_ioc() -> None:
         indicators=[{"type": "domain", "indicator": "evil.example", "description": "c2"}],
     )
     cap = _Capturing()
-    await handle_otx_feed(client=_FakeOtx([pulse]), pipeline=cap)
+    await handle_otx_feed(client=_FakeOtx([pulse]), pipeline=cap)  # type: ignore[arg-type]
 
     assert cap.iocs, "nothing was ingested"
     ioc = cap.iocs[0]
