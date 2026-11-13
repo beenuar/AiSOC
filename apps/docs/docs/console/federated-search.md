@@ -68,15 +68,15 @@ Recognition is a fixed list of field names per entity type (`host`, `user`, `ip`
 
 Vendor placeholders for "field present but unset" (`-`, `null`, `n/a`, `unknown`) are skipped rather than linked.
 
-## Enabling it
+## Turning it off
 
-Federated search is behind a flag on the API service:
+Federated search is **on by default** — the API setting `AISOC_FEATURE_FED_SEARCH` defaults to `true`, so a stock install needs no configuration to use it. It is an opt-*out*; to disable it, set the flag on the API service to `false`:
 
 ```bash
-AISOC_FEATURE_FED_SEARCH=true
+AISOC_FEATURE_FED_SEARCH=false
 ```
 
-With the flag unset, `/api/v1/federated/*` answers `404` and the console page says the feature is turned off and names the variable, rather than showing a generic not-found. No query is sent while it is disabled.
+With the flag set to `false`, `/api/v1/federated/*` answers `404` and the console page says the feature is turned off and names the variable, rather than showing a generic not-found. No query is sent while it is disabled.
 
 You also need at least one enabled connector of a supported type. With none, the page says so and links to `/connectors`.
 

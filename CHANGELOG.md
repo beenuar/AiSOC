@@ -58,6 +58,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when every sink failed), and the retro-hunt consumer dedups re-emissions
   against its existing exposure rows. Contributed by @43n51c — the backfill
   half of #1278, whose reporting half fixed the misleading `indexed: 0`.
+- **Federated-search docs corrected: the feature is on by default, not
+  opt-in** (#1865). The console page's "Enabling it" section said
+  `/api/v1/federated/*` answers `404` while the flag is *unset* and told
+  operators to set `AISOC_FEATURE_FED_SEARCH=true` to turn it on. The setting
+  defaults to `true`, so it is an opt-*out*: a stock install already serves
+  federated search, and `404` is returned only when the flag is explicitly
+  `false`. The page now documents it as on-by-default. Contributed by @43n51c.
 
 ## [23.4.0] - 2026-11-13
 
