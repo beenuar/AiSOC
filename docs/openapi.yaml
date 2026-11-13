@@ -3,7 +3,7 @@ info:
   title: AiSOC Platform API
   description: AiSOC — open-source AI Security Operations Center. Autonomous threat
     detection, investigation, and response.
-  version: 23.3.0
+  version: 23.4.0
 paths:
   /api/v1/auth/login:
     post:

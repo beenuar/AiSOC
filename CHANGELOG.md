@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.4.0] - 2026-11-13
+
 ### Added
 
 - **Huntress connector.** `huntress` reads Huntress Managed EDR incident
