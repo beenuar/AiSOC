@@ -97,7 +97,10 @@ class ThreatIntelPipeline:
             return f"{sink}:{ioc.get('type', '?')}:{ioc.get('value', '?')}"
 
         sinks: dict[str, int | None] = {}
-        stored_iocs: dict[str, dict[str, Any]] = {}  # type:value -> ioc, deduped for Kafka
+        # Keyed on the global "type:value" identity, deduped for Kafka. (The
+        # comment must not start with `type:` — mypy reads that as a type
+        # comment and refuses the file with a syntax error on some versions.)
+        stored_iocs: dict[str, dict[str, Any]] = {}
 
         for name, writer in writers:
             pending = [ioc for ioc in iocs if not await self._bloom.contains(_key(name, ioc))]

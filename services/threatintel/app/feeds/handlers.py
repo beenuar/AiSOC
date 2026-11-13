@@ -99,27 +99,47 @@ async def handle_misp_feed(
 # ─── OTX Feed Handler ─────────────────────────────────────────────────────────
 
 
+_OTX_INGEST_BATCH = 1000
+
+
 async def handle_otx_feed(
     client: OtxClient,
     pipeline: ThreatIntelPipeline,
 ) -> None:
     """
-    Fetch subscribed OTX pulses and extract IOC indicators.
+    Fetch subscribed OTX pulses and ingest their IOC indicators in bounded batches.
+
+    A subscribed pulse can be an aggregate feed with over a million indicators;
+    building one list of every pulse's IOCs and handing it to ``ingest_iocs`` in
+    a single call (per-item Redis dedup + Qdrant embedding) stalled the poll and
+    left every store empty. Streaming the IOCs and flushing in batches keeps both
+    memory and each ingest call bounded.
     """
     logger.info("Polling OTX feed")
 
     try:
         pulses = await client.get_subscribed_pulses(limit=100)
-        all_iocs: list[dict[str, Any]] = []
+        buffer: list[dict[str, Any]] = []
+        total_new = 0
+        total_iocs = 0
         for pulse in pulses:
-            all_iocs.extend(client.extract_iocs(pulse))
+            for ioc in client.iter_iocs(pulse):
+                buffer.append(ioc)
+                if len(buffer) >= _OTX_INGEST_BATCH:
+                    stats = await pipeline.ingest_iocs(buffer, source="otx")
+                    total_new += stats.get("new", 0)
+                    total_iocs += len(buffer)
+                    buffer = []
+        if buffer:
+            stats = await pipeline.ingest_iocs(buffer, source="otx")
+            total_new += stats.get("new", 0)
+            total_iocs += len(buffer)
 
-        if all_iocs:
-            stats = await pipeline.ingest_iocs(all_iocs, source="otx")
-            logger.info("OTX IOCs ingested", **stats, pulse_count=len(pulses))
+        if total_iocs:
+            logger.info("OTX IOCs ingested", new=total_new, total=total_iocs, pulse_count=len(pulses))
 
     except Exception as exc:
-        logger.error("OTX feed handler failed", error=str(exc))
+        logger.error("OTX feed handler failed", error=repr(exc))
 
 
 # ─── CISA KEV Feed Handler ────────────────────────────────────────────────────

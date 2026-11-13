@@ -42,6 +42,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An OTX mega-pulse no longer stalls the threat-intel poll** (#1861). A
+  subscribed pulse can be an aggregate feed carrying over a million
+  indicators (observed live: 1,263,473 in one pulse); `handle_otx_feed`
+  materialised every pulse's IOCs into one list and handed it to
+  `ingest_iocs` in a single call — per-item Redis dedup plus Qdrant
+  embedding on a million items meant the poll neither finished nor errored,
+  and every store stayed empty (`otx=0`). The client now yields IOCs through
+  a generator and the handler flushes in bounded batches of 1,000, keeping
+  memory and each ingest call bounded regardless of pulse size, with the
+  pulse-level context (tags, malware families, ATT&CK ids, TLP) still riding
+  on every indicator. OTX fetch and handler failures log `repr(exc)` —
+  several httpx transport exceptions stringify to an empty string, and
+  `error=""` told an operator nothing. Contributed by @43n51c; pinned by a
+  batch-bound test that fails on the old handler.
+
 - **A threat-intel store that was down at first write is backfilled instead
   of skipped forever** (#1856). `ingest_iocs` deduplicated on a single global
   Bloom key (`type:value`) recorded *before* the best-effort writes to
