@@ -42,7 +42,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from .engine import HuntEngine
 from .loader import HuntCorpus, HuntDefinition
-from .store import record_run, sync_catalog
+from .store import record_run, resolve_tenant_id, sync_catalog
 
 logger = structlog.get_logger()
 
@@ -117,7 +117,12 @@ class HuntScheduler:
     async def _tick(self) -> None:
         """Run every hunt whose interval has elapsed since its last run."""
         now = time.time()
-        events = _load_telemetry(self._tenant_ref)  # one shared snapshot per tick
+        # Resolve the ref to a UUID before the lake read: the lake's tenant_id
+        # is a ClickHouse UUID column, so a slug like 'default' is a parse error
+        # (the store path already resolves it). None → the lake loader's
+        # no-tenant guard skips cleanly; the synthetic provider ignores it.
+        resolved = await resolve_tenant_id(self._tenant_ref)
+        events = _load_telemetry(str(resolved) if resolved else None)  # one shared snapshot per tick
 
         for hunt in self._corpus.list():
             if not hunt.schedule.enabled:
@@ -167,7 +172,8 @@ class HuntScheduler:
         if hunt is None:
             return {"ok": False, "error": f"hunt {hunt_id} not found"}
         target = tenant_ref or self._tenant_ref
-        result = self._engine.run(hunt, _load_telemetry(target))
+        resolved = await resolve_tenant_id(target)
+        result = self._engine.run(hunt, _load_telemetry(str(resolved) if resolved else None))
         await record_run(
             hunt,
             result,
