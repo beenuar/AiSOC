@@ -98,6 +98,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when every sink failed), and the retro-hunt consumer dedups re-emissions
   against its existing exposure rows. Contributed by @43n51c — the backfill
   half of #1278, whose reporting half fixed the misleading `indexed: 0`.
+- **A large MISP or OpenCTI poll is ingested in bounded batches instead of one
+  unbounded call** (#1864). `handle_misp_feed` and `handle_opencti_feed` accumulated
+  every event's (or indicator node's) IOCs into a single list and handed the
+  whole thing to `ingest_iocs` in one call. `ingest_iocs` does per-item work —
+  a Redis dedup round-trip and a Qdrant embedding — for every indicator, so a
+  busy instance's 24-hour window (tens of thousands of attributes) held the
+  entire feed in memory and stalled the poll. Both handlers now stream their
+  IOCs and flush every 1,000, bounding each `ingest_iocs` call regardless of
+  how large the feed is. Contributed by @43n51c.
 
 - **Scheduled hunts no longer crash reading the lake on a slug tenant ref**
   (`hunt.telemetry.lake.failed: Cannot parse uuid default`). The hunt
