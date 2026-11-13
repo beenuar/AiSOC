@@ -40,6 +40,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root `pnpm.overrides`, re-resolved to 4.13.18 / 2.1.8 — the scoped-range
   discipline from the minimatch incident, not a blanket pin.
 
+### Security
+
+- **`opentelemetry-api` re-locked to 1.45.2 across all thirteen Python
+  services** (CVE-2026-126360, high). The CVE published against 1.45.1 the
+  same day it started failing every pull request's security audit — the
+  recorded fleet-level signature. The whole OpenTelemetry family moves
+  together (sdk 1.45.2, instrumentation 0.66b2) because the sdk pins the api
+  exactly, and `fastapi` re-resolves to 0.162.7 inside its gate-pinned range
+  (`>=0.117,<0.163`), identical in every lock per the pin-agreement gate.
+  Lock-only; no manifest ranges moved.
+
 ### Fixed
 
 - **A Wazuh source-side outage no longer deletes its window from the lake**
