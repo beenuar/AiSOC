@@ -7,7 +7,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, get_current_user
@@ -32,7 +32,15 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 class LoginRequest(BaseModel):
     email: EmailStr
-    password: str
+    #: ``min_length=1`` refuses the empty string at the boundary
+    #: (GHSA-xh3r-vqgc-cv78). ``verify_password("", bcrypt(""))`` is true, so
+    #: an account row created with an empty password *before* the creation
+    #: floor landed would otherwise keep accepting the empty login forever.
+    #: No legitimate password is empty — the SCIM and invite markers are
+    #: non-empty sentinels — so the only accounts this locks out are the
+    #: residue this advisory is about, which an admin recovers by setting a
+    #: real password.
+    password: str = Field(min_length=1)
 
 
 class TokenResponse(BaseModel):

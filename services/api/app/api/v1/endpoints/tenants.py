@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import select, text, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -78,7 +78,13 @@ class UserResponse(BaseModel):
 class CreateUserRequest(BaseModel):
     email: EmailStr
     username: str
-    password: str
+    #: The field was a bare ``str``, so an explicit ``""`` passed validation,
+    #: was bcrypt-hashed like any password, and the login path accepted the
+    #: empty string for that account from then on (GHSA-xh3r-vqgc-cv78).
+    #: The floor is NIST SP 800-63B's eight characters; the ceiling is
+    #: bcrypt's own 72-byte truncation boundary, refused rather than
+    #: silently cut.
+    password: str = Field(min_length=8, max_length=72)
     #: Refused unless the caller already holds everything it confers, and
     #: refused outright for the wildcard roles. See ``app.core.role_grants``.
     #: Not a Literal: the enforced vocabulary lives in ``ROLE_PERMISSIONS``,
