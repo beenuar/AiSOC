@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `critical` stays `critical`. Setup and troubleshooting are on the new
   [Huntress](apps/docs/docs/connectors/huntress.md) page.
 
+### Security
+
+- **An empty password can neither be set nor used** (GHSA-xh3r-vqgc-cv78).
+  `POST /api/v1/tenants/me/users` declared its password as a bare string, so
+  an explicit `""` passed validation, was bcrypt-hashed like any password,
+  and `POST /api/v1/auth/login` accepted the empty string for that account
+  from then on — `verify_password("", bcrypt(""))` is simply true. Creation
+  now enforces NIST SP 800-63B's eight-character floor (and refuses past
+  bcrypt's 72-byte truncation boundary rather than silently cutting), and
+  login refuses the empty string at the boundary, so an account row created
+  with an empty password *before* the floor landed is locked out rather
+  than quietly serviceable forever — an admin recovers it by setting a real
+  password. SCIM and invite-pending accounts are unaffected (their sentinel
+  markers are non-empty and already fail verification). Reported by
+  abdochtouki with a live PoC.
+
 ### Fixed
 
 - **UEBA, honeytokens and purple-team tracing no longer points at the
