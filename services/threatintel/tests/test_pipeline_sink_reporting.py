@@ -118,3 +118,67 @@ class TestTheCoreProfileReportsWhatItStored:
     async def test_an_empty_batch_is_not_an_error(self) -> None:
         stats = await _pipeline(opensearch=True, qdrant=True, neo4j=True).ingest_iocs([], source="cisa-kev")
         assert stats["total"] == 0
+
+
+class TestASinkAbsentAtFirstWriteIsBackfilled:
+    """The backfill half of #1278, not the reporting half.
+
+    KEV first lands while OpenSearch is a `full`-profile store a CORE install
+    does not run: it goes to Qdrant, and the dedup records it. When the
+    deployment later moves to `full` and OpenSearch appears, the next poll must
+    write the backlog to it. A single global Bloom keyed on `type:value`,
+    added before the write, marked the entry seen for *every* sink, so the
+    second poll read the whole batch as duplicate and skipped the write — and
+    OpenSearch, which the search API and enrichment read, stayed permanently
+    behind (observed live: Qdrant 1,779 KEV, OpenSearch ~10). Dedup is per
+    sink, so a store unreachable at first write is backfilled on a later poll
+    instead of skipped forever.
+    """
+
+    @pytest.mark.asyncio
+    async def test_opensearch_absent_on_core_is_backfilled_once_full(self) -> None:
+        bloom = _Bloom()
+        os_sink = _Sink(absent=True)  # CORE: OpenSearch is not in the profile
+        qdrant = _Sink(absent=False)
+        neo4j = _Sink(absent=True)
+
+        def pipe() -> ThreatIntelPipeline:
+            return ThreatIntelPipeline(
+                bloom=bloom,  # type: ignore[arg-type]
+                os_store=os_sink,  # type: ignore[arg-type]
+                qdrant_store=qdrant,  # type: ignore[arg-type]
+                neo4j_store=neo4j,  # type: ignore[arg-type]
+                kafka_producer=None,
+                kafka_topic="t",
+            )
+
+        first = await pipe().ingest_iocs(IOCS, source="cisa-kev")
+        assert first["sinks"]["qdrant"] == 3
+        assert first["sinks"]["opensearch"] is None
+
+        # The deployment moves to `full`; OpenSearch is now reachable.
+        os_sink.absent = False
+        second = await pipe().ingest_iocs(IOCS, source="cisa-kev")
+
+        assert second.get("sinks", {}).get("opensearch") == 3, "OpenSearch was unreachable at first write and never got backfilled"
+        # Qdrant already holds them — per-sink dedup, not a re-store.
+        assert second["sinks"]["qdrant"] == 0
+
+    @pytest.mark.asyncio
+    async def test_a_steady_core_still_dedups_the_present_store(self) -> None:
+        """The present store must not be re-written every poll: per-sink dedup
+        still suppresses Qdrant on a stand that never gains OpenSearch."""
+        bloom = _Bloom()
+        pipeline = ThreatIntelPipeline(
+            bloom=bloom,  # type: ignore[arg-type]
+            os_store=_Sink(absent=True),  # type: ignore[arg-type]
+            qdrant_store=_Sink(absent=False),  # type: ignore[arg-type]
+            neo4j_store=_Sink(absent=True),  # type: ignore[arg-type]
+            kafka_producer=None,
+            kafka_topic="t",
+        )
+        await pipeline.ingest_iocs(IOCS, source="cisa-kev")
+        second = await pipeline.ingest_iocs(IOCS, source="cisa-kev")
+
+        assert second["sinks"]["qdrant"] == 0, "Qdrant was re-written for IOCs it already held"
+        assert second["new"] == 0

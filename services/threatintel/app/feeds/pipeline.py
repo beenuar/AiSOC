@@ -66,91 +66,81 @@ class ThreatIntelPipeline:
         if not iocs:
             return {"total": 0, "new": 0, "duplicate": 0}
 
-        # --- Dedup via Bloom filter ---
-        new_iocs: list[dict[str, Any]] = []
-        duplicates = 0
-
-        for ioc in iocs:
-            bloom_key = f"{ioc.get('type', '?')}:{ioc.get('value', '?')}"
-            if await self._bloom.contains(bloom_key):
-                duplicates += 1
-            else:
-                await self._bloom.add(bloom_key)
-                new_iocs.append(ioc)
-
-        logger.info(
-            "IOC dedup complete",
-            source=source,
-            total=len(iocs),
-            new=len(new_iocs),
-            duplicate=duplicates,
-        )
-
-        if not new_iocs:
-            return {"total": len(iocs), "new": 0, "duplicate": duplicates}
-
-        # --- Write to storage sinks ---
+        # --- Per-sink dedup + write to storage sinks ---
         #
-        # Every sink is best-effort, OpenSearch included. It was the one
-        # unguarded call here, which made a store that ships in the `full`
-        # profile a hard requirement of a service that now runs in CORE: an
-        # exception from it aborted the batch before Qdrant — the CORE store,
-        # and the one the console reads through — was written at all. A feed
-        # that can reach one of its sinks should write to that one.
-        # `indexed` was the OpenSearch return value and nothing else, so on
-        # CORE — where OpenSearch is not in the profile — a batch of 1,739
-        # KEV entries that landed correctly in Qdrant reported `indexed: 0`
-        # (issue #1278). A zero beside a successful write is the shape this
-        # project treats as worse than a missing number: it reads as a
-        # measurement, and it is the number an operator checks to decide
-        # whether the feed works.
+        # Every sink is best-effort and independent. OpenSearch is a `full`-
+        # profile store a service that now runs in CORE does not have, so its
+        # write raises while Qdrant — the CORE store the console reads through —
+        # succeeds. Dedup is therefore keyed *per sink* (`{sink}:{type}:{value}`)
+        # and a key is recorded only *after* that sink accepts the write.
         #
-        # Each sink now reports itself, and `None` means "this store was not
-        # reachable" rather than "it stored nothing".
+        # A single global `type:value` key, added before the write, marked an
+        # IOC seen for every sink the moment any one of them took it: a batch
+        # that reached Qdrant on CORE was never written to OpenSearch once the
+        # deployment moved to `full`, because the next poll read the whole batch
+        # as duplicate and skipped it — so OpenSearch, and the search API and
+        # enrichment that read it, stayed permanently behind. Per-sink keys
+        # backfill a store that was unreachable at first write on the next poll
+        # instead of skipping it forever. This is the backfill half of issue
+        # #1278, whose reporting half fixed the misleading `indexed: 0`.
+        #
+        # `indexed` (kept) now means "stored in at least one sink"; `sinks`
+        # carries the per-store detail, where `None` is an unreachable store,
+        # not an empty one.
+        writers: list[tuple[str, Any]] = [
+            ("opensearch", self._os.bulk_index_iocs),
+            ("qdrant", self._qdrant.upsert_iocs),
+            ("neo4j", self._neo4j.upsert_iocs),
+        ]
+
+        def _key(sink: str, ioc: dict[str, Any]) -> str:
+            return f"{sink}:{ioc.get('type', '?')}:{ioc.get('value', '?')}"
+
         sinks: dict[str, int | None] = {}
+        stored_iocs: dict[str, dict[str, Any]] = {}  # type:value -> ioc, deduped for Kafka
 
-        try:
-            sinks["opensearch"] = await self._os.bulk_index_iocs(new_iocs)
-        except Exception as exc:
-            sinks["opensearch"] = None
-            logger.warning("OpenSearch IOC index failed", error=str(exc))
+        for name, writer in writers:
+            pending = [ioc for ioc in iocs if not await self._bloom.contains(_key(name, ioc))]
+            if not pending:
+                sinks[name] = 0
+                continue
+            try:
+                count = await writer(pending)
+            except Exception as exc:
+                # Unreachable: leave this sink's keys unset so the next poll
+                # retries it rather than treating the batch as already stored.
+                sinks[name] = None
+                logger.warning("IOC sink write failed", sink=name, source=source, error=str(exc))
+                continue
+            for ioc in pending:
+                await self._bloom.add(_key(name, ioc))
+                stored_iocs.setdefault(f"{ioc.get('type', '?')}:{ioc.get('value', '?')}", ioc)
+            # OpenSearch returns its bulk count; the others return None on success.
+            sinks[name] = count if isinstance(count, int) else len(pending)
 
-        try:
-            await self._qdrant.upsert_iocs(new_iocs)
-            sinks["qdrant"] = len(new_iocs)
-        except Exception as exc:
-            sinks["qdrant"] = None
-            logger.warning("Qdrant IOC upsert failed", error=str(exc))
-
-        try:
-            await self._neo4j.upsert_iocs(new_iocs)
-            sinks["neo4j"] = len(new_iocs)
-        except Exception as exc:
-            sinks["neo4j"] = None
-            logger.warning("Neo4j IOC upsert failed", error=str(exc))
-
+        new_count = len(stored_iocs)
+        duplicates = len(iocs) - new_count
         stored = max((count for count in sinks.values() if count is not None), default=0)
         unavailable = sorted(name for name, count in sinks.items() if count is None)
         logger.info(
             "IOC batch stored",
             source=source,
-            new=len(new_iocs),
+            total=len(iocs),
+            new=new_count,
+            duplicate=duplicates,
             stored=stored,
             sinks=dict(sinks),
             unavailable=unavailable or None,
         )
 
         # --- Emit Kafka events ---
-        if self._kafka:
-            await self._emit_kafka_events(new_iocs, event_type="NEW_IOC", source=source)
+        if self._kafka and stored_iocs:
+            await self._emit_kafka_events(list(stored_iocs.values()), event_type="NEW_IOC", source=source)
 
         return {
             "total": len(iocs),
-            "new": len(new_iocs),
+            "new": new_count,
             "duplicate": duplicates,
-            # Kept, but it now means "stored in at least one sink" rather
-            # than "stored in OpenSearch". `sinks` carries the detail, and a
-            # `None` there is an unreachable store, not an empty one.
             "indexed": stored,
             "sinks": sinks,
         }
