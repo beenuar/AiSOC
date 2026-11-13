@@ -19,9 +19,11 @@ for ``"secret"``) is caught at import time, not at form-render time.
 from __future__ import annotations
 
 import hashlib
+import math
 from abc import ABC, abstractmethod
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -732,6 +734,20 @@ class BaseConnector(ABC):
     #: the default) regardless of what the source calls things.
     max_dedup_identities: int = 10_000
 
+    #: Ceiling on how far back the persisted cursor may widen one poll's
+    #: request window (issue #1860). A source that has been behind for longer
+    #: than this loses whatever is older — the cap binding is logged at
+    #: warning, because a capped backfill is a data-loss decision an operator
+    #: should get to see. A week covers every outage anyone has reported
+    #: while keeping the worst-case backlog query bounded.
+    max_checkpoint_lookback_seconds: int = 7 * 24 * 3600
+
+    #: Clock-skew cushion added when the window opens at the cursor: the
+    #: cursor time was minted by the *source*, and the window is computed
+    #: against this host's clock. Re-reading one extra minute costs only
+    #: rows :meth:`apply_checkpoint` already drops.
+    checkpoint_overlap_seconds: int = 60
+
     #: Staged by :meth:`apply_checkpoint`, read by the scheduler after ingest
     #: accepts the batch. Declared here so it has one type rather than being
     #: introduced inside a branch.
@@ -811,6 +827,69 @@ class BaseConnector(ABC):
         advances it.
         """
         return self._next_checkpoint
+
+    def checkpointed_since_seconds(self, since_seconds: int, *, now: datetime | None = None) -> int:
+        """The lookback this poll should request, opened at the cursor.
+
+        The sliding window ``[now - since, now]`` permanently loses whatever
+        the source publishes *late*: a poll during a source-side outage
+        succeeds and returns nothing, the next window opens where the clock
+        says, and the backlog that drains afterwards — carrying original
+        timestamps inside windows already polled — is never requested again.
+        Issue #1860 proved it end to end with canary events against a Wazuh
+        indexer that spent eight hours behind a flood-stage watermark: every
+        poll green, every canary lost, no backfill fired, because the
+        backfill worker keys on the *connector's* failures and the connector
+        never failed.
+
+        A connector that declares an event-time watermark can instead open
+        its window at the persisted cursor. The cursor advances only when
+        ingest accepts rows (see :meth:`apply_checkpoint` and the
+        scheduler's persistence ordering), so successful-but-empty polls
+        hold the left edge in place and the window *grows over the gap*
+        instead of sliding past it — the late backlog is requested the
+        moment it becomes queryable, and :meth:`apply_checkpoint` drops the
+        rows the overlap re-reads.
+
+        Growth is bounded by ``max_checkpoint_lookback_seconds``; the cap
+        binding is logged at warning because it is the point where this
+        protection stops and real loss resumes. With no usable cursor —
+        first poll, a connector that does not checkpoint, or an unparseable
+        stored time — the answer is ``since_seconds`` unchanged, which is
+        exactly today's behaviour.
+        """
+        cursor = self._incoming_checkpoint or {}
+        raw_time = str(cursor.get("time") or "")
+        if not raw_time:
+            return since_seconds
+        try:
+            cursor_time = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+        except ValueError:
+            logger.debug(
+                "connector.checkpoint.unparseable_time",
+                connector=self.connector_id,
+                time=raw_time[:64],
+            )
+            return since_seconds
+        if cursor_time.tzinfo is None:
+            cursor_time = cursor_time.replace(tzinfo=UTC)
+
+        current = now or datetime.now(UTC)
+        gap = math.ceil((current - cursor_time).total_seconds()) + self.checkpoint_overlap_seconds
+        if gap <= since_seconds:
+            return since_seconds
+        if gap > self.max_checkpoint_lookback_seconds:
+            logger.warning(
+                "connector.checkpoint.lookback_capped",
+                connector=self.connector_id,
+                cursor_age_seconds=gap,
+                cap_seconds=self.max_checkpoint_lookback_seconds,
+                detail=(
+                    "events older than the cap are not requested; rewind connector_config.checkpoint deliberately to reach further back"
+                ),
+            )
+            return self.max_checkpoint_lookback_seconds
+        return gap
 
     # ----------------------------- acknowledgement (phase 3) -----------------
     #

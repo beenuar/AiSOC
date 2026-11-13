@@ -151,6 +151,35 @@ override `index_pattern` to match.
 running a self-signed lab cluster. In production, install the root CA so the
 connector trusts the indexer's certificate.
 
+## Backfill after a source-side outage
+
+The alert stream resumes from a **durable cursor**, not from the clock. The
+poll window opens at the last event ingest accepted, so when the indexer runs
+behind the manager — a full disk, a flood-stage watermark blocking filebeat,
+an index rotation hiccup — the connector's successful-but-empty polls hold
+the window's left edge in place. When the backlog drains (carrying its
+original timestamps, hours inside windows that were already polled), the next
+poll requests the whole gap and reads it to the end; rows the overlap re-reads
+are dropped by the cursor before they are re-submitted.
+
+Two bounds to know:
+
+- **Lookback cap.** One poll widens at most 7 days past the cursor
+  (`connector.checkpoint.lookback_capped` is logged at warning when the cap
+  binds). A source behind for longer loses what is older, deliberately —
+  an unbounded backlog query is its own outage.
+- **Manual backfill.** The cursor lives at `connector_config.checkpoint` on
+  the connector instance. To re-read a window deliberately — the operator
+  action asked for in issue #1860 — patch `checkpoint.time` back to where the
+  re-read should start (`PATCH /api/v1/connectors/{id}` merges config keys,
+  so send only `{"connector_config": {"checkpoint": {"time": "...", "id": ""}}}`).
+  The next poll opens there; duplicates are collapsed by fusion's
+  deduplication downstream.
+
+The vulnerability stream (`vuln_mode: inventory`) deliberately stays on the
+clock window: one connector instance persists one cursor, and its CVE
+findings are reconciled state that re-converges on later polls.
+
 ## Related
 
 - [osctrl](/docs/connectors/osctrl) and [FleetDM](/docs/connectors/fleetdm) — osquery-based fleet managers if you want host telemetry without Wazuh's full agent stack.

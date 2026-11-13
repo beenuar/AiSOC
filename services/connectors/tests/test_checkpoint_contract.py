@@ -146,6 +146,14 @@ class TestAdoptionIsCountedNotAssumed:
     EXPECTED = {
         "splunk": (("_time", "event_time"), ("event_id", "_cd")),
         "okta": (("published",), ("uuid",)),
+        # Issue #1860: the Wazuh indexer can run hours behind its manager
+        # while every poll succeeds on an empty window, so this cursor is
+        # also what *opens* the request window (checkpointed_since_seconds)
+        # — the first connector where the watermark widens the read rather
+        # than only de-duplicating it. The declared fields are the cursor's
+        # vocabulary; the connector overrides the row accessors because the
+        # indexer nests `@timestamp` under `_source`.
+        "wazuh": (("@timestamp",), ("_id",)),
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),

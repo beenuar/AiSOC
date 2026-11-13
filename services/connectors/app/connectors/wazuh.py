@@ -170,6 +170,27 @@ class WazuhConnector(BaseConnector):
     connector_name = "Wazuh"
     connector_category = "siem"
 
+    #: Event-time watermark over the alert stream (issue #1860). The indexer
+    #: can run hours behind the manager — a flood-stage watermark blocks
+    #: filebeat while the connector's polls keep succeeding on empty windows —
+    #: and a clock-derived window never re-requests what drains late. The
+    #: cursor advances only on rows ingest accepted, so an empty poll holds
+    #: the window's left edge and the gap is re-read when the backlog lands.
+    #: The declared names are documentation of *which* values the cursor
+    #: carries; the accessors below read them from where the indexer actually
+    #: puts them (``@timestamp`` lives under ``_source``, the id at top level).
+    checkpoint_time_field = ("@timestamp",)
+    checkpoint_id_field = ("_id",)
+
+    def _row_time(self, row: dict[str, Any]) -> str:
+        source = row.get("_source")
+        value = (source or {}).get("@timestamp") if isinstance(source, dict) else None
+        return str(value) if value not in (None, "") else ""
+
+    def _row_id(self, row: dict[str, Any]) -> str:
+        value = row.get("_id")
+        return str(value) if value not in (None, "") else ""
+
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
         # Wazuh is *both* an EDR (host-agent telemetry) and a SIEM (alert
@@ -353,7 +374,19 @@ class WazuhConnector(BaseConnector):
         scheduler's ``filter_rules`` are tenant-controlled and evaluated
         after normalization, so dropping here is the only place the two
         streams provably cannot both claim the same event.
+
+        The window opens at the persisted cursor, not at ``now - since``
+        (issue #1860): the indexer can be hours behind the manager while
+        every poll here succeeds on an empty window, and a clock-derived
+        left edge never re-requests what filebeat drains late. The cursor
+        advances only on accepted rows, so the gap is re-read when the
+        backlog becomes queryable; :meth:`apply_checkpoint` drops what the
+        overlap re-reads. An operator can rewind further than the lookback
+        cap by patching ``connector_config.checkpoint.time`` back — the
+        manual backfill the issue asked for, through a knob that already
+        exists.
         """
+        effective_since = self.checkpointed_since_seconds(since_seconds)
         query: dict[str, Any] = {
             "size": 1000,
             "sort": [{"@timestamp": {"order": "asc"}}],
@@ -363,7 +396,7 @@ class WazuhConnector(BaseConnector):
                         {
                             "range": {
                                 "@timestamp": {
-                                    "gte": f"now-{max(int(since_seconds), 0)}s",
+                                    "gte": f"now-{max(int(effective_since), 0)}s",
                                     "lte": "now",
                                 }
                             }
@@ -383,15 +416,27 @@ class WazuhConnector(BaseConnector):
             ]
 
         hits = await self._search(query, feed="wazuh.alerts")
+        # Dedup against the cursor and stage its advance *before* the vuln
+        # filter: a row the filter drops was read and deliberately excluded,
+        # which is not the same as never requested, so the cursor may move
+        # past it.
+        fresh = self.apply_checkpoint([hit for hit in hits if isinstance(hit, dict)])
         if self._vuln_mode != "inventory":
-            return [self.normalize(hit) for hit in hits if isinstance(hit, dict)]
+            return [self.normalize(hit) for hit in fresh]
         # belt-and-braces: the must_not above misses custom rule packs that
         # re-home detector events under a different group, so re-check the
         # document shape itself before anything reaches the alert stream.
-        return [self.normalize(hit) for hit in hits if isinstance(hit, dict) and not is_vulnerability_source(hit.get("_source") or {})]
+        return [self.normalize(hit) for hit in fresh if not is_vulnerability_source(hit.get("_source") or {})]
 
     async def fetch_vulnerability_findings(self, since_seconds: int = 3600) -> list[dict[str, Any]]:
         """Pull recent vulnerability-detector events as inventory findings.
+
+        Deliberately *not* on the alert stream's cursor (#1860): a connector
+        instance persists one checkpoint, and splitting it across two streams
+        would let whichever read last drag the other's left edge forward.
+        This stream keeps the clock window; its CVE findings are reconciled
+        state whose lifecycle re-converges on later polls, where a missed
+        alert is simply gone.
 
         Called by the scheduler's vulnerability-sync gate (it detects this
         method's presence), which feeds :func:`app.vulnerabilities.sync_findings`
