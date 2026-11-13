@@ -70,6 +70,21 @@ async def _resolve_tenant_id(conn: asyncpg.Connection, tenant_ref: str) -> uuid.
     return row["id"] if row else None
 
 
+async def resolve_tenant_id(tenant_ref: str) -> uuid.UUID | None:
+    """Resolve a tenant ref (UUID string, slug or name) to its UUID, or None.
+
+    Public so the hunt scheduler can resolve the ref once and hand a real UUID
+    to the lake reader: the lake's ``tenant_id`` is a ClickHouse UUID column,
+    where a slug such as ``'default'`` is a parse error, not a miss — unlike the
+    Postgres writes in this module, which already resolve the ref before use.
+    """
+    pool = await _get_pool()
+    if pool is None:
+        return None
+    async with pool.acquire() as conn:
+        return await _resolve_tenant_id(conn, tenant_ref)
+
+
 async def _set_rls_context(conn: asyncpg.Connection, tenant_id: uuid.UUID) -> None:
     """Bind this connection to one tenant for the enclosing transaction.
 

@@ -99,6 +99,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against its existing exposure rows. Contributed by @43n51c — the backfill
   half of #1278, whose reporting half fixed the misleading `indexed: 0`.
 
+- **Scheduled hunts no longer crash reading the lake on a slug tenant ref**
+  (`hunt.telemetry.lake.failed: Cannot parse uuid default`). The hunt
+  scheduler's process-wide `tenant_ref` defaults to `default`, and the lake
+  reader bound it straight into a ClickHouse query whose `tenant_id` is a UUID
+  column — a parse error on every tick, not a miss, so a `full`-profile
+  deployment logged the failure every 30 minutes and scheduled hunts read no
+  telemetry. The scheduler now resolves the ref to a tenant UUID (the Postgres
+  store path already did) before the lake read; an unresolvable ref hands the
+  loader `None`, which its existing no-tenant guard skips cleanly, and the
+  synthetic provider is unaffected.
+
 ## [23.4.0] - 2026-11-13
 
 ### Added
