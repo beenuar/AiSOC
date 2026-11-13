@@ -166,13 +166,28 @@ def test_threatintels_optional_stores_are_guarded_in_code() -> None:
         "OpenSearch then kills a CORE service on boot."
     )
 
-    for call in ("self._os.bulk_index_iocs(new_iocs)", "self._os.bulk_index_actors(actors)"):
-        assert call in pipeline, f"{call} moved; re-point this gate"
-        before = pipeline.split(call)[0]
-        assert "try:" in before.rsplit("\n\n", 1)[-1], (
-            f"{call} is not inside a try block. It is the first sink written, so an exception there "
-            "aborts the batch before Qdrant — the store CORE actually reads — is touched at all."
-        )
+    # The IOC path was restructured for per-sink dedup (#1856): every sink —
+    # OpenSearch included — now writes through one guarded loop, so the pin
+    # moved from the OpenSearch call site to the loop's write. The property is
+    # unchanged: an exception from the `full`-profile store must not abort the
+    # batch before Qdrant — the store CORE actually reads — is written.
+    assert '("opensearch", self._os.bulk_index_iocs)' in pipeline, "the OpenSearch IOC writer left the writers list; re-point this gate"
+    ioc_write = "count = await writer(pending)"
+    assert ioc_write in pipeline, f"{ioc_write} moved; re-point this gate"
+    before = pipeline.split(ioc_write)[0]
+    assert before.rstrip().endswith("try:"), (
+        f"{ioc_write} is not inside a try block. A sink exception there aborts the batch "
+        "before the remaining sinks — including Qdrant, the store CORE actually reads — are written."
+    )
+
+    # The actors path still writes OpenSearch first, at its original call site.
+    call = "self._os.bulk_index_actors(actors)"
+    assert call in pipeline, f"{call} moved; re-point this gate"
+    before = pipeline.split(call)[0]
+    assert "try:" in before.rsplit("\n\n", 1)[-1], (
+        f"{call} is not inside a try block. It is the first sink written, so an exception there "
+        "aborts the batch before Qdrant — the store CORE actually reads — is touched at all."
+    )
 
 
 # ── The API reads CLICKHOUSE_HOST, and nothing under services/api reads a URL ─
