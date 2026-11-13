@@ -60,13 +60,30 @@ _USER_CUE_RE = re.compile(
     r"(?P<name>[A-Za-z][A-Za-z0-9._\-]{2,63})\b",
     re.IGNORECASE,
 )
+# A whole PEM private key block, header to END line, so the key body does not
+# stay behind the header. Any key type (ENCRYPTED, DSA, PGP ... BLOCK). Lines
+# are split on real or JSON-escaped newlines. Each line is base64 or an
+# RFC 1421 header (Proc-Type: ...), so a block never runs on through prose to
+# a later END line. A block cut off before its END line still loses the base64
+# and header lines that follow it.
+_PEM_SEP = r"(?:\s|\\[rn])+"
+_PEM_HEADER = r"[A-Za-z][A-Za-z\-]*: [^\r\n\\]*(?=[\r\n]|\\[rn]|\Z)"
+_PEM_BLOCK_RE = re.compile(
+    r"-----BEGIN ((?:[A-Z0-9]+ )*)PRIVATE KEY((?: BLOCK)?)-----"
+    rf"(?:(?:{_PEM_SEP}(?:[A-Za-z0-9+/=]+|{_PEM_HEADER}))*{_PEM_SEP}-----END \1PRIVATE KEY\2-----"
+    rf"|(?:{_PEM_SEP}(?:[A-Za-z0-9+/=]{{16,}}|{_PEM_HEADER}))*)"
+)
 # Common secret shapes: AWS keys, OpenAI-style, bearer/JWT, private key headers.
 _SECRET_RES: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
-    re.compile(r"\b(?:sk|rk)-[A-Za-z0-9]{20,}\b"),
-    re.compile(r"\bghp_[A-Za-z0-9]{36}\b"),
+    # Provider keys carry "-" and "_" inside the body (sk-proj-..., sk-ant-api03-...).
+    # A run of 20 without "-" is still required, so kebab-case names stay.
+    re.compile(r"\b(?:sk|rk)-[A-Za-z0-9_\-]{0,200}?[A-Za-z0-9_]{20}[A-Za-z0-9_\-]*"),
+    # GitHub classic tokens (personal, OAuth, user, server, refresh) and fine-grained PATs.
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36}\b"),
+    re.compile(r"\bgithub_pat_[A-Za-z0-9_]{22,}"),
     re.compile(r"\beyJ[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\.[A-Za-z0-9_\-]{10,}\b"),  # JWT
-    re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+    _PEM_BLOCK_RE,
 )
 _IPV4_RE = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 # FQDNs; only redacted when the suffix is in the internal set.
