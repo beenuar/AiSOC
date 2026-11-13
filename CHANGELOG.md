@@ -15,6 +15,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root `pnpm.overrides`, re-resolved to 4.13.18 / 2.1.8 — the scoped-range
   discipline from the minimatch incident, not a blanket pin.
 
+### Fixed
+
+- **A threat-intel store that was down at first write is backfilled instead
+  of skipped forever** (#1856). `ingest_iocs` deduplicated on a single global
+  Bloom key (`type:value`) recorded *before* the best-effort writes to
+  OpenSearch, Qdrant and Neo4j, so a sink unreachable at first write never
+  received the batch — every later poll read it as duplicate. On a CORE
+  install (no OpenSearch), a feed landed in Qdrant and marked the key; moving
+  to `full` never backfilled OpenSearch, leaving the `/iocs` search API and
+  enrichment feed-lookup blind to all but a handful of entries (observed
+  live: Qdrant 1,779 KEV rows, OpenSearch 10). Dedup is now keyed per sink
+  (`{sink}:{type}:{value}`) and recorded only after that sink accepts the
+  write; steady-state dedup for present stores is unchanged, pinned by tests
+  that fail on the old pipeline. Kafka `NEW_IOC` events now fire only for
+  indicators at least one sink actually stored (they previously fired even
+  when every sink failed), and the retro-hunt consumer dedups re-emissions
+  against its existing exposure rows. Contributed by @43n51c — the backfill
+  half of #1278, whose reporting half fixed the misleading `indexed: 0`.
+
 ## [23.4.0] - 2026-11-13
 
 ### Added
