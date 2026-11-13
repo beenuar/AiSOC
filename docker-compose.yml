@@ -1435,6 +1435,12 @@ services:
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:8007:8004"
     environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
       # Two roles, the same split the api service uses. This service manages
       # its own schema through alembic, so it needs the owner to apply DDL and
       # must not serve requests as it. The marker on the second line below is
@@ -1522,6 +1528,12 @@ services:
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:8008:8005"
     environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
       # Two roles, the same split the api service uses. This service manages
       # its own schema through alembic, so it needs the owner to apply DDL and
       # must not serve requests as it. The marker on the second line below is
@@ -1579,6 +1591,12 @@ services:
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:8006:8006"
     environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
       # Two roles, the same split the api service uses. This service manages
       # its own schema through alembic, so it needs the owner to apply DDL and
       # must not serve requests as it. The marker on the second line below is

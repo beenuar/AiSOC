@@ -29,6 +29,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and `critical` stays `critical`. Setup and troubleshooting are on the new
   [Huntress](apps/docs/docs/connectors/huntress.md) page.
 
+### Fixed
+
+- **UEBA, honeytokens and purple-team tracing no longer points at the
+  service's own container** (#1848). All three built an OTLP span exporter
+  inline in `main.py` against `settings.otel_endpoint`, whose default of
+  `http://localhost:4317` is — inside a container — the service itself, so
+  tracing could never reach the collector (`otel-collector:4317`, behind the
+  compose `monitoring` profile) and UEBA's batch processor retried a refused
+  connection every few seconds, hundreds of export-failure log lines on a
+  stand without the profile. The three now share a guarded
+  `app/core/telemetry.py` (held byte-identical by
+  `scripts/sync_vendored_telemetry.py --check` in CI): quiet by default
+  (`OTEL_EXPORTER=none` — deliberately diverging from api/agents' `otlp`
+  default, because these services emit spans continuously and a missing
+  collector must cost one log line, not a retry loop), with
+  `OTEL_EXPORTER=otlp` targeting `OTEL_EXPORTER_OTLP_ENDPOINT`
+  (default `http://otel-collector:4317`, never localhost). Compose passes
+  both knobs through. The dead `otel_endpoint` config field is removed —
+  a deployment that set `OTEL_ENDPOINT`/`UEBA_OTEL_ENDPOINT` should set
+  `OTEL_EXPORTER=otlp` and `OTEL_EXPORTER_OTLP_ENDPOINT` instead. Reported
+  by @43n51c with the repro and the fix sketch this follows.
+
 ## [23.3.0] - 2026-11-12
 
 ### Security

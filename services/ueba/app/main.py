@@ -14,25 +14,13 @@ from app._health import install_health_routes, register_subscription
 from app.core.config import settings
 from app.core.cors import build_cors_kwargs
 
-# ---------------------------------------------------------------------------
-# OpenTelemetry setup (best-effort)
-# ---------------------------------------------------------------------------
-try:
-    from opentelemetry import trace
-    from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
-    from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
-    from opentelemetry.sdk.resources import SERVICE_NAME, Resource
-    from opentelemetry.sdk.trace import TracerProvider
-    from opentelemetry.sdk.trace.export import BatchSpanProcessor
-
-    resource = Resource.create({SERVICE_NAME: settings.service_name})
-    provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=settings.otel_endpoint, insecure=True)
-    provider.add_span_processor(BatchSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    _otel_enabled = True
-except Exception:
-    _otel_enabled = False
+# OpenTelemetry moved to app/core/telemetry.py (issue #1848): the exporter
+# here was built inline against settings.otel_endpoint, whose default of
+# http://localhost:4317 is the service's own container, so tracing never
+# reached the collector and the batch processor retried a refused connection
+# every few seconds. instrument_service_app() below is guarded, quiet by default,
+# and targets the compose collector when OTEL_EXPORTER=otlp is set.
+from app.core.telemetry import instrument_service_app
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -76,8 +64,7 @@ app.add_middleware(
 
 app.include_router(router)
 
-if _otel_enabled:
-    FastAPIInstrumentor.instrument_app(app)
+_otel_enabled = instrument_service_app(app, settings.service_name)
 
 # ---------------------------------------------------------------------------
 # Kafka consumer lifecycle

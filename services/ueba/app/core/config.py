@@ -57,10 +57,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("SCORING_BATCH_SIZE", "UEBA_SCORING_BATCH_SIZE"),
     )
 
-    otel_endpoint: str = Field(
-        default="http://localhost:4317",
-        validation_alias=AliasChoices("OTEL_ENDPOINT", "UEBA_OTEL_ENDPOINT"),
-    )
     service_name: str = Field(
         default="aisoc-ueba",
         validation_alias=AliasChoices("SERVICE_NAME", "UEBA_SERVICE_NAME"),
