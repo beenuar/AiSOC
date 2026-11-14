@@ -51,6 +51,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`>=0.117,<0.163`), identical in every lock per the pin-agreement gate.
   Lock-only; no manifest ranges moved.
 
+### Security
+
+- **`dnspython` re-locked to 2.9.2 in the api service** (CVE-2026-128089,
+  high; rides in transitively through `email-validator`). The second CVE to
+  publish against the locked tree inside one day — lock-only, no manifest
+  range moves, three lines of churn.
+
 ### Fixed
 
 - **A Wazuh source-side outage no longer deletes its window from the lake**
