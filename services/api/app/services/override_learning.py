@@ -268,7 +268,7 @@ async def apply_redisposition(
         raise ValueError("confirmation_token does not match the alert set; re-preview before applying")
     now = datetime.now(UTC)
     result = await db.execute(
-        update(Alert).where(Alert.tenant_id == tenant_id, Alert.id.in_(alert_ids)).values(disposition=new_disposition, updated_at=now)
+        update(Alert).where(Alert.tenant_id == tenant_id, Alert.id.in_(alert_ids)).values(disposition=new_disposition, disposition_source="analyst", updated_at=now)
     )
     await db.commit()
     rowcount = result.rowcount or 0

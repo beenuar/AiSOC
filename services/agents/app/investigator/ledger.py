@@ -840,6 +840,7 @@ async def persist_auto_triage(
                         """
                         UPDATE alerts
                            SET disposition = CASE WHEN $10 THEN disposition ELSE $3 END,
+                               disposition_source = CASE WHEN $10 THEN disposition_source ELSE 'ai' END,
                                ai_score = $4,
                                ai_summary = $5,
                                ai_recommendations = $6::jsonb,
