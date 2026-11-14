@@ -786,6 +786,9 @@ services:
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:8001:8084"
     environment:
+      # Opt-in: 0/off/false spends the token ceiling on answer tokens instead
+      # of hidden reasoning (thinking-tier models). Unset = provider default.
+      AISOC_LLM_THINKING: ${AISOC_LLM_THINKING:-}
       REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
       AISOC_INVESTIGATION_MAX_SECONDS: ${AISOC_INVESTIGATION_MAX_SECONDS:-120}
       # The agents :15002/metrics gate compares against this token exactly as
