@@ -382,6 +382,12 @@ UPDATE alerts
  WHERE tenant_id = $1
    AND dedup_hash = $2::text
    AND status = ANY($3::text[])
+   -- A HUMAN analyst's false-positive verdict is durable suppression; an
+   -- AI-authored or unknown-provenance one is not. disposition_source names
+   -- the author (migration 161); without it, one uncorroborated AI FP
+   -- verdict would permanently suppress a fingerprint — the ungoverned
+   -- silence GHSA-qp9f-459j-w89c was published against.
+   AND NOT (disposition = 'false_positive' AND disposition_source = 'analyst')
 RETURNING id, reopen_count
 """
 
