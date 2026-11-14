@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`AISOC_LLM_THINKING` knob for thinking-tier models** (#1883). A
+  thinking-tier model streams chain-of-thought into `reasoning_content` and
+  it counts against `max_tokens` — measured live on the bundled gateway, a
+  forensic-shaped call burned 4,093 of its 4,096-token budget on reasoning
+  and returned `finish_reason=length` with empty content, so the truncation
+  gate marked every such investigation INCONCLUSIVE. Setting
+  `AISOC_LLM_THINKING=0|off|false` sends `enable_thinking: false` so the
+  whole ceiling buys answer tokens; unset leaves the provider default
+  untouched (deep-investigation roles arguably want reasoning on), and the
+  gateway's `drop_params: true` makes it a no-op on providers without the
+  knob. The carry also fixes the non-OpenAI `extra_body` merge to compose
+  with the knob rather than silently replacing it — pinned by a test that
+  fails on the plain assignment. Contributed by @alexmateescu.
+
 - **Vectra AI Platform connector.** `vectra_ai` reads Vectra AI Platform
   network, identity and cloud detections through the v3.4 detection events
   API, `GET /api/v3.4/events/detections`, with OAuth2 client credentials

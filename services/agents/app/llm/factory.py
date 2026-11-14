@@ -194,6 +194,22 @@ def make_chat_model(
     params: dict[str, Any] = {"model": model, "temperature": temperature}
     if max_tokens is not None:
         params["max_tokens"] = max_tokens
+    # Thinking-tier models (e.g. Qwen3.6-35B-A3B) stream chain-of-thought into
+    # ``reasoning_content`` and it counts against max_tokens. Measured live on
+    # the bundled gateway: a forensic-shaped call burned 4093 of its 4096-token
+    # budget on reasoning and returned finish_reason=length with content="" — the
+    # whole answer silently lost. The gateway ignores ``thinking`` /
+    # ``thinking_budget``; only ``enable_thinking: false`` in extra_body works.
+    #
+    # Opt-in: unset AISOC_LLM_THINKING changes nothing (deep-investigation roles
+    # arguably want reasoning on). Set AISOC_LLM_THINKING=0|off|false to spend
+    # the full token ceiling on answer tokens instead. Composed via setdefault so
+    # a caller's explicit enable_thinking wins and the legacy max_tokens merge
+    # below is untouched. Gateway runs drop_params:true, so providers without the
+    # knob ignore it.
+    thinking = os.environ.get("AISOC_LLM_THINKING", "").strip().lower()
+    if thinking in ("0", "off", "false"):
+        params.setdefault("extra_body", {}).setdefault("enable_thinking", False)
     if json_output:
         # Via ``model_kwargs`` rather than as a top-level argument. ChatOpenAI
         # does not declare ``response_format`` as a field, so passing it
@@ -223,7 +239,11 @@ def make_chat_model(
         # new one. It is added only for a non-OpenAI endpoint because OpenAI
         # itself rejects `max_tokens` outright for its newer models, and the
         # bundled gateway drops what a provider does not support anyway.
-        params["extra_body"] = {"max_tokens": max_tokens, **(kwargs.pop("extra_body", None) or {})}
+        # Spread any extra_body already on params (the thinking knob above
+        # writes `enable_thinking` there) rather than replacing it — a plain
+        # assignment here silently dropped the knob on exactly the
+        # non-OpenAI endpoints it exists for. Caller kwargs still win last.
+        params["extra_body"] = {**params.get("extra_body", {}), "max_tokens": max_tokens, **(kwargs.pop("extra_body", None) or {})}
     api_key = (override or {}).get("api_key") or resolve_api_key(model)
     if api_key:
         params["api_key"] = api_key
