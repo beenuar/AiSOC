@@ -40,7 +40,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   root `pnpm.overrides`, re-resolved to 4.13.18 / 2.1.8 — the scoped-range
   discipline from the minimatch incident, not a blanket pin.
 
-### Security
 
 - **`opentelemetry-api` re-locked to 1.45.2 across all thirteen Python
   services** (CVE-2026-126360, high). The CVE published against 1.45.1 the
@@ -51,7 +50,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`>=0.117,<0.163`), identical in every lock per the pin-agreement gate.
   Lock-only; no manifest ranges moved.
 
-### Security
+
+- **The privacy redactor now catches modern provider keys, every GitHub
+  token kind, and whole PEM private-key bodies** (#1869). Three gaps in
+  `Pseudonymizer.redact()`: the `sk-`/`rk-` pattern had no `-`/`_` in its
+  class, so `sk-proj-…`, `sk-ant-api03-…` and `sk-svcacct-…` keys passed
+  through to hosted models on the LLM egress path; only `ghp_` GitHub
+  tokens were matched, leaving `gho_`/`ghu_`/`ghs_`/`ghr_`/`github_pat_`
+  in clear; and the PEM pattern matched only the `BEGIN` header line, so
+  the base64 key body and `END` line stayed in the text — on the public
+  replay path, which has no contract gate, every PEM body leaked. The new
+  patterns require a 20-character dash-free run (kebab-case names like
+  `rk-worker-7d9f8b6c4-xk2lp` and `sk-learn` stay), match all GitHub token
+  kinds, and consume the whole PEM block header-to-matching-END for any key
+  type including ENCRYPTED/DSA/PGP, tolerating JSON-escaped newlines;
+  certificates and public keys are deliberately not secrets. Verified
+  linear-time on 100 KB adversarial inputs; the vendored copy in
+  `services/api/_vendor` is regenerated and the sync gate pins it.
+  Reported and fixed by @goranai with runnable repros; three of the five
+  new tests fail on the old redactor.
 
 - **`dnspython` re-locked to 2.9.2 in the api service** (CVE-2026-128089,
   high; rides in transitively through `email-validator`). The second CVE to
