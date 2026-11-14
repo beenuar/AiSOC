@@ -77,6 +77,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Secured deployments keep their api/ingest/agents scrapes** (#1881).
+  Those three `/metrics` endpoints refuse scrapes without
+  `Authorization: Bearer $METRICS_TOKEN` once the token is set (#1823), and
+  the bundled Prometheus sent no credentials — so hardening the metrics
+  surface silently cost the deployment its own monitoring. The compose
+  entrypoint now materialises the token into `/prometheus/metrics_token` at
+  boot (Prometheus cannot read environment variables from scrape configs)
+  and the three jobs present it via `credentials_file`. With no token set
+  the file is empty and the dev-posture endpoints ignore the empty bearer,
+  so the default stack scrapes exactly as before — verified live in both
+  postures against a header-echo target. Diagnosed in #1876 by
+  @alexmateescu.
+
 - **Prometheus actually scrapes the ingest service now.** The scrape job
   targeted `ingest-worker:9090` — the `METRICS_PORT` the Go config parses
   and nothing consumes — while `/metrics` registers on the main router at

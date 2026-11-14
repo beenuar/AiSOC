@@ -1878,6 +1878,28 @@ services:
     container_name: aisoc-prometheus
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:9091:9090"
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+    # The api, ingest and agents /metrics endpoints refuse scrapes without
+    # `Authorization: Bearer $METRICS_TOKEN` once the token is set (#1823),
+    # so every secured deployment watched those scrapes 401 (#1876, #1881).
+    # Prometheus cannot read environment variables from scrape configs; it
+    # reads a `credentials_file`. Nothing in the repo is a sensible home for
+    # that file (a committed one would be a secret in the tree, an unmounted
+    # path broke the default stack in the declined #1876), so the entrypoint
+    # materialises it from the environment at boot — into /prometheus, the
+    # TSDB volume, which is the one path the image's non-root user is
+    # guaranteed to write. An empty token writes an empty file: the scrape
+    # then presents an empty bearer, which every gated endpoint ignores in
+    # the token-unset posture (dev allows, production refuses the scrape
+    # with its own 401 naming METRICS_TOKEN) — so the default stack stays
+    # exactly as green as it was. `"$0" "$@"` hands the image's own CMD
+    # (config path, storage flags) through untouched.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - 'printf "%s" "$$METRICS_TOKEN" > /prometheus/metrics_token && exec "$$0" "$$@"'
+      - /bin/prometheus
     volumes:
       - ./infra/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       # Phase 2.4 — alert rules mounted as a directory so adding a
