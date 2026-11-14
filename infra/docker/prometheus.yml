@@ -65,6 +65,13 @@ alerting:
 scrape_configs:
   # FastAPI core API — uvicorn worker on container port 8000.
   - job_name: 'aisoc-api'
+    # /metrics refuses scrapes without `Authorization: Bearer $METRICS_TOKEN`
+    # once the token is set. The file is materialised from the environment by
+    # the compose entrypoint (see the prometheus service in docker-compose.yml);
+    # when no token is set the file is empty and the gated endpoints ignore
+    # the empty bearer, so the default stack scrapes exactly as before.
+    authorization:
+      credentials_file: /prometheus/metrics_token
     static_configs:
       - targets: ['api:8000']
     metrics_path: /metrics
@@ -78,6 +85,9 @@ scrape_configs:
     # METRICS_PORT (9090) is parsed in internal/config and consumed by
     # nothing, so this target had no listener and every ingest scrape
     # failed since the job was written (#1876 diagnosed it).
+    # Bearer-gated like the api job (authoriseScrape in internal/server).
+    authorization:
+      credentials_file: /prometheus/metrics_token
     static_configs:
       - targets: ['ingest-worker:8080']
     metrics_path: /metrics
@@ -128,5 +138,8 @@ scrape_configs:
   # llm stays flat means the LLM path is failing open to the fallback, which
   # looks fine from outside because alerts still get verdicts.
   - job_name: aisoc-agents
+    # Bearer-gated by METRICS_TOKEN (#1823) — the 401s that motivated #1876.
+    authorization:
+      credentials_file: /prometheus/metrics_token
     static_configs:
       - targets: ["agents:8084"]
