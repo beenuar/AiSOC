@@ -39,3 +39,7 @@ MEMORY_SUPPRESSION=0, LLM_THINKING=0. Agents recreated; env verified live.
   upstream PRs continue from those branches. After fork deletion, future
   upstream contributions push branches to github remote recreated or via patch.
 - GitHub fork deletion: pending #1883/#1884 merge/close (Alexandru).
+- PR import/main-from-github -> master MERGED (fast-forward via graft commit
+  d7a3c317a: first-parent = full fork history, second parent = empty init).
+  master verified == d7a3c317a, ancestor e8b28aa0b intact. Import branch deleted.
+  Local default renamed master, tracks origin/master. Code home = Bitbucket.
