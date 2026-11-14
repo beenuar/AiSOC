@@ -241,6 +241,11 @@ var connectorOCSFClass = map[string]connectorClass{
 	// ransomware canary, a malicious process — and undelivered reports are
 	// dropped in the connector, so what reaches ingest is a finding.
 	"huntress": {classUID: classSecurityFinding},
+	// eset_protect reads the ESET Connect /v1/detections list: every record
+	// is a detection ESET's endpoint protection raised on a device — an
+	// antivirus or HIPS hit, a blocked network intrusion, an ESET Inspect
+	// rule match — not a telemetry event, so it is a finding.
+	"eset_protect": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},

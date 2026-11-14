@@ -1,0 +1,36 @@
+id: eset_protect
+name: ESET PROTECT Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  ESET PROTECT detections via the ESET Connect API: antivirus, HIPS,
+  firewall, network intrusion, web access and ESET Inspect rule hits. Each
+  detection is raised once, with its device looked up for the hostname,
+  addresses and operating system. The region is a fixed choice, so the
+  credential is only ever sent to ESET. ESET's severity ladder stops at
+  high, so no detection is raised as critical. Read-only; nothing here
+  changes a device or a detection.
+author: AiSOC Core Team
+tags: [edr, endpoint, eset, eset-protect, detections]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/eset_protect.py
+license: MIT
+# The first release that contains this connector. v23.4.0 was cut before it
+# merged; the next release's PR confirms or corrects this value, the same way
+# the v23.4.0 release PR did for huntress.
+min_aisoc_version: "23.5.0"
+config_schema:
+  type: object
+  required: [region, username, password]
+  properties:
+    region:
+      type: string
+      enum: [eu, de, us, ca, jpn]
+      description: The ESET data region your ESET PROTECT Hub or ESET Business Account lives in.
+    username:
+      type: string
+      description: Email of a dedicated API user with the Integrations toggle on. It must have signed in to ESET PROTECT Hub once.
+    password:
+      type: string
+      description: Password of the API user.
+      secret: true

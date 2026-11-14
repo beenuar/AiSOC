@@ -43,3 +43,14 @@ MEMORY_SUPPRESSION=0, LLM_THINKING=0. Agents recreated; env verified live.
   d7a3c317a: first-parent = full fork history, second parent = empty init).
   master verified == d7a3c317a, ancestor e8b28aa0b intact. Import branch deleted.
   Local default renamed master, tracks origin/master. Code home = Bitbucket.
+
+## Upstream sync 2eb69d638 -> BB (14-Nov ~13:00 UTC)
+- Merged 25 upstream commits (all our work landed upstream: #1879 truncation
+  gate, #1880 search, #1889 thinking knob w/ composition fix, #1888 governed
+  FP reopen + NULL-safe predicate 40f071f63, #1887 prometheus bearer).
+- Conflicts resolved taking upstream: ruff-format override_learning; NULL-safe
+  IS DISTINCT FROM predicate (our HEAD form silently killed all reopens on
+  NULL disposition — his live-suite catch, correct).
+- Merge commit 707d65ffb; BB master protected -> branch sync/upstream-20261114
+  opened as PR #3 (merge: no squash). api/fusion/agents rebuilt+redeployed,
+  readyz 200, predicate + knob verified live in containers.

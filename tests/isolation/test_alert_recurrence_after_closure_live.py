@@ -417,6 +417,86 @@ async def test_an_open_alert_that_an_analyst_is_working_is_not_dragged_backwards
     assert row["reopen_count"] == 0, "nothing was closed, so nothing was reopened"
 
 
+# ── disposition authorship (migration 161, carries #1884) ─────────────────
+#
+# `alerts.disposition` is written by two hands: the analyst override
+# (`POST /feedback/alert-override`, behind `alerts:write`, stamped
+# `disposition_source='analyst'`) and the AI auto-triage chokepoint
+# (`investigator/ledger.py`, stamped `'ai'`). Only the human verdict is
+# durable suppression: an uncorroborated AI false-positive outvoting every
+# future recurrence of a fingerprint is the GHSA-qp9f-459j-w89c condition
+# reintroduced through a side door — and the memory system's own rule is
+# that human FP priors are trusted immediately while AI priors need
+# corroboration. Rows dispositioned before the column existed are NULL
+# (unknown provenance) and must stay reopenable: guessed provenance would
+# convert the entire backlog into suppressions nobody authored.
+
+
+async def _disposition(pool, tenant: uuid.UUID, *, value: str, source: str | None) -> None:
+    async with pool.acquire() as conn:
+        updated = await conn.execute(
+            "UPDATE alerts SET disposition = $2, disposition_source = $3 WHERE tenant_id = $1",
+            tenant,
+            value,
+            source,
+        )
+    assert updated.endswith(" 1"), f"expected to disposition exactly one alert, got {updated!r}"
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_an_analyst_false_positive_is_durable_suppression(pool, make_tenant) -> None:
+    """A human's `false_positive` survives the recurrence: no reopen, no churn."""
+    tenant = await make_tenant("fp-analyst")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 7, 9, 0, tzinfo=UTC)
+
+    await sink.persist(_fused(tenant, event_time=base, source_event_ids=["fpa-1"]))
+    await _close(pool, tenant, status="resolved")
+    await _disposition(pool, tenant, value="false_positive", source="analyst")
+    await sink.persist(_fused(tenant, event_time=base + timedelta(hours=1), source_event_ids=["fpa-2"]))
+
+    row = (await _rows(pool, tenant))[0]
+    assert row["status"] == "resolved", f"an analyst-dispositioned FP was resurrected to {row['status']!r}"
+    assert row["reopen_count"] == 0, "durable suppression must not count a reopen"
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_an_ai_false_positive_still_reopens(pool, make_tenant) -> None:
+    """The AI's own `false_positive` is not durable: the GHSA control holds."""
+    tenant = await make_tenant("fp-ai")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 7, 10, 0, tzinfo=UTC)
+
+    await sink.persist(_fused(tenant, event_time=base, source_event_ids=["fpi-1"]))
+    await _close(pool, tenant, status="resolved")
+    await _disposition(pool, tenant, value="false_positive", source="ai")
+    await sink.persist(_fused(tenant, event_time=base + timedelta(hours=1), source_event_ids=["fpi-2"]))
+
+    row = (await _rows(pool, tenant))[0]
+    assert row["status"] not in TERMINAL_STATUSES, (
+        "an AI-authored false_positive silently absorbed the recurrence — "
+        "one uncorroborated verdict suppressing a fingerprint forever is the advisory condition"
+    )
+    assert row["reopen_count"] == 1
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_an_unknown_provenance_false_positive_still_reopens(pool, make_tenant) -> None:
+    """Rows dispositioned before migration 161 have NULL provenance and stay reopenable."""
+    tenant = await make_tenant("fp-null")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 7, 11, 0, tzinfo=UTC)
+
+    await sink.persist(_fused(tenant, event_time=base, source_event_ids=["fpn-1"]))
+    await _close(pool, tenant, status="resolved")
+    await _disposition(pool, tenant, value="false_positive", source=None)
+    await sink.persist(_fused(tenant, event_time=base + timedelta(hours=1), source_event_ids=["fpn-2"]))
+
+    row = (await _rows(pool, tenant))[0]
+    assert row["status"] not in TERMINAL_STATUSES, "unknown provenance was treated as an analyst verdict"
+    assert row["reopen_count"] == 1
+
+
 @pytest.mark.asyncio(loop_scope="module")
 async def test_the_runtime_role_cannot_bypass_rls(pool) -> None:
     """Everything above is graded as the role fusion really connects as."""

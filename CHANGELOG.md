@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`AISOC_LLM_THINKING` knob for thinking-tier models** (#1883). A
+  thinking-tier model streams chain-of-thought into `reasoning_content` and
+  it counts against `max_tokens` — measured live on the bundled gateway, a
+  forensic-shaped call burned 4,093 of its 4,096-token budget on reasoning
+  and returned `finish_reason=length` with empty content, so the truncation
+  gate marked every such investigation INCONCLUSIVE. Setting
+  `AISOC_LLM_THINKING=0|off|false` sends `enable_thinking: false` so the
+  whole ceiling buys answer tokens; unset leaves the provider default
+  untouched (deep-investigation roles arguably want reasoning on), and the
+  gateway's `drop_params: true` makes it a no-op on providers without the
+  knob. The carry also fixes the non-OpenAI `extra_body` merge to compose
+  with the knob rather than silently replacing it — pinned by a test that
+  fails on the plain assignment. Contributed by @alexmateescu.
+
 - **Vectra AI Platform connector.** `vectra_ai` reads Vectra AI Platform
   network, identity and cloud detections through the v3.4 detection events
   API, `GET /api/v3.4/events/detections`, with OAuth2 client credentials
@@ -31,6 +45,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ocsf_classes.go` files `vectra_ai` at 2001 Security Finding, which
   promotes whatever the severity. Setup and troubleshooting are on the new
   [Vectra AI Platform](apps/docs/docs/connectors/vectra-ai.md) page.
+
+- **ESET PROTECT connector.** `eset_protect` reads ESET PROTECT detections
+  (antivirus, HIPS, firewall, network intrusion, web access and ESET Inspect
+  rule hits) through the ESET Connect API, `GET /v1/detections`, signing in
+  as a dedicated API user with an OAuth2 password grant (part of #356). The
+  region is a fixed choice of ESET's five, so the password, which is vaulted,
+  is only ever sent to that region's `*.eset.systems` hosts; the bearer token
+  is cached until shortly before it expires and exchanged once more if ESET
+  refuses a cached one early. The read asks for the window through
+  `startTime` and `endTime` and follows `nextPageToken` until ESET returns
+  an empty one; a refused or unreachable opening request fails the poll, a
+  later page failing keeps the pages already read, and the 25-page bound is
+  logged when it binds. ESET's `202 Accepted` for a slow query is waited out
+  by re-sending the same request with its `response-id`, within ESET's own
+  120-second limit. A detection is raised once, in the window that contains
+  its `occurTime`. The distinct devices behind a poll's detections are looked
+  up through `devices:batchGet`, 50 a request and at most 500 a poll, for
+  the hostname, addresses and operating system; a failed, rate-limited or
+  still-pending lookup costs the host, never the detection. Network detections are
+  oriented by ESET's recorded direction, so an inbound peer is the source.
+  ESET's ladder stops at `SEVERITY_LEVEL_HIGH`, which stays `high`; nothing
+  is raised as `critical`, and an unspecified level carries no tier.
+  `ocsf_classes.go` files `eset_protect` at 2001 Security Finding. Setup,
+  regions and troubleshooting are on the new
+  [ESET PROTECT](apps/docs/docs/connectors/eset-protect.md) page.
 
 ### Security
 
@@ -76,6 +115,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range moves, three lines of churn.
 
 ### Fixed
+
+- **Cyble enrichment is configured by the name the code actually reads**
+  (#1886). The enrichment service enables Cyble on `CYBLE_API_KEY` (and reads `CYBLE_BASE_URL`)
+  — `main.go` gates the provider on `cfg.CybleAPIKey != ""`, `config.go` loads it
+  from `CYBLE_API_KEY`, and `services/enrichment/README.md` documents exactly
+  those names. But `.env.example` shipped `CYBLE_VISION_API_KEY` /
+  `CYBLE_VISION_BASE_URL` (plus `CYBLE_VISION_TENANT_ID` / `CYBLE_VISION_FEEDS` /
+  `CYBLE_HUNT_API_KEY`, which no service reads), and the auth-failure message told
+  operators to "check CYBLE_VISION_API_KEY" — so a key provisioned by the template
+  never took effect and the error pointed at the wrong variable. The template now
+  ships `CYBLE_API_KEY` / `CYBLE_BASE_URL`, the unreferenced `CYBLE_VISION_*`
+  placeholders are dropped, and the error names `CYBLE_API_KEY`. Contributed by @43n51c.
+
+- **An analyst's `false_positive` verdict is durable suppression; the AI's
+  is not** (#1884, the governed form #1875's review asked for). The
+  reopen-on-recurrence control (migration 160) resurrected alerts an analyst
+  had already dispositioned as false positives — recurring benign activity
+  reopened the same alert indefinitely, which trains operators to distrust
+  the queue. But `alerts.disposition` carried no authorship, and the AI
+  auto-triage writes its verdicts (including `false_positive`) into the same
+  column, so suppressing on the bare disposition would let one
+  uncorroborated AI verdict silence a fingerprint forever — the
+  GHSA-qp9f-459j-w89c condition through a side door. Migration 161 adds
+  `disposition_source` (`analyst` | `ai`, NULL for rows that predate it:
+  unknown provenance is deliberately not durable), the analyst override and
+  batch re-disposition stamp `analyst`, the AI chokepoint stamps `ai`, and
+  the reopen predicate excludes only `false_positive` + `analyst`. Pinned by
+  live-Postgres recurrence tests for all three authorship cases. Contributed
+  by @alexmateescu.
+
+- **Secured deployments keep their api/ingest/agents scrapes** (#1881).
+  Those three `/metrics` endpoints refuse scrapes without
+  `Authorization: Bearer $METRICS_TOKEN` once the token is set (#1823), and
+  the bundled Prometheus sent no credentials — so hardening the metrics
+  surface silently cost the deployment its own monitoring. The compose
+  entrypoint now materialises the token into `/prometheus/metrics_token` at
+  boot (Prometheus cannot read environment variables from scrape configs)
+  and the three jobs present it via `credentials_file`. With no token set
+  the file is empty and the dev-posture endpoints ignore the empty bearer,
+  so the default stack scrapes exactly as before — verified live in both
+  postures against a header-echo target. Diagnosed in #1876 by
+  @alexmateescu.
+
+- **The alerts list `search` parameter actually filters now** (#1877).
+  `GET /api/v1/alerts` declared `search`, the console sent it, and the
+  result set ignored it — a filter that looks applied and is not. It now
+  ILIKE-matches over the columns an analyst pastes into the box (title,
+  description, rule name/id, category, and the alert id cast to text), the
+  same idiom the admin-users, audit and tenant-provision searches already
+  use. A `disposition` exact-match filter rides along so the operator queue
+  can span new+triaged escalated rows without a status filter. Contributed
+  by @alexmateescu; pinned by a live-Postgres test driving the real route.
+
+- **A truncated forensic reply becomes INCONCLUSIVE instead of findings**
+  (#1873). A reply cut at `max_tokens` could still parse as JSON — the
+  greedy extraction glued whatever survived into a matchable blob — and the
+  fragment flowed into the report verbatim; the reporting deployment watched
+  a truncated run fabricate a kernel-rootkit narrative about its own SOC
+  host. The agent now gates on `finish_reason=length`: the narrative is
+  suppressed, the run returns an explicit INCONCLUSIVE skeleton
+  ("partial output is not admissible as findings") at floor confidence, and
+  the suppression lands in the audit log. JSON extraction is anchored at the
+  reply's end, so prose rambling after the object defers to manual instead
+  of being laundered into structured findings. Contributed by
+  @alexmateescu; pinned by tests that fail on the old agent.
+
+- **Prometheus actually scrapes the ingest service now.** The scrape job
+  targeted `ingest-worker:9090` — the `METRICS_PORT` the Go config parses
+  and nothing consumes — while `/metrics` registers on the main router at
+  `HTTP_PORT` 8080, so every ingest scrape had failed since the job was
+  written. Retargeted to 8080. Diagnosed in #1876 by @alexmateescu.
 
 - **A Wazuh source-side outage no longer deletes its window from the lake**
   (#1860). The connector's poll window was `[now - since, now]`: when the

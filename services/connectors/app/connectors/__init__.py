@@ -50,6 +50,7 @@ from app.connectors.dropbox import DropboxConnector
 from app.connectors.duo_security import DuoSecurityConnector
 from app.connectors.elastic import ElasticConnector
 from app.connectors.email_inbox import EmailInboxConnector
+from app.connectors.eset_protect import ESETProtectConnector
 from app.connectors.exabeam import ExabeamConnector
 from app.connectors.extrahop import ExtraHopConnector
 from app.connectors.falco import FalcoConnector
@@ -155,6 +156,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     DuoSecurityConnector,
     ElasticConnector,
     EmailInboxConnector,
+    ESETProtectConnector,
     ExabeamConnector,
     FalcoConnector,
     FleetDMConnector,
@@ -289,6 +291,7 @@ __all__ = [
     "DuoSecurityConnector",
     "ElasticConnector",
     "EmailInboxConnector",
+    "ESETProtectConnector",
     "FalcoConnector",
     "Field",
     "FleetDMConnector",

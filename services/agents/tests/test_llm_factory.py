@@ -32,6 +32,7 @@ def _clean_llm_env(monkeypatch):
         "OPENAI_MODEL",
         "LLM_MODEL",
         "AISOC_LLM_MODEL",
+        "AISOC_LLM_THINKING",
         *(f"AISOC_MODEL_PIN_{role.upper()}" for role in all_roles()),
     ):
         monkeypatch.delenv(var, raising=False)
@@ -159,6 +160,48 @@ def test_make_chat_model_reaches_the_gateway_from_compose_alone(monkeypatch):
     assert llm.model_name == "aisoc-triage"
     assert str(llm.openai_api_base).rstrip("/") == "http://litellm:4000/v1"
     assert llm.openai_api_key.get_secret_value() == "sk-aisoc-local"
+
+
+def test_thinking_env_unset_changes_nothing(monkeypatch):
+    """The knob is opt-in: unset, the request carries no `enable_thinking`."""
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-aisoc-local")
+    llm = make_chat_model("triage", max_tokens=256)
+    assert "enable_thinking" not in (llm.extra_body or {})
+
+
+def test_thinking_off_composes_with_the_legacy_max_tokens_merge(monkeypatch):
+    """`enable_thinking: false` must survive the non-OpenAI extra_body merge.
+
+    The gateway deployment is exactly where the knob matters (a thinking-tier
+    model burned 4093 of 4096 completion tokens on reasoning), and it is also
+    exactly where `_needs_legacy_max_tokens` rewrites extra_body — a plain
+    assignment there dropped the knob on the deployments it exists for.
+    """
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-aisoc-local")
+    monkeypatch.setenv("AISOC_LLM_THINKING", "0")
+    llm = make_chat_model("investigation", max_tokens=4096)
+    body = llm.extra_body or {}
+    assert body.get("enable_thinking") is False, f"knob lost in the legacy merge: {body}"
+    assert body.get("max_tokens") == 4096, f"legacy max_tokens lost to the knob: {body}"
+
+
+def test_thinking_off_without_max_tokens(monkeypatch):
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-aisoc-local")
+    monkeypatch.setenv("AISOC_LLM_THINKING", "off")
+    llm = make_chat_model("triage")
+    assert (llm.extra_body or {}).get("enable_thinking") is False
+
+
+def test_thinking_truthy_value_changes_nothing(monkeypatch):
+    """Only 0/off/false disable; any other value leaves the provider default."""
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "sk-aisoc-local")
+    monkeypatch.setenv("AISOC_LLM_THINKING", "1")
+    llm = make_chat_model("triage", max_tokens=64)
+    assert "enable_thinking" not in (llm.extra_body or {})
 
 
 def test_make_chat_model_refuses_an_alias_with_no_gateway(monkeypatch):

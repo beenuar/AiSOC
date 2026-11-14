@@ -361,7 +361,7 @@ func (c *CybleClient) get(ctx context.Context, endpoint string) ([]byte, error) 
 		return nil, nil
 	case resp.StatusCode == http.StatusUnauthorized,
 		resp.StatusCode == http.StatusForbidden:
-		return nil, fmt.Errorf("cyble auth error (HTTP %d): check CYBLE_VISION_API_KEY",
+		return nil, fmt.Errorf("cyble auth error (HTTP %d): check CYBLE_API_KEY",
 			resp.StatusCode)
 	case resp.StatusCode == http.StatusTooManyRequests:
 		return nil, fmt.Errorf("cyble rate-limited (HTTP 429); back off or increase quota")
