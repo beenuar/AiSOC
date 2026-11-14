@@ -1,0 +1,25 @@
+id: det-identity-099
+name: 'Pass-The-Hash Indicator: NTLMv2 With NewCredentials'
+description: 'AiSOC v1 curated detection. Triggers on the identity signal described by ''Pass-The-Hash
+  Indicator: NTLMv2 With NewCredentials''. Watch the 1 documented false-positive case before tuning.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550.002
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: auth
+detection:
+  condition: |
+    event_id == 4624
+    AND logon_type == 9
+    AND auth_type == "NTLMv2"
+false_positives:
+- RunAs /netonly use
+playbook: tpl-lateral-movement
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

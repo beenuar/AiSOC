@@ -1,0 +1,4 @@
+{
+  "event_type": "firewall_state_change",
+  "state": "disabled"
+}

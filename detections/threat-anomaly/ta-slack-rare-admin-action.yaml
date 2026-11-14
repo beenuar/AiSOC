@@ -1,0 +1,26 @@
+id: det-threat-anomaly-018
+name: Slack Workspace Admin Action This Principal Has Never Performed
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'Slack Workspace
+  Admin Action This Principal Has Never Performed'. Watch the 2 documented false-positive cases before
+  tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    action STARTSWITH_ANY ["workspace_", "organization_", "app_"]
+    AND baseline_action_rarity >= 0.95
+false_positives:
+- A workspace migration
+- A new workspace owner's first changes
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

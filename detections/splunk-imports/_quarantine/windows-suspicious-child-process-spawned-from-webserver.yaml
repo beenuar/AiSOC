@@ -1,0 +1,59 @@
+id: splunk-security-content-2d4470ef-7158-4b47-b68b-1f7f16382156
+name: Windows Suspicious Child Process Spawned From WebServer
+description: The following analytic identifies the execution of suspicious processes
+  typically associated with WebShell activity on web servers. It detects when processes
+  like `cmd.exe`, `powershell.exe`, or `bash.exe` are spawned by web server processes
+  such as `w3wp.exe` or `nginx.exe`. This behavior is significant as it may indicate
+  an adversary exploiting a web application vulnerability to install a WebShell, providing
+  persistent access and command execution capabilities. If confirmed malicious, this
+  activity could allow attackers to maintain control over the compromised server,
+  execute arbitrary commands, and potentially escalate privileges or exfiltrate sensitive
+  data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1505/003/
+- https://github.com/nsacyber/Mitigating-Web-Shells
+- https://www.hackingarticles.in/multiple-ways-to-exploit-tomcat-manager/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count max(_time) as lastTime,\
+    \ min(_time) as firstTime FROM datamodel=Endpoint.Processes\n  WHERE (\n     \
+    \   Processes.process_name IN (\"arp.exe\",\"at.exe\",\"bash.exe\",\"bitsadmin.exe\"\
+    ,\"certutil.exe\",\"cmd.exe\",\"cscript.exe\", \"dsget.exe\",\"dsquery.exe\",\"\
+    find.exe\",\"findstr.exe\",\"fsutil.exe\",\"hostname.exe\",\"ipconfig.exe\",\"\
+    ksh.exe\",\"nbstat.exe\", \"net.exe\",\"net1.exe\",\"netdom.exe\",\"netsh.exe\"\
+    ,\"netstat.exe\",\"nltest.exe\",\"nslookup.exe\",\"ntdsutil.exe\",\"pathping.exe\"\
+    , \"ping.exe\",\"powershell.exe\",\"pwsh.exe\",\"qprocess.exe\",\"query.exe\"\
+    ,\"qwinsta.exe\",\"reg.exe\",\"rundll32.exe\",\"sc.exe\", \"scrcons.exe\",\"schtasks.exe\"\
+    ,\"sh.exe\",\"systeminfo.exe\",\"tasklist.exe\",\"tracert.exe\",\"ver.exe\",\"\
+    vssadmin.exe\", \"wevtutil.exe\",\"whoami.exe\",\"wmic.exe\",\"wscript.exe\",\"\
+    wusa.exe\",\"zsh.exe\")\n        AND\n        Processes.parent_process_name IN\
+    \ (\"w3wp.exe\", \"http*.exe\", \"nginx*.exe\", \"php*.exe\", \"php-cgi*.exe\"\
+    ,\"tomcat*.exe\")\n    )\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_suspicious_child_process_spawned_from_webserver_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2d4470ef-7158-4b47-b68b-1f7f16382156
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_suspicious_child_process_spawned_from_webserver.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

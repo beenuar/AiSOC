@@ -1,0 +1,4 @@
+{
+  "event_type": "auth_success",
+  "src_ip_tor_exit": true
+}

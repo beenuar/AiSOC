@@ -1,0 +1,33 @@
+id: extrahop
+name: ExtraHop RevealX 360 Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Network detections from ExtraHop RevealX 360. The vendor's own risk bands
+  are preserved end to end: red 80-99 maps to high, orange 31-79 to medium
+  and yellow 1-30 to low, and no detection is ever promoted to critical
+  because ExtraHop publishes no fourth band. Read-only; nothing here changes
+  a detection's status or assignee.
+author: AiSOC Core Team
+tags: [ndr, network, detections, extrahop, revealx]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/extrahop.py
+license: MIT
+min_aisoc_version: "21.0.0"
+config_schema:
+  type: object
+  required: [api_host, client_id, client_secret]
+  properties:
+    api_host:
+      type: string
+      description: The API Endpoint shown on the RevealX 360 API Access page, without the /oauth2/token suffix.
+    client_id:
+      type: string
+      description: RevealX 360 REST API credential ID.
+    client_secret:
+      type: string
+      description: RevealX 360 REST API credential secret. An API key works against a sensor or console but is not compatible with RevealX 360.
+      secret: true
+    risk_score_min:
+      type: integer
+      description: Only detections at or above this risk score are pulled. The vendor's bands are 1-30, 31-79 and 80-99.

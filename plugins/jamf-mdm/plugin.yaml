@@ -1,0 +1,28 @@
+id: jamf-mdm
+name: Jamf Pro MDM Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Jamf Pro MDM connector for Apple device fleet management. Looks up devices,
+  retrieves compliance posture, locks compromised endpoints, wipes lost
+  devices, and pulls inventory metadata for case enrichment — all via the
+  Jamf Pro Classic and Pro REST APIs.
+author: AiSOC Core Team
+tags: [mdm, jamf, endpoint, apple, identity]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/jamf-mdm
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [jamf_url, client_id, client_secret]
+  properties:
+    jamf_url:
+      type: string
+      description: "Jamf Pro base URL, e.g. https://acme.jamfcloud.com"
+    client_id:
+      type: string
+      description: "OAuth client (API role) ID"
+    client_secret:
+      type: string
+      description: "OAuth client secret"
+      secret: true

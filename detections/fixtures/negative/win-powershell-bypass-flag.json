@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "process_command_line": "prefix--executionpolicy bypass-suffix",
+  "process_name": "head-powershell.exe"
+}

@@ -1,0 +1,60 @@
+name: Migration numbering
+
+# Two migrations must not claim the same number.
+#
+# `services/api/migrations/NNN_*.sql` is a first-come namespace and git does
+# not defend it: two branches that each add a file called `121_*.sql` merge
+# without a conflict, because the filenames differ. That happened — one 121
+# merged while another sat open in a pull request — and nothing in the
+# repository noticed. `scripts/check_migration_numbering.py` explains what
+# then diverges between a fresh install and an upgrade.
+#
+# Deliberately NO `paths:` filter, on either trigger.
+#
+# A path filter here would be wrong twice over. The obvious way to write one
+# is `services/api/migrations/**`, and the collision is created by a branch
+# that adds exactly one file to exactly that directory — so the filter would
+# usually fire. But the defect is a property of the *pair*, and the second
+# half of the pair arrives on main from somebody else's merge: a pull request
+# that touched no migration at all can become the duplicate without its own
+# diff changing. Only an unconditional run sees that.
+#
+# The second reason is the one this repository keeps relearning: a required
+# check that reports success having executed only its "nothing under test
+# changed" step is indistinguishable from one that graded the commit. 28
+# workflows here once keyed `concurrency` on `github.ref` and cancelled
+# themselves; a backup gate reported success on 74 of 100 runs without
+# restoring anything. The gate is a sub-second, dependency-free read of
+# `git ls-files`, so there is nothing to buy by skipping it.
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands on
+  # a protected branch must be graded — and `cancel-in-progress: false` alone
+  # does not achieve that, because a run left *pending* in a busy group is
+  # cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  migration-numbering:
+    name: Migrations — No duplicate numbers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Self-test first: it proves the detector still fires on an injected
+      # duplicate and still forgives a gap, so a green gate below means the
+      # tree is clean rather than that the rule stopped matching.
+      - name: Gate self-test
+        run: python scripts/check_migration_numbering.py --self-test
+      - name: No two migrations claim the same number
+        run: python scripts/check_migration_numbering.py

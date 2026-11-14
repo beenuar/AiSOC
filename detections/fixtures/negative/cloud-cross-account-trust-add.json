@@ -1,0 +1,6 @@
+{
+  "event_name": "UpdateAssumeRolePolicy",
+  "external_account_in_allowlist": true,
+  "role": "prod-admin",
+  "trusted_principal_external_account": false
+}

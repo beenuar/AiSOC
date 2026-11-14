@@ -1,0 +1,26 @@
+title: Email Attachment With Container File (ISO/IMG/VHD)
+id: aisoc-id-em-0004-iso-attach
+status: stable
+description: |
+  Inbound email attachment is an ISO/IMG/VHD/VHDX container — used to
+  bypass Mark-of-the-Web protections and deliver loaders for QakBot,
+  IcedID, BumbleBee, and similar malware families.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: email_gateway
+  service: messagetrace
+tags:
+  - attack.t1566.001
+  - attack.initial_access
+  - aisoc.email
+detection:
+  selection:
+    event.category: 'email'
+    email.direction: 'inbound'
+    email.attachment.name|endswith:
+      - '.iso'
+      - '.img'
+      - '.vhd'
+      - '.vhdx'
+  condition: selection

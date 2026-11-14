@@ -1,0 +1,25 @@
+id: det-application-025
+name: Slack Token Posted in Public Channel
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Token
+  Posted in Public Channel'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1552.004
+- tlp.white
+category: application
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    event_type == "message.posted"
+    AND message_text PATTERN_MATCH_ANY ["xoxp-", "xoxb-", "xoxa-"]
+    AND channel_visibility == "public"
+false_positives:
+- 'Channels named #security-test (must be allowlisted)'
+playbook: tpl-secret-leak
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

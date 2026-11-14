@@ -1,0 +1,39 @@
+id: splunk-security-content-fe7efbf7-5f82-44b9-8c33-316189ab2393
+name: Windows Firewall Rule Modification
+description: This detection identifies instances where a Windows Firewall rule has
+  been modified, which may indicate an attempt to alter security policies. Unauthorized
+  modifications can weaken firewall protections, allowing malicious traffic or preventing
+  legitimate communications. The event logs details such as the modified rule name,
+  protocol, ports, application path, and the user responsible for the change. Security
+  teams should monitor unexpected modifications, correlate them with related events,
+  and investigate anomalies to prevent unauthorized access and maintain network security
+  integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4947
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4947\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY RuleName signature subject\n      \
+    \ status dest ProcessID\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_firewall_rule_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fe7efbf7-5f82-44b9-8c33-316189ab2393
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_firewall_rule_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

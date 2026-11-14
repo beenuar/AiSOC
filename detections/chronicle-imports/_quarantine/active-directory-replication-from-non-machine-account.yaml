@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-active-directory-replication-from-non-machine-account
+name: active_directory_replication_from_non_machine_account
+description: active_directory_replication_from_non_machine_account
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule active_directory_replication_from_non_machine_account {\n\
+    \ meta:\n    author = \"Roberto Rodriguez @Cyb3rWard0g\"\n    description = \"\
+    Detects potential abuse of Active Directory Replication Service (ADRS) from a\
+    \ non machine account to request credentials.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/jTwsuQPYgYcP\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/07/26\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"credential_access, t1003\"\n\n  events:\n(($selection.metadata.product_event_type\
+    \ = \"4662\" and $selection.target.process.access_mask = \"0x100\" and (re.regex($selection.target.process.file.file_metadata.pe.import_hash,\
+    \ `.*1131f6aa-9c07-11d1-f79f-00c04fc2dcd2.*`) or re.regex($selection.target.process.file.file_metadata.pe.import_hash,\
+    \ `.*1131f6ad-9c07-11d1-f79f-00c04fc2dcd2.*`) or re.regex($selection.target.process.file.file_metadata.pe.import_hash,\
+    \ `.*89e95b76-444d-4c62-991a-0facbeda640c.*`))) and not (re.regex($selection.principal.user.user_display_name,\
+    \ `.*$`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: active_directory_replication_from_non_machine_account
+provenance:
+  source: chronicle/detection-rules
+  source_id: active_directory_replication_from_non_machine_account
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/active_directory_security/windows/active_directory_replication_from_non_machine_account.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

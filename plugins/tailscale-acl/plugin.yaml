@@ -1,0 +1,25 @@
+id: tailscale-acl
+name: Tailscale ACL Action
+version: "1.0.0"
+plugin_type: action
+description: >
+  Tailscale ACL action plugin. Lists devices, retrieves the current tailnet
+  policy, suspends devices, and pushes ACL updates via the Tailscale API.
+  Useful as an isolation step in account-takeover and lateral-movement
+  playbooks.
+author: AiSOC Core Team
+tags: [network, tailscale, zerotrust, response, isolation]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/tailscale-acl
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tailnet, api_key]
+  properties:
+    tailnet:
+      type: string
+      description: "Tailnet name, e.g. example.com or alice@github"
+    api_key:
+      type: string
+      description: "Tailscale API key (tskey-api-...)"
+      secret: true

@@ -1,0 +1,46 @@
+id: splunk-security-content-e28b4fd4-8f5a-41cd-8222-2f1ccca53ef1
+name: Tomcat Session Deserialization Attempt
+description: This detection identifies potential exploitation of CVE-2025-24813 in
+  Apache Tomcat through the second stage of the attack. This phase occurs when an
+  attacker attempts to trigger deserialization of a previously uploaded malicious
+  session file by sending a GET request with a specially crafted JSESSIONID cookie.
+  These requests typically have specific characteristics, including a JSESSIONID cookie
+  with a leading dot that matches a previously uploaded filename, and typically result
+  in a HTTP 500 error when the exploitation succeeds.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1505.003
+  categories:
+  - application
+references:
+- https://lists.apache.org/thread/j5fkjv2k477os90nczf2v9l61fb0kkgq
+- https://nvd.nist.gov/vuln/detail/CVE-2025-24813
+- https://github.com/vulhub/vulhub/tree/master/tomcat/CVE-2025-24813
+- https://www.rapid7.com/db/vulnerabilities/apache-tomcat-cve-2025-24813/
+- https://gist.github.com/MHaggis/e106367f6649fbb09ab27e7b4a01cf73
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.http_method=GET\n    AND\n    Web.cookie=\"*JSESSIONID=.*\"\
+    \n    AND\n    Web.status=500\n  BY Web.src, Web.dest, Web.http_user_agent,\n\
+    \     Web.uri_path, Web.cookie, Web.status\n| `drop_dm_object_name(\"Web\")`\n\
+    | where match(cookie, \"^JSESSIONID=\\.\")\n| rex field=cookie \"JSESSIONID=\\\
+    .(?<cookie_path>[^;]+)\"\n| eval severity=\"High\"\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `tomcat_session_deserialization_attempt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e28b4fd4-8f5a-41cd-8222-2f1ccca53ef1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/tomcat_session_deserialization_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

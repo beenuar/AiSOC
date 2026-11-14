@@ -1,0 +1,49 @@
+id: splunk-security-content-4e12db1f-f7c7-486d-8152-a221cad6ac2b
+name: O365 New MFA Method Registered
+description: The following analytic detects the registration of a new Multi-Factor
+  Authentication (MFA) method for a user account within Office 365. It leverages O365
+  audit logs to identify changes in MFA configurations. This activity is significant
+  as it may indicate an attacker's attempt to maintain persistence on a compromised
+  account. If confirmed malicious, the attacker could bypass existing security measures,
+  solidify their access, and potentially escalate privileges or access sensitive data.
+  Immediate verification and remediation are required to secure the affected account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.005
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/005/
+- https://www.microsoft.com/en-us/security/blog/2023/06/08/detecting-and-mitigating-a-multi-stage-aitm-phishing-and-bec-campaign/
+- https://www.csoonline.com/article/573451/sophisticated-bec-scammers-bypass-microsoft-365-multi-factor-authentication.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity`\nWorkload=AzureActiveDirectory\nOperation=\"\
+    Update user.\"\n| eval propertyName = mvindex('ModifiedProperties{}.Name', 0)\n\
+    | search propertyName IN (\"StrongAuthenticationMethod\", \"StrongAuthenticationPhoneAppDetail\"\
+    )\n| eval oldvalue = mvindex('ModifiedProperties{}.OldValue',0)\n| eval newvalue\
+    \ = mvindex('ModifiedProperties{}.NewValue',0)\n| rex field=newvalue max_match=0\
+    \ \"(?i)(?<new_method_type>MethodType|DeviceName)\"\n| rex field=oldvalue max_match=0\
+    \ \"(?i)(?<old_method_type>MethodType|DeviceName)\"\n| eval count_new_method_type\
+    \ = coalesce(mvcount(new_method_type), 0)\n| eval count_old_method_type = coalesce(mvcount(old_method_type),\
+    \ 0)\n| where count_new_method_type > count_old_method_type\n| fillnull\n| stats\
+    \ earliest(_time) as firstTime\n        latest(_time) as lastTime\n        values(propertyName)\
+    \ as propertyName\n  by user newvalue oldvalue vendor_account\n     vendor_product\
+    \ dest signature src\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `o365_new_mfa_method_registered_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4e12db1f-f7c7-486d-8152-a221cad6ac2b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_new_mfa_method_registered.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

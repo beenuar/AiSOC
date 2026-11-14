@@ -1,0 +1,28 @@
+title: EHR Bulk PHI Export Exceeds Per-User Baseline
+id: aisoc-vt-hlth-0001-ehr-bulk-phi-export
+status: experimental
+description: |
+  An EHR user (Epic, Cerner, Meditech) exported patient records at a
+  volume above their personal 30-day baseline. Captures the classic
+  "snooping nurse" and disgruntled-clinician PHI theft scenarios that
+  drive most HIPAA breach notifications.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: ehr
+  service: audit
+tags:
+  - attack.t1530
+  - attack.collection
+  - aisoc.vertical.healthcare
+  - aisoc.compliance.hipaa
+detection:
+  selection:
+    event.module|in:
+      - 'epic.audit'
+      - 'cerner.audit'
+      - 'meditech.audit'
+    event.action: 'patient.export'
+  anomaly:
+    records.sigma|gte: 4.0
+  condition: selection and anomaly

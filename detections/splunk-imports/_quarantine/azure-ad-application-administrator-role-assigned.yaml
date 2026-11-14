@@ -1,0 +1,45 @@
+id: splunk-security-content-eac4de87-7a56-4538-a21b-277897af6d8d
+name: Azure AD Application Administrator Role Assigned
+description: The following analytic identifies the assignment of the Application Administrator
+  role to an Azure AD user. It leverages Azure Active Directory events, specifically
+  monitoring the "Add member to role" operation. This activity is significant because
+  users in this role can manage all aspects of enterprise applications, including
+  credentials, which can be used to impersonate application identities. If confirmed
+  malicious, an attacker could escalate privileges, manage application settings, and
+  potentially access sensitive resources by impersonating application identities,
+  posing a significant security risk to the Azure AD tenant.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://dirkjanm.io/azure-ad-privilege-escalation-application-admin/
+- https://posts.specterops.io/azure-privilege-escalation-via-service-principal-abuse-210ae2be2a5
+- https://docs.microsoft.com/en-us/azure/active-directory/roles/concept-understand-roles
+- https://attack.mitre.org/techniques/T1098/003/
+- https://learn.microsoft.com/en-us/azure/active-directory/roles/permissions-reference#application-administrator
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad`  operationName=\"Add member to role\"  \"properties.targetResources{}.modifiedProperties{}.newValue\"\
+    =\"*Application Administrator*\"\n  | rename properties.* as *\n  | rename initiatedBy.user.userPrincipalName\
+    \ as initiatedBy, userAgent as user_agent\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product initiatedBy\n       user_agent signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_application_administrator_role_assigned_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eac4de87-7a56-4538-a21b-277897af6d8d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_application_administrator_role_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

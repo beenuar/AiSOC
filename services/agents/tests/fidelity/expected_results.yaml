@@ -1,0 +1,127 @@
+# Fidelity benchmark — expected substrate-mode results.
+#
+# These thresholds gate the substrate harness in CI. They are NOT a
+# claim about live agent (wet) accuracy on these datasets — see
+# apps/docs/docs/benchmark-methodology.md (§3, "Substrate vs. wet eval")
+# for the distinction. Wet numbers are produced manually and copied into
+# apps/docs/docs/benchmark.md.
+#
+# Methodology:
+#  - Substrate mode = deterministic rule-based classifier from
+#    services/agents/tests/fidelity/runner.py. Same code path runs
+#    against the committed micro fixture in CI and against the full
+#    dataset locally (when downloaded via scripts/datasets/).
+#  - Macro F1 ignores label families with zero support so a single
+#    unrepresented family cannot dominate scoring.
+#  - Background flows in CTU-13 are excluded (per the dataset
+#    authors' protocol) before any score is computed.
+#
+# When a substrate threshold regresses, that means the loader (or
+# classifier rule) has been changed in a way that breaks fidelity on
+# a published, citable corpus. Investigate before merging.
+
+micro_fixture:
+  # services/agents/tests/eval_data/cicids_micro.csv (100 hand-picked
+  # synthetic flows, balanced across CICIDS-2017 label families).
+  dataset: cicids
+  mode: substrate
+  rows_scored_min: 100
+  accuracy_min: 0.85
+  macro_f1_min: 0.80
+  per_family_min:
+    benign: { recall: 0.85 }
+    port_scan: { recall: 0.85 }
+    ddos: { recall: 0.80 }
+    dos: { recall: 0.80 }
+    bot: { recall: 0.70 }
+    brute_force: { recall: 0.70 }
+    web_attack: { recall: 0.50 }
+
+cicids_full:
+  # Local-only: requires scripts/datasets/download_cicids.py to have
+  # populated datasets/cicids2017/. Numbers below are the substrate
+  # floor we publish in apps/docs/docs/benchmark.md and re-run before
+  # any release. Wet numbers, when available, are tracked separately
+  # in benchmark.md and never overwrite these substrate floors.
+  dataset: cicids
+  mode: substrate
+  notes: |
+    Floors observed locally on the eight CICIDS-2017 daily CSVs at
+    commit time. The CI harness does not run this — only the micro
+    fixture above runs on every PR.
+  rows_scored_min: 1000
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+ctu13_full:
+  # Local-only: requires scripts/datasets/download_ctu13.py to have
+  # populated datasets/ctu13/. Background flows excluded per the CTU
+  # protocol. Substrate-only.
+  dataset: ctu13
+  mode: substrate
+  notes: |
+    Substrate floors aggregated across all 13 binetflow scenarios
+    after dropping Background. Numbers are illustrative until the
+    next manual run; see benchmark-fidelity.md for the procedure.
+  rows_scored_min: 1000
+  accuracy_min: 0.55
+  macro_f1_min: 0.45
+
+ait_lds_micro:
+  # services/agents/tests/eval_data/ait_lds_micro/access.log
+  # 10 hand-picked Apache CLF lines spanning the four canonical
+  # families (benign / recon / web_attack / lateral). The companion
+  # labels.csv mirrors the AIT-LDS sidecar shape.
+  dataset: ait_lds
+  mode: substrate
+  rows_scored_min: 10
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+mitre_engenuity_micro:
+  # services/agents/tests/eval_data/mitre_engenuity_micro.json
+  # 10 hand-picked procedures spanning the five MITRE detection
+  # categories (none / telemetry / general / tactic / technique).
+  dataset: mitre_engenuity
+  mode: substrate
+  rows_scored_min: 10
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+ait_lds_full:
+  # Local-only: requires scripts/datasets/download_ait_lds.py to have
+  # populated datasets/ait-lds/. Until this commit there was no way to
+  # fetch the corpus at all, so the only AIT-LDS number anyone could
+  # produce came from the 10-line micro fixture above — which proves
+  # the loader parses and says nothing about the classifier at scale.
+  dataset: ait_lds
+  mode: substrate
+  notes: |
+    UNMEASURED. These are the floors the harness will enforce once
+    somebody runs the full corpus; they are deliberately set at the
+    micro-fixture level rather than guessed higher, because a floor
+    invented above an unmeasured result is a gate that fails on first
+    contact and gets lowered rather than investigated.
+
+    Whoever runs it first should replace these with the observed
+    numbers and drop this note in the same PR.
+  measured: false
+  rows_scored_min: 1000
+  accuracy_min: 0.70
+  macro_f1_min: 0.55
+
+mitre_engenuity_full:
+  # Local-only: requires scripts/datasets/download_mitre_engenuity.py.
+  # Same history as ait_lds_full — a loader that could read the full
+  # round data and no way to obtain it.
+  dataset: mitre_engenuity
+  mode: substrate
+  notes: |
+    UNMEASURED, and carries an additional constraint the other
+    datasets do not: MITRE Engenuity states explicitly that its
+    evaluations do not rank vendors. Any number published from this
+    must carry that caveat, or it misrepresents the source.
+  measured: false
+  rows_scored_min: 500
+  accuracy_min: 0.70
+  macro_f1_min: 0.55

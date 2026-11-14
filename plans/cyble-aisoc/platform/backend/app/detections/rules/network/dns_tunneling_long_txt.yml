@@ -1,0 +1,25 @@
+title: DNS Tunneling via Long TXT Queries
+id: aisoc-id-nw-0001-dns-tunnel
+status: stable
+description: |
+  Unusually long DNS TXT queries to a single domain — classic
+  signature of DNS-tunneling C2 frameworks (dnscat2, iodine).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: dns
+tags:
+  - attack.t1071.004
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.protocol: 'dns'
+    dns.question.type: 'TXT'
+  long_query:
+    dns.question.name|re: '^[A-Za-z0-9\-]{40,}\..+'
+  high_volume:
+    enrich.dns.queries_per_domain_5m|gte: 50
+  condition: selection and long_query and high_volume

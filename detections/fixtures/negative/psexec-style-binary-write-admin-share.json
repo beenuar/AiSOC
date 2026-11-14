@@ -1,0 +1,6 @@
+{
+  "event_type": "FileCreate",
+  "file_path": "C:\\Users\\user\\Documents\\report.docx",
+  "host": "wks-001",
+  "image_basename_creator": "winword.exe"
+}

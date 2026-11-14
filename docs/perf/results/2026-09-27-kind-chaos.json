@@ -1,0 +1,27 @@
+{
+  "schema": "aisoc.chaos_fusion_restart/v1",
+  "measured_at": "2026-09-27T14:21:46+00:00",
+  "deployment": "kubernetes",
+  "run_id": "c90518825",
+  "replica_killed": "aisoc-alert-fusion-8dcff55cd-p8rm9",
+  "replicas_before": [
+    "aisoc-alert-fusion-8dcff55cd-p8rm9",
+    "aisoc-alert-fusion-8dcff55cd-sg4gm"
+  ],
+  "replicas_after": [
+    "aisoc-alert-fusion-8dcff55cd-dg6k9",
+    "aisoc-alert-fusion-8dcff55cd-sg4gm"
+  ],
+  "replica_replaced": true,
+  "killed_at_offset_seconds": 24.3,
+  "alerts_stored_when_killed": 1840,
+  "drain_seconds": 5.4,
+  "accepted_events": 6000,
+  "alert_rows": 6000,
+  "distinct_events_alerted": 6000,
+  "missing_count": 0,
+  "duplicate_count": 0,
+  "missing_sample": [],
+  "duplicated_sample": [],
+  "verdict": "no loss, no duplicates"
+}

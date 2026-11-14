@@ -1,0 +1,33 @@
+title: Executive Impersonation Email Fails DMARC/SPF
+id: aisoc-id-em-0007-exec-impersonation
+status: stable
+description: |
+  Inbound email claiming to come from a known executive's display
+  name fails DMARC or SPF authentication. Hallmark of CEO-fraud /
+  payroll-redirect attacks.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: email_gateway
+  service: messagetrace
+tags:
+  - attack.t1566.002
+  - attack.initial_access
+  - aisoc.email
+detection:
+  selection:
+    event.category: 'email'
+    email.direction: 'inbound'
+  exec_display:
+    enrich.email.from_matches_executive: true
+  auth_fail:
+    email.auth.dmarc:
+      - 'fail'
+      - 'softfail'
+      - 'none'
+  spf_fail:
+    email.auth.spf:
+      - 'fail'
+      - 'softfail'
+      - 'neutral'
+  condition: selection and exec_display and (auth_fail or spf_fail)

@@ -1,0 +1,44 @@
+id: splunk-security-content-2a9b80d3-6340-4345-b5ad-290bf3d0dac4
+name: Detect New Open S3 buckets
+description: The following analytic identifies the creation of open/public S3 buckets
+  in AWS. It detects this activity by analyzing AWS CloudTrail events for `PutBucketAcl`
+  actions where the access control list (ACL) grants permissions to all users or authenticated
+  users. This activity is significant because open S3 buckets can expose sensitive
+  data to unauthorized access, leading to data breaches. If confirmed malicious, an
+  attacker could read, write, or fully control the contents of the bucket, potentially
+  leading to data exfiltration or tampering.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1530
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventSource=s3.amazonaws.com eventName=PutBucketAcl\n\
+    \  | rex field=_raw \"(?<json_field>{.+})\"\n  | spath input=json_field output=grantees\
+    \ path=requestParameters.AccessControlPolicy.AccessControlList.Grant{}\n  | search\
+    \ grantees=*\n  | mvexpand grantees\n  | spath input=grantees output=uri path=Grantee.URI\n\
+    \  | spath input=grantees output=permission path=Permission\n  | search uri IN\
+    \ (\"http://acs.amazonaws.com/groups/global/AllUsers\",\"http://acs.amazonaws.com/groups/global/AuthenticatedUsers\"\
+    )\n  | search permission IN (\"READ\",\"READ_ACP\",\"WRITE\",\"WRITE_ACP\",\"\
+    FULL_CONTROL\")\n  | rename requestParameters.bucketName AS bucketName\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY user_arn userIdentity.principalId\
+    \ userAgent\n       uri permission bucketName\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `detect_new_open_s3_buckets_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a9b80d3-6340-4345-b5ad-290bf3d0dac4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_new_open_s3_buckets.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,4 @@
+{
+  "operation": "Set-RetentionCompliancePolicy",
+  "actor": "admin@corp.com"
+}

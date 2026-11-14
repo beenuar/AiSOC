@@ -1,0 +1,28 @@
+title: Regsvr32 Squiblydoo Remote SCT Execution
+id: aisoc-id-ep-0023-squiblydoo
+status: stable
+description: |
+  regsvr32.exe invoked with /s /n /u /i: and a remote URL —
+  the "Squiblydoo" technique to download and execute SCT payloads
+  while bypassing application whitelisting.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1218.010
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'regsvr32.exe'
+  remote:
+    process.command_line|re: '(?i)/i:https?://'
+  silent:
+    process.command_line|contains:
+      - ' /s'
+      - ' /u'
+  condition: selection and remote and silent

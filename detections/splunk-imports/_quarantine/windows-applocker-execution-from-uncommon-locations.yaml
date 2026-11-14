@@ -1,0 +1,43 @@
+id: splunk-security-content-d57ce957-151a-4aec-ada5-5fb1eb555b6b
+name: Windows AppLocker Execution from Uncommon Locations
+description: The following analytic identifies the execution of applications or scripts
+  from uncommon or suspicious file paths, potentially indicating malware or unauthorized
+  activity. It leverages Windows AppLocker event logs and uses statistical analysis
+  to detect anomalies. By calculating the average and standard deviation of execution
+  counts per file path, it flags paths with execution counts significantly higher
+  than expected. This behavior is significant as it can uncover malicious activities
+  or policy violations. If confirmed malicious, this activity could allow attackers
+  to execute unauthorized code, leading to potential system compromise or data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/querying-application-control-events-centrally-using-advanced-hunting
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/using-event-viewer-with-applocker
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`applocker`\n  | spath input=UserData_Xml\n  | rename RuleAndFileData.*\
+    \ as *, Computer as dest, TargetUser AS user\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest, PolicyName, RuleId,\n       user, TargetProcessId,\
+    \ FilePath,\n       FullFilePath\n  | eventstats avg(count) as avg, stdev(count)\
+    \ as stdev\n  | eval upperBound=(avg+stdev*2), anomaly=if(count > upperBound,\
+    \ \"Yes\", \"No\")\n  | where anomaly=\"Yes\"\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_applocker_execution_from_uncommon_locations_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d57ce957-151a-4aec-ada5-5fb1eb555b6b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_applocker_execution_from_uncommon_locations.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

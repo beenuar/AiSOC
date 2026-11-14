@@ -1,0 +1,45 @@
+id: splunk-security-content-ac59298a-8d81-4c02-8c9b-ffdac993891f
+name: Windows Modify Registry ValleyRAT C2 Config
+description: The following analytic detects modifications to theregistry related to
+  ValleyRAT C2 configuration. Specifically,  it monitors changes in registry keys
+  where ValleyRAT saves the IP address and port information of its command-and-control
+  (C2) server. This activity is a key indicator of ValleyRAT attempting to establish
+  persistent communication with its C2 infrastructure. By identifying these unauthorized
+  registry modifications, security analysts can quickly detect malicious configurations
+  and investigate the associated threats. Early detection of these changes helps prevent
+  further exploitation and limits the malware’s ability to exfiltrate data or control
+  infected systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.proofpoint.com/us/blog/threat-insight/chinese-malware-appears-earnest-across-cybercrime-threat-landscape
+- https://www.fortinet.com/blog/threat-research/valleyrat-campaign-targeting-chinese-speakers
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    WHERE (Registry.registry_path= "*\\Console\\IpDateInfo" AND Registry.registry_value_data="Binary
+    Data") OR (Registry.registry_path= "*\\Console\\SelfPath" AND Registry.registry_value_data="*.exe")
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_valleyrat_c2_config_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ac59298a-8d81-4c02-8c9b-ffdac993891f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_valleyrat_c2_config.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

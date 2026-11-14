@@ -1,0 +1,252 @@
+---
+sidebar_position: 1
+title: Funnel KPIs and pipeline health
+description: How AiSOC turns raw telemetry into a six-tile operations funnel, an efficiency report, and a five-stage pipeline-health rail on the dashboard — backed by /metrics/funnel and /health/pipeline.
+---
+
+# Funnel KPIs and pipeline health
+
+Tier-1 SOC consoles open on the same picture: a row of funnel tiles that says how much signal made it into the analyst's queue, an efficiency report that says how well the pipeline converted raw events into alerts, and a per-stage health rail that says where the next outage will come from. v1.5 brings that picture to AiSOC's `/dashboard` without breaking the existing flat per-page layout.
+
+This page documents the three widgets, their data sources, and the endpoints they call.
+
+## Where the widgets sit
+
+The new `funnel-kpis` and `efficiency-and-pipeline` widgets render at the top of `/dashboard`, above the existing top-metrics row. Both are drag-and-drop reorderable; their order persists in `localStorage` under `aisoc:dashboard-widget-order` (the dashboard auto-migrates older saved orders to include the new widgets).
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Welcome                                                             │
+├──────────────────────────────────────────────────────────────────────┤
+│  Operations Funnel  ─ 6 tiles                                        │
+│  Events of Interest  · Correlation Inst.  · Alerts Generated         │
+│  Signal / Noise      · MTTD               · Analyst Queue            │
+├──────────────────────────────────────────────────┬───────────────────┤
+│  Efficiency Report                               │  Pipeline Health  │
+│  Correlation efficiency                          │  Ingest           │
+│  Alert yield                                     │  Normalize        │
+│  MITRE coverage                                  │  Fuse             │
+│                                                  │  Correlate        │
+│                                                  │  Alert            │
+└──────────────────────────────────────────────────┴───────────────────┘
+```
+
+## `FunnelKpiBar` — six tiles, one period
+
+The bar renders six tiles in fixed order. Each tile carries an absolute value and, where the API returns one, a period-over-period delta:
+
+| Tile | Value | Delta direction |
+|---|---|---|
+| Events of Interest | normalized events in window | up is good |
+| Correlation Instances | fired correlations in window | up is good |
+| Alerts Generated | alerts created in window | up is good |
+| Signal / Noise | `1 − (FP / dispositioned alerts)` | up is good |
+| MTTD | mean `created_at → first_seen_at` across alerts in window | **down is good** |
+| Analyst Queue | active alerts in `new`/`triaging`/`in_progress` | **down is good** |
+
+Delta direction matters because the same percent change has the opposite meaning on MTTD or Queue: a +20% Analyst Queue is bad, a +20% Alerts Generated is good. The component encodes this so the green/red coloring is correct without the operator having to think about it.
+
+Loading and error states are deliberately quiet:
+
+- **Loading** — six skeleton tiles with the same labels and shape as the loaded view, so the layout never jumps.
+- **Error** — a single "Funnel metrics unavailable" line replaces the tiles; the rest of the dashboard keeps rendering. `useSWR` is configured with `shouldRetryOnError: false` so a 5xx doesn't melt the API.
+
+## `EfficiencyReport` — how well the pipeline converts
+
+Three bars, all clamped to `[0, 1]` so the visualization never overflows:
+
+1. **Correlation efficiency** = `alerts / correlation_instances`. Clamped to `1.0`. Tells you how much of your correlation work turned into an actual alert.
+2. **Alert yield** = `alerts / events_of_interest`. Always tiny — `0.00208` is healthy. Tells you what fraction of raw signal made it to an analyst.
+3. **MITRE coverage** = `covered / total`. Surfaces "42 / 201 · 20.9%" — the count of distinct MITRE tactic + technique IDs (`Txxxx` and `TAxxxx`) referenced by detection rules with at least one alert in the window, divided by the configured total (see [Tunables](#tunables)).
+
+The `EfficiencyReport` and `FunnelKpiBar` deliberately share an SWR cache key (`funnel-metrics:<period>`) so both widgets de-dupe on a single call to `GET /api/v1/metrics/funnel`.
+
+### The period comes from the global selector
+
+The window selector in the console header drives these tiles, and
+`/metrics/dashboard` and `/metrics/soc` alongside them. It used to drive
+nothing: `useTimeWindow()` had no data-fetching consumers at all, the
+dashboard's SWR key was a constant string, and `period="24h"` was hardcoded
+into both widgets — so changing the window re-rendered a header and refetched
+nothing.
+
+The window is part of the cache key, which is the half that is easy to miss:
+passing the period to the fetcher alone is not enough, because SWR serves one
+entry per key and a constant key means every window shares one cached answer.
+
+The SOC Insights page has no 1-hour window, so a global `1h` is clamped to
+`24h` **and the clamp is shown**. Rendering a day of data under a header
+reading "1h" would be a quietly wrong number, which is worse than a note
+saying what happened.
+
+## `PipelineHealth` — five stages, four statuses
+
+The rail mirrors the data path end-to-end:
+
+```
+Ingest → Normalize → Fuse → Correlate → Alert
+```
+
+Each stage card shows:
+
+- **Backlog** — queued items waiting for the stage. Sourced from connector-level backlog counters for `ingest`/`normalize` and from `alert`-table row counts in `new`/`pending` for `alert`.
+- **p95 latency (ms)** — derived from existing alert timestamp fields (`created_at`, `first_seen_at`, `fused_at`, etc.) so we don't need a separate metrics store. Stages without a meaningful latency signal report `0`.
+- **Error rate** — fraction of failed runs in the window. Sourced from `Connector.last_error_at` / `last_success_at` counters and aggregated.
+- **Status** — `unknown | green | yellow | red`, derived from the same `compute_freshness` service that powers the existing connector health page (`services/api/app/services/connector_freshness.py`) plus per-stage staleness thresholds. The top-of-rail badge reports the worst stage status.
+
+`refreshInterval` is 30 s for pipeline health and 60 s for the funnel — fast enough to spot a fuse-stage backlog spike, slow enough not to pound the API.
+
+## Endpoints
+
+### `GET /api/v1/metrics/funnel`
+
+```
+GET /api/v1/metrics/funnel?period=1h|24h|7d|30d
+```
+
+Returns:
+
+```json
+{
+  "period": "24h",
+  "events_of_interest": 94612,
+  "correlation_instances": 73515,
+  "alerts_generated": 153,
+  "signal_to_noise": 0.864,
+  "signal_to_noise_sample_count": 118,
+  "mttd_seconds": 252,
+  "mttd_sample_count": 96,
+  "analyst_queue_depth": 27,
+  "correlation_efficiency": 0.777,
+  "alert_yield": 0.00208,
+  "mitre_coverage": { "covered": 71, "total": 100, "ratio": 0.71 },
+  "repeat_alerts_suppressed": 18,
+  "repeat_suppression_rate": 0.105,
+  "triaged_alerts": 153,
+  "abstentions": 9,
+  "abstention_rate": 0.0588,
+  "ungrounded_demotions": 4,
+  "mean_groundedness": 0.9124,
+  "scored_verdicts": 144,
+  "deltas": {
+    "events_of_interest": 0.037,
+    "correlation_instances": 0.012,
+    "alerts_generated": -0.04,
+    "signal_to_noise": 0.005,
+    "mttd_seconds": -0.18,
+    "analyst_queue_depth": 0.20
+  },
+  "generated_at": "2026-05-13T10:00:00Z"
+}
+```
+
+#### Denominators
+
+A ratio over an empty denominator and a mean over no rows are both
+*undefined*, and both used to publish `0.0` here. The console rendered
+"Signal / Noise 0%" and "MTTD 0s" on a tenant where nobody had dispositioned
+or acknowledged anything — directly above a SOC Performance card correctly
+reading "MTTD — not measured · no closures in 7d".
+
+The two values stay `0.0` on the wire, because making them nullable is a
+breaking change for every generated client. The denominator travels beside
+each one instead, which is the same decision `/metrics/soc` took with
+`mttd_sample_count`. **Read them as a pair.**
+
+| Field | Meaning | What a bad value looks like |
+|-------|---------|------------------------------|
+| `signal_to_noise_sample_count` | Alerts in the window with a *decided* verdict — the denominator `signal_to_noise` divided by. Abstentions (`needs_review`) are excluded: scoring an agent on questions it refused to answer is not an accuracy figure. | Zero. The ratio above it is then not 0%, it is unmeasured, and the console renders "not measured". A count far below `triaged_alerts` means most verdicts were abstentions. |
+| `mttd_sample_count` | Alerts in the window that have been acknowledged, i.e. that have a `first_seen_at` — the rows `mttd_seconds` averaged. | Zero, which is the ordinary state on a fresh deployment: nothing in the pipeline writes `first_seen_at`, and its only writers are analyst actions. A zero here means nobody has opened an alert, not that detection is instantaneous. |
+
+#### Suppression and triage-quality fields
+
+Eight fields shipped in v7.7 and v8.0 and were absent from this page, which
+matters more than a documentation gap usually does: they are the fields that
+say whether the automation is working *honestly*, and a number nobody
+documents is a number nobody checks.
+
+| Field | Meaning | What a bad value looks like |
+|-------|---------|------------------------------|
+| `repeat_alerts_suppressed` | Alerts auto-resolved because an identical signature already had a trusted benign or false-positive disposition. | Flat zero. That is the value this reported for the whole of v7.7, because the evidence fingerprint included the alert id so no two alerts ever matched. A zero here means the mechanism is not firing, not that there are no repeats. |
+| `repeat_suppression_rate` | `repeat_alerts_suppressed / alerts_generated`. | Climbing past roughly 0.4 without a corresponding drop in queue depth suggests a prior is being trusted too broadly. |
+| `triaged_alerts` | Alerts the auto-triage worker reached a verdict on in the window. | Materially below `alerts_generated` means the worker is behind, or the tenant is at its plan's triage cap — which fails quietly, so this is where it shows. |
+| `abstentions` | Verdicts where the agent declined to conclude. | Zero. An agent that never abstains is guessing on the cases it cannot decide, and those are the cases that matter. |
+| `abstention_rate` | `abstentions / triaged_alerts`. | Above roughly 0.3 usually means missing context rather than a cautious model — check whether a connector stopped polling. |
+| `ungrounded_demotions` | Verdicts demoted to human review because they cited indicators the evidence did not contain. | Rising sharply is a model or prompt regression. Persistent zero alongside a low `scored_verdicts` means the check is not running, not that nothing is ungrounded. |
+| `mean_groundedness` | Mean fraction of cited indicators that appear in the evidence, across scored verdicts. `null` when nothing was scored. | Below ~0.8 means a meaningful share of reasoning rests on indicators that were not in the evidence. |
+| `scored_verdicts` | How many verdicts groundedness was computed for. | The denominator for the two fields above. If it is far below `triaged_alerts`, most verdicts are unscored and `mean_groundedness` describes a minority. |
+
+`mean_groundedness` is deliberately nullable rather than defaulting to `0.0`
+or `1.0`. Both defaults are a claim: zero says every verdict was ungrounded,
+one says every verdict was perfect, and the truth is that none were measured.
+
+Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
+
+- Tenant-scoped via `AuthUser`; every query joins on `tenant_id` or — for ClickHouse — passes through `services/api/app/services/lake_sql.py:rewrite_for_tenant` which uses `sqlglot` to enforce the tenant clause before the query reaches the lake.
+- `events_of_interest` reads from ClickHouse `aisoc.raw_events` when the lake is enabled, with a Postgres-only fallback (alerts table count) for air-gapped deployments where `AISOC_DISABLE_CLICKHOUSE=1`.
+- `mttd_seconds` reuses the exact same `AVG(EXTRACT EPOCH FROM (created_at - first_seen_at))` expression as the existing SOC metrics endpoint so the two never disagree.
+- `signal_to_noise` is true positives over alerts with a **decided** verdict (`true_positive`, `benign_true_positive`, `false_positive`, `benign`, `duplicate`). `needs_review` is the agent declining to decide and is in neither half. The predicate is `app/services/alert_disposition.py`'s, shared with `/metrics/soc` and `/dashboards/soc-insights`, which each used to ask this question with a different filter and get a different answer. Returns `0.0` with a `signal_to_noise_sample_count` of 0 when nothing has been decided — that pair means unmeasured, not zero.
+- **Deltas are signed percentages, not fractions: `5.0` means +5%.** `_pct_delta` multiplies by 100 and rounds to two decimals before returning, so a run that fell from 160 events to 10 sends `-93.75`. This page said the opposite for several releases and the console believed it, multiplying by 100 a second time and rendering `-9375%` on the first tile of the dashboard. Scale comes from the contract, never the magnitude — a real +1% delta and a fraction of `1.0` are the same number, so "it looks small, it must be a fraction" is a guess that is right until it is catastrophically not.
+- A delta of exactly `0.0` means **no meaningful baseline** (the previous window was empty), not "no change". The previous-period window is the same duration immediately before the current one.
+- `deltas` covers the six tiles only. The suppression and triage-quality fields have no delta, because a period-over-period change in, say, `mean_groundedness` reads as a trend when it is usually a change in which alerts happened to arrive.
+- The field list on this page is gated: `scripts/check_funnel_contract.py` compares it against the keys the endpoint actually returns, so a field cannot ship undocumented again.
+
+### `GET /api/v1/health/pipeline`
+
+```
+GET /api/v1/health/pipeline
+```
+
+Returns:
+
+```json
+{
+  "overall_status": "yellow",
+  "stages": [
+    {"stage": "ingest",    "backlog":  0, "p95_latency_ms":  120, "error_rate": 0,    "status": "green"},
+    {"stage": "normalize", "backlog":  5, "p95_latency_ms":  200, "error_rate": 0.01, "status": "green"},
+    {"stage": "fuse",      "backlog": 42, "p95_latency_ms": 1800, "error_rate": 0.03, "status": "yellow"},
+    {"stage": "correlate", "backlog": 12, "p95_latency_ms":  600, "error_rate": 0,    "status": "green"},
+    {"stage": "alert",     "backlog":  3, "p95_latency_ms":  300, "error_rate": 0,    "status": "green"}
+  ],
+  "generated_at": "2026-05-13T10:00:00Z"
+}
+```
+
+`overall_status` is the worst per-stage status (`red > yellow > green > unknown`) and drives the colored badge at the top of the rail.
+
+## Tunables
+
+Configuration lives in `services/api/app/core/config.py`:
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `AISOC_FUNNEL_MITRE_TOTAL` | `201` | Denominator for MITRE coverage. Set to your active framework's technique count (e.g. ATT&CK Enterprise v15 = 201). The numerator is computed live from rules with at least one alert in window. |
+| `AISOC_PIPELINE_STALE_WARN_SECONDS` | `300` | Per-stage staleness threshold below which a stage stays `green`. Above this, the stage flips to `yellow`. |
+| `AISOC_PIPELINE_STALE_DOWN_SECONDS` | `900` | Per-stage staleness threshold above which a stage flips to `red`. |
+
+All three are env-driven and tenant-uniform (deliberately — the picture of "is my pipeline healthy" should not vary per tenant).
+
+## Why this shape
+
+A few design choices are worth calling out:
+
+1. **One endpoint, two widgets.** `FunnelKpiBar` and `EfficiencyReport` are split for layout reasons, not data-fetching reasons. Sharing the SWR key means the dashboard makes one network call for both. If we ever need to refresh the efficiency report independently, the cache key would split.
+2. **No mock data, anywhere.** The previous `34%` SNR in `NoiseTuningView` was the only mocked KPI left in v1.4. It now reads from this endpoint and falls back to a deterministic local computation only when the API is unreachable — never to a fixed constant.
+3. **Stages, not connectors.** The reference SOC console renders pipeline health per-stage, not per-connector, because operators want to know "is fusion behind?" — not "which of 91 connectors is having a bad day." The connector health page (`/health`) still exists for the per-connector drill-down.
+4. **Worst-status badge.** The top-of-rail status is intentionally pessimistic. A single red stage flips the rail to red, because in SOC operations the worst link defines the chain.
+
+## Operator playbook
+
+| Symptom | Likely cause | First check |
+|---|---|---|
+| MTTD tile is red and rising | Triage queue is backlogged, or alerts are firing without `first_seen_at` getting written | Open `/queue` and look at oldest unclaimed; verify the alert worker is running |
+| Signal / Noise dropping below `0.5` | Recent rule change is over-firing | `/detection/tuning` to find the noisiest rule |
+| Fuse stage in yellow with high backlog | Correlation rule is slow or unbounded | Inspect last fusion logs; check rule windowing |
+| All stages `unknown` | No connectors have polled in `> AISOC_PIPELINE_STALE_DOWN_SECONDS` | Likely a deployment issue, not a data issue — check the connector scheduler |
+
+## Related
+
+- [Connector health and schema-drift sentinel](../features/connector-health.md) — the per-connector drill-down behind the ingest stage.
+- [Credentials vault](../operations/credentials.md) — how connector credentials are encrypted at rest.
+- [Architecture](../architecture.md) — the full data-flow diagram these widgets render against.

@@ -1,0 +1,39 @@
+title: Inbox Rule Designed to Hide Reply or Security Alerts
+id: aisoc-id-em-0002-hide-evidence
+status: stable
+description: |
+  Inbox rule moves messages containing words like 'invoice', 'wire',
+  'phishing', or 'security alert' to Deleted Items / RSS Feeds / Junk.
+  Strong indicator of BEC actor hiding their tracks from the victim.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: m365
+  service: exchange
+tags:
+  - attack.t1564.008
+  - attack.defense_evasion
+  - aisoc.email
+detection:
+  selection:
+    event.module: m365
+    email.operation|contains:
+      - 'New-InboxRule'
+      - 'Set-InboxRule'
+  hides_to_junk:
+    email.rule.move_to_folder|contains:
+      - 'Deleted Items'
+      - 'RSS Feeds'
+      - 'RSS Subscriptions'
+      - 'Junk'
+      - 'Archive'
+  suspicious_keywords:
+    email.rule.subject_contains|contains:
+      - 'invoice'
+      - 'wire'
+      - 'payment'
+      - 'phishing'
+      - 'security alert'
+      - 'mfa'
+      - 'compromised'
+  condition: selection and (hides_to_junk or suspicious_keywords)

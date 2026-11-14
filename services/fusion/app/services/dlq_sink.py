@@ -1,0 +1,178 @@
+"""A dead-letter queue an operator can actually read.
+
+Three DLQ implementations existed and none of them could answer the
+question a DLQ exists for. `LoggingDLQ` writes a log line, which is
+findable only if you already know to look. `KafkaDLQ` writes to
+`aisoc.alerts.dlq`, which has no consumer. `InMemoryDLQ` forgets on
+restart.
+
+So events were being dropped correctly and invisibly — and an invisible
+drop is indistinguishable from an event that never arrived, which is the
+worse of the two possibilities and the one nobody investigates.
+
+This persists them. Two properties matter more than the writing:
+
+**A DLQ that fails must not take the pipeline with it.** The whole point
+of routing a poison message aside is to keep consuming; if recording that
+decision can raise, the DLQ becomes a second way for one bad event to stop
+everything. Every failure here is logged and turned into ``False`` rather
+than raised, which is the one place in this codebase where swallowing is the
+correct behaviour.
+
+``False`` is not the same as "nothing to see": it tells the caller the
+capture did not happen, so the consumer can hold the Kafka offset instead of
+committing a message that exists nowhere durable.
+
+**The payload is truncated, never stored whole.** It is untrusted by
+definition — it is the thing the pipeline refused — and may be large or
+hostile. Storing all of it makes this table an unbounded sink for exactly
+the content that was rejected.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+
+import asyncpg
+import structlog
+
+from app.services.dlq import DeadLetter, DeadLetterQueue
+
+logger = structlog.get_logger(__name__)
+
+#: Characters of payload kept. Enough to recognise the shape and find the
+#: producer; far short of enough to reconstruct the event, which is
+#: deliberate — this is a triage record, not a replay buffer.
+MAX_EXCERPT = 2000
+
+_INSERT_SQL = """
+INSERT INTO aisoc_dead_letters
+    (tenant_id, topic, reason, schema_version, payload_excerpt, source_event_id,
+     topic_partition, kafka_offset)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+"""
+
+
+class PostgresDLQ(DeadLetterQueue):
+    """Persist rejected messages so they can be triaged.
+
+    Takes a provider rather than a pool, because the connection pool is
+    opened during worker startup — after this is constructed. Capturing it
+    eagerly would capture ``None`` and silently drop every dead letter,
+    which is the failure this class exists to end.
+
+    A provider *always*, never "a pool or a provider": telling the two
+    apart with ``callable()`` is wrong for anything with ``__call__``,
+    which includes every mock, and a constructor whose behaviour depends
+    on duck-typing its own argument is one that fails differently in
+    tests than in production. Callers with a concrete pool pass
+    ``lambda: pool``.
+    """
+
+    #: A committed INSERT is durable storage; ``False`` from `record` is not.
+    durable = True
+
+    def __init__(
+        self,
+        pool_provider: Callable[[], asyncpg.Pool | None],
+        *,
+        ensure_pool: Callable[[], Awaitable[asyncpg.Pool | None]] | None = None,
+        invalidate_pool: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        self._pool_provider = pool_provider
+        # The DLQ shares the alert sink's pool. When that pool has been
+        # invalidated, nothing rebuilds it during a recovery hold — no alert is
+        # being persisted, which is the only other caller of `ensure_pool`. The
+        # callbacks let the hold actually end once Postgres returns instead of
+        # waiting for a restart.
+        self._ensure_pool = ensure_pool
+        self._invalidate_pool = invalidate_pool
+
+    async def _pool_now(self) -> asyncpg.Pool | None:
+        pool = self._pool_provider()
+        if pool is None and self._ensure_pool is not None:
+            pool = await self._ensure_pool()
+        return pool
+
+    async def record(self, letter: DeadLetter) -> bool:
+        excerpt = (letter.payload_excerpt or "")[:MAX_EXCERPT]
+        tenant_id = _as_uuid(letter.tenant_id)
+
+        pool = await self._pool_now()
+        if pool is None:
+            # The sink never opened, so there is nowhere to write. Logged
+            # at warning rather than silently skipped: a DLQ that records
+            # nothing looks exactly like a pipeline dropping nothing.
+            #
+            # Returning False is what tells the consumer this capture did not
+            # happen, so it holds the offset instead of committing a message
+            # that now exists nowhere durable.
+            logger.warning(
+                "dlq.no_pool",
+                topic=letter.topic,
+                reason=letter.reason,
+            )
+            return False
+
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    _INSERT_SQL,
+                    tenant_id,
+                    letter.topic,
+                    letter.reason,
+                    letter.schema_version,
+                    excerpt,
+                    letter.source_event_id,
+                    # Nullable, and left null rather than guessed when the
+                    # refusal came from a path with no Kafka record behind it
+                    # — a fabricated offset replays somebody else's message.
+                    letter.partition,
+                    letter.offset,
+                )
+        except Exception as exc:  # noqa: BLE001 - see the module docstring
+            # Losing the record of a dropped event is bad. Stopping the
+            # consumer because we could not record it is worse: one poison
+            # message would then halt the pipeline, which is precisely the
+            # outcome the DLQ exists to prevent.
+            #
+            # Drop a pool that just failed so the next attempt can rebuild it;
+            # without this a stale handle makes every retry fail the same way.
+            if self._invalidate_pool is not None:
+                try:
+                    await self._invalidate_pool()
+                except Exception as invalidate_exc:  # noqa: BLE001
+                    logger.debug("dlq.pool_invalidate_failed", error=str(invalidate_exc))
+            logger.warning(
+                "dlq.persist_failed",
+                topic=letter.topic,
+                reason=letter.reason,
+                error=str(exc),
+            )
+            return False
+
+        logger.info(
+            "dlq.recorded",
+            topic=letter.topic,
+            reason=letter.reason,
+            tenant_id=letter.tenant_id,
+        )
+        return True
+
+
+def _as_uuid(value: str | None):
+    """Parse a tenant id, or None.
+
+    A malformed envelope can carry a tenant field that is not a uuid.
+    Rejecting the whole record over it would lose the dead letter entirely
+    — and the dead letter is the evidence that something is producing
+    malformed envelopes.
+    """
+    if not value:
+        return None
+    import uuid  # noqa: PLC0415 - only needed on the failure path
+
+    try:
+        return uuid.UUID(str(value))
+    except (ValueError, AttributeError, TypeError):
+        return None

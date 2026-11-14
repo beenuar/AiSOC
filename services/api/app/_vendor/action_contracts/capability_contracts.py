@@ -1,0 +1,1372 @@
+"""Contract per capability, not per vendor.
+
+What an action does to an estate is a property of the verb. Isolating a host
+is equally disruptive on CrowdStrike, Defender and SentinelOne, so declaring
+it three times invites the three to drift — and the one that drifts low is
+the one that auto-executes.
+
+Adding a vendor for an existing verb therefore inherits the classification
+automatically. Adding a *new verb* requires an entry here, which the
+conformance gate enforces, so a capability cannot reach dispatch without
+somebody having decided what it does when the finding is wrong.
+
+The classifications below are deliberately conservative. The cost of an
+unnecessary approval is a few minutes of analyst time. The cost of a wrong
+autonomous containment is an outage plus the organisational trust needed to
+ever enable autonomy again, and that second one does not come back.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from .contract import ActionImpact, ApprovalRequirement, Reversal
+
+
+@dataclass(frozen=True)
+class CapabilityContract:
+    impact: ActionImpact
+    approval: ApprovalRequirement
+    reversal: Reversal
+    required_permission: str
+    reverse_capability: str = ""
+    has_verification_probe: bool = False
+    verification_gap: str = ""
+    note: str = ""
+
+
+_READ = "actions:read"
+_CONTAIN = "actions:contain"
+#: Reading a vendor is not containment and should not require the
+#: permission that isolates a host — bundling them means anyone who
+#: can look can also act.
+_INVESTIGATE = "actions:investigate"
+_IDENTITY = "actions:identity"
+_NETWORK = "actions:network"
+_TICKET = "actions:ticket"
+
+CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
+    # ── Read-only ──────────────────────────────────────────────────────────
+    # ── Read-only investigation verbs ───────────────────────────────────
+    #
+    # Twenty-nine executors could change the estate and exactly one could
+    # ask it a question. That shapes an agent: with no way to read a
+    # vendor, an investigation can only reach the lake, and anything the
+    # lake did not ingest is invisible to it.
+    #
+    # These are automatic by construction. They change nothing, so there is
+    # nothing to verify and nothing to approve — and gating a read behind
+    # an analyst is how an agent learns to conclude without looking.
+    "get_host": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note="Device record from the EDR: OS, agent version, last seen, containment state.",
+    ),
+    "get_detections": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note=(
+            "Recent vendor detections for a host. What the EDR already "
+            "concluded, which is context an investigation should start from "
+            "rather than rediscover."
+        ),
+    ),
+    # search_hash is deliberately absent. Fleet-wide hash prevalence is
+    # the most useful read of the four — first-seen timestamps clustered
+    # in one morning mean something different from a binary present for
+    # a year — but CrowdStrike exposes it through an endpoint whose shape
+    # I could not verify, and a declared capability with no working
+    # executor is the exact defect this contract exists to prevent.
+    "get_user_activity": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        note="Recent authentication events for a principal, from the IdP.",
+    ),
+    "lookup_cloud_audit": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back, so there is no write "
+            "for a probe to confirm. Recorded rather than left blank so this "
+            "reads as the answer it is and not as an omission."
+        ),
+        note=(
+            "Cloud control-plane audit events for one principal, resource or "
+            "API call. The window and the attribute are typed arguments; the "
+            "caller never supplies query text."
+        ),
+    ),
+    "lookup_network_flows": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "Flow and protocol records involving one address, from an NDR "
+            "appliance's recordstore. The address and the window are typed "
+            "arguments; the caller never supplies query text. A deployment "
+            "with no recordstore answers a refusal rather than an empty "
+            "result, because 'no flows' and 'nothing was searched' are "
+            "different facts and only one is evidence."
+        ),
+    ),
+    "lookup_network_device": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "What an NDR appliance has discovered at one address: role, "
+            "analysis level, criticality and observed software. Read-only; "
+            "the vendor's write verbs on a device are deliberately absent."
+        ),
+    ),
+    "lookup_endpoint_telemetry": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "Sightings of one indicator in endpoint telemetry, through the "
+            "EDR's own hunting index. The query is one of a closed set of "
+            "templates the executor owns; a caller supplies a template name, "
+            "an indicator and a window, never a query string. That is a "
+            "security boundary rather than a convenience: this verb is "
+            "reachable from an investigation agent, and the indicator it "
+            "passes was lifted out of attacker-influenced alert text."
+        ),
+    ),
+    "osquery_live_query": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_READ,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back, the same gap "
+            "search_siem and lookup_endpoint_telemetry record. The rows the "
+            "fleet returned are the response; asking again would be a second "
+            "query, not a confirmation of the first."
+        ),
+        note=(
+            "Runs one of a closed set of allowlisted osquery templates across "
+            "a fleet. READ_ONLY is a statement about the SQL, which the "
+            "caller cannot write: app.clients.osquery_allowlist owns every "
+            "template and renders the parameters. A verb that accepted query "
+            "text would not be read-only at this tier, because osquery can "
+            "read any file the agent can."
+        ),
+    ),
+    "search_siem": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_READ,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back. Verification answers "
+            "'did the write land', and there is no write — the results are "
+            "the response, and a second query would not confirm the first, it "
+            "would be another one. Recorded rather than left blank so this "
+            "reads as the answer it is and not as an omission."
+        ),
+        note="A query. Safe at any confidence, which is the point of separating impact from confidence.",
+    ),
+    # ── Endpoint containment ───────────────────────────────────────────────
+    "isolate_host": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="unisolate_host",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Cuts one machine off the network. Reversible, but somebody notices "
+            "immediately. The verification probe matters more here than anywhere: "
+            "believing a host is contained when it is not is the failure this "
+            "whole contract exists to prevent."
+        ),
+    ),
+    "unisolate_host": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="isolate_host",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "No ActionType exists for unisolate_host, so the verifier cannot be "
+            "reached for it. The isolate_host probe reads the same containment "
+            "state and would answer this too; wiring needs an ActionType."
+        ),
+        note="Restoring connectivity is itself a decision; it needs the same approval.",
+    ),
+    "quarantine_file": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_file",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Quarantining a legitimate binary breaks whatever depended on it. "
+            "The CrowdStrike arm is an RTR 'rm', so the probe reads the path "
+            "back with 'ls': the effect is the file's absence, and RTR "
+            "accepting a delete is not the same fact. SentinelOne's arm "
+            "fetches the file into the forensics vault instead of removing "
+            "it, so the probe reports indeterminate there rather than "
+            "checking for an absence that arm never causes."
+        ),
+    ),
+    "restore_file": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="quarantine_file",
+        required_permission=_CONTAIN,
+    ),
+    "kill_process": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "A killed process cannot be un-killed, but the effect does not "
+            "persist: a service restarts, a user runs the program again. "
+            "Self-healing is the honest answer here, not 'irreversible'. "
+            "The probe re-reads the host's process table over RTR, because "
+            "an accepted 'kill' and a dead process differ whenever the agent "
+            "is offline or the process is protected. SentinelOne targets "
+            "binaries by hash and lists no processes, so that arm reports "
+            "indeterminate."
+        ),
+    ),
+    "run_av_scan": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Consumes CPU on one host and finishes. Nothing to undo. It is "
+            "automatic, and Defender replies 'Pending' the instant it queues "
+            "the sweep — so the response is the one thing that certainly is "
+            "not the confirmation. The probe reads the machine action's "
+            "terminal state instead, and answers indeterminate while the "
+            "scan is still running, which an immediate post-dispatch check "
+            "almost always is."
+        ),
+    ),
+    "run_script": CapabilityContract(
+        impact=ActionImpact.SEVERE,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "There is nothing to probe. The platform cannot know what an "
+            "arbitrary script was supposed to do, so no read-back can confirm it "
+            "did it. The exit code says the script ran, which is a different "
+            "claim. This is why the action is mandatory-human: the approver is "
+            "the verification."
+        ),
+        note=(
+            "Arbitrary code on a production host. The platform cannot reason "
+            "about what a script does, so no confidence score is meaningful and "
+            "no autonomy tier executes it. Classified SEVERE rather than HIGH "
+            "precisely because its blast radius is not knowable in advance."
+        ),
+    ),
+    "capture_forensics": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Collects an evidence package from one host. The estate is "
+            "unchanged, which is why the impact matches run_av_scan: some "
+            "endpoint CPU and IO, and it finishes on its own. "
+            "Analyst-gated rather than automatic on the same reasoning that "
+            "separated suppress_alert from update_alert_disposition — the "
+            "question is what bounds the verb, not how loud it is. The "
+            "writeback is bounded by a disposition mapping that refuses to "
+            "close a true positive; this one has no bound at all. It collects "
+            "whatever the vendor package contains, from whichever host it is "
+            "pointed at, and the result is a copy of somebody's endpoint — "
+            "processes, registry, event logs, temp files — in a vendor cloud "
+            "behind a download URI. Pointed at the wrong host that is a "
+            "data-handling event nobody can take back, which is also why the "
+            "reversal is manual: an operator deletes the package from the "
+            "console, the copy having already been made. "
+            "The probe is the reason this verb needed one at all: acquisition "
+            "is asynchronous, so the API response is emphatically not the "
+            "confirmation — it says a machine action was queued, and the "
+            "package appears minutes later or never. The probe reads that "
+            "machine action's terminal state and then asks for the download "
+            "URI, so VERIFIED means a package exists and can be fetched. "
+            "Still running answers indeterminate rather than either guess."
+        ),
+    ),
+    # ── Human-in-the-loop ──────────────────────────────────────────────────
+    "chatops_verify": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "There is no vendor state to read back. What this action produces "
+            "is a delivered prompt, and the transport's own response is the "
+            "confirmation of delivery — the case the probe rule waives below "
+            "MODERATE. The thing a probe might want to check, whether the "
+            "person answered, is not a state to poll: the answer arrives as a "
+            "signed callback, and until it does the action reports "
+            "awaiting_completion rather than success."
+        ),
+        note=(
+            "Asks the affected user 'was this you?' and routes the signed "
+            "answer onto the case. Shares notify's impact — a message cannot "
+            "be unsent — but not its approval tier, because notify addresses "
+            "a SOC channel and this addresses the account under "
+            "investigation. Sent automatically on a true positive it tells an "
+            "attacker they have been detected, and the verb has no way to "
+            "know whether the person it is asking is the suspect. That "
+            "missing bound is what makes it analyst-gated."
+        ),
+    ),
+    # ── Identity ───────────────────────────────────────────────────────────
+    "disable_user": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_user",
+        required_permission=_IDENTITY,
+        has_verification_probe=True,
+        note="Stops one person working. Reversible, and instantly noticed.",
+    ),
+    "enable_user": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="disable_user",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "No ActionType exists for enable_user. _probe_enable_user is "
+            "implemented and reads the same directory state as the disable probe; "
+            "it is unreachable until the verb has an ActionType."
+        ),
+        note=(
+            "Re-enabling an account is a higher bar than disabling it: the "
+            "failure mode is restoring access to a compromised identity, and "
+            "no model output should be sufficient for that."
+        ),
+    ),
+    "suspend_session": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "Okta removed session listing from the Management API, so there is no "
+            "supported read-back for 'are this user's sessions actually cleared'. "
+            "Entra's revokeSignInSessions has the same shape."
+        ),
+        note=(
+            "Forces re-authentication, and the user restores their own access by "
+            "logging in — cheap enough that automating it is tempting. It is "
+            "analyst-gated anyway, because an unverifiable containment reported as "
+            "successful is the isolate_host failure in miniature: the responder "
+            "believes the session is gone and moves on."
+        ),
+    ),
+    "revoke_session": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "Same absent read-back as suspend_session, stated here rather than "
+            "by reference because a gap that points at another entry stops "
+            "being checkable when that entry changes. Okta withdrew session "
+            "listing from the Management API and Entra's revokeSignInSessions "
+            "returns only an acknowledgement, so neither provider will say "
+            "whether the sessions are gone. The nearest readable field, "
+            "Entra's signInSessionsValidFromDateTime, moves when the call is "
+            "accepted rather than when the tokens stop working, so a probe "
+            "reading it would report VERIFIED on the strength of the same "
+            "acknowledgement the executor already has."
+        ),
+    ),
+    "reset_password": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "Neither Okta nor Entra exposes a readable 'password was reset' state. "
+            "The user's lifecycle status is unchanged by a reset, so a probe "
+            "reading it would confirm nothing and report VERIFIED for a reset that "
+            "never happened — worse than reporting unverified. The obvious "
+            "candidate, Okta's passwordChanged timestamp, is the wrong read and "
+            "not merely a missing one: the executor calls "
+            "lifecycle/reset_password with sendEmail, which issues a recovery "
+            "link. The password changes later, if the user follows it, so a "
+            "probe watching that field would report FAILED for every correctly "
+            "executed reset and VERIFIED only once the user had already "
+            "recovered. Entra's lastPasswordChangeDateTime behaves the same way."
+        ),
+        note="The user recovers through the normal reset flow, but is locked out until they do.",
+    ),
+    "force_mfa": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.SELF_HEALING,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "'Re-enrolment required' is not a readable flag on either provider — "
+            "the factor list looks the same before and after. A probe reading it "
+            "would report VERIFIED for a reset that never applied."
+        ),
+        note="Re-enrolment friction, not a lockout, but unverifiable and so not automatic.",
+    ),
+    "block_user_signin": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_user",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=(
+            "No ActionType exists for block_user_signin, so the verifier cannot be "
+            "reached. The disable_user probe covers the same directory state."
+        ),
+    ),
+    # ── Network ────────────────────────────────────────────────────────────
+    "block_ip": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_ip",
+        required_permission=_NETWORK,
+        has_verification_probe=True,
+        note=(
+            "Blocking a shared egress address, a CDN edge or a SaaS endpoint "
+            "takes out far more than the intended target, and the alert rarely "
+            "says which kind of address it is."
+        ),
+    ),
+    "allow_ip": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_ip",
+        required_permission=_NETWORK,
+        has_verification_probe=True,
+        note="Removing a block is a security decision, so it is not automatic.",
+    ),
+    "block_domain": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_domain",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=(
+            "The only registered executor is a generic placeholder with no "
+            "enforcement point to read back from. A real arm (Route 53 Resolver "
+            "DNS Firewall, Umbrella, a DNS RPZ) would expose one; until one is "
+            "wired, claiming verification would certify a block that never "
+            "happened."
+        ),
+    ),
+    "allow_domain": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_domain",
+        required_permission=_NETWORK,
+    ),
+    "block_hash": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_hash",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "Same absent read as block_ioc, of which this is the narrowest "
+            "case: the indicator API creates and deletes and offers no list "
+            "to compare against. Unlike block_ioc this one is automatic, so "
+            "the gap is load-bearing and worth restating — it has no "
+            "ActionType either, which means a probe could not be keyed to it "
+            "even if Defender grew the read tomorrow."
+        ),
+        note=(
+            "A hash identifies one exact binary, so a wrong block affects only "
+            "that file. The narrowest containment the platform has, and the "
+            "one genuinely safe to automate at high confidence."
+        ),
+    ),
+    "allow_hash": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_hash",
+        required_permission=_CONTAIN,
+    ),
+    "block_ioc": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_ioc",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=(
+            "Defender's indicator API is write-only in this client: block_ioc "
+            "creates one and remove_ioc deletes one by id, and there is no read "
+            "of the current indicator set to compare against. Confirming the "
+            "indicator exists would also be the weaker of the two available "
+            "claims — what a responder needs to know is whether it is being "
+            "enforced on the estate, and Defender reports indicator "
+            "distribution nowhere this client can reach."
+        ),
+        note="Breadth depends on the indicator type, so it is classified at the worst case.",
+    ),
+    "allow_ioc": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_ioc",
+        required_permission=_NETWORK,
+    ),
+    # ── SIEM / detection content ───────────────────────────────────────────
+    "create_notable_event": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "The creation is synchronous — Splunk's /services/notable_events "
+            "either writes the notable or returns an error, with no queued "
+            "state in between — so unlike run_av_scan the response really is "
+            "the confirmation. It is also the only one available: the reply "
+            "carries no event_id, and get_notable_event_state needs one. "
+            "Searching the notable index by rule name instead would match any "
+            "notable that rule has ever produced, which is a probe that "
+            "passes without the action."
+        ),
+        note="Writes a record into someone else's queue. Noise, not damage.",
+    ),
+    "sync_detection_rule": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="sync_detection_rule",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "The client writes correlation searches and watchers through "
+            "create-or-update calls and exposes no read of the saved "
+            "definition, so there is nothing to compare the intended content "
+            "against. Confirming the object merely exists would be the wrong "
+            "check anyway: this verb's failure mode is a rule that saved with "
+            "different content, not one that did not save."
+        ),
+        note=(
+            "Changing detection content in the customer's SIEM can silence a "
+            "rule as easily as add one. Its own reverse: sync the prior version."
+        ),
+    ),
+    "update_watcher": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="update_watcher",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=(
+            "Same absence as sync_detection_rule, which this is the Elastic "
+            "spelling of: the write goes through a create-or-update and no "
+            "read of the stored watcher comes back to compare against."
+        ),
+    ),
+    "update_alert_disposition": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=True,
+        note=(
+            "Writes a verdict onto a finding in the customer's SIEM. Classified "
+            "the same as create_notable_event and push_status, which it is the "
+            "mirror image of: it changes a queue item, not an estate, and a "
+            "wrong one is re-opened from the vendor console in a click. "
+            "What bounds it is not the approval tier but the disposition "
+            "mapping — a confirmed true positive escalates and is never "
+            "closed, and a verdict outside the taxonomy is refused rather than "
+            "guessed (app/services/disposition_writeback.py). On top of that "
+            "the feature ships dry-run by default: AISOC_SIEM_WRITEBACK_EXECUTE "
+            "is off, so an operator opts in to the vendor call, not out of it. "
+            "The probe re-reads the finding and compares its state against the "
+            "plan the executor derived from the same disposition: Splunk's "
+            "notable status and QRadar's offense status both change observably "
+            "on a close. A QRadar escalation leaves the offense OPEN, which is "
+            "also its prior state, so that combination answers indeterminate "
+            "rather than confirming a write that may not have happened."
+        ),
+    ),
+    # ── Alert lifecycle ────────────────────────────────────────────────────
+    #
+    # Impact is the same as update_alert_disposition, and for the same reason:
+    # these move a queue item, not an estate. The approval tiers differ,
+    # because what bounds the writeback is its disposition mapping and these
+    # two verbs have none — they do what the caller says.
+    "ack_alert": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=True,
+        note=(
+            "Marks a vendor finding in-progress and owned by AiSOC. It removes "
+            "nothing from anyone's view — it says who is already looking, which "
+            "is the point of automating it: two analysts working the same "
+            "notable is the cost of not doing so. The probe reads the notable's "
+            "status back, so the claim is checked rather than inferred from a "
+            "202."
+        ),
+    ),
+    "suppress_alert": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=True,
+        note=(
+            "Closes a vendor finding outright. The impact is a queue item, the "
+            "same as update_alert_disposition — but analyst-gated where that "
+            "one is automatic, because the thing that makes the writeback safe "
+            "to automate is the disposition mapping that refuses to close a "
+            "confirmed true positive, and this verb has no such bound. It "
+            "closes whatever it is pointed at, on the caller's say-so. Prefer "
+            "update_alert_disposition for anything driven by a verdict; this "
+            "exists for an analyst acting deliberately."
+        ),
+    ),
+    # ── Ticketing and notification ─────────────────────────────────────────
+    "create_ticket": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "This is the case the probe rule waives, and it is worth writing "
+            "down rather than leaving as an absence. Jira, ServiceNow and "
+            "PagerDuty all return the identifier they allocated, and none of "
+            "them can allocate one without having created the record — so the "
+            "response is the confirmation, in the strict sense that a "
+            "read-back could not tell us anything the create did not. The "
+            "identifier is also what every later step uses, so a fabricated "
+            "one fails loudly at the next transition rather than passing "
+            "silently."
+        ),
+    ),
+    "push_case": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Creates a record in the ticketing system and gets its identifier "
+            "back, the same as create_ticket: the identifier cannot exist "
+            "without the record."
+        ),
+    ),
+    "push_status": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Updates a record the caller already holds the identifier for, "
+            "and the vendors answer with the transition they applied. No "
+            "ActionType keys this one, so a probe could not be reached for it "
+            "in any case."
+        ),
+    ),
+    "notify": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_TICKET,
+        has_verification_probe=False,
+        verification_gap=(
+            "Chat platforms return the posted message's timestamp, which is "
+            "the confirmation — they cannot allocate one for a message they "
+            "did not post. Reading the channel back afterwards would answer a "
+            "different question, whether anyone has since deleted it."
+        ),
+        note=("A message cannot be unsent, but paging the wrong channel is embarrassment rather than impact."),
+    ),
+    # ── Mailbox remediation ───────────────────────────────────────────────
+    #
+    # These are the only verbs in the vocabulary whose impact genuinely is
+    # not a constant: purging one copy of a message out of one mailbox and
+    # purging it out of a thousand are different acts. The constant below is
+    # the floor, and `scaled_impact` raises it from the recipient count —
+    # see that function for why the scaling lives outside the table.
+    "search_mailboxes": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back, the same gap search_siem and lookup_cloud_audit record."),
+        note=(
+            "Find the copies of one reported message across mailboxes, by "
+            "internet message id, sender, subject or receipt window. Every "
+            "other verb here depends on it: a purge needs a per-mailbox "
+            "message id and only this maps one message onto the mailboxes "
+            "holding it."
+        ),
+    ),
+    "purge_email": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_email",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Soft-delete one copy of a message from one mailbox: a move to "
+            "recoverableitemsdeletions on Microsoft, a move to Trash on "
+            "Gmail. Never a hard delete, which has no reverse. MODERATE is "
+            "the single-recipient floor and scaled_impact raises it with the "
+            "campaign's size; ANALYST rather than AUTOMATIC because a wrong "
+            "purge removes a message the recipient may have needed and the "
+            "restore, while real, is not instantaneous."
+        ),
+    ),
+    "restore_email": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="purge_email",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Put a soft-deleted message back. The declared rollback for "
+            "purge_email, and the reason that verb may be dispatched at all: "
+            "a reverse that resolves to nothing is the defect "
+            "KNOWN_ORPHANS exists to catch, and it would be at its worst on "
+            "the most disruptive verb in the product. LOW and automatic "
+            "because undoing a containment must never be harder than "
+            "applying it."
+        ),
+    ),
+    "block_sender": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="unblock_sender",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Stop future mail from one sender reaching one mailbox: an inbox "
+            "message rule on Microsoft, a filter on Gmail. Per-mailbox, not "
+            "tenant-wide — neither vendor exposes its organisation-level "
+            "block list through the API this platform speaks, and declaring "
+            "the broader verb would have an analyst believe the organisation "
+            "is covered when one mailbox is."
+        ),
+    ),
+    "unblock_sender": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_sender",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note="Remove the rule or filter block_sender created. Its declared reverse.",
+    ),
+}
+
+
+#: Recipient counts at which ``purge_email`` stops being the verb its base
+#: contract describes. Ascending, and read as "at least this many".
+#:
+#: The numbers are a judgement and are stated rather than hidden in an `if`
+#: so a deployment reviewing its own posture can read them:
+#:
+#: * **1–4** stays MODERATE. One analyst clearing a message from a handful of
+#:   mailboxes is routine phishing work.
+#: * **5+** is HIGH. It is no longer one person's mail; a mistake now
+#:   disrupts a team and several people notice at once.
+#: * **25+** is SEVERE, which ``NEVER_AUTONOMOUS`` makes mandatory-human at
+#:   any confidence and any autonomy tier. A purge at that scale is an
+#:   organisation-visible event, and the gap-closure plan names exactly this
+#:   case: a 25-recipient campaign must yield one proposal that requires
+#:   approval.
+RECIPIENT_IMPACT_LADDER: tuple[tuple[int, ActionImpact], ...] = (
+    (25, ActionImpact.SEVERE),
+    (5, ActionImpact.HIGH),
+)
+
+#: Capabilities whose impact scales with how many mailboxes they touch.
+#: ``restore_email`` is deliberately absent: putting a thousand messages back
+#: is not disruptive in the way taking them away is, and making the rollback
+#: harder to authorise than the action is how a containment becomes permanent.
+_RECIPIENT_SCALED: frozenset[str] = frozenset({"purge_email", "block_sender"})
+
+#: Parameter keys a caller may use to declare the blast radius. Several
+#: because the count arrives from three places — a campaign proposal knows it
+#: up front, a fan-out executor counts its own targets, and a single-mailbox
+#: dispatch has one.
+_RECIPIENT_COUNT_KEYS: tuple[str, ...] = ("recipient_count", "mailbox_count", "affected_recipients")
+
+
+def recipient_count_from(params: dict | None) -> int:
+    """How many mailboxes an action says it will touch. Unknown reads as one.
+
+    Unknown is **not** treated as zero and not treated as large. Zero would
+    let a caller omit the field to dodge the ladder, which is the same shape
+    as "missing confidence is not high confidence". Large would route every
+    single-mailbox purge to a mandatory human and train people to approve
+    without reading. One is the honest floor: a dispatch with no count is a
+    dispatch against the one mailbox in ``target``.
+    """
+    if not params:
+        return 1
+    for key in _RECIPIENT_COUNT_KEYS:
+        raw = params.get(key)
+        if raw is None:
+            continue
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            continue
+        return max(1, value)
+    recipients = params.get("recipients")
+    if isinstance(recipients, (list, tuple, set)):
+        return max(1, len(recipients))
+    return 1
+
+
+def scaled_impact(capability: str, params: dict | None) -> ActionImpact:
+    """The impact this dispatch actually carries, given its blast radius.
+
+    Why this is a function and not more rows in the table: the contract
+    belongs to the *verb*, and ``purge_email`` is one verb. Splitting it into
+    ``purge_email_small`` and ``purge_email_large`` would hand a caller the
+    choice of which contract to be graded under, which is the opposite of
+    what a contract is for. The verb stays one entry and the dispatch
+    declares its size.
+
+    **It only ever raises.** A ladder entry below the contract's own floor is
+    ignored, so no parameter a caller supplies can make an action cheaper
+    than its contract says it is — the same one-way property the approval
+    matrix has.
+    """
+    contract = CAPABILITY_CONTRACTS.get(capability)
+    base = contract.impact if contract else ActionImpact.IRREVERSIBLE
+    if capability not in _RECIPIENT_SCALED:
+        return base
+    count = recipient_count_from(params)
+    order = (
+        ActionImpact.READ_ONLY,
+        ActionImpact.LOW,
+        ActionImpact.MODERATE,
+        ActionImpact.HIGH,
+        ActionImpact.SEVERE,
+        ActionImpact.IRREVERSIBLE,
+    )
+    for threshold, impact in RECIPIENT_IMPACT_LADDER:
+        if count >= threshold:
+            return impact if order.index(impact) > order.index(base) else base
+    return base
+
+
+#: Legacy ``ActionType`` value -> capability name, for the cases where the
+#: two vocabularies chose different words for the same verb.
+#:
+#: Only one entry, and it is a naming gap rather than a missing capability:
+#: the public API verb is ``notify_slack`` (it predates the capability
+#: registry and names the transport), the capability is ``notify`` (it names
+#: the verb, which is the whole point of a per-capability contract), and
+#: ``SlackNotify`` in ``builtins.py`` already bridges them. What was missing
+#: was anything that told a *lookup by ActionType value* about the bridge, so
+#: ``approval_gate`` found no contract, skipped the confidence matrix
+#: entirely and let blast radius decide alone.
+#:
+#: Why an alias and not a rename. ``action_type`` is persisted as free text:
+#: ``remediation_whitelist`` (migration 015) stores operator pre-approvals
+#: keyed ``UNIQUE (tenant_id, action_type)``, so renaming the enum member
+#: silently orphans every row an operator created for ``notify_slack`` —
+#: their pre-approval stops matching and nobody is told. It is also a
+#: documented request field (``{"action_type": "notify_slack"}`` in
+#: ``apps/docs/docs/operations/notifications.md``) and a member of the
+#: ``ActionType`` union in ``packages/types``.
+#:
+#: When to delete this. It retires with ``ActionType`` itself: the enum is
+#: already the legacy half of the registry (every adapter carries a
+#: ``_legacy_action_type`` pointing back at it) and the live-actions path
+#: dispatches on capability strings. When the ``POST /actions`` body takes a
+#: capability and the ``remediation_whitelist`` rows have been migrated,
+#: this map and the enum go together. Until then a new entry here needs the
+#: same justification: a *naming* difference for a verb that already has a
+#: contract, never a stand-in for a capability nobody wrote.
+ACTION_TYPE_CAPABILITY_ALIASES: dict[str, str] = {
+    "notify_slack": "notify",
+}
+
+
+def contract_for_action_type(action_type_value: str) -> CapabilityContract | None:
+    """Resolve a legacy ``ActionType`` value to its capability contract.
+
+    Tries the value as a capability name first, then the alias map. Returns
+    ``None`` when the verb genuinely has no contract, so callers can say so
+    rather than invent an impact for it.
+    """
+    contract = CAPABILITY_CONTRACTS.get(action_type_value)
+    if contract is not None:
+        return contract
+    aliased = ACTION_TYPE_CAPABILITY_ALIASES.get(action_type_value)
+    if aliased is None:
+        return None
+    return CAPABILITY_CONTRACTS.get(aliased)
+
+
+#: Wave-2 Phase 6.1 (depth 5.5): cloud, SaaS and code-platform containment.
+#:
+#: One verification note covers most of this block, so it is stated once
+#: here rather than copied twenty times. Every verb below has a real
+#: read-back on its client — ``list_access_keys``, ``get_service_account``,
+#: ``get_workflow``, ``get_org_membership``, ``get_category`` and so on —
+#: and none of them is reachable from ``PostActionVerifier``, because that
+#: registry is keyed on ``ActionType`` and these verbs are live-action
+#: capabilities with no legacy ActionType behind them. That is the same
+#: recorded gap ``unisolate_host`` carries and it is a wiring gap, not a
+#: vendor one: the read exists and is registered as its own read verb, so
+#: an analyst or a playbook can run it, but governance does not treat these
+#: as self-verifying. Which is why none of them is AUTOMATIC — unverifiable
+#: means not autonomous, and the ladder here is ANALYST at the lightest.
+_PROBE_GAP_NO_ACTION_TYPE = (
+    "The vendor exposes a read-back and this client implements it, but "
+    "PostActionVerifier is keyed on ActionType and this verb is a "
+    "live-action capability with no ActionType, so the verifier cannot be "
+    "reached for it — the same gap unisolate_host records. Recorded rather "
+    "than left blank, and the reason this verb is not AUTOMATIC at any "
+    "confidence. The read is separately dispatchable as its own read verb."
+)
+
+_PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
+    # ── Cloud identity: access keys ────────────────────────────────────────
+    "deactivate_access_key": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="reactivate_access_key",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Stops one long-lived cloud credential. HIGH rather than MODERATE "
+            "because the holder is usually a pipeline rather than a person: "
+            "nobody notices for an hour and then a deploy fails. The key is "
+            "deactivated, never deleted, which is what makes the reverse real."
+        ),
+    ),
+    "reactivate_access_key": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="deactivate_access_key",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Restoring a credential is a decision that the incident is over, so it needs the same approval as taking it away.",
+    ),
+    # ── Cloud identity: role sessions ──────────────────────────────────────
+    "revoke_role_sessions": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_role_sessions",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Denies everything to credentials issued before a cut-off, keyed "
+            "on the token's issue time. Sessions minted after it keep working, "
+            "which is what makes this usable mid-incident: the role is not "
+            "broken, only the credentials already in circulation. The effect "
+            "is an inline policy, so the rollback is deleting that policy."
+        ),
+    ),
+    "restore_role_sessions": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="revoke_role_sessions",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Removes only the revocation policy this platform wrote. A rollback that could delete any inline policy on any role is an "
+            "escalation primitive wearing a rollback's clothes."
+        ),
+    ),
+    # ── Cloud identity: service identities ─────────────────────────────────
+    "disable_service_identity": CapabilityContract(
+        impact=ActionImpact.SEVERE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_service_identity",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "SEVERE rather than HIGH, and the distinction is the whole reason "
+            "this is not disable_user: a service account is load-bearing for "
+            "something other people depend on, so the outage is a service "
+            "outage. Reversible, and real while it lasts."
+        ),
+    ),
+    "enable_service_identity": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="disable_service_identity",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "The route back for the most disruptive identity verb. It exists because a containment whose reverse resolves to nothing is "
+            "not a containment anybody will enable."
+        ),
+    ),
+    # ── Cloud identity: tokens and grants ──────────────────────────────────
+    "revoke_token": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "The verb-level truth is the conservative one: most vendors cannot "
+            "un-revoke. GitHub states plainly that a revoked credential cannot "
+            "be reactivated; a deleted Workspace application password is gone; "
+            "a revoked Salesforce refresh token takes its access tokens with "
+            "it. GCP is the exception and it has its own verb (restore_token) "
+            "that an operator dispatches deliberately. Declaring PLATFORM here "
+            "because one vendor can would be a false promise on the other four, "
+            "and the rollback path would believe it had a route back."
+        ),
+    ),
+    "restore_token": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="revoke_token",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Only meaningful where the vendor disables a credential rather than destroying it — today that is a GCP service-account key.",
+    ),
+    "revoke_oauth_grant": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Revoking a consent is not platform-reversible anywhere: re-consent "
+            "is the user's decision at the application's own prompt, which this "
+            "platform cannot make for them and should not. MANDATORY_HUMAN "
+            "because the same verb that cuts an attacker's application also "
+            "cuts a tenant's own integrations, and the input naming which grant "
+            "to revoke travels through alert text an attacker may have written."
+        ),
+    ),
+    "get_oauth_grants": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note="What this identity has consented to, which is the list an analyst needs before choosing a grant to revoke.",
+    ),
+    "get_cloud_identity": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note=(
+            "State and credentials of one cloud or SaaS identity. Also the "
+            "read-back behind most of the containment verbs in this block: a "
+            "playbook can dispatch it after a containment to see the effect, "
+            "which is the half of verification that is reachable today."
+        ),
+    ),
+    # ── Cloud workload ─────────────────────────────────────────────────────
+    "quarantine_instance": CapabilityContract(
+        impact=ActionImpact.SEVERE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="release_instance",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Replaces the instance's security groups with a quarantine group. "
+            "Distinct from isolate_host, which needs an EDR agent — this works "
+            "on the agentless workload that is the usual compromised one. The "
+            "groups it replaced are captured in the result, because they are "
+            "the only record of what to put back."
+        ),
+    ),
+    "release_instance": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="quarantine_instance",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Restores named security groups. The caller supplies them; this verb never guesses what an instance used to have.",
+    ),
+    # ── Code platform ──────────────────────────────────────────────────────
+    "remove_org_member": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_org_member",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Removes a person from an organisation and all its teams. The reverse re-invites them, which restores access rather than "
+            "restoring the session — the user has to accept."
+        ),
+    ),
+    "restore_org_member": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="remove_org_member",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Re-invites at the role the caller names, defaulting to member. Re-inviting at admin by default would make a rollback an "
+            "escalation."
+        ),
+    ),
+    "revoke_deploy_key": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Deleting a deploy key breaks whatever deploys with it. Not "
+            "platform-reversible: the host stores only the public half and "
+            "re-adding needs key material this platform never holds, so an "
+            "operator restores it from their own copy — a decision they should "
+            "be making anyway."
+        ),
+    ),
+    "disable_workflow": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_workflow",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Stops a CI workflow running. The containment for a tampered pipeline, and the thing that stops a team shipping, which is why "
+            "it is not automatic."
+        ),
+    ),
+    "enable_workflow": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="disable_workflow",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Turning a pipeline back on after a tampering incident is a decision, not a cleanup step.",
+    ),
+    "get_secret_scanning_alerts": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note=(
+            "Open secret-scanning alerts on the repositories a compromised "
+            "token could reach. Secret values are never returned by the vendor "
+            "and are not stored here: the type and the location are what an "
+            "analyst needs, and the secret itself is what you are trying not "
+            "to spread."
+        ),
+    ),
+    # ── Secure web gateway ─────────────────────────────────────────────────
+    "block_url": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_url",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "One URL rather than the whole host, which is the point: blocking "
+            "the domain to contain a single phishing page takes down everything "
+            "else on that host. Same impact tier as block_domain because the "
+            "enforcement is the customer's own gateway policy either way."
+        ),
+    ),
+    "allow_url": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_url",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Removes an entry this platform added. Un-blocking is a decision with the same weight as blocking.",
+    ),
+}
+
+CAPABILITY_CONTRACTS.update(_PHASE61_CONTRACTS)
+
+#: Wave-2 Phase 7.5 (depth 6.6): containment for the AI estate.
+#:
+#: Three verbs, and the reason they are verbs of their own rather than
+#: flags on `disable_user` is the blast radius. Demoting a compromised
+#: project owner stops them minting provider keys and leaves their work
+#: intact; removing them from a workspace takes their access to everything
+#: in it; capping spend stops a runaway agent without touching anybody's
+#: membership at all. Collapsing those into one verb would force the
+#: widest action every time.
+_PHASE75_CONTRACTS: dict[str, CapabilityContract] = {
+    "demote_role": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="demote_role",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Lowers a principal's role on a provider or workspace. Its own "
+            "reverse, because the operation is 'set the role' and the "
+            "rollback is setting it back — a separate promote verb would be "
+            "a second way to grant privilege, which is not a thing to add "
+            "for symmetry's sake."
+        ),
+    ),
+    "remove_workspace_member": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Takes a person out of an AI workspace, with no route back the "
+            "platform owns: re-adding somebody is an invitation they have "
+            "to accept. The route-back rule exists to bound *autonomous* "
+            "damage, so the coherent posture is a human who accepts the "
+            "irreversibility knowingly rather than an analyst approval over "
+            "a rollback that does not exist. demote_role is the reversible "
+            "action for the same situation and is the one to reach for "
+            "first."
+        ),
+    ),
+    "set_spend_cap": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Caps what one key may spend. The softest containment in this "
+            "block: a key spending anomalously is not necessarily a key in "
+            "an attacker's hands, and a cap stops the bleeding without "
+            "breaking anything that is behaving."
+        ),
+    ),
+    "restore_spend_cap": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="set_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Puts a budget back. The caller supplies the figure; this verb never guesses what a key used to be allowed.",
+    ),
+}
+
+CAPABILITY_CONTRACTS.update(_PHASE75_CONTRACTS)
+
+
+def apply_contract(cls: type) -> type:
+    """Class decorator: stamp the capability's contract onto an executor.
+
+    Used instead of per-class declarations so twenty vendors implementing
+    ``isolate_host`` cannot disagree about how dangerous it is — and the one
+    that disagrees low is the one that auto-executes.
+    """
+    contract = CAPABILITY_CONTRACTS.get(getattr(cls, "capability", ""))
+    if contract is None:
+        # Left with the unsafe defaults, so the conformance gate names it
+        # rather than the action quietly becoming dispatchable.
+        return cls
+    cls.impact = contract.impact
+    cls.approval = contract.approval
+    cls.reversal = contract.reversal
+    cls.reverse_capability = contract.reverse_capability
+    cls.required_permission = contract.required_permission
+    cls.has_verification_probe = contract.has_verification_probe
+    cls.verification_gap = contract.verification_gap
+    return cls

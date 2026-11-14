@@ -1,0 +1,11 @@
+{
+  "action": "CREATED",
+  "target_path": "/var/log/auth.log",
+  "hostname": "linux-host-42",
+  "node_key": "abc123def456",
+  "tenant_id": "acme",
+  "process_name": "rsyslogd",
+  "pid": 1022,
+  "username": "syslog",
+  "event_time": "2026-05-10T14:22:00Z"
+}

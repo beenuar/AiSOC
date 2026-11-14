@@ -1,0 +1,290 @@
+"""
+Playbook Store
+==============
+Simple in-process store backed by a JSON file (``playbooks.json``).
+In production this would be replaced with a Postgres-backed store, but
+the file-based approach lets us ship playbooks as part of the repo and
+have zero DB migrations for Pillar-2.
+
+The store is a singleton; mount it at app startup:
+
+    store = PlaybookStore.default()   # loads from data/playbooks/
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
+
+from .models import Playbook
+
+logger = logging.getLogger("aisoc.playbook.store")
+
+_DEFAULT_STORE_DIR = Path(__file__).parent.parent.parent / "data" / "playbooks"
+
+
+def _resolve_repo_root() -> Path:
+    """Best-effort repo root resolution.
+
+    On the host the file lives at ``services/agents/app/playbook/store.py``
+    so the repo root is ``parents[4]``. Inside the agents Docker image the
+    code is copied to ``/app/app/playbook/store.py`` and only ``parents[2]``
+    exists. We walk up while the index is in range and treat the first
+    ancestor that contains a ``playbooks`` directory as the root; otherwise
+    we fall back to the deepest available ancestor.
+    """
+    here = Path(__file__).resolve()
+    candidates = list(here.parents)
+    for candidate in candidates:
+        if (candidate / "playbooks" / "packs").is_dir():
+            return candidate
+    # Prefer the conventional host layout when available.
+    if len(candidates) > 4:
+        return candidates[4]
+    return candidates[-1]
+
+
+_REPO_ROOT = _resolve_repo_root()
+
+#: The pack that ships *inside* the package, and the one a container has.
+#:
+#: `_resolve_repo_root` walks up looking for an ancestor holding
+#: `playbooks/packs`. That works in a checkout and finds nothing in the
+#: image: `services/agents/Dockerfile` has a build context of
+#: `services/agents` and copies only `app/`, and a build context cannot
+#: reach outside itself.
+#:
+#: So the shipped image carried **zero** pack playbooks, silently — the
+#: loader's pack branch is guarded by `exists()`, which makes an absent
+#: pack indistinguishable from an empty one. A deployment's library was
+#: 62 entries shorter than the repository's with no error anywhere.
+#:
+#: `scripts/sync_vendored_playbook_packs.py --check` keeps this copy
+#: byte-identical to `playbooks/packs/v1/`, the same arrangement
+#: `services/fusion` uses for its compiled detection ruleset.
+_VENDORED_PACK_ROOT = Path(__file__).resolve().parent / "packs" / "v1"
+_DEFAULT_PACK_ROOT = _VENDORED_PACK_ROOT if _VENDORED_PACK_ROOT.is_dir() else _REPO_ROOT / "playbooks" / "packs" / "v1"
+
+
+class PlaybookStore:
+    """CRUD store for Playbook objects, backed by a JSON manifest file."""
+
+    def __init__(
+        self,
+        store_dir: Path | None = None,
+        pack_root: Path | None = None,
+    ) -> None:
+        self._dir = store_dir or Path(os.getenv("PLAYBOOK_STORE_DIR", str(_DEFAULT_STORE_DIR)))
+        self._dir.mkdir(parents=True, exist_ok=True)
+        # Optional canonical pack tree (playbooks/packs/v1/<category>/<slug>.playbook.json).
+        # Loaded read-only — mutations always go to self._dir/index.json.
+        self._pack_root = pack_root or Path(os.getenv("PLAYBOOK_PACK_ROOT", str(_DEFAULT_PACK_ROOT)))
+        self._manifest_path = self._dir / "index.json"
+        self._playbooks: dict[str, Playbook] = {}
+        self._load()
+
+    # ------------------------------------------------------------------
+    # Singleton
+    # ------------------------------------------------------------------
+
+    _instance: PlaybookStore | None = None
+
+    @classmethod
+    def default(cls) -> PlaybookStore:
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _load_one(self, fixture: Path) -> None:
+        try:
+            data = json.loads(fixture.read_text())
+            pb = Playbook.model_validate(data)
+            if pb.id not in self._playbooks:
+                self._playbooks[pb.id] = pb
+        except Exception as exc:
+            logger.warning("Skipping invalid fixture %s: %s", fixture.name, exc)
+
+    def _load(self) -> None:
+        # 1) Load individual *.playbook.json fixture files shipped with the runtime dir
+        for fixture in sorted(self._dir.glob("*.playbook.json")):
+            self._load_one(fixture)
+
+        # 2) Load the canonical v1 production pack (playbooks/packs/v1/**/*.playbook.json)
+        #    if present. These ship with the repo and are read-only here.
+        if self._pack_root.exists():
+            pack_count_before = len(self._playbooks)
+            for fixture in sorted(self._pack_root.rglob("*.playbook.json")):
+                self._load_one(fixture)
+            pack_count = len(self._playbooks) - pack_count_before
+            if pack_count:
+                logger.info(
+                    "Loaded %d playbooks from production pack %s",
+                    pack_count,
+                    self._pack_root,
+                )
+
+        # 3) Load/merge from the mutable index.json (user-created / API-created playbooks)
+        if not self._manifest_path.exists():
+            if self._playbooks:
+                logger.info(
+                    "Loaded %d fixture+pack playbooks (no user index.json yet)",
+                    len(self._playbooks),
+                )
+            return
+        try:
+            raw: list[dict] = json.loads(self._manifest_path.read_text())
+            for entry in raw:
+                pb = Playbook.model_validate(entry)
+                self._playbooks[pb.id] = pb  # index.json wins over fixtures
+            logger.info("Loaded %d playbooks from %s", len(self._playbooks), self._manifest_path)
+        except Exception as exc:
+            logger.error("Failed to load playbooks: %s", exc)
+
+    def _save(self) -> None:
+        data = [pb.model_dump() for pb in self._playbooks.values()]
+        self._manifest_path.write_text(json.dumps(data, indent=2))
+
+    # ------------------------------------------------------------------
+    # CRUD
+    # ------------------------------------------------------------------
+
+    # ``tenant_id`` is keyword-only and required on every method below, so a
+    # new call site cannot forget it the way every existing one had
+    # (GHSA-27wx-pcv5-pr7q). The same reasoning as the API gateway's
+    # ``_proxy(..., tenant_id=...)``: an argument that may be omitted is an
+    # argument that will be.
+
+    def _visible(self, pb: Playbook, tenant_id: str) -> bool:
+        """Whether *tenant_id* may see *pb* at all.
+
+        Two kinds of row live in one store: shipped pack content, which has no
+        owner and belongs to everybody, and a tenant's own playbooks. Anything
+        else is invisible — not filtered after the fact, but never a candidate.
+        """
+        return pb.tenant_id is None or pb.tenant_id == tenant_id
+
+    def _owned(self, pb: Playbook, tenant_id: str) -> bool:
+        """Whether *tenant_id* may *modify* ``pb``.
+
+        Narrower than :meth:`_visible` on purpose: the shipped library is
+        readable by every tenant and writable by none, so one tenant cannot
+        edit a pack playbook out from under all the others.
+        """
+        return pb.tenant_id is not None and pb.tenant_id == tenant_id
+
+    def list(self, *, tenant_id: str, enabled_only: bool = False) -> list[Playbook]:
+        pbs = [p for p in self._playbooks.values() if self._visible(p, tenant_id)]
+        if enabled_only:
+            pbs = [p for p in pbs if p.enabled]
+        return pbs
+
+    def get(self, playbook_id: str, *, tenant_id: str) -> Playbook | None:
+        pb = self._playbooks.get(playbook_id)
+        if pb is None or not self._visible(pb, tenant_id):
+            # One answer for "no such playbook" and "somebody else's", so the
+            # store cannot be used to learn which ids exist in other tenants.
+            return None
+        return pb
+
+    def create(self, playbook: Playbook, *, tenant_id: str) -> Playbook:
+        now = datetime.now(UTC).isoformat()
+        if not playbook.id:
+            playbook = playbook.model_copy(update={"id": str(uuid.uuid4())})
+        # The owner is stamped from the caller's credential here, overwriting
+        # whatever the request body said. Validating a body-supplied owner
+        # would leave a value to get wrong; there is no such value.
+        playbook = playbook.model_copy(update={"created_at": now, "updated_at": now, "tenant_id": tenant_id})
+        self._playbooks[playbook.id] = playbook
+        self._save()
+        return playbook
+
+    def update(self, playbook_id: str, data: dict[str, Any], *, tenant_id: str) -> Playbook | None:
+        pb = self._playbooks.get(playbook_id)
+        if pb is None or not self._owned(pb, tenant_id):
+            return None
+        now = datetime.now(UTC).isoformat()
+        data = {k: v for k, v in data.items() if k != "tenant_id"}
+        data["updated_at"] = now
+        updated = pb.model_copy(update=data)
+        self._playbooks[playbook_id] = updated
+        self._save()
+        return updated
+
+    def delete(self, playbook_id: str, *, tenant_id: str) -> bool:
+        pb = self._playbooks.get(playbook_id)
+        if pb is None or not self._owned(pb, tenant_id):
+            return False
+        del self._playbooks[playbook_id]
+        self._save()
+        return True
+
+    # ------------------------------------------------------------------
+    # Trigger matching
+    # ------------------------------------------------------------------
+
+    def find_matching(self, event: str, context: dict[str, Any], *, tenant_id: str) -> list[Playbook]:
+        """Return all enabled playbooks whose trigger matches this event/context.
+
+        Scoped like every other read: an alert in one tenant must not fire
+        another tenant's automation. This is the trigger half of
+        GHSA-27wx-pcv5-pr7q — the advisory reported the HTTP route, and the
+        same global store is reached from ``alert_trigger.run_for_alert``,
+        which already knows the alert's tenant and had nowhere to pass it.
+        """
+        matches: list[Playbook] = []
+        for pb in self._playbooks.values():
+            if not pb.enabled or not self._visible(pb, tenant_id):
+                continue
+            trigger = pb.trigger
+            if trigger.get("on") != event:
+                continue
+            # Optional severity filter
+            if "severity" in trigger:
+                allowed = trigger["severity"]
+                if context.get("severity") not in allowed:
+                    continue
+            # Optional tag filter
+            if "tags" in trigger:
+                required_tags = set(trigger["tags"])
+                ctx_tags = set(context.get("tags", []))
+                if not required_tags.intersection(ctx_tags):
+                    continue
+            matches.append(pb)
+        return matches
+
+    # ------------------------------------------------------------------
+    # Seed helpers (used by seed_demo.py)
+    # ------------------------------------------------------------------
+
+    def seed_defaults(self) -> int:
+        """Seed the store with built-in starter playbooks if store is empty.
+
+        Written straight into the index rather than through :meth:`create`,
+        because these are library content and must carry **no** owner: they
+        are seeded once at boot, by the service rather than on behalf of any
+        caller, and stamping them with whichever tenant happened to start the
+        process would hide them from every other one.
+        """
+        if self._playbooks:
+            return 0
+        from .templates import STARTER_PLAYBOOKS
+
+        now = datetime.now(UTC).isoformat()
+        count = 0
+        for pb_dict in STARTER_PLAYBOOKS:
+            pb = Playbook.model_validate(pb_dict)
+            pb = pb.model_copy(update={"tenant_id": None, "created_at": now, "updated_at": now})
+            self._playbooks[pb.id] = pb
+            count += 1
+        self._save()
+        logger.info("Seeded %d default playbooks", count)
+        return count

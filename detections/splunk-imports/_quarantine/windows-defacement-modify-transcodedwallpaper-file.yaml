@@ -1,0 +1,50 @@
+id: splunk-security-content-e11c3d90-5bc7-42ad-94cd-ba75db10d897
+name: Windows Defacement Modify Transcodedwallpaper File
+description: The following analytic identifies modifications to the TranscodedWallpaper
+  file in the wallpaper theme directory, excluding changes made by explorer.exe. This
+  detection leverages the Endpoint.Processes and Endpoint.Filesystem data models to
+  correlate process activity with file modifications. This activity is significant
+  as it may indicate an adversary attempting to deface or change the desktop wallpaper
+  of a targeted host, a tactic often used to signal compromise or deliver a message.
+  If confirmed malicious, this could be a sign of unauthorized access and tampering,
+  potentially leading to further system compromise or data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1491
+  categories:
+  - endpoint
+references:
+- https://forums.ivanti.com/s/article/Wallpaper-Windows-Settings-Desktop-Settings-and-the-transcodedwallpaper-jpg?language=en_US
+- https://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/ransom_sifreli.a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes
+    where Processes.process_path !="*\\Windows\\Explorer.EXE" by _time span=1h Processes.action
+    Processes.dest Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` |rename process_guid
+    as proc_guid | join proc_guid, _time [ | tstats `security_content_summariesonly`
+    count FROM datamodel=Endpoint.Filesystem where Filesystem.file_path = "*\\AppData\\Roaming\\Microsoft\\Windows\\Themes\\TranscodedWallpaper"
+    by _time span=1h Filesystem.dest Filesystem.file_create_time Filesystem.file_name
+    Filesystem.file_path Filesystem.process_guid | `drop_dm_object_name(Filesystem)`
+    |rename process_guid as proc_guid | fields file_name file_path process_name process_path
+    process dest file_create_time _time proc_guid] | `windows_defacement_modify_transcodedwallpaper_file_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e11c3d90-5bc7-42ad-94cd-ba75db10d897
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_defacement_modify_transcodedwallpaper_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

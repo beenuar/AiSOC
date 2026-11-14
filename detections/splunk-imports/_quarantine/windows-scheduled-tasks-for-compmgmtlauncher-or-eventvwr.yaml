@@ -1,0 +1,42 @@
+id: splunk-security-content-feb43b86-8c38-46cd-865e-20ce8a96c26c
+name: Windows Scheduled Tasks for CompMgmtLauncher or Eventvwr
+description: The following analytic detects the creation or modification of Windows
+  Scheduled Tasks related to CompMgmtLauncher or Eventvwr. These legitimate system
+  utilities, used for launching the Computer Management Console and Event Viewer,
+  can be abused by attackers to execute malicious payloads under the guise of normal
+  system processes. By leveraging these tasks, adversaries can establish persistence
+  or elevate privileges without raising suspicion. This detection helps security analysts
+  identify unusual or unauthorized scheduled tasks involving these executables, allowing
+  for timely investigation and remediation of potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references:
+- https://www.proofpoint.com/us/blog/threat-insight/chinese-malware-appears-earnest-across-cybercrime-threat-landscape
+- https://www.fortinet.com/blog/threat-research/valleyrat-campaign-targeting-chinese-speakers
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4698 TaskContent = "*&lt;Command&gt;C:\\Windows\\System32\\CompMgmtLauncher.exe&lt;/Command&gt;*"
+    OR TaskContent = "*&lt;Command&gt;C:\\Windows\\System32\\zh-CN\\eventvwr.msc&lt;/Command&gt;*"
+    OR TaskContent = "*&lt;Command&gt;C:\\Windows\\System32\\eventvwr.msc&lt;/Command&gt;*"
+    | stats count min(_time) as firstTime max(_time) as lastTime by dest action EventData_Xml
+    TaskContent TaskName | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_scheduled_tasks_for_compmgmtlauncher_or_eventvwr_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: feb43b86-8c38-46cd-865e-20ce8a96c26c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_scheduled_tasks_for_compmgmtlauncher_or_eventvwr.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

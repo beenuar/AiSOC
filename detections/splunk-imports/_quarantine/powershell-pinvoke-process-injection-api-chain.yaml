@@ -1,0 +1,72 @@
+id: splunk-security-content-3f1a2b4c-d5e6-7890-abcd-ef1234567890
+name: PowerShell PInvoke Process Injection API Chain
+description: 'The following analytic detects PowerShell Script Block Logging (Event
+  ID 4104) evidence of a complete P/Invoke process-injection API chain at either the
+  compile phase or the execution phase.
+
+  Portions of this search were modified to retain the same functionality while preventing
+  antivirus products from alerting on the detection itself'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055.001
+  - T1055.003
+  - T1055.004
+  - T1055.012
+  - T1055.013
+  - T1059.001
+  - T1620
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/dotnet/api/system.runtime.interopservices.dllimportattribute
+- https://www.ired.team/offensive-security/code-injection-process-injection
+- https://www.broadcom.com/support/security-center/protection-bulletin/vip-keylogger-spreads-via-multi-org-impersonation-campaign
+- https://attack.mitre.org/techniques/T1055/
+- https://attack.mitre.org/techniques/T1620/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell`\nEventCode=4104\nScriptBlockText=\"*add-type*\"\nScriptBlockText=\"\
+    *DllImport*\"\nScriptBlockText IN (\n    \"*extern IntPtr*\",\n    \"*extern bool*\"\
+    ,\n    \"*extern uint*\",\n    \"*extern int*\"\n)\n| where\n    (\n        match(ScriptBlockText,\
+    \ \"(?i)[v][i][r][t][u][a][l][a][l][l][o][c]\")\n        AND match(ScriptBlockText,\
+    \ \"(?i)[v][i][r][t][u][a][l][p][r][o][t][e][c][t]\")\n        AND match(ScriptBlockText,\
+    \ \"(?i)[c][r][e][a][t][e][t][h][r][e][a][d]\")\n    )\n    OR\n    (\n      \
+    \  match(ScriptBlockText, \"(?i)[o][p][e][n][p][r][o][c][e][s][s]\")\n       \
+    \ AND match(ScriptBlockText, \"(?i)[v][i][r][t][u][a][l][a][l][l][o][c]\")\n \
+    \       AND match(ScriptBlockText, \"(?i)[w][r][i][t][e][p][r][o][c][e][s][s][m][e][m][o][r][y]\"\
+    )\n        AND (\n            match(ScriptBlockText, \"(?i)[c][r][e][a][t][e][r][e][m][o][t][e][t][h][r][e][a][d]\"\
+    )\n            OR\n            match(ScriptBlockText, \"(?i)[q][u][e][u][e][u][s][e][r][a][p][c]\"\
+    )\n        )\n    )\n    OR\n    (\n        match(ScriptBlockText, \"(?i)[o][p][e][n][t][h][r][e][a][d]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[s][u][s][p][e][n][d][t][h][r][e][a][d]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[g][e][t][t][h][r][e][a][d][c][o][n][t][e][x][t]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[w][r][i][t][e][p][r][o][c][e][s][s][m][e][m][o][r][y]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[s][e][t][t][h][r][e][a][d][c][o][n][t][e][x][t]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[r][e][s][u][m][e][t][h][r][e][a][d]\"\
+    )\n    )\n    OR\n    (\n        match(ScriptBlockText, \"(?i)[c][r][e][a][t][e][p][r][o][c][e][s][s]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[v][i][r][t][u][a][l][a][l][l][o][c]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[w][r][i][t][e][p][r][o][c][e][s][s][m][e][m][o][r][y]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[s][e][t][t][h][r][e][a][d][c][o][n][t][e][x][t]\"\
+    )\n        AND ScriptBlockText = \"*ResumeThread*\"\n    )\n    OR\n    (\n  \
+    \      match(ScriptBlockText, \"(?i)[n][t][c][r][e][a][t][e][s][e][c][t][i][o][n]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[n][t][m][a][p][v][i][e][w][o][f][s][e][c][t][i][o][n]\"\
+    )\n        AND match(ScriptBlockText, \"(?i)[c][r][e][a][t][e][r][e][m][o][t][e][t][h][r][e][a][d]\"\
+    )\n    )\n| fillnull\n| stats count min(_time) as firstTime\n              max(_time)\
+    \ as lastTime\n   by dest signature signature_id user_id vendor_product EventID\n\
+    \      Guid Opcode Name Path ProcessID ScriptBlockId ScriptBlockText\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `powershell_pinvoke_process_injection_api_chain_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3f1a2b4c-d5e6-7890-abcd-ef1234567890
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_pinvoke_process_injection_api_chain.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

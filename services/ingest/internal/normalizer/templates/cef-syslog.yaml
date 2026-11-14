@@ -1,0 +1,56 @@
+# Common Event Format (CEF) syslog template.
+#
+# Used by the /v1/inbox/cef route. The handler parses the CEF prefix
+# (CEF:Version|DeviceVendor|DeviceProduct|DeviceVersion|SignatureID|
+#  Name|Severity|Extension) and the key=value extension into a flat
+# map before invoking this template.
+#
+# Reference:
+#   https://docs.fortinet.com/document/fortianalyzer/7.4.0/cef-reference
+#   https://www.microfocus.com/documentation/arcsight/arcsight-smartconnectors-8.4/cef-implementation-standard/
+id: cef-syslog
+vendor_name: CEF
+product_name: CEF Syslog
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  DeviceVendor: metadata.product.vendor_name
+  DeviceProduct: metadata.product.name
+  DeviceVersion: metadata.product.version
+  SignatureID: finding.related_events.id
+  Name: finding.title
+  msg: message
+  src: src_endpoint.ip
+  dst: dst_endpoint.ip
+  spt: src_endpoint.port
+  dpt: dst_endpoint.port
+  suser: actor.user.name
+  duser: target_user.name
+  shost: src_endpoint.hostname
+  dhost: dst_endpoint.hostname
+  cs1: finding.evidence.process
+  externalId: finding.uid
+  act: activity_name
+  cat: finding.types
+severity_field: Severity
+severity_map:
+  "0": 1
+  "1": 1
+  "2": 2
+  "3": 2
+  "4": 3
+  "5": 3
+  "6": 4
+  "7": 4
+  "8": 5
+  "9": 5
+  "10": 6
+  Low: 2
+  Medium: 3
+  High: 4
+  Very-High: 5
+time_field: rt
+message_field: msg
+constants:
+  source_type: cef-syslog

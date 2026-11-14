@@ -1,0 +1,25 @@
+id: det-endpoint-001
+name: LOLBAS Binary Used for Download or Execution
+description: Detects living-off-the-land binaries (LOLBAS) being used to download payloads or execute
+  remote code. These binaries are commonly abused by attackers because they are signed by Microsoft and
+  bypass simple application whitelisting.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1218
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    image_basename IN ["regsvr32.exe", "rundll32.exe", "mshta.exe", "certutil.exe", "bitsadmin.exe", "installutil.exe", "msbuild.exe", "wmic.exe"]
+    AND command_line CONTAINS_ANY ["http", "/i:", "downloadfile", "scrobj.dll", "/transfer", "wsh"]
+false_positives:
+- Legitimate admin scripting (rare; tag known scripts)
+playbook: tpl-malware-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

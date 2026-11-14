@@ -1,0 +1,27 @@
+id: det-threat-anomaly-007
+name: MFA Factor Reset From a Country This Principal Has Never Used
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'MFA Factor
+  Reset From a Country This Principal Has Never Used'. Watch the 2 documented false-positive cases before
+  tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556.006
+- mitre.attack.t1098.005
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: okta
+  service: identity
+detection:
+  condition: |
+    event_type IN ["user.mfa.factor.reset_all", "user.mfa.factor.deactivate"]
+    AND baseline_location_rarity >= 0.95
+false_positives:
+- A user travelling and locked out
+- A help desk operating from a second region
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

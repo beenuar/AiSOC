@@ -1,0 +1,46 @@
+id: splunk-security-content-983be012-e408-4cb0-b87f-6756bb5f7047
+name: Cisco Duo Bulk Policy Deletion
+description: The following analytic detects instances where a Duo administrator performs
+  a bulk deletion of more than three policies in a single action. It identifies this
+  behavior by searching Duo activity logs for the policy_bulk_delete action, extracting
+  the names of deleted policies, and counting them. If the count exceeds three, the
+  event is flagged. This behavior is significant for a Security Operations Center
+  (SOC) because mass deletion of security policies can indicate malicious activity,
+  such as an attacker or rogue administrator attempting to weaken or disable security
+  controls, potentially paving the way for further compromise. Detecting and investigating
+  such actions promptly is critical, as the impact of this attack could include reduced
+  security posture, increased risk of unauthorized access, and potential data breaches.
+  Monitoring for bulk policy deletions helps ensure that any suspicious or unauthorized
+  changes to security configurations are quickly identified and addressed to protect
+  organizational assets and maintain compliance.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cisco_duo_administrator` action=policy_bulk_delete | rename username
+    as user | spath input=description | rex field=policies max_match=0 "(?<policy_name>[^:,]+):\s+"
+    | eval policy_count=mvcount(policy_name) | where policy_count > 3 | stats count
+    min(_time) as firstTime max(_time) as lastTime by action actionlabel description
+    user admin_email policy_count | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `cisco_duo_bulk_policy_deletion_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 983be012-e408-4cb0-b87f-6756bb5f7047
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_bulk_policy_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

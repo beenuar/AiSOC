@@ -1,0 +1,23 @@
+id: det-application-003
+name: Path Traversal Attempt in HTTP Request
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Path Traversal
+  Attempt in HTTP Request'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1083
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri PATTERN_MATCH_ANY ["\.\./", "\.\.\\", "%2e%2e%2f", "%2e%2e/", "\.\.%2f"]
+false_positives:
+- URL-encoded characters in legitimate parameters (rare)
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,29 @@
+id: $slug
+name: $name
+version: 0.1.0
+plugin_type: widget
+tier: community
+description: >
+  $name is a custom dashboard widget for AiSOC. The widget is rendered inside
+  the saved-views / dashboard surface and receives a small query API plus the
+  current tenant's theme tokens.
+author: "$author"
+tags: [widget]
+license: MIT
+min_aisoc_version: "4.0.0"
+runtime: python
+entry_point: widget.py
+config_schema:
+  type: object
+  required: []
+  properties:
+    title:
+      type: string
+      description: "Display title shown in the widget header."
+      default: "$name"
+    refresh_interval_seconds:
+      type: integer
+      description: "How often the dashboard should re-fetch the widget's data."
+      default: 60
+      minimum: 5
+      maximum: 3600

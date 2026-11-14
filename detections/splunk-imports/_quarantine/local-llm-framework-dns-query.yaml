@@ -1,0 +1,48 @@
+id: splunk-security-content-d7ceffc5-a45e-412b-b9fa-2ba27c284503
+name: Local LLM Framework DNS Query
+description: 'Detects DNS queries related to local LLM models on endpoints by monitoring
+  Sysmon DNS query events (Event ID 22) for known LLM model domains and services.
+
+  Local LLM frameworks like Ollama, LM Studio, and GPT4All make DNS calls to repositories
+  such as huggingface.co and ollama.ai for model downloads, updates, and telemetry.
+
+  These queries can reveal unauthorized AI tool usage or data exfiltration risks on
+  corporate networks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1590
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/sysinternals/downloads/sysmon
+- https://www.splunk.com/en_us/blog/artificial-intelligence/splunk-technology-add-on-for-ollama.html
+- https://blogs.cisco.com/security/detecting-exposed-llm-servers-shodan-case-study-on-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=22\nQueryName IN (\n    \"*huggingface*\",\n  \
+    \  \"*ollama*\",\n    \"*jan.ai*\",\n    \"*gpt4all*\",\n    \"*nomic*\",\n  \
+    \  \"*koboldai*\",\n    \"*lmstudio*\",\n    \"*modelscope*\",\n    \"*civitai*\"\
+    ,\n    \"*oobabooga*\",\n    \"*replicate*\",\n    \"*anthropic*\",\n    \"*openai*\"\
+    ,\n    \"*openrouter*\",\n    \"*api.openrouter*\",\n    \"*aliyun*\",\n    \"\
+    *alibabacloud*\",\n    \"*dashscope.aliyuncs*\"\n)\nNOT Image IN (\n    \"*\\\\\
+    MsMpEng.exe\",\n    \"C:\\\\ProgramData\\\\*\",\n    \"C:\\\\Windows\\\\System32\\\
+    \\*\",\n    \"C:\\\\Windows\\\\SysWOW64\\\\*\"\n)\n| stats count\n    min(_time)\
+    \ as firstTime\n    max(_time) as lastTime\n    by src Image process_name QueryName\
+    \ query_count answer answer_count reply_code_id vendor_product\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `local_llm_framework_dns_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d7ceffc5-a45e-412b-b9fa-2ba27c284503
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/local_llm_framework_dns_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

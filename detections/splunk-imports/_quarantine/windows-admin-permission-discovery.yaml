@@ -1,0 +1,45 @@
+id: splunk-security-content-e08620cb-9488-4052-832d-97bcc0afd414
+name: Windows Admin Permission Discovery
+description: The following analytic identifies the creation of a suspicious file named
+  'win.dat' in the root directory (C:\). It leverages data from the Endpoint.Filesystem
+  datamodel to detect this activity. This behavior is significant as it is commonly
+  used by malware like NjRAT to check for administrative privileges on a compromised
+  host. If confirmed malicious, this activity could indicate that the malware has
+  administrative access, allowing it to perform high-privilege actions, potentially
+  leading to further system compromise and persistence.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.njrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '|tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Filesystem where Filesystem.file_name
+    IN ("*.exe", "*.dll", "*.sys", "*.com", "*.vbs", "*.vbe", "*.js", "*.bat", "*.cmd",
+    "*.pif", "*.lnk", "*.dat") by Filesystem.action Filesystem.dest Filesystem.file_access_time
+    Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name
+    Filesystem.file_path Filesystem.file_acl Filesystem.file_size Filesystem.process_guid
+    Filesystem.process_id Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | eval dropped_file_path = split(file_path, "\\") | eval dropped_file_path_split_count
+    = mvcount(dropped_file_path) | eval root_drive = mvindex(dropped_file_path,0)
+    | where LIKE(root_drive, "C:") AND dropped_file_path_split_count = 2 | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_admin_permission_discovery_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e08620cb-9488-4052-832d-97bcc0afd414
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_admin_permission_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

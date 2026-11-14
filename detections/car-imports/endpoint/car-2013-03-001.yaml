@@ -1,0 +1,79 @@
+id: mitre-car-car-2013-03-001
+name: Reg.exe called from Command Shell
+description: 'Registry modifications are often essential in establishing persistence
+  via known Windows mechanisms. Many legitimate modifications are done graphically
+  via `regedit.exe` or by using the corresponding channels, or even calling the Registry
+  APIs directly. The built-in utility `reg.exe` provides a [command-line interface](https://en.wikipedia.org/wiki/Command-line_interface)
+  to the registry, so that queries and modifications can be performed from a shell,
+  such as `cmd.exe`. When a user is responsible for these actions, the parent of `cmd.exe`
+  will likely be `explorer.exe`. Occasionally, power users and administrators write
+  scripts that do this behavior as well, but likely from a different process tree.
+  These background scripts must be learned so they can be tuned out accordingly.
+
+
+  ### Output Description
+
+
+  The sequence of processes that resulted in `reg.exe` being started from a shell.
+  That is, a hierarchy that looks like
+
+
+  -   `great-grand_parent.exe`
+
+  -   `grand_parent.exe`
+
+  -   `parent.exe`
+
+  -   `reg.exe`'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1012
+  - T1112
+  - T1547
+  - T1574
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'processes = search Process:Create
+
+      reg = filter processes where (exe == "reg.exe" and parent_exe == "cmd.exe")
+
+      cmd = filter processes where (exe == "cmd.exe" and parent_exe != "explorer.exe"")
+
+      reg_and_cmd = join (reg, cmd) where (reg.ppid == cmd.pid and reg.hostname ==
+      cmd.hostname)
+
+      output reg_and_cmd
+
+      '
+  - name: ''
+    type: DNIF
+    code: '_fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $Process=regex(.*reg\.exe.*)i
+      AND $ParentProcess=regex(.*cmd\.exe.*)i as #A limit 100
+
+      >>_fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $Process=regex(.*cmd\.exe.*)i
+      NOT $ParentProcess=regex(.*explorer\.exe.*)i as #B limit 100
+
+      >>_checkif sjoin #B.$PPID = #A.$CPID str_compare #B.$SystemName eq #A.$SystemName
+      include
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-03-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-03-001.yaml
+notes:
+  car_status: needs_implementation

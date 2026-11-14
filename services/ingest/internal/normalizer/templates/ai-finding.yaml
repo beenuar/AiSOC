@@ -1,0 +1,64 @@
+# AI guardrail finding — something the customer's AI estate did that a
+# guardrail, scanner or the SDK's own checks flagged.
+#
+# The counterpart to ai-runtime.yaml, and the split between them is the whole
+# design. Routine AI activity is `6003` API Activity: category 6, so
+# `should_promote()` leaves it in the lake unless severity reaches high, and it
+# is hunted rather than alerted on. A finding is `2001` Security Finding:
+# category 2, which the promoter always promotes regardless of severity,
+# because something has already decided this is worth a human's attention.
+#
+# Getting that split wrong in either direction is the failure mode. Model
+# everything as 2001 and a chatty agent floods the queue. Model everything as
+# 6003 and a detected prompt injection sits silently in the lake.
+#
+# `finding_type` is the signal to write detections against: prompt_injection,
+# excessive_agency, sensitive_data_egress, unapproved_model, tool_escalation,
+# shadow_ai.
+id: ai-finding
+vendor_name: AiSOC
+product_name: AI Guardrail
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  finding_id: finding.uid
+  finding_type: activity_name
+  title: finding.title
+  description: finding.desc
+  # The principal and the AI asset it concerns.
+  agent_id: actor.process.name
+  agent_name: actor.process.path
+  on_behalf_of: actor.user.name
+  model: metadata.product.feature.name
+  provider: cloud.provider
+  server_name: resource.name
+  tool_name: finding.evidence.tool_name
+  # What tripped, and how sure the detector is. `confidence` is carried
+  # because a guardrail's own uncertainty should reach triage rather than
+  # being flattened into a severity tier.
+  rule_id: finding.related_events.id
+  confidence: finding.evidence.confidence
+  matched_pattern: finding.evidence.matched_pattern
+  # Provenance without content, same contract as ai-runtime.
+  prompt_sha256: finding.evidence.prompt_sha256
+  response_sha256: finding.evidence.response_sha256
+  session_id: finding.evidence.session_id
+  source_ip: src_endpoint.ip
+  hostname: src_endpoint.hostname
+severity_field: severity
+severity_map:
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  warning: 3
+  high: 4
+  critical: 5
+  fatal: 6
+time_field: timestamp
+message_field: title
+constants:
+  source_type: ai-finding
+  metadata.product.vendor_name: AiSOC
+  metadata.product.name: AI Guardrail

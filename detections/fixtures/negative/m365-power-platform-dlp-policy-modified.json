@@ -1,0 +1,4 @@
+{
+  "operation": "GetEnvironmentDlpPolicy",
+  "actor": "admin@corp.com"
+}

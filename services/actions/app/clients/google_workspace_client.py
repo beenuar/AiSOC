@@ -1,0 +1,436 @@
+"""
+Google Workspace (Admin SDK Directory + Identity) client.
+
+Wraps the Admin SDK Directory API and Identity Toolkit for the
+identity-response actions AiSOC supports:
+
+* ``suspend_user``    — Directory.users.update suspended=True
+* ``unsuspend_user``  — Directory.users.update suspended=False
+* ``revoke_sessions`` — Directory.users.signOut on Workspace,
+                        which invalidates every active OAuth/SAML
+                        session and forces a fresh sign-in.
+* ``reset_password``  — Directory.users.update password=<temp>
+                        with changePasswordAtNextLogin=True. We
+                        never persist the temp password in the
+                        action response payload.
+* ``enforce_2sv``     — Directory.users.update with the legacy
+                        ``enforced2Sv`` flag (Workspace's standard
+                        verb for "make this user re-enrol MFA on
+                        next sign-in").
+
+Authentication
+--------------
+
+Google Workspace requires *delegated* service-account auth:
+1. Create a service account in GCP IAM.
+2. Enable domain-wide delegation in Workspace Admin.
+3. Grant the scopes ``admin.directory.user``,
+   ``admin.directory.user.security``.
+
+The runtime credential is a JSON key file we sign a JWT with, then
+trade for a bearer token. The signed JWT carries ``sub`` = the
+super-admin email to impersonate (because the Admin SDK refuses
+to act on behalf of a service account; it must impersonate a real
+admin).
+
+Credentials expected in :class:`ActionRequest.parameters`:
+
+* ``gws_service_account_key``  — JSON key content as a string.
+* ``gws_subject_email``        — admin email to impersonate.
+
+The class uses ``google-auth`` + ``httpx`` rather than the
+Google API Python client because the latter is sync-only and would
+need a thread pool.
+"""
+
+from __future__ import annotations
+
+import json
+import secrets
+import string
+import time
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from urllib.parse import quote
+
+import httpx
+import structlog
+
+logger = structlog.get_logger()
+
+_TOKEN_URI = "https://oauth2.googleapis.com/token"
+_DIRECTORY = "https://admin.googleapis.com/admin/directory/v1"
+_REPORTS = "https://admin.googleapis.com/admin/reports/v1"
+_SCOPES = " ".join(
+    [
+        "https://www.googleapis.com/auth/admin.directory.user",
+        "https://www.googleapis.com/auth/admin.directory.user.security",
+        # Gap-closure Phase 4.2. Required by `list_login_events`, and listed
+        # here rather than on a second client so one credential covers both
+        # directions. A deployment whose service account has not had this
+        # scope granted domain-wide gets a 403 on the login read and an
+        # unchanged containment path, which is the safe asymmetry: the read
+        # names the missing scope instead of reporting no logins.
+        "https://www.googleapis.com/auth/admin.reports.audit.readonly",
+    ]
+)
+
+
+def _gen_temp_password(length: int = 16) -> str:
+    alphabet = string.ascii_letters + string.digits + "!@#$%&*"
+    while True:
+        candidate = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.islower() for c in candidate)
+            and any(c.isupper() for c in candidate)
+            and any(c.isdigit() for c in candidate)
+            and any(c in "!@#$%&*" for c in candidate)
+        ):
+            return candidate
+
+
+class GoogleWorkspaceClient:
+    """Async client over Admin SDK Directory + Identity Toolkit."""
+
+    def __init__(self, service_account_key: str | dict, subject_email: str) -> None:
+        if isinstance(service_account_key, str):
+            try:
+                service_account_key = json.loads(service_account_key)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"gws_service_account_key is not valid JSON: {exc}") from exc
+        # `json.loads` happily returns a str, list or int for a document that
+        # is valid JSON but not an object. Without this the credential passed
+        # construction and failed at `self._key["client_email"]` — inside the
+        # JWT signing path, with `TypeError: string indices must be integers`,
+        # at the moment an operator triggered a live containment action. The
+        # configuration is wrong either way; it should say so when it is
+        # saved, not when it is used.
+        if not isinstance(service_account_key, dict):
+            raise ValueError(f"gws_service_account_key must be a JSON object, got {type(service_account_key).__name__}")
+        self._key: dict[str, Any] = service_account_key
+        self._subject = subject_email
+        self._token: str | None = None
+        self._token_expiry: float = 0.0
+
+    async def _mint_token(self, client: httpx.AsyncClient) -> str:
+        """Sign a JWT and exchange for an access token.
+
+        We do the signing inline to avoid pulling in `google-auth`
+        for one operation — the JWT shape is fixed and the underlying
+        crypto is a single RSA-SHA256 sign over a stable claim set.
+        """
+        # Imports are local because we don't want to pay the
+        # cryptography import cost on every client construction; the
+        # JWT path only runs once per token.
+        import base64
+
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+
+        now = int(time.time())
+        header = {"alg": "RS256", "typ": "JWT"}
+        claims = {
+            "iss": self._key["client_email"],
+            "sub": self._subject,
+            "scope": _SCOPES,
+            "aud": _TOKEN_URI,
+            "iat": now,
+            "exp": now + 3600,
+        }
+
+        def _b64(blob: dict) -> str:
+            return base64.urlsafe_b64encode(json.dumps(blob, separators=(",", ":")).encode()).rstrip(b"=").decode()
+
+        signing_input = f"{_b64(header)}.{_b64(claims)}".encode()
+        private_key = serialization.load_pem_private_key(self._key["private_key"].encode(), password=None)
+        signature = private_key.sign(signing_input, padding.PKCS1v15(), hashes.SHA256())
+        encoded_sig = base64.urlsafe_b64encode(signature).rstrip(b"=").decode()
+        jwt_str = f"{signing_input.decode()}.{encoded_sig}"
+
+        resp = await client.post(
+            _TOKEN_URI,
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": jwt_str,
+            },
+        )
+        resp.raise_for_status()
+        body = resp.json()
+        self._token = body["access_token"]
+        self._token_expiry = time.time() + int(body.get("expires_in", 3600)) - 60  # 1m safety margin
+        return self._token
+
+    async def _ensure_token(self, client: httpx.AsyncClient) -> None:
+        if not self._token or time.time() >= self._token_expiry:
+            await self._mint_token(client)
+
+    def _headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
+
+    async def list_login_events(
+        self,
+        user_email: str,
+        *,
+        hours: int = 24,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Recent login audit activity for one account.
+
+        Gap-closure Phase 4.2. Read-only: a GET over the Reports API's
+        ``login`` application activity feed.
+
+        The Reports API takes the user key in the path and the window as
+        RFC 3339 query parameters, so there is no query language to escape
+        here. The address is still percent-encoded, because it arrives from
+        alert text and a path segment carrying ``../`` would otherwise steer
+        the request at a different Reports endpoint.
+
+        Note the scope this needs. The two scopes this client already requests
+        are directory scopes and do not cover reports; a deployment that has
+        not granted ``admin.reports.audit.readonly`` to the service account
+        gets a 403 here, which surfaces as a read failure naming the scope
+        rather than as an account with no logins.
+        """
+        since = datetime.now(UTC) - timedelta(hours=max(1, min(hours, 720)))
+        user_key = quote(str(user_email), safe="@")
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_REPORTS}/activities/users/{user_key}/applications/login",
+                headers=self._headers(),
+                params={"startTime": since.strftime("%Y-%m-%dT%H:%M:%SZ"), "maxResults": min(limit, 100)},
+            )
+            resp.raise_for_status()
+            raw = resp.json().get("items", []) or []
+        return [self._project_login(entry) for entry in raw if isinstance(entry, dict)]
+
+    @staticmethod
+    def _project_login(entry: dict[str, Any]) -> dict[str, Any]:
+        raw_events = entry.get("events")
+        events: list[Any] = raw_events if isinstance(raw_events, list) else []
+        first: dict[str, Any] = events[0] if events and isinstance(events[0], dict) else {}
+        params = {
+            p.get("name"): (p.get("value") if p.get("value") is not None else p.get("boolValue"))
+            for p in (first.get("parameters") or [])
+            if isinstance(p, dict) and p.get("name")
+        }
+        raw_identity = entry.get("id")
+        identity: dict[str, Any] = raw_identity if isinstance(raw_identity, dict) else {}
+        return {
+            "at": identity.get("time"),
+            "event": first.get("name"),
+            "ip": entry.get("ipAddress"),
+            "login_type": params.get("login_type"),
+            "challenge_method": params.get("login_challenge_method"),
+            "is_suspicious": params.get("is_suspicious"),
+            "failure_type": params.get("login_failure_type"),
+        }
+
+    async def suspend_user(self, user_email: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.patch(
+                f"{_DIRECTORY}/users/{user_email}",
+                headers=self._headers(),
+                json={"suspended": True},
+            )
+            resp.raise_for_status()
+            logger.info("gws.suspend_user.success", user=user_email)
+            return {"success": True, "action": "suspend_user", "user": user_email}
+
+    async def unsuspend_user(self, user_email: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.patch(
+                f"{_DIRECTORY}/users/{user_email}",
+                headers=self._headers(),
+                json={"suspended": False},
+            )
+            resp.raise_for_status()
+            logger.info("gws.unsuspend_user.success", user=user_email)
+            return {"success": True, "action": "unsuspend_user", "user": user_email}
+
+    async def revoke_sessions(self, user_email: str) -> dict[str, Any]:
+        """Sign the user out of every Workspace session.
+
+        Workspace's signOut verb terminates OAuth grants too; the
+        user has to re-authenticate at the IdP. Equivalent to
+        Entra's ``revokeSignInSessions`` plus the OAuth-grant
+        reset.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.post(
+                f"{_DIRECTORY}/users/{user_email}/signOut",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            logger.info("gws.revoke_sessions.success", user=user_email)
+            return {"success": True, "action": "revoke_sessions", "user": user_email}
+
+    async def reset_password(self, user_email: str) -> dict[str, Any]:
+        temp_password = _gen_temp_password()
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.patch(
+                f"{_DIRECTORY}/users/{user_email}",
+                headers=self._headers(),
+                json={
+                    "password": temp_password,
+                    "changePasswordAtNextLogin": True,
+                },
+            )
+            resp.raise_for_status()
+            logger.info("gws.reset_password.success", user=user_email)
+            return {
+                "success": True,
+                "action": "reset_password",
+                "user": user_email,
+                # Same reasoning as the Entra client — we never
+                # surface the temp password into the action
+                # timeline.
+            }
+
+    async def enforce_2sv(self, user_email: str) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.patch(
+                f"{_DIRECTORY}/users/{user_email}",
+                headers=self._headers(),
+                json={"enforced2Sv": True},
+            )
+            resp.raise_for_status()
+            logger.info("gws.enforce_2sv.success", user=user_email)
+            return {"success": True, "action": "enforce_2sv", "user": user_email}
+
+    # ------------------------------------------------------------------
+    # Wave-2 Phase 6.1: OAuth-grant and application-password containment
+    # ------------------------------------------------------------------
+    #
+    # Suspending the account and signing the sessions out leaves two routes
+    # back in that a suspended user does not close: a third-party OAuth
+    # grant keeps its own refresh token, and an application-specific
+    # password keeps working against the legacy protocols that cannot do
+    # 2-step verification. Containing the account and leaving those is the
+    # shape of an incident that reopens a week later.
+    #
+    # Both need the `admin.directory.user.security` scope, which this
+    # client already requests, so no deployment has to re-consent.
+    #
+    # References, fetched before these were written:
+    #   https://developers.google.com/workspace/admin/directory/reference/rest/v1/tokens/delete
+    #   https://developers.google.com/workspace/admin/directory/reference/rest/v1/asps/delete
+
+    async def list_oauth_tokens(self, user_email: str) -> list[dict[str, Any]]:
+        """Third-party applications holding a token for this user.
+
+        The read behind the grant-revocation probe, and useful on its own:
+        it is the list an analyst needs to decide which grant to revoke.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}/tokens", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        return [
+            {
+                "client_id": row.get("clientId"),
+                "display_text": row.get("displayText"),
+                "scopes": row.get("scopes") or [],
+                "anonymous": row.get("anonymous"),
+                "native_app": row.get("nativeApp"),
+            }
+            for row in body.get("items", [])
+        ]
+
+    async def revoke_oauth_token(self, user_email: str, client_id: str) -> dict[str, Any]:
+        """DELETE one application's token for this user.
+
+        Not platform-reversible: Google offers no call that re-grants a
+        revoked consent, because re-consent is the user's decision at the
+        application's own prompt. Recorded as such in the contract rather
+        than given a reverse capability that would dispatch to nothing.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.delete(
+                f"{_DIRECTORY}/users/{user_email}/tokens/{client_id}",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            logger.info("gws.revoke_oauth_token.success", user=user_email, client_id=client_id)
+            return {
+                "success": True,
+                "action": "revoke_oauth_grant",
+                "user": user_email,
+                "client_id": client_id,
+            }
+
+    async def list_app_passwords(self, user_email: str) -> list[dict[str, Any]]:
+        """Application-specific passwords (ASPs) issued to this user."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}/asps", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        return [
+            {
+                "code_id": row.get("codeId"),
+                "name": row.get("name"),
+                "creation_time": row.get("creationTime"),
+                "last_time_used": row.get("lastTimeUsed"),
+            }
+            for row in body.get("items", [])
+        ]
+
+    async def revoke_app_passwords(self, user_email: str, *, code_id: str | None = None) -> dict[str, Any]:
+        """Delete one ASP, or every ASP the user holds.
+
+        The default is every one. A per-code option exists because an
+        analyst who has identified the single leaked code should be able to
+        take the narrow action, and because a verb that can only take the
+        wide one gets avoided.
+
+        Deleting an ASP cannot be undone — Google does not return the code
+        and there is no re-create call. The user generates a new one, which
+        is a different credential. The contract records that.
+        """
+        codes = [code_id] if code_id else [entry["code_id"] for entry in await self.list_app_passwords(user_email) if entry.get("code_id")]
+        revoked: list[str] = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            for code in codes:
+                resp = await client.delete(
+                    f"{_DIRECTORY}/users/{user_email}/asps/{code}",
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                revoked.append(code)
+        logger.info("gws.revoke_app_passwords.success", user=user_email, count=len(revoked))
+        return {
+            "success": True,
+            "action": "revoke_token",
+            "user": user_email,
+            "revoked_code_ids": revoked,
+            "count": len(revoked),
+        }
+
+    async def get_user(self, user_email: str) -> dict[str, Any]:
+        """Directory record for one account. The read behind the suspend probe.
+
+        Reference: https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json()
+        return {
+            "id": body.get("id"),
+            "primary_email": body.get("primaryEmail"),
+            "suspended": bool(body.get("suspended", False)),
+            "archived": bool(body.get("archived", False)),
+            "is_admin": bool(body.get("isAdmin", False)),
+            "is_enforced_in_2sv": bool(body.get("isEnforcedIn2Sv", False)),
+            "last_login_time": body.get("lastLoginTime"),
+        }

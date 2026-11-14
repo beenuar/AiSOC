@@ -1,0 +1,47 @@
+id: splunk-security-content-4b4f8fdd-1f9e-45d8-9b0f-1f64c0b297a4
+name: Cisco ASA - Core Syslog Message Volume Drop
+description: Adversaries may intentionally suppress or reduce the volume of core Cisco
+  ASA syslog messages to evade detection or cover their tracks. This hunting search
+  is recommended to proactively identify suspicious downward shifts or absences in
+  key syslog message IDs, which may indicate tampering or malicious activity. Visualizing
+  this data in Splunk dashboards enables security teams to quickly spot anomalies
+  and investigate potential compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://blog.talosintelligence.com/arcanedoor-new-espionage-focused-campaign-found-targeting-perimeter-network-devices/
+- https://sec.cloudapps.cisco.com/security/center/resources/asa_ftd_continued_attacks
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-webvpn-z5xP8EUB
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-http-code-exec-WmfP3h3O
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-asaftd-webvpn-YROOTUW
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-http-code-exec-WmfP3h3O
+- https://www.cisa.gov/news-events/directives/ed-25-03-identify-and-mitigate-potential-compromise-cisco-devices
+- https://www.ncsc.gov.uk/news/persistent-malicious-targeting-cisco-devices
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (302013, 302014, 609002, 710005)\n| eval\
+    \ msg_desc=case(\n  message_id=\"302013\",\"Built inbound TCP connection\",\n\
+    \  message_id=\"302014\",\"Teardown TCP connection\",\n  message_id=\"609002\"\
+    ,\"Teardown local-host management\",\n  message_id=\"710005\",\"TCP request discarded\"\
+    \n)\n| bin _time span=15m\n| stats count values(msg_desc) as message_description\n\
+    \              values(dest) as dest\n  by _time message_id\n| xyseries _time message_id\
+    \ count\n| `cisco_asa___core_syslog_message_volume_drop_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4b4f8fdd-1f9e-45d8-9b0f-1f64c0b297a4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___core_syslog_message_volume_drop.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "path": "/usr/bin/plutil"
+}

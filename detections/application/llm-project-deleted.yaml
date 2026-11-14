@@ -1,0 +1,23 @@
+id: det-application-078
+name: LLM Provider Project Deleted
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'LLM Provider
+  Project Deleted'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: application
+log_source:
+  product: openai
+  service: audit
+detection:
+  condition: |
+    event_type ENDSWITH ".project.archived"
+false_positives:
+- Planned project decommission
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

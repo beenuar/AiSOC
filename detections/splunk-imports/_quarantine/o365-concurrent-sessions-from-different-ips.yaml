@@ -1,0 +1,42 @@
+id: splunk-security-content-58e034de-1f87-4812-9dc3-a4f68c7db930
+name: O365 Concurrent Sessions From Different Ips
+description: The following analytic identifies user sessions in Office 365 accessed
+  from multiple IP addresses, indicating potential adversary-in-the-middle (AiTM)
+  phishing attacks. It detects this activity by analyzing Azure Active Directory logs
+  for 'UserLoggedIn' operations and flags sessions with more than one associated IP
+  address. This behavior is significant as it suggests unauthorized concurrent access,
+  which is uncommon in normal usage. If confirmed malicious, the impact could include
+  data theft, account takeover, and the launching of internal phishing campaigns,
+  posing severe risks to organizational security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1185/
+- https://breakdev.org/evilginx-2-next-generation-of-phishing-2fa-tokens/
+- https://github.com/kgretzky/evilginx2
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory Operation=UserLoggedIn\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\
+    \ values(src) as src\n    BY signature dest user\n       vendor_account vendor_product\
+    \ SessionId\n  | where mvcount(src) > 1\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_concurrent_sessions_from_different_ips_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 58e034de-1f87-4812-9dc3-a4f68c7db930
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_concurrent_sessions_from_different_ips.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

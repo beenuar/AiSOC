@@ -1,0 +1,4 @@
+{
+  "anonymous_auth": true,
+  "method_name": "clusters.update-x"
+}

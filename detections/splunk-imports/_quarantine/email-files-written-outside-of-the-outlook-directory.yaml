@@ -1,0 +1,45 @@
+id: splunk-security-content-8d52cf03-ba25-4101-aa78-07994aed4f74
+name: Email files written outside of the Outlook directory
+description: The following analytic detects email files (.pst or .ost) being created
+  outside the standard Outlook directories. It leverages the Endpoint.Filesystem data
+  model to identify file creation events and filters for email files not located in
+  "C:\Users\*\My Documents\Outlook Files\*" or "C:\Users\*\AppData\Local\Microsoft\Outlook*".
+  This activity is significant as it may indicate data exfiltration or unauthorized
+  access to email data. If confirmed malicious, an attacker could potentially access
+  sensitive email content, leading to data breaches or further exploitation within
+  the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.001
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Filesystem.file_path)\
+    \ as file_path min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n\
+    \  WHERE (\n        Filesystem.file_name=*.pst\n        OR\n        Filesystem.file_name=*.ost\n\
+    \    )\n    Filesystem.file_path != \"C:\\Users\\*\\My Documents\\Outlook Files\\\
+    *\"  Filesystem.file_path!=\"C:\\Users\\*\\AppData\\Local\\Microsoft\\Outlook*\"\
+    \n  BY Filesystem.action Filesystem.dest Filesystem.file_access_time\n     Filesystem.file_create_time\
+    \ Filesystem.file_hash Filesystem.file_modify_time\n     Filesystem.file_name\
+    \ Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid\
+    \ Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(\"\
+    Filesystem\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `email_files_written_outside_of_the_outlook_directory_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8d52cf03-ba25-4101-aa78-07994aed4f74
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/email_files_written_outside_of_the_outlook_directory.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

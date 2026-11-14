@@ -1,0 +1,29 @@
+title: GCP Project Owner or Editor Role Granted
+id: aisoc-id-cl-0019-gcp-owner-grant
+status: stable
+description: |
+  Highly privileged GCP IAM role (roles/owner, roles/editor,
+  roles/iam.securityAdmin) granted to a principal. Privilege
+  escalation step in GCP compromises.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: gcp
+  service: audit
+tags:
+  - attack.t1098.003
+  - attack.privilege_escalation
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: gcp
+    event.action:
+      - 'SetIamPolicy'
+      - 'google.iam.admin.v1.SetIamPolicy'
+  privileged:
+    gcp.iam.role|contains:
+      - 'roles/owner'
+      - 'roles/editor'
+      - 'roles/iam.securityAdmin'
+      - 'roles/resourcemanager.organizationAdmin'
+  condition: selection and privileged

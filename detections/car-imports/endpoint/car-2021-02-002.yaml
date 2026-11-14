@@ -1,0 +1,62 @@
+id: mitre-car-car-2021-02-002
+name: Get System Elevation
+description: 'Cyber actors frequently escalate to the SYSTEM account after gaining
+  entry to a Windows host, to enable them to carry out various attacks more effectively.
+  Tools such as Meterpreter, Cobalt Strike, and Empire carry out automated steps to
+  "Get System", which is the same as switching over to the System user account. Most
+  of these tools utilize multiple techniques to try and attain SYSTEM: in the first
+  technique, they create a named pipe and connects an instance of cmd.exe to it, which
+  allows them to impersonate the security context of cmd.exe, which is SYSTEM. In
+  the second technique, a malicious DLL is injected into a process that is running
+  as SYSTEM; the injected DLL steals the SYSTEM token and applies it where necessary
+  to escalate privileges. This analytic looks for both of these techniques.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - Meterpreter and Cobalt Strike
+    type: Pseudocode
+    code: "processes = search Process\nsuspicious_processes = filter processes where\
+      \ (\n  (parent_image_path == C:\\Windows\\System32\\services.exe\" AND\n   image_path\
+      \ == \"C:\\Windows\\System32\\cmd.exe\" AND\n   command_line == \"*echo*\" AND\n\
+      \   command_line == \"*\\pipe\\*\") OR\n  (image_path == \"C:\\Windows\\System32\\\
+      rundll32.exe\" AND\n   command_line == \"*,a /p:*\"))\noutput suspicious_processes\n"
+  - name: Splunk Search - Meterpreter and Cobalt Strike
+    type: Splunk
+    code: 'index=__your_sysmon_index__ (ParentImage="C:\\Windows\\System32\\services.exe"
+      Image="C:\\Windows\\System32\\cmd.exe" (CommandLine="*echo*" AND CommandLine="*\\pipe\\*"))
+
+      OR (Image="C:\\Windows\\System32\\rundll32.exe" CommandLine="*,a /p:*")
+
+      '
+  - name: Pseudocode - Empire and PoshC2
+    type: Pseudocode
+    code: "processes = search Process\nsuspicious_processes = filter processes where\
+      \ (\n  (image_path == \"C:\\Windows\\System32\\cmd.exe\" OR\n   command_line\
+      \ == \"*%COMSPEC%*\") AND\n   command_line == \"*echo*\" AND\n   command_line\
+      \ == \"*\\pipe\\*\"))\noutput suspicious_processes\n"
+  - name: Splunk Search - Empire and PoshC2
+    type: Splunk
+    code: 'index=__your_sysmon_index__ (Image="C:\\Windows\\System32\\cmd.exe" OR
+      CommandLine="*%COMSPEC%*") (CommandLine="*echo*" AND CommandLine="*\pipe\*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-02-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-02-002.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,31 @@
+title: Classified-Marked File Detected on Lower-Classification Network
+id: aisoc-vt-pub-0002-classified-spillage
+status: experimental
+description: |
+  A file carrying a classification marking (SECRET, TOP SECRET,
+  CONFIDENTIAL, NOFORN) was observed in transit, at rest, or in an
+  upload event on a network at a lower classification tier. Direct
+  classified-spillage event requiring immediate containment and
+  formal incident reporting per NIST SP 800-53 IR-9 and applicable
+  agency directives.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: dlp
+  service: classification
+tags:
+  - attack.t1530
+  - attack.exfiltration
+  - aisoc.vertical.public_sector
+  - aisoc.compliance.nist
+detection:
+  selection:
+    event.module: dlp.classification
+    document.classification|in:
+      - 'secret'
+      - 'top_secret'
+      - 'confidential'
+      - 'noforn'
+  filter:
+    network.classification_tier|gte: document.classification_tier
+  condition: selection and not filter

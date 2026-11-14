@@ -1,0 +1,69 @@
+id: splunk-security-content-cb909b3e-512b-11ec-aa31-3e22fbd008af
+name: Possible Lateral Movement PowerShell Spawn
+description: 'The following analytic detects the spawning of a PowerShell process
+  as a child or grandchild of commonly abused processes like services.exe, wmiprvse.exe,
+  svchost.exe, wsmprovhost.exe, and mmc.exe.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  process and parent process names, as well as command-line executions.
+
+  This activity is significant as it could indicates lateral movement or remote code
+  execution attempts by adversaries.
+
+  If confirmed malicious, this behavior could allow attackers to execute code remotely,
+  escalate privileges, or persist within the environment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  - T1021.006
+  - T1047
+  - T1053.005
+  - T1059.001
+  - T1218.014
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/003/
+- https://attack.mitre.org/techniques/T1021/006/
+- https://attack.mitre.org/techniques/T1047/
+- https://attack.mitre.org/techniques/T1053/005/
+- https://attack.mitre.org/techniques/T1543/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\ncount min(_time) as firstTime\n\
+    \      max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n\n(\n\
+    \    Processes.parent_process_name IN (\n        \"mmc.exe\",\n        \"services.exe\"\
+    ,\n        \"wmiprvse.exe\",\n        \"wsmprovhost.exe\"\n    )\n    OR\n   \
+    \ (\n        Processes.parent_process_name=\"svchost.exe\"\n        ```\n    \
+    \    We exclude the \"Schedule\" service from the svchost.exe process. But since\
+    \ there are instances where its not hosted in a dedicated svchost process, we\
+    \ need to the hosting group \"netsvcs\" too\n        ```\n        NOT Processes.parent_process\
+    \ IN (\n            \"*-k netsvcs*\",\n            \"*-s Schedule*\",\n      \
+    \  )\n    )\n)\nAND\n(\n    Processes.process_name IN (\"powershell.exe\", \"\
+    pwsh.exe\")\n    OR\n    (\n        Processes.process_name=cmd.exe\n        Processes.process\
+    \ IN (\n            \"*powershell*\",\n            \"*pwsh*\"\n        )\n   \
+    \ )\n)\nNOT Processes.process IN (\"*C:\\\\Windows\\\\CCM\\\\*\")\n\nby Processes.action\
+    \ Processes.dest Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `possible_lateral_movement_powershell_spawn_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cb909b3e-512b-11ec-aa31-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/possible_lateral_movement_powershell_spawn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

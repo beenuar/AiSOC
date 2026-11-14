@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-okta-threatinsight-suspected-brute-force-attack
+name: okta_threatinsight_suspected_brute_force_attack
+description: okta_threatinsight_suspected_brute_force_attack
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule okta_threatinsight_suspected_brute_force_attack {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Okta ThreatInsight detects\
+    \ multiple login failures from the same IP across one or more Okta orgs.\"\n \
+    \   rule_id = \"mr_9537e888-7af7-491f-a5e2-3623e1798aba\"\n    rule_name = \"\
+    Okta ThreatInsight Suspected Bruteforce Attack\"\n    reference = \"https://help.okta.com/en-us/Content/Topics/Security/threat-insight/configure-threatinsight-system-log.htm\"\
+    \n    mitre_attack_tactic = \"Credential Access\"\n    mitre_attack_technique\
+    \ = \"Brute Force: Password Guessing\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1110/001/\"\
+    \n    mitre_attack_version = \"v13.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"Okta\"\n    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n\
+    \    $bruteforce.metadata.product_name = \"Okta\"\n    $bruteforce.metadata.vendor_name\
+    \ = \"Okta\"\n    $bruteforce.metadata.event_type = \"USER_UNCATEGORIZED\"\n \
+    \   $bruteforce.metadata.product_event_type = \"security.threat.detected\"\n \
+    \   $bruteforce.security_result.category_details = \"Login Failures\"\n    $bruteforce.principal.user.userid\
+    \ = $userid\n\n  match:\n    $userid over 1h\n\n  outcome:\n    $risk_score =\
+    \ max(\n        35 +\n        // If the IP Address is marked as suspicious IP\
+    \ address by Okta ThreatInsight\n        if($bruteforce.security_result.detection_fields[\"\
+    threatSuspected\"] = \"true\", 30) +\n        // Unauthorized target geographies\n\
+    \        if($bruteforce.principal.ip_geo_artifact.location.country_or_region =\
+    \ \"Cuba\", 20) +\n        if($bruteforce.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Iran\", 20) +\n        if($bruteforce.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"North Korea\", 20) +\n        if($bruteforce.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Russia\", 20) +\n        if($bruteforce.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Syria\", 20)\n    )\n    $mitre_attack_tactic = \"Credential Access\"\n\
+    \    $mitre_attack_technique = \"Brute Force: Password Guessing\"\n    $target_user_agent\
+    \ = array_distinct($bruteforce.network.http.user_agent)\n    $principal_ip = array_distinct($bruteforce.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($bruteforce.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($bruteforce.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($bruteforce.principal.location.city)\n\
+    \    $security_result_summary = array_distinct($bruteforce.security_result.summary)\n\
+    \n  condition:\n    $bruteforce\n}"
+  chronicle_rule_name: okta_threatinsight_suspected_brute_force_attack
+provenance:
+  source: chronicle/detection-rules
+  source_id: okta_threatinsight_suspected_brute_force_attack
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/okta/okta_threatinsight_suspected_brute_force_attack.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

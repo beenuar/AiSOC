@@ -1,0 +1,29 @@
+title: CAD/PLM Repository Mass Download from Single Identity
+id: aisoc-vt-mfg-0004-cad-plm-mass-download
+status: experimental
+description: |
+  A single identity downloaded CAD drawings, BOMs, or PLM artifacts
+  (Siemens Teamcenter, PTC Windchill, Dassault ENOVIA) at a rate
+  exceeding their personal 30-day baseline. Manufacturing IP theft
+  signal, often immediately precedes employee departure to competitor
+  or foreign nation-state hand-off.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: plm
+  service: audit
+tags:
+  - attack.t1530
+  - attack.exfiltration
+  - aisoc.vertical.manufacturing
+  - aisoc.ip_theft
+detection:
+  selection:
+    event.module|in:
+      - 'teamcenter.audit'
+      - 'windchill.audit'
+      - 'enovia.audit'
+    event.action: 'artifact.downloaded'
+  anomaly:
+    artifacts.sigma|gte: 4.0
+  condition: selection and anomaly

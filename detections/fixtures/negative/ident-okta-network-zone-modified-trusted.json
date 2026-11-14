@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "trusted": true,
+  "zone_type": "IP"
+}

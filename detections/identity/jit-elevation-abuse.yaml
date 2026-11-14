@@ -1,0 +1,24 @@
+id: det-identity-017
+name: Just-In-Time Elevation Held Beyond Window
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Just-In-Time Elevation
+  Held Beyond Window'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.privilege.elevate"
+    AND elevation_duration_minutes > 240
+false_positives:
+- Maintenance window approved beyond 4h (must be ticketed)
+playbook: tpl-account-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

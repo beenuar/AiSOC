@@ -1,0 +1,28 @@
+title: Volume Shadow Copy Deletion
+id: aisoc-id-ep-0012-vss-delete
+status: stable
+description: |
+  Deletion of volume shadow copies — a hallmark precursor to ransomware
+  encryption to prevent recovery.
+author: Cyble AiSOC
+level: critical
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1490
+  - attack.impact
+  - aisoc.ransomware
+detection:
+  vssadmin:
+    process.executable|endswith: '\vssadmin.exe'
+    process.command_line|contains: 'delete shadows'
+  wmic:
+    process.executable|endswith: '\wmic.exe'
+    process.command_line|contains: 'shadowcopy delete'
+  bcdedit:
+    process.executable|endswith: '\bcdedit.exe'
+    process.command_line|contains:
+      - 'bootstatuspolicy ignoreallfailures'
+      - 'recoveryenabled no'
+  condition: vssadmin or wmic or bcdedit

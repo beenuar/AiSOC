@@ -1,0 +1,69 @@
+id: chronicle-detection-rules-download-from-suspicious-tld
+name: download_from_suspicious_tld
+description: download_from_suspicious_tld
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule download_from_suspicious_tld {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects download of certain file types from hosts\
+    \ in suspicious TLDs  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/KfpllN83W2Y3\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/06/13\"\n    category = \"proxy\"\n\n  events:\n\
+    (($selection.target.url = \"exe\" or $selection.target.url = \"vbs\" or $selection.target.url\
+    \ = \"bat\" or $selection.target.url = \"rar\" or $selection.target.url = \"ps1\"\
+    \ or $selection.target.url = \"doc\" or $selection.target.url = \"docm\" or $selection.target.url\
+    \ = \"xls\" or $selection.target.url = \"xlsm\" or $selection.target.url = \"\
+    pptm\" or $selection.target.url = \"rtf\" or $selection.target.url = \"hta\" or\
+    \ $selection.target.url = \"dll\" or $selection.target.url = \"ws\" or $selection.target.url\
+    \ = \"wsf\" or $selection.target.url = \"sct\" or $selection.target.url = \"zip\"\
+    ) and (re.regex($selection.target.hostname, `.*\\.country`) or re.regex($selection.target.hostname,\
+    \ `.*\\.stream`) or re.regex($selection.target.hostname, `.*\\.gdn`) or re.regex($selection.target.hostname,\
+    \ `.*\\.mom`) or re.regex($selection.target.hostname, `.*\\.xin`) or re.regex($selection.target.hostname,\
+    \ `.*\\.kim`) or re.regex($selection.target.hostname, `.*\\.men`) or re.regex($selection.target.hostname,\
+    \ `.*\\.loan`) or re.regex($selection.target.hostname, `.*\\.download`) or re.regex($selection.target.hostname,\
+    \ `.*\\.racing`) or re.regex($selection.target.hostname, `.*\\.online`) or re.regex($selection.target.hostname,\
+    \ `.*\\.science`) or re.regex($selection.target.hostname, `.*\\.ren`) or re.regex($selection.target.hostname,\
+    \ `.*\\.gb`) or re.regex($selection.target.hostname, `.*\\.win`) or re.regex($selection.target.hostname,\
+    \ `.*\\.top`) or re.regex($selection.target.hostname, `.*\\.review`) or re.regex($selection.target.hostname,\
+    \ `.*\\.vip`) or re.regex($selection.target.hostname, `.*\\.party`) or re.regex($selection.target.hostname,\
+    \ `.*\\.tech`) or re.regex($selection.target.hostname, `.*\\.xyz`) or re.regex($selection.target.hostname,\
+    \ `.*\\.date`) or re.regex($selection.target.hostname, `.*\\.faith`) or re.regex($selection.target.hostname,\
+    \ `.*\\.zip`) or re.regex($selection.target.hostname, `.*\\.cricket`) or re.regex($selection.target.hostname,\
+    \ `.*\\.space`) or re.regex($selection.target.hostname, `.*\\.info`) or re.regex($selection.target.hostname,\
+    \ `.*\\.vn`) or re.regex($selection.target.hostname, `.*\\.cm`) or re.regex($selection.target.hostname,\
+    \ `.*\\.am`) or re.regex($selection.target.hostname, `.*\\.cc`) or re.regex($selection.target.hostname,\
+    \ `.*\\.asia`) or re.regex($selection.target.hostname, `.*\\.ws`) or re.regex($selection.target.hostname,\
+    \ `.*\\.tk`) or re.regex($selection.target.hostname, `.*\\.biz`) or re.regex($selection.target.hostname,\
+    \ `.*\\.su`) or re.regex($selection.target.hostname, `.*\\.st`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ro`) or re.regex($selection.target.hostname, `.*\\.ge`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ms`) or re.regex($selection.target.hostname, `.*\\.pk`) or re.regex($selection.target.hostname,\
+    \ `.*\\.nu`) or re.regex($selection.target.hostname, `.*\\.me`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ph`) or re.regex($selection.target.hostname, `.*\\.to`) or re.regex($selection.target.hostname,\
+    \ `.*\\.tt`) or re.regex($selection.target.hostname, `.*\\.name`) or re.regex($selection.target.hostname,\
+    \ `.*\\.tv`) or re.regex($selection.target.hostname, `.*\\.kz`) or re.regex($selection.target.hostname,\
+    \ `.*\\.tc`) or re.regex($selection.target.hostname, `.*\\.mobi`) or re.regex($selection.target.hostname,\
+    \ `.*\\.study`) or re.regex($selection.target.hostname, `.*\\.click`) or re.regex($selection.target.hostname,\
+    \ `.*\\.link`) or re.regex($selection.target.hostname, `.*\\.trade`) or re.regex($selection.target.hostname,\
+    \ `.*\\.accountant`) or re.regex($selection.target.hostname, `.*\\.cf`) or re.regex($selection.target.hostname,\
+    \ `.*\\.gq`) or re.regex($selection.target.hostname, `.*\\.ml`) or re.regex($selection.target.hostname,\
+    \ `.*\\.ga`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: download_from_suspicious_tld
+provenance:
+  source: chronicle/detection-rules
+  source_id: download_from_suspicious_tld
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/download_from_suspicious_tld.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

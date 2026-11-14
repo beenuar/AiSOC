@@ -1,0 +1,39 @@
+id: splunk-security-content-8281ce42-5c50-11ec-82d2-acde48001122
+name: Java Class File download by Java User Agent
+description: The following analytic identifies a Java user agent performing a GET
+  request for a .class file from a remote site. It leverages web or proxy logs within
+  the Web Datamodel to detect this activity. This behavior is significant as it may
+  indicate exploitation attempts, such as those related to CVE-2021-44228 (Log4Shell).
+  If confirmed malicious, an attacker could exploit vulnerabilities in the Java application,
+  potentially leading to remote code execution and further compromise of the affected
+  system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://arstechnica.com/information-technology/2021/12/as-log4shell-wreaks-havoc-payroll-service-reports-ransomware-attack/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats  `security_content_summariesonly` count FROM datamodel=Web\n\
+    \  WHERE Web.http_user_agent=\"*Java*\" Web.http_method=\"GET\" Web.url=\"*.class*\"\
+    \n  BY Web.http_user_agent Web.http_method, Web.url,Web.url_length\n     Web.src,\
+    \ Web.dest\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `java_class_file_download_by_java_user_agent_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8281ce42-5c50-11ec-82d2-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/java_class_file_download_by_java_user_agent.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

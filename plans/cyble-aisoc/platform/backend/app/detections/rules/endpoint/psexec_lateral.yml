@@ -1,0 +1,26 @@
+title: PsExec Service Installation
+id: aisoc-id-ep-0013-psexec
+status: stable
+description: |
+  PsExec or PSEXESVC service installed — common lateral movement
+  primitive used by both adversaries and red teams.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+tags:
+  - attack.t1021.002
+  - attack.lateral_movement
+  - aisoc.endpoint
+detection:
+  service_install:
+    event.action: 'service.install'
+    service.name|contains:
+      - 'PSEXESVC'
+      - 'PAExec'
+      - 'csexec'
+  cmdline:
+    process.command_line|contains:
+      - 'psexec'
+      - '\PSEXEC.EXE'
+  condition: service_install or cmdline

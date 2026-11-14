@@ -1,0 +1,6 @@
+{
+  "actor": "principal-a",
+  "event_type": "role_grant",
+  "role_priv": true,
+  "target": "other-principal-a"
+}

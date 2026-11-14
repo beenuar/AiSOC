@@ -1,0 +1,195 @@
+# Phase 2.4 — AiSOC alerting rules.
+#
+# Loaded by Prometheus at startup (see prometheus.yml `rule_files`
+# and the alerting block that points at the in-cluster Alertmanager
+# at `alertmanager:9093`). Every alert here is wired to a runbook
+# under `docs/runbooks/`; the URL is embedded in the annotations so
+# Alertmanager's notification template can deep-link the on-call.
+#
+# Rule-quality principles applied below:
+#   - One responsibility per group (availability vs latency vs
+#     saturation vs business-KPI). Mixing them inflates the for:
+#     window and confuses paging policy.
+#   - Every alert has a `for:` >= 2m so a single scrape blip
+#     doesn't page. Critical alerts use 2-5m; warnings use 10m.
+#   - `severity` label drives Alertmanager routing (page on
+#     `critical`, ticket on `warning`).
+#   - `service` label is the docker-compose service name so the
+#     receiver can deep-link to logs.
+#   - Expression-only — no recording rules. Recording rules belong
+#     in a separate file once we measure that an expression is
+#     too slow at evaluation time.
+
+groups:
+  # ──────────────────────────────────────────────────────────────
+  # Availability — the "is the scrape target up?" tier. Reuses
+  # the standard `up` metric Prometheus emits for every scrape.
+  # ──────────────────────────────────────────────────────────────
+  - name: aisoc-availability
+    interval: 30s
+    rules:
+      - alert: AisocServiceDown
+        expr: up{job=~"aisoc-.+"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: '{{ $labels.job }} is down (2m)'
+          description: |
+            Prometheus has been unable to scrape `{{ $labels.job }}`
+            at `{{ $labels.instance }}` for 2 minutes. Check the
+            container is running and listening on its declared
+            metrics port (see scripts/audit_prometheus_targets.py
+            for the source-of-truth port map).
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/service-down.md
+
+  # ──────────────────────────────────────────────────────────────
+  # FastAPI / HTTP latency — surfaces requests-per-second and
+  # p95 latency derived from prometheus-fastapi-instrumentator's
+  # `http_request_duration_seconds` histogram (shipped by every
+  # FastAPI service that imports `app.observability.metrics`).
+  # ──────────────────────────────────────────────────────────────
+  - name: aisoc-http-latency
+    interval: 30s
+    rules:
+      - alert: AisocHttpP95LatencyHigh
+        # 95th-percentile latency over 5m, excluding /metrics
+        # (otherwise the recording loop pollutes the histogram).
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (job, le) (
+              rate(http_request_duration_seconds_bucket{
+                job=~"aisoc-.+",
+                handler!="/metrics"
+              }[5m])
+            )
+          ) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: '{{ $labels.job }} p95 latency > 1.5s (10m)'
+          description: |
+            The 95th-percentile HTTP request latency for
+            `{{ $labels.job }}` has exceeded 1.5 seconds for the
+            last 10 minutes. Check the upstream dependencies
+            (Postgres, Redis, Kafka) and look for slow query logs.
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/http-latency-high.md
+
+      - alert: AisocHttpErrorRateHigh
+        # 5xx rate > 5% of total requests over 5m, again
+        # excluding /metrics.
+        expr: |
+          (
+            sum by (job) (
+              rate(http_requests_total{
+                job=~"aisoc-.+",
+                handler!="/metrics",
+                status=~"5.."
+              }[5m])
+            )
+            /
+            sum by (job) (
+              rate(http_requests_total{
+                job=~"aisoc-.+",
+                handler!="/metrics"
+              }[5m])
+            )
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: '{{ $labels.job }} 5xx rate > 5% (5m)'
+          description: |
+            `{{ $labels.job }}` is returning HTTP 5xx for more than
+            5% of requests over the last 5 minutes. This is a
+            customer-visible failure — page the on-call now.
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/http-5xx-high.md
+
+  # ──────────────────────────────────────────────────────────────
+  # Kafka consumer health — every event-driven service (fusion,
+  # actions, threatintel, ueba) reports lag through aiokafka's
+  # client metrics surfaced as `kafka_consumer_lag_records`.
+  # ──────────────────────────────────────────────────────────────
+  - name: aisoc-kafka
+    interval: 30s
+    rules:
+      - alert: AisocKafkaConsumerLagHigh
+        expr: max by (job, topic) (kafka_consumer_lag_records) > 10000
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: '{{ $labels.job }} Kafka lag > 10k on {{ $labels.topic }}'
+          description: |
+            `{{ $labels.job }}` has fallen more than 10,000
+            messages behind on `{{ $labels.topic }}` for 10
+            minutes. Either the consumer is slow or the partition
+            count is too low for the current throughput.
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/kafka-consumer-lag.md
+
+  # ──────────────────────────────────────────────────────────────
+  # Detection / response pipeline KPIs. These are the alerts that
+  # surface AiSOC's PRODUCT failing rather than its infrastructure
+  # failing — they're the ones that matter to a SOC manager.
+  # ──────────────────────────────────────────────────────────────
+  - name: aisoc-pipeline-kpis
+    interval: 60s
+    rules:
+      - alert: AisocDetectionPipelineStalled
+        # No alerts emitted from any detection engine for 15m
+        # during a window when at least one connector is healthy.
+        # `aisoc_detections_emitted_total` is the counter the
+        # detection runtime increments on every fired rule.
+        expr: |
+          sum(rate(aisoc_detections_emitted_total[15m])) == 0
+          and
+          sum(up{job="aisoc-ingest"}) > 0
+        for: 15m
+        labels:
+          severity: critical
+          team: detect
+        annotations:
+          summary: Detection pipeline emitted zero alerts in 15m
+          description: |
+            No detection has fired in 15 minutes while the ingest
+            service is healthy. Either every rule is suppressed,
+            the rule engine has stopped evaluating, or the
+            telemetry stream is empty. Check the detection-runtime
+            logs and confirm the connector queue isn't backed up.
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/detection-pipeline-stalled.md
+
+      - alert: AisocActionExecutorFailureRateHigh
+        # Live-action dispatcher tracks failures via
+        # `aisoc_action_executor_failures_total` vs
+        # `aisoc_action_executor_attempts_total`. >20% failures
+        # for 10m means the EDR / firewall / IAM target is down
+        # or the credentials have rotated.
+        expr: |
+          (
+            sum by (executor) (
+              rate(aisoc_action_executor_failures_total[10m])
+            )
+            /
+            sum by (executor) (
+              rate(aisoc_action_executor_attempts_total[10m])
+            )
+          ) > 0.20
+        for: 10m
+        labels:
+          severity: critical
+          team: respond
+        annotations:
+          summary: 'Action executor {{ $labels.executor }} failing > 20% (10m)'
+          description: |
+            More than 20% of `{{ $labels.executor }}` dispatches
+            failed over the last 10 minutes. This blocks the
+            "respond" loop end-to-end — analysts will see actions
+            timing out in the UI.
+          runbook_url: https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/action-executor-failures.md

@@ -1,0 +1,61 @@
+id: splunk-security-content-0b6b12b9-8ba9-48fe-b3b8-b4e3e1cd22b4
+name: Windows RDP File Execution
+description: The following analytic detects when a Windows RDP client attempts to
+  execute an RDP file from a temporary directory, downloads directory, or Outlook
+  directories. This detection is significant as it can indicate an attempt for an
+  adversary to deliver a .rdp file, which may be leveraged by attackers to control
+  or exfiltrate data. If confirmed malicious, this activity could lead to unauthorized
+  access, data theft, or further lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1598.002
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2024/10/29/midnight-blizzard-conducts-large-scale-spear-phishing-campaign-using-rdp-files/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats count min(_time) as firstTime max(_time) as lastTime from
+    datamodel=Endpoint.Processes where Processes.process IN ("*\\AppData\\Local\\Temp\\*",
+    "*\\Olk\\Attachments\\*", "*\\AppData\\Local\\Microsoft\\Outlook\\*", "*\\Content.Outlook\\*",
+    "*\\Downloads\\*") AND Processes.process="*.rdp*" by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | eval execution_type=case( match(process,
+    "\\\\Temp\\\\.*\\.(zip|7z|rar|cab|tgz|gz|tar|iso|img|vhd|vhdx).*\\.*\\.rdp"),
+    "temp_archive_execution", match(process, "\\\\Downloads\\\\"), "downloads_execution",
+    match(process, "\\\\Temp\\\\"), "temp_execution", match(process, "\\\\Microsoft\\\\Outlook\\\\"),
+    "outlook_execution", match(process, "\\\\Olk\\\\Attachments\\\\"), "outlook_execution",
+    match(process, "\\\\Content.Outlook\\\\"), "outlook_execution", true(), "other"
+    ), risk_score=case( execution_type="temp_archive_execution", "Critical", execution_type
+    IN ("temp_execution", "outlook_execution"), "High", execution_type="downloads_execution",
+    "Medium", true(), "Low" ), risk_reason=case( execution_type="temp_archive_execution",
+    "RDP file executed directly from archive/disk image in Temp directory", execution_type="downloads_execution",
+    "RDP file executed from Downloads directory (Could be legitimate admin activity)",
+    execution_type="temp_execution", "RDP file executed from Temp directory", execution_type="outlook_execution",
+    "RDP file executed from Outlook directories", true(), "Standard RDP file execution"
+    ) | sort - risk_score | rename process_name as "RDP Process", parent_process_name
+    as "Parent Process", process as "Command Line", user as "User", execution_type
+    as "Execution Context", risk_score as "Risk Level", risk_reason as "Risk Details"
+    | fields - parent_process | `windows_rdp_file_execution_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0b6b12b9-8ba9-48fe-b3b8-b4e3e1cd22b4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_file_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

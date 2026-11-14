@@ -1,0 +1,42 @@
+id: splunk-security-content-95b8061a-0a67-11ec-85ec-acde48001122
+name: PetitPotam Network Share Access Request
+description: The following analytic detects network share access requests indicative
+  of the PetitPotam attack (CVE-2021-36942). It leverages Windows Event Code 5145,
+  which logs attempts to access network share objects. This detection is significant
+  as PetitPotam can coerce authentication from domain controllers, potentially leading
+  to unauthorized access. If confirmed malicious, this activity could allow attackers
+  to escalate privileges or move laterally within the network, posing a severe security
+  risk. Ensure Event Code 5145 is enabled via Group Policy to utilize this analytic
+  effectively.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1187
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1187/
+- https://www.ultimatewindowssecurity.com/securitylog/encyclopedia/event.aspx?eventid=5145
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5145
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` SubjectUserName=\"ANONYMOUS LOGON\" EventCode=5145\
+    \ RelativeTargetName=lsarpc\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest, SubjectUserSid, ShareName,\n       src, AccessMask,\
+    \ AccessReason\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `petitpotam_network_share_access_request_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 95b8061a-0a67-11ec-85ec-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/petitpotam_network_share_access_request.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

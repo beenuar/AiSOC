@@ -1,0 +1,54 @@
+id: splunk-security-content-a83122f2-fa09-4868-a230-544dbc54bc1c
+name: Fortinet Appliance Auth bypass
+description: 'The following analytic detects attempts to exploit CVE-2022-40684, a
+  Fortinet appliance authentication bypass vulnerability.
+
+  It identifies REST API requests to the /api/v2/ endpoint using various HTTP methods
+  (GET, POST, PUT, DELETE) that may indicate unauthorized modifications, such as adding
+  SSH keys or creating new users.
+
+  This detection leverages the Web datamodel to monitor specific URL patterns and
+  HTTP methods.
+
+  This activity is significant as it can lead to unauthorized access and control over
+  the appliance.
+
+  If confirmed malicious, attackers could gain persistent access, reroute network
+  traffic, or capture sensitive information.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.wordfence.com/blog/2022/10/threat-advisory-cve-2022-40684-fortinet-appliance-auth-bypass/
+- https://www.horizon3.ai/fortios-fortiproxy-and-fortiswitchmanager-authentication-bypass-technical-deep-dive-cve-2022-40684/
+- https://github.com/horizon3ai/CVE-2022-40684
+- https://www.horizon3.ai/fortinet-iocs-cve-2022-40684/
+- https://attackerkb.com/topics/QWOxGIKkGx/cve-2022-40684/rapid7-analysis
+- https://github.com/rapid7/metasploit-framework/pull/17143
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n         count min(_time)\
+    \ as firstTime\n               max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\
+    \nWeb.url = \"*/api/v2/cmdb/system/admin*\"\nWeb.http_method IN (\"GET\", \"PUT\"\
+    )\nBY Web.http_user_agent\n   Web.http_method Web.url\n   Web.url_length\n   Web.src\
+    \ Web.dest\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `fortinet_appliance_auth_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a83122f2-fa09-4868-a230-544dbc54bc1c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/fortinet_appliance_auth_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

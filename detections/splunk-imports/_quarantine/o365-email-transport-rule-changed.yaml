@@ -1,0 +1,51 @@
+id: splunk-security-content-11ebb7c2-46bd-41c9-81e1-d0b4b34583a2
+name: O365 Email Transport Rule Changed
+description: The following analytic identifies when a user with sufficient access
+  to Exchange Online alters the mail flow/transport rule configuration of the organization.
+  Transport rules are a set of rules that can be used by attackers to modify or delete
+  emails based on specific conditions, this activity could indicate an attacker hiding
+  or exfiltrated data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.003
+  - T1564.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/003/
+- https://cardinalops.com/blog/cardinalops-contributes-new-mitre-attck-techniques-related-to-abuse-of-mail-transport-rules/
+- https://www.microsoft.com/en-us/security/blog/2022/09/22/malicious-OAuth-applications-used-to-compromise-email-servers-and-spread-spam/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange AND Operation IN ("Set-*","Disable-*","New-*","Remove-*")
+    AND Operation="*TransportRule"
+
+    | eval object_name = case(''Parameters{}.Name''=="Name",mvindex(''Parameters{}.Value'',mvfind(''Parameters{}.Name'',"^Name$")),true(),ObjectId),
+    object_id = case(''Parameters{}.Name''=="Identity",mvindex(''Parameters{}.Value'',mvfind(''Parameters{}.Name'',"^Identity$")),true(),Id)
+
+    | stats values(object_name) as object_name, min(_time) as firstTime, max(_time)
+    as lastTime, count by object_id, UserId, Operation, signature
+
+    | rename UserId as user
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_email_transport_rule_changed_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 11ebb7c2-46bd-41c9-81e1-d0b4b34583a2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_transport_rule_changed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

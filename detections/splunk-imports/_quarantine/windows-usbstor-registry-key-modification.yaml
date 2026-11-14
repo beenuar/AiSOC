@@ -1,0 +1,47 @@
+id: splunk-security-content-a345980a-417d-4ed3-9fb4-cac30c9405a0
+name: Windows USBSTOR Registry Key Modification
+description: This analytic is used to identify when a USB removable media device is
+  attached to a Windows host. In this scenario we are querying the Endpoint Registry
+  data model to look for modifications to the HKLM\System\CurrentControlSet\Enum\USBSTOR\
+  key. Adversaries and Insider Threats may use removable media devices for several
+  malicious activities, including initial access, execution, and exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  - T1025
+  - T1091
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1200/
+- https://www.cisa.gov/news-events/news/using-caution-usb-drives
+- https://www.bleepingcomputer.com/news/security/fbi-hackers-use-badusb-to-target-defense-firms-with-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime,\
+    \ max(_time) as lastTime, count FROM datamodel=Endpoint.Registry\n  WHERE Registry.registry_path\
+    \ IN (\"HKLM\\\\System\\\\CurrentControlSet\\\\Enum\\\\USBSTOR\\\\*\")\n    AND\n\
+    \    Registry.registry_value_name =\"FriendlyName\"\n  BY Registry.action Registry.dest\
+    \ Registry.process_guid\n     Registry.process_id Registry.registry_hive Registry.registry_path\n\
+    \     Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name\n\
+    \     Registry.registry_value_type Registry.status Registry.user\n     Registry.vendor_product\n\
+    | `drop_dm_object_name(Registry)`\n| eval object_name = registry_value_data, object_handle\
+    \ = split(mvindex(split(registry_path, \"\\\\\"),6),\"&amp;\"), object_handle\
+    \ = mvindex(mvfilter(NOT len(object_handle)=1),0)\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_usbstor_registry_key_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a345980a-417d-4ed3-9fb4-cac30c9405a0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_usbstor_registry_key_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

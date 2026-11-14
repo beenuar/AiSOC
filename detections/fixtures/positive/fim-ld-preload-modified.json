@@ -1,0 +1,13 @@
+{
+  "action": "CREATED",
+  "target_path": "/etc/ld.so.preload",
+  "hostname": "db-node-03",
+  "node_key": "ldp333aaa",
+  "tenant_id": "acme",
+  "process_name": "bash",
+  "pid": 9901,
+  "ppid": 9899,
+  "username": "root",
+  "sha256": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
+  "event_time": "2026-05-10T03:12:44Z"
+}

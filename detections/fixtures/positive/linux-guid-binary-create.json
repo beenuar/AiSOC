@@ -1,0 +1,5 @@
+{
+  "mode_octal": "prefix-2-suffix",
+  "path": "__benign__",
+  "syscall": "fchmod"
+}

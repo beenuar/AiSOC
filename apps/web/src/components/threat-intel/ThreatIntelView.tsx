@@ -1,0 +1,500 @@
+'use client';
+
+import { useState } from 'react';
+import useSWR from 'swr';
+import {
+  threatIntelApi,
+  type AlertSeverity,
+  type KnownIndicatorType,
+  type IOCLookupOutcome,
+  type ThreatIndicator,
+} from '@/lib/api';
+import { clsx } from 'clsx';
+import { format } from 'date-fns';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { demoFallback } from '@/lib/demoFallback';
+
+// ─── Mock Data ────────────────────────────────────────────────────────────────
+// Static timestamps avoid SSR/client hydration mismatches (React error #418)
+// that occur when Date.now() differs between server render and client hydration.
+
+const MOCK_INDICATORS: ThreatIndicator[] = [
+  {
+    id: 'ioc-001',
+    type: 'ip',
+    value: '185.220.101.45',
+    confidence: 95,
+    severity: 'critical',
+    tags: ['tor-exit', 'ransomware-c2', 'known-bad'],
+    sources: ['AbuseIPDB', 'VirusTotal', 'GreyNoise'],
+    firstSeen: '2024-01-15T10:00:00Z',
+    lastSeen: '2026-05-06T18:30:00Z',
+    description: 'Tor exit node with ransomware C2 activity',
+    country: 'DE',
+    malicious: true,
+  },
+  {
+    id: 'ioc-002',
+    type: 'domain',
+    value: 'malicious-update-cdn.ru',
+    confidence: 88,
+    severity: 'high',
+    tags: ['phishing', 'credential-harvest'],
+    sources: ['VirusTotal'],
+    firstSeen: '2024-02-01T00:00:00Z',
+    lastSeen: '2026-05-06T17:00:00Z',
+    description: 'Phishing domain mimicking software update CDN',
+    malicious: true,
+  },
+  {
+    id: 'ioc-003',
+    type: 'hash',
+    value: 'a1b2c3d4e5f6789012345678901234567890abcd',
+    confidence: 99,
+    severity: 'critical',
+    tags: ['malware', 'ransomware', 'lockbit'],
+    sources: ['VirusTotal', 'Hybrid Analysis'],
+    firstSeen: '2024-01-28T00:00:00Z',
+    lastSeen: '2026-05-06T19:00:00Z',
+    description: 'LockBit 3.0 ransomware payload hash',
+    malicious: true,
+  },
+  {
+    id: 'ioc-004',
+    type: 'url',
+    value: 'https://cdn.legit-looking.xyz/payload.exe',
+    confidence: 76,
+    severity: 'high',
+    tags: ['dropper', 'malware-distribution'],
+    sources: ['URLScan', 'VirusTotal'],
+    firstSeen: '2024-02-10T00:00:00Z',
+    lastSeen: '2026-05-06T15:00:00Z',
+    description: 'Malware distribution URL hosting dropper',
+    malicious: true,
+  },
+  {
+    id: 'ioc-005',
+    type: 'ip',
+    value: '45.33.32.156',
+    confidence: 62,
+    severity: 'medium',
+    tags: ['scanner', 'reconnaissance'],
+    sources: ['GreyNoise', 'Shodan'],
+    firstSeen: '2024-01-20T00:00:00Z',
+    lastSeen: '2026-05-05T19:30:00Z',
+    description: 'Known internet scanner with anomalous activity',
+    country: 'US',
+    malicious: false,
+  },
+];
+
+// ─── Type badges ──────────────────────────────────────────────────────────────
+
+const TYPE_CONFIG: Record<KnownIndicatorType, { label: string; color: string }> = {
+  ip: { label: 'IP', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  domain: { label: 'Domain', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  hash: { label: 'Hash', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
+  url: { label: 'URL', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+  email: { label: 'Email', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
+  // The CISA KEV catalogue is the one real feed a default install ships,
+  // and every row it writes is this type. Its absence here is why 1,766
+  // CVEs rendered badged "IP".
+  vulnerability: { label: 'CVE', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+};
+
+const UNKNOWN_TYPE = { label: 'Unknown', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' };
+
+/** Chip order when there are no rows to derive one from. */
+const KNOWN_TYPE_ORDER: KnownIndicatorType[] = ['ip', 'domain', 'hash', 'url', 'vulnerability'];
+
+/**
+ * The badge for one indicator type.
+ *
+ * An unrecognised type renders as **Unknown**, not as the first entry in
+ * the table. `TYPE_CONFIG[ioc.type] || TYPE_CONFIG.ip` silently asserted
+ * that every indicator the console had no badge for was an IP address, so
+ * the page made a confident wrong claim about data it did not understand
+ * rather than admitting it did not understand it.
+ */
+function badgeFor(type: string): { label: string; color: string } {
+  return TYPE_CONFIG[type as KnownIndicatorType] ?? UNKNOWN_TYPE;
+}
+
+/** The label a filter chip shows, so the chip and the badge cannot drift. */
+function chipLabelFor(type: string): string {
+  return badgeFor(type).label;
+}
+
+const SEVERITY_CONFIG: Record<AlertSeverity, string> = {
+  critical: 'text-red-400 bg-red-500/10 border-red-500/20',
+  high: 'text-orange-400 bg-orange-500/10 border-orange-500/20',
+  medium: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+  low: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+  info: 'text-slate-400 bg-slate-500/10 border-slate-500/20',
+};
+
+// ─── Lookup Form ──────────────────────────────────────────────────────────────
+
+function LookupForm() {
+  const [query, setQuery] = useState('');
+  // One outcome rather than a `result` plus a `notFound` flag. The two-flag
+  // shape is what allowed a failed lookup to render as a clean one: the
+  // `catch` had nowhere to put "this did not work" except the flag that meant
+  // "we checked, and it is clean".
+  const [outcome, setOutcome] = useState<IOCLookupOutcome | null>(null);
+  const [isLooking, setIsLooking] = useState(false);
+
+  const handleLookup = async () => {
+    if (!query.trim()) return;
+    setIsLooking(true);
+    setOutcome(null);
+    try {
+      setOutcome(await threatIntelApi.lookup(query.trim()));
+    } catch (err) {
+      // `lookup` reports transport failure in its return value, so reaching
+      // here means the client itself threw. Still not a clean verdict.
+      setOutcome({ status: 'failed', reason: (err as Error)?.message || 'the lookup did not complete' });
+    } finally {
+      setIsLooking(false);
+    }
+  };
+
+  return (
+    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+      <h3 className="text-sm font-medium text-gray-300 mb-3">IOC Lookup</h3>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+          placeholder="Enter IP, domain, hash, or URL…"
+          className="flex-1 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-300 placeholder-gray-600 px-3 py-2 focus:outline-none focus:border-blue-500/50"
+        />
+        <button
+          onClick={handleLookup}
+          disabled={isLooking || !query.trim()}
+          className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+        >
+          {isLooking ? 'Looking up…' : 'Lookup'}
+        </button>
+      </div>
+
+      {outcome?.status === 'failed' && (
+        <div className="mt-3 flex items-start gap-2 text-sm text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider pt-0.5 shrink-0">
+            not checked
+          </span>
+          <span>
+            Lookup failed — {outcome.reason}. This says nothing about{' '}
+            <span className="font-mono">{query.trim()}</span>; it was never checked.
+          </span>
+        </div>
+      )}
+
+      {outcome?.status === 'clean' && (
+        <div className="mt-3 flex items-center gap-2 text-sm text-green-400 bg-green-500/10 border border-green-500/20 rounded-lg px-3 py-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wider">clean</span>
+          <span>No threat indicators found for this IOC</span>
+        </div>
+      )}
+
+      {outcome?.status === 'match' && (
+        <div className="mt-3 bg-red-500/5 border border-red-500/20 rounded-lg p-3 space-y-2">
+          <div className="flex items-center gap-2">
+            <span className="text-red-400 font-medium text-sm">Malicious indicator</span>
+            <span className="text-xs text-gray-500">Confidence: {outcome.indicator.confidence}%</span>
+          </div>
+          {outcome.indicator.description ? (
+            <p className="text-xs text-gray-400">{outcome.indicator.description}</p>
+          ) : null}
+          <div className="flex flex-wrap gap-1">
+            {(outcome.indicator.tags ?? []).map((t) => (
+              <span key={t} className="text-xs bg-gray-800 text-gray-400 px-1.5 py-0.5 rounded">{t}</span>
+            ))}
+          </div>
+          <div className="text-xs text-gray-500">
+            Sources: {(outcome.indicator.sources ?? []).join(', ')}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── IOC Row ──────────────────────────────────────────────────────────────────
+
+function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
+  const typeCfg = badgeFor(ioc.type);
+
+  return (
+    <div className="flex items-center gap-4 py-3 border-b border-gray-800/60 last:border-0 hover:bg-gray-800/20 px-4 -mx-4 transition-colors rounded-lg">
+      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border shrink-0', typeCfg.color)}>
+        {typeCfg.label}
+      </span>
+
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-mono text-gray-300 truncate">{ioc.value}</p>
+        <p className="text-xs text-gray-600 mt-0.5 truncate">{ioc.description ?? ''}</p>
+      </div>
+
+      <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border shrink-0', SEVERITY_CONFIG[ioc.severity])}>
+        {ioc.severity}
+      </span>
+
+      <div className="text-right shrink-0">
+        <div className="flex items-center gap-1 justify-end">
+          <span className="text-xs text-gray-500">Confidence:</span>
+          <span className={clsx(
+            'text-xs font-medium',
+            ioc.confidence >= 80 ? 'text-red-400' : ioc.confidence >= 60 ? 'text-yellow-400' : 'text-gray-400'
+          )}>
+            {ioc.confidence}%
+          </span>
+        </div>
+        <p className="text-xs text-gray-600 mt-0.5" suppressHydrationWarning>
+          {ioc.lastSeen || ioc.firstSeen
+            ? format(new Date(ioc.lastSeen ?? ioc.firstSeen ?? 0), 'MMM dd HH:mm')
+            : '—'}
+        </p>
+      </div>
+
+      <div className="flex flex-wrap gap-1 max-w-32 shrink-0">
+        {ioc.sources.slice(0, 2).map((src) => (
+          <span key={src} className="text-xs bg-gray-800 text-gray-500 px-1.5 py-0.5 rounded">
+            {src}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── Main View ────────────────────────────────────────────────────────────────
+
+export function ThreatIntelView() {
+  const [typeFilter, setTypeFilter] = useState<ThreatIndicator['type'] | 'all'>('all');
+  const [search, setSearch] = useState('');
+
+  const { data, error, isLoading } = useSWR(
+    'threat-intel-indicators',
+    () => threatIntelApi.list(),
+    { fallbackData: demoFallback({ indicators: MOCK_INDICATORS, total: MOCK_INDICATORS.length }) },
+  );
+
+  // `data` is undefined on first paint and on error alike, and both prior
+  // fixes on these lines were about fabricated values rather than about
+  // absence. `?? []` then published "Malicious (of shown): 0" — a security
+  // verdict — and an empty state telling the operator to go connect a feed,
+  // on a store the page could not reach.
+  //
+  // `degraded` is the other half, and the live one. With no threat-intel
+  // service reachable the route answers **HTTP 200** carrying
+  // `degraded: true` and a reason — an explicit statement that nothing was
+  // measured — so `!data` is false and every figure on this page rendered a
+  // confident zero over it. `threatIntelApi.lookup` already treats the same
+  // flag as a failed lookup; the list did not.
+  const storeUnknown = !data || data.degraded === true;
+
+  // Two distinct ways to not know, and the operator needs to be told which.
+  // `reason` is the route answering 200 and saying it could not read its
+  // store; `error` is the request never completing. The latter used to be
+  // destructured and spent on `${error ? '' : ''}` — a no-op that read as a
+  // use — so a transport failure fell through to the same generic sentence
+  // as everything else.
+  const transportFailure =
+    error instanceof Error ? error.message : error ? String(error) : null;
+  const notMeasuredReason =
+    data?.reason?.trim() || transportFailure || 'The threat-intel service did not answer';
+
+  // Not `?? MOCK_INDICATORS`. `fallbackData` above already withholds the
+  // sample set outside the hosted demo; repeating the constant here put it
+  // back, so a 404 from the indicators API rendered five invented IOCs and a
+  // "3 Added Today" counter on a tenant that had never ingested one.
+  const allIndicators = data?.indicators ?? [];
+
+  // The store's count, not this page's length. Falls back to the page length
+  // only when the API omits the field, which is the pre-`shown` contract.
+  const totalCollected = data?.total ?? allIndicators.length;
+
+  const indicators = allIndicators.filter((ioc) => {
+    if (typeFilter !== 'all' && ioc.type !== typeFilter) return false;
+    if (
+      search &&
+      !ioc.value.toLowerCase().includes(search.toLowerCase()) &&
+      !(ioc.description ?? '').toLowerCase().includes(search.toLowerCase())
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  // Derived from the rows, not from a list written here.
+  //
+  // The hardcoded `ip | domain | hash | url` set published four measured
+  // zeros beside a populated table on every default install, because the
+  // only feed a fresh deployment ships emits `vulnerability` and none of
+  // the four matched a single row. Four chips that each empty the table
+  // when clicked, summing to less than the total above them.
+  //
+  // Counting what is there means a feed added later is filterable with no
+  // second edit, and a chip can never read `(0)` — a filter that is
+  // guaranteed to show nothing is not a filter worth offering.
+  const typeCounts = new Map<string, number>();
+  for (const ioc of allIndicators) {
+    typeCounts.set(ioc.type, (typeCounts.get(ioc.type) ?? 0) + 1);
+  }
+  const presentTypes = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([type]) => type);
+
+  // With no rows to derive chips from, offering none would quietly remove
+  // a control rather than explain it, so the known set is shown instead.
+  // The two reasons for having no rows stay distinguishable in the number:
+  // a store that could not be read gets an em-dash apiece — the same thing
+  // the panel header beside them does — and a store that answered and holds
+  // nothing gets real zeros, because that is a measurement.
+  const chipTypes: string[] = presentTypes.length > 0 ? presentTypes : [...KNOWN_TYPE_ORDER];
+
+  return (
+    <div className="space-y-5">
+      {/* Header */}
+      <div>
+        <h1 className="text-xl font-semibold text-gray-100">Threat Intelligence</h1>
+        <p className="text-sm text-gray-500 mt-0.5">
+          Indicators of compromise aggregated from multiple intel feeds
+        </p>
+      </div>
+
+      {/* Stats
+       *
+       * Every figure here is either the store's own count or a count of the
+       * rows on screen, and each card says which. It previously published
+       * neither: "Total IOCs" was the length of one page — 100, against 1,725
+       * collected — and "Added Today" was the literal `3`, hard-coded, on
+       * every deployment including ones that had never ingested an indicator.
+       * The comment above `allIndicators` describes removing the invented IOC
+       * list for exactly that reason; the counter the same paragraph names
+       * survived it. */}
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: 'Indicators collected', value: totalCollected, color: 'text-blue-400' },
+          { label: 'Shown below', value: allIndicators.length, color: 'text-gray-200' },
+          { label: 'Malicious (of shown)', value: allIndicators.filter(i => i.malicious).length, color: 'text-red-400' },
+          { label: 'High confidence (of shown)', value: allIndicators.filter(i => i.confidence >= 80).length, color: 'text-orange-400' },
+        ].map((stat) => (
+          <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+            <p className={clsx('text-2xl font-bold mb-1', storeUnknown ? 'text-gray-600' : stat.color)}>
+              {storeUnknown ? '—' : stat.value}
+            </p>
+            <p className="text-xs text-gray-500">{storeUnknown ? 'not measured' : stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Lookup */}
+      <LookupForm />
+
+      {/* Filters */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search indicators…"
+            className="w-full pl-9 pr-4 py-2 bg-gray-900/60 border border-gray-800 rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
+          />
+        </div>
+
+        <div className="flex gap-1">
+          {['all', ...chipTypes].map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={clsx(
+                'text-xs px-3 py-1.5 rounded-lg transition-colors',
+                typeFilter === t
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 bg-gray-800/60 hover:bg-gray-800'
+              )}
+            >
+              {/* A chip reading `(0)` is a measured claim about a store the
+                  page could not reach; an em-dash says it was not measured. */}
+              {t === 'all' ? 'All' : chipLabelFor(t).toUpperCase()} (
+              {storeUnknown ? '—' : t === 'all' ? allIndicators.length : (typeCounts.get(t) ?? 0)})
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* IOC List */}
+      <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-medium text-gray-300">Indicators of Compromise</h3>
+          {/* `storeUnknown` is the same signal the empty state below uses to
+              say "this is not a report that no indicators exist". This
+              counter said `0 indicators` directly above that sentence. */}
+          <span
+            className="text-xs text-gray-500"
+            title={storeUnknown ? 'The threat-intel service has not answered, so there is no count to show.' : undefined}
+          >
+            {storeUnknown
+              ? '— indicators'
+              : totalCollected > indicators.length
+                ? `${indicators.length.toLocaleString()} of ${totalCollected.toLocaleString()} indicators`
+                : `${indicators.length.toLocaleString()} indicators`}
+          </span>
+        </div>
+        {indicators.length === 0 ? (
+          // WS-F5 — TI feeds rarely have a true "no IOCs ever" state in
+          // practice (the OT feed alone seeds dozens), so the most common
+          // empty path here is a filter-miss. Both copies still steer the
+          // analyst back to a useful action.
+          typeFilter !== 'all' || search ? (
+            <EmptyState
+              icon={EmptyStateIcons.search}
+              title="No indicators match these filters"
+              description="Try a different IOC type or clear the search to see the full feed."
+              action={
+                <button
+                  onClick={() => {
+                    setTypeFilter('all');
+                    setSearch('');
+                  }}
+                  className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+                >
+                  Clear filters
+                </button>
+              }
+              className="bg-transparent py-8"
+            />
+          ) : (
+            <EmptyState
+              icon={EmptyStateIcons.shield}
+              title={storeUnknown ? (isLoading ? 'Loading threat intel…' : 'Threat intel store unreachable') : 'No threat intel ingested yet'}
+              description={
+                storeUnknown
+                  ? isLoading
+                    ? 'Reading indicators from the threat-intel service.'
+                  : // The route's own `reason` when it sent one, because
+                    // "did not answer (ConnectError)" tells an operator
+                    // where to look and a generic sentence does not.
+                    `${notMeasuredReason}. This is not a report that no indicators exist.`
+                  : 'Connect a TI feed (MISP, OTX, AbuseIPDB, GreyNoise, internal STIX/TAXII) from Settings → Connectors to start enriching alerts with reputation context.'
+              }
+              className="bg-transparent py-8"
+            />
+          )
+        ) : (
+          <div>
+            {indicators.map((ioc) => <IOCRow key={ioc.id} ioc={ioc} />)}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

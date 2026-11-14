@@ -1,0 +1,70 @@
+id: chronicle-detection-rules-finger-exe-execution
+name: finger_exe_execution
+description: finger_exe_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule finger_exe_execution {\n\n  meta:\n    author = \"Florian Roth (Nextron\
+    \ Systems), omkar72, oscd.community\"\n    description = \"Detects execution of\
+    \ the finger.exe utility. Finger.EXE or \\\"TCPIP Finger Command\\\" is an old\
+    \ utility that is still present on modern Windows installation. It Displays information\
+    \ about users on a specified remote computer (typically a UNIX computer) that\
+    \ is running the finger service or daemon. Due to the old nature of this utility\
+    \ and the rareness of machines having the finger service. Any execution of finger.exe\
+    \ can be considered suspicious and worth investigating.\"\n    reference = \"\
+    https://github.com/SigmaHQ/sigma/blob/master/rules/windows/process_creation/proc_creation_win_finger_execution.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Finger.EXE Execution\"\n    sigma_uuid = \"af491bca-e752-4b44-9c86-df5680533dbc\"\
+    \n    sigma_status = \"test\"\n    rule_id = \"mr_9174795b-96f3-4fce-b5a3-f8e5901990b1\"\
+    \n    tactic = \"TA0011\"\n    technique = \"T1105\"\n    type = \"Detection\"\
+    \n    data_source = \"Sysmon\"\n    platform = \"Windows\"\n    severity = \"\
+    High\"\n    priority = \"High\"\n    false_positives = \"Admin activity (unclear\
+    \ what they do nowadays with finger.exe)\"\n\n  events:\n    $process.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n    (\n        $process.src.process.file.full_path = \"\
+    finger.exe\" nocase or\n        re.regex($process.target.process.file.full_path,\
+    \ `\\\\finger\\.exe$`) nocase\n    )\n    $process.principal.hostname = $hostname\n\
+    \n  match:\n    $hostname over 5m\n\n  outcome:\n      //example usage of specifying\
+    \ test user and hostname to adjust risk score\n      $risk_score = max(if($process.principal.user.userid\
+    \ = \"user\" and $process.principal.hostname = \"hostname\", 0, 15))\n      $principal_process_pid\
+    \ = array_distinct($process.principal.process.pid)\n      $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n      $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n      $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n      $principal_process_product_specfic_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \     $principal_process_parent_process_product_specfic_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \      $target_process_pid = array_distinct($process.target.process.pid)\n   \
+    \   $target_process_command_line = array_distinct($process.target.process.command_line)\n\
+    \      $target_process_file_sha256 = array_distinct($process.target.process.file.sha256)\n\
+    \      $target_process_file_full_path = array_distinct($process.target.process.file.full_path)\n\
+    \      $target_process_product_specfic_process_id = array_distinct($process.target.process.product_specific_process_id)\n\
+    \      $principal_user_userid = array_distinct($process.principal.user.userid)\n\
+    \      $log_type = array_distinct(strings.concat($process.metadata.log_type,\"\
+    /\",$process.metadata.product_event_type))\n\n  condition:\n    $process\n}"
+  chronicle_rule_name: finger_exe_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: finger_exe_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/finger_exe_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

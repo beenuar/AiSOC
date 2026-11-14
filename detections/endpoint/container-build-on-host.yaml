@@ -1,0 +1,24 @@
+id: det-endpoint-238
+name: docker build Run On Production Host
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'docker build Run
+  On Production Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1612
+- tlp.white
+category: endpoint
+log_source:
+  product: docker
+  service: dockerd
+detection:
+  condition: |
+    event_type == "image_build"
+    AND host_role == "production"
+false_positives:
+- Documented bake host
+playbook: tpl-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

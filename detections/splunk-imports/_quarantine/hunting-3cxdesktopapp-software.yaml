@@ -1,0 +1,48 @@
+id: splunk-security-content-553d0429-1a1c-44bf-b3f5-a8513deb9ee5
+name: Hunting 3CXDesktopApp Software
+description: The following analytic detects the presence of any version of the 3CXDesktopApp,
+  also known as the 3CX Desktop App, on Mac or Windows systems. It leverages the Endpoint
+  data model's Processes node to identify instances of the application running, although
+  it does not provide file version information. This activity is significant because
+  3CX has identified vulnerabilities in versions 18.12.407 and 18.12.416, which could
+  be exploited by attackers. If confirmed malicious, this could lead to unauthorized
+  access, data exfiltration, or further compromise of the affected systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1195.002
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/blog/smoothoperator-ongoing-campaign-trojanizes-3cx-software-in-software-supply-chain-attack/
+- https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp
+- https://www.reddit.com/r/crowdstrike/comments/125r3uu/20230329_situational_awareness_crowdstrike/
+- https://www.3cx.com/community/threads/crowdstrike-endpoint-security-detection-re-3cx-desktop-app.119934/page-2#post-558898
+- https://www.3cx.com/community/threads/3cx-desktopapp-security-alert.119951/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=3CXDesktopApp.exe\n\
+    \    OR\n    Processes.process_name=\"3CX Desktop App\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `hunting_3cxdesktopapp_software_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 553d0429-1a1c-44bf-b3f5-a8513deb9ee5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/hunting_3cxdesktopapp_software.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

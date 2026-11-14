@@ -1,0 +1,23 @@
+id: det-identity-183
+name: 1Password Sign-In Blocked By The Account Firewall
+description: AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In
+  Blocked By The Account Firewall'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    event_type == "onepassword.signin.firewall_failed"
+false_positives:
+- Staff member travelling outside an allowed country
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

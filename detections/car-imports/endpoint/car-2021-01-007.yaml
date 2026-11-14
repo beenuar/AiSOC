@@ -1,0 +1,42 @@
+id: mitre-car-car-2021-01-007
+name: Detecting Tampering of Windows Defender Command Prompt
+description: In an attempt to avoid detection after compromising a machine, threat
+  actors often try to disable Windows Defender. This is often done using “sc” [service
+  control], a legitimate tool provided by Microsoft for managing services. This action
+  interferes with event detection and may lead to a security event going undetected,
+  thereby potentially leading to further compromise of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk search - Detecting Tampering of Windows Defender Command Prompt
+    type: Splunk
+    code: 'index= __your_sysmon__index__ EventCode=1 Image = "C:\\Windows\\System32\\sc.exe"  |
+      regex CommandLine="^sc\s*(config|stop|query)\sWinDefend$"
+
+      '
+  - name: Splunk search - Detecting Tampering of Windows Defender Command Prompt
+    type: pseudocode
+    code: "processes = search Process:Create\ntarget_processes = filter processes\
+      \ where (\n                   (exe=\"C:\\\\Windows\\\\System32\\\\sc.exe\")\
+      \ AND (command_line=\"sc *config*\" OR command_line=\"sc *stop*\" OR command_line=\"\
+      sc *query*\")\n                   )\noutput target_processes\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-007
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-007.yaml
+notes:
+  car_status: needs_implementation

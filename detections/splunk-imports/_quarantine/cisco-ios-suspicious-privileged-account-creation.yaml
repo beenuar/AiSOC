@@ -1,0 +1,48 @@
+id: splunk-security-content-63e3aff9-45d7-4d41-bcdb-9da561fb4533
+name: Cisco IOS Suspicious Privileged Account Creation
+description: This analytic detects the creation of privileged user accounts on Cisco
+  IOS devices, which could indicate an attacker establishing backdoor access. The
+  detection focuses on identifying when user accounts are created with privilege level
+  15 (the highest administrative privilege level in Cisco IOS) or when existing accounts
+  have their privileges elevated. This type of activity is particularly concerning
+  when performed by unauthorized users or during unusual hours, as it may represent
+  a key step in establishing persistence following the exploitation of vulnerabilities
+  like CVE-2018-0171 in Cisco Smart Install. Threat actors like Static Tundra have
+  been observed creating privileged accounts as part of their attack chain after gaining
+  initial access to network devices.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136
+  - T1078
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/static-tundra/
+- https://tools.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180328-smi2
+- https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/security/a1/sec-a1-cr-book/sec-cr-a2.html#wp3796044403
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Changes.command)\
+    \ as command min(_time) as firstTime max(_time) as lastTime FROM datamodel=Change.All_Changes\n\
+    \  WHERE (\n        (All_Changes.command=\"*username * privilege 15*\")\n    \
+    \    OR\n        (All_Changes.command=\"*username * password*\"\n        AND\n\
+    \        All_Changes.command=\"*USER TABLE MODIFIED*\")\n        OR\n        (All_Changes.command=\"\
+    *USER_PRIVILEGE_UPDATE*priv-15*\")\n    )\n  BY All_Changes.dvc All_Changes.user\n\
+    | `drop_dm_object_name(\"All_Changes\")`\n| rename dvc as dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_ios_suspicious_privileged_account_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 63e3aff9-45d7-4d41-bcdb-9da561fb4533
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_ios_suspicious_privileged_account_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,23 @@
+id: det-identity-271
+name: Okta API Token Revoked
+description: Rotation looks like this, and so does removing the token that was used.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1070
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "system.api_token.revoke"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

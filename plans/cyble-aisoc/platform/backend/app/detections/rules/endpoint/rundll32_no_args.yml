@@ -1,0 +1,21 @@
+title: rundll32.exe Executed Without Arguments
+id: aisoc-id-ep-0006-rundll32-no-args
+status: stable
+description: |
+  rundll32.exe spawned with no DLL/function argument. Legitimate use
+  always supplies an export; argument-less rundll32 is a strong
+  indicator of injected or proxied execution (Cobalt Strike default).
+author: Cyble AiSOC
+level: high
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1218.011
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    process.executable|endswith: '\rundll32.exe'
+    process.command_line|endswith: '\rundll32.exe'
+  condition: selection

@@ -1,0 +1,40 @@
+id: splunk-security-content-dc1457d0-1d9b-422e-b5a7-db46c184d9aa
+name: Network Share Discovery Via Dir Command
+description: The following analytic detects access to Windows administrative SMB shares
+  (Admin$, IPC$, C$) using the 'dir' command. It leverages Windows Security Event
+  Logs with EventCode 5140 to identify this activity. This behavior is significant
+  as it is commonly used by tools like PsExec/PaExec for staging binaries before creating
+  and starting services on remote endpoints, a technique often employed by adversaries
+  for lateral movement and remote code execution. If confirmed malicious, this activity
+  could allow attackers to propagate malware, such as IcedID, across the network,
+  leading to widespread infection and potential data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1135
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=5140 ShareName IN("\\\\*\\ADMIN$","\\\\*\\C$","*\\\\*\\IPC$")
+    AccessMask= 0x1 | stats min(_time) as firstTime max(_time) as lastTime count by
+    ShareName IpAddress ObjectType SubjectUserName SubjectDomainName IpPort AccessMask
+    Computer | rename Computer as dest | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `network_share_discovery_via_dir_command_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: dc1457d0-1d9b-422e-b5a7-db46c184d9aa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/network_share_discovery_via_dir_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

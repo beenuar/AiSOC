@@ -1,0 +1,28 @@
+title: Azure AD Risky OAuth Application Consent
+id: aisoc-id-0006-azure-app-consent
+status: stable
+description: |
+  User granted consent to a third-party OAuth app requesting
+  high-impact Graph scopes (Mail.ReadWrite, full_access_as_user,
+  Files.ReadWrite.All).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azure
+  service: auditlogs
+tags:
+  - attack.t1528
+  - attack.credential_access
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    azure.operation_name: 'Consent to application'
+    azure.scopes|contains:
+      - 'Mail.ReadWrite'
+      - 'Mail.Send'
+      - 'full_access_as_user'
+      - 'Files.ReadWrite.All'
+  condition: selection
+falsepositives:
+  - Approved Microsoft 365 partner apps; allow-list by app id.

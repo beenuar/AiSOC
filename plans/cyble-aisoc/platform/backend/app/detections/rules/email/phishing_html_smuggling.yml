@@ -1,0 +1,27 @@
+title: HTML Smuggling Email Attachment
+id: aisoc-id-em-0005-html-smuggling
+status: stable
+description: |
+  HTML attachment contains a long base64 blob and a download anchor
+  with a name like 'invoice.zip' or 'document.iso' — pattern used by
+  HTML smuggling to deliver payloads past gateway content inspection.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: email_gateway
+  service: messagetrace
+tags:
+  - attack.t1027.006
+  - attack.defense_evasion
+  - aisoc.email
+detection:
+  selection:
+    event.category: 'email'
+    email.direction: 'inbound'
+    email.attachment.name|endswith:
+      - '.html'
+      - '.htm'
+      - '.shtml'
+  smuggling_indicators:
+    enrich.email.html_smuggling_score|gte: 70
+  condition: selection and smuggling_indicators

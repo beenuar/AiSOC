@@ -1,0 +1,5 @@
+{
+  "host": "api.corp.com",
+  "request_body": "{__schema{queryType{name}}}",
+  "request_uri": "/graphql"
+}

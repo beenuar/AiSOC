@@ -1,0 +1,114 @@
+name: Installer failure
+description: install.sh or install.ps1 did not get you to a working console
+title: "[Install]: "
+labels: ["bug", "installer", "triage"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Both installers link here when they fail, so the fields below are the
+        ones we would otherwise have to ask for. The two that decide almost
+        every case are the **exit code** and the **diagnose output** — the
+        installers document their exit codes, so the number alone usually
+        names the step that failed.
+
+        If you have not run it yet, this changes nothing and takes a minute:
+
+        ```
+        ./install.sh --diagnose          # Linux / macOS
+        .\install.ps1 -Diagnose          # Windows
+        ```
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux — Debian / Ubuntu
+        - Linux — Fedora / RHEL / CentOS
+        - Linux — Arch
+        - Linux — other
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: entrypoint
+    attributes:
+      label: How did you start the install?
+      options:
+        - "install.sh (curl | bash one-liner)"
+        - "install.sh (from a clone)"
+        - "install.ps1 (irm | iex one-liner)"
+        - "install.ps1 (from a clone)"
+        - "make up"
+        - "docker compose up -d"
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: exit_code
+    attributes:
+      label: Exit code
+      description: >-
+        The number the installer exited with. Both installers document theirs:
+        2 = a prerequisite could not be installed, 3 = the stack did not come
+        up, 4 = preflight refused, 5 = the clone or the end-to-end pipeline
+        check failed.
+      placeholder: "3"
+    validations:
+      required: false
+
+  - type: textarea
+    id: output
+    attributes:
+      label: Installer output
+      description: >-
+        The last 50 or so lines, including the error. Paste as text rather
+        than a screenshot so it is searchable for the next person.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnose
+    attributes:
+      label: Diagnose output
+      description: "Output of `./install.sh --diagnose` or `.\\install.ps1 -Diagnose`."
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: >-
+        Versions and the resources Docker has. `make doctor` prints all of
+        this if the clone got far enough.
+      placeholder: |
+        docker --version          : 
+        docker compose version    : 
+        python3 --version         : 
+        Docker memory / disk      : 
+        Anything already listening on 5432, 3000, 8000 or 11434:
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before filing
+      options:
+        - label: >-
+            I checked that no secret, token or password is included in the
+            output I pasted above.
+          required: true

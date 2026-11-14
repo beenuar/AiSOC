@@ -1,0 +1,49 @@
+id: mitre-car-car-2020-11-003
+name: DLL Injection with Mavinject
+description: Injecting a malicious DLL into a process is a common adversary TTP. Although
+  the ways of doing this are numerous, mavinject.exe is a commonly used tool for doing
+  so because it roles up many of the necessary steps into one, and is available within
+  Windows. Attackers may rename the executable, so we also use the common argument
+  "INJECTRUNNING" as a related signature here. Whitelisting certain applications may
+  be necessary to reduce noise for this analytic.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - mavinject process and its common argument
+    type: Pseudocode
+    code: "processes = search Process:Create\nmavinject_processes = filter processes\
+      \ where (\n  exe = \"C:\\\\Windows\\\\SysWOW64\\\\mavinject.exe\" OR Image=\"\
+      C:\\\\Windows\\\\System32\\\\mavinject.exe\" OR command_line = \"*/INJECTRUNNING*\"\
+      \noutput mavinject_processes\n"
+  - name: Splunk Search - mavinject
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (Image="C:\\Windows\\SysWOW64\\mavinject.exe"
+      OR Image="C:\\Windows\\System32\\mavinject.exe" OR CommandLine="*\INJECTRUNNING*")
+
+      '
+  - name: LogPoint Search - mavinject
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (image="C:\Windows\SysWOW64\mavinject.exe"
+      OR image="C:\Windows\System32\mavinject.exe" OR command="*\INJECTRUNNING*")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-003.yaml
+notes:
+  car_status: needs_implementation

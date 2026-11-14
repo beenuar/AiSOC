@@ -1,0 +1,51 @@
+id: splunk-security-content-65615b3a-62ea-4d65-bb9f-6f07c17df4ea
+name: Windows WinLogon with Public Network Connection
+description: The following analytic detects instances of Winlogon.exe, a critical
+  Windows process, connecting to public IP addresses. This behavior is identified
+  using Endpoint Detection and Response (EDR) telemetry, focusing on network connections
+  made by Winlogon.exe. Under normal circumstances, Winlogon.exe should not connect
+  to public IPs, and such activity may indicate a compromise, such as the BlackLotus
+  bootkit attack. This detection is significant as it highlights potential system
+  integrity breaches. If confirmed malicious, attackers could maintain persistence,
+  bypass security measures, and compromise the system at a fundamental level.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1542.003
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2023/04/11/guidance-for-investigating-attacks-using-cve-2022-21894-the-blacklotus-campaign/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ IN (winlogon.exe) Processes.process!=unknown\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| join process_id [\n| tstats `security_content_summariesonly`\
+    \ count FROM datamodel=Network_Traffic.All_Traffic\n  WHERE All_Traffic.dest_port\
+    \ != 0 NOT (All_Traffic.dest IN (127.0.0.1,10.0.0.0/8,172.16.0.0/12, 192.168.0.0/16,\
+    \ 0:0:0:0:0:0:0:1))\n  BY All_Traffic.process_id All_Traffic.dest All_Traffic.dest_port\n\
+    | `drop_dm_object_name(All_Traffic)`\n| rename dest as publicIp ]\n| table dest\
+    \ parent_process_name process_name process_path process process_id dest_port publicIp\n\
+    | `windows_winlogon_with_public_network_connection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 65615b3a-62ea-4d65-bb9f-6f07c17df4ea
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_winlogon_with_public_network_connection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

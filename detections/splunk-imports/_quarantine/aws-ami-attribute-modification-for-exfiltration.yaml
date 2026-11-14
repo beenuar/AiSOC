@@ -1,0 +1,46 @@
+id: splunk-security-content-f2132d74-cf81-4c5e-8799-ab069e67dc9f
+name: AWS AMI Attribute Modification for Exfiltration
+description: The following analytic detects suspicious modifications to AWS AMI attributes,
+  such as sharing an AMI with another AWS account or making it publicly accessible.
+  It leverages AWS CloudTrail logs to identify these changes by monitoring specific
+  API calls. This activity is significant because adversaries can exploit these modifications
+  to exfiltrate sensitive data stored in AWS resources. If confirmed malicious, this
+  could lead to unauthorized access and potential data breaches, compromising the
+  confidentiality and integrity of organizational information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1537
+  categories:
+  - cloud
+references:
+- https://labs.nettitude.com/blog/how-to-exfiltrate-aws-ec2-data/
+- https://stratus-red-team.cloud/attack-techniques/AWS/aws.exfiltration.ec2-share-ami/
+- https://hackingthe.cloud/aws/enumeration/loot_public_ebs_snapshots/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=ModifyImageAttribute (requestParameters.launchPermission.add.items{}.userId\
+    \ = * OR requestParameters.launchPermission.add.items{}.group = all)\n  | rename\
+    \ requestParameters.launchPermission.add.items{}.group as group_added\n  | rename\
+    \ requestParameters.launchPermission.add.items{}.userId as accounts_added\n  |\
+    \ eval ami_status=if(match(group_added,\"all\") ,\"Public AMI\", \"Not Public\"\
+    )\n  | rename user_name as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime values(group_added) as group_added values(accounts_added) as accounts_added\
+    \ values(ami_status) as ami_status\n    BY signature dest user\n       user_agent\
+    \ src vendor_account\n       vendor_region vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `aws_ami_attribute_modification_for_exfiltration_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f2132d74-cf81-4c5e-8799-ab069e67dc9f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_ami_attribute_modification_for_exfiltration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

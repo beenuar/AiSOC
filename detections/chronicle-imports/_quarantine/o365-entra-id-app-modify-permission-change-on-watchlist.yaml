@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-o365-entra-id-app-modify-permission-change-on-watchlist
+name: o365_entra_id_app_modify_permission_change_on_watchlist
+description: o365_entra_id_app_modify_permission_change_on_watchlist
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_entra_id_app_modify_permission_change_on_watchlist {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Alerts when a permission\
+    \ on the watchlist is applied to an Entra ID application.\"\n    rule_id = \"\
+    mr_678cafb8-ea1f-42ac-a396-238bc35e4d21\"\n    rule_name = \"O365 Entra ID App\
+    \ Modify Permission Change On Watchlist\"\n    reference = \"https://learn.microsoft.com/en-us/graph/permissions-reference\"\
+    \n    assumption = \"The list msgraph_watchlist_permissions is populated as needed\
+    \ with guid permissions Example: 024d486e-b451-40bb-833d-3e66d98c5c73 //Mail.Read.Write\"\
+    \n    type = \"alert\"\n    platform = \"azure\"\n    data_source = \"o365\"\n\
+    \    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $app.metadata.event_type\
+    \ = \"USER_RESOURCE_UPDATE_CONTENT\"\n    $app.metadata.product_name = \"Office\
+    \ 365\"\n    $app.metadata.product_event_type = \"Update application.\"\n    $app.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $app.security_result.action = \"ALLOW\"\n    (\n      \
+    \  $app.target.resource.attribute.labels.key = /NewValue_EntitlementId-/ or\n\
+    \        $app.target.resource.attribute.labels.key = /OldValue_EntitlementId-/\n\
+    \    )\n    $app.security_result.detection_fields[\"target_1\"] = $app_name\n\n\
+    \  match:\n    $app_name over 5m\n\n  outcome:\n    $risk_score = 65\n    $event_count\
+    \ = count_distinct($app.metadata.id)\n    $security_summary = array_distinct($app.security_result.summary)\n\
+    \    $user_agent = array_distinct($app.network.http.user_agent)\n    //The reference\
+    \ list msgraph_watchlist_permissions matches on the GUID. List contents example\
+    \ row:  6aedf524-7e1c-45a7-bd76-ded8cab8d0fc //SecurityEvents.ReadWrite.All\n\
+    \    $watchlist_permissions_after_modification = array_distinct(if($app.target.resource.attribute.labels.key\
+    \ = /NewValue_EntitlementId/ and $app.target.resource.attribute.labels.value IN\
+    \ %msgraph_watchlist_permissions, $app.target.resource.attribute.labels.value,\"\
+    \"))\n    $watchlist_permissions_before_modification = array_distinct(if($app.target.resource.attribute.labels.key\
+    \ = /OldValue_EntitlementId/ and $app.target.resource.attribute.labels.value IN\
+    \ %msgraph_watchlist_permissions, $app.target.resource.attribute.labels.value,\"\
+    \"))\n    $permissions_after_modification = array_distinct(if($app.target.resource.attribute.labels.key\
+    \ = /NewValue_EntitlementId/ and $app.target.resource.attribute.labels.value !=\"\
+    \", $app.target.resource.attribute.labels.value,\"\"))\n    $permissions_before_modification\
+    \ = array_distinct(if($app.target.resource.attribute.labels.key = /OldValue_EntitlementId/\
+    \ and $app.target.resource.attribute.labels.value !=\"\", $app.target.resource.attribute.labels.value,\"\
+    \"))\n    $total_permissions_after_modification = count_distinct(if($app.target.resource.attribute.labels.key\
+    \ = /NewValue_EntitlementId/ and $app.target.resource.attribute.labels.value !=\"\
+    \", $app.target.resource.attribute.labels.value, \"\")) - 1\n    $total_permissions_before_modification\
+    \ = count_distinct(if($app.target.resource.attribute.labels.key = /OldValue_EntitlementId/\
+    \ and $app.target.resource.attribute.labels.value !=\"\", $app.target.resource.attribute.labels.value,\
+    \ \"\")) - 1\n    //added to populate alert graph with additional context\n  \
+    \  $principal_user_userid = array_distinct($app.principal.user.userid)\n\n  condition:\n\
+    \    $app\n}"
+  chronicle_rule_name: o365_entra_id_app_modify_permission_change_on_watchlist
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_entra_id_app_modify_permission_change_on_watchlist
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_entra_id_app_modify_permission_change_on_watchlist.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,67 @@
+id: mitre-car-car-2014-05-001
+name: RPC Activity
+description: 'Microsoft Windows uses its implementation of [Distributed Computing
+  Environment/Remote Procedure Call](https://en.wikipedia.org/wiki/DCE/RPC) (DCE/RPC),
+  which it calls [Microsoft RPC](https://en.wikipedia.org/wiki/Microsoft_RPC), to
+  call certain APIs remotely.
+
+
+  A Remote Procedure Call is initiated by communicating to the RPC Endpoint Mapper,
+  which exists as the Windows service RpcEptMapper and listens on the port 135/tcp.
+  The endpoint mapper resolves a requested endpoint/interface and responds to the
+  client with the port that the service is listening on. Since the RPC endpoints are
+  assigned ports when the services start, these ports are dynamically assigned from
+  49152 to 65535. The connection to the endpoint mapper then terminates and the client
+  program can communicate directly with the requested service.
+
+
+  RPC is a legitimate functionality of Windows that allows remote interaction with
+  a variety of services. For a Windows environment to be properly configured, several
+  programs use RPC to communicate legitimately with servers. The background and benign
+  RPC activity may be enormous, but must be learned, especially peer-to-peer RPC between
+  workstations, which is often indicative of [Lateral Movement](https://attack.mitre.org/tactics/TA0008).
+
+
+  According to ATT&CK, adversaries frequently use RPC connections to remotely
+
+
+  -   [Create/modify](https://attack.mitre.org/techniques/T1543/003) and [execute](https://attack.mitre.org/techniques/T1569/002)
+  services ([CAR-2014-03-005](CAR-2014-03-005))
+
+  -   [Schedule Tasks](https://attack.mitre.org/techniques/T1053) ([CAR-2015-04-002](../CAR-2015-04-002))
+
+  -   Query ([CAR-2014-11-007](../CAR-2014-11-007)) and Invoke ([CAR-2014-12-001](../CAR-2014-12-001))
+  - [Windows Management Instrumentation (WMI)](https://attack.mitre.org/techniques/T1047)
+
+
+  Additional endpoints are detailed at [here](http://www.hsc.fr/ressources/articles/win_net_srv/well_known_named_pipes.html).'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Netflow
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "flows = search Flow:Start\nrpc_mapper = filter flows where (dest_port ==\
+      \ 135)\nrpc_endpoint = filter flows where (dest_port >= 49152 and src_port >=\
+      \ 49152)\nrpc = join rpc_mapper, rpc_endpoint where (\n (rpc_mapper.time < rpc_endpoint.time\
+      \ < rpc_mapper.time + 2 seconds) and\n (rpc_mapper.src_ip == rpc_endpoint.src_ip\
+      \ and rpc_mapper.dest_ip == rpc_endpoint.dest_ip)\n)\noutput rpc"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-05-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-05-001.yaml
+notes:
+  car_status: needs_implementation

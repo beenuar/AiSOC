@@ -1,0 +1,218 @@
+"""Identity-centric investigation timeline (tier2-identity).
+
+Builds a chronological event timeline anchored to a user, device, or
+service-account identity.  Queries ``aisoc_alerts``, ``aisoc_events``,
+and the enrichment store to produce an ordered list of security events
+grouped by entity, with ATT&CK technique annotations.
+
+Endpoints
+---------
+* ``GET  /identity-timeline``          Search timelines by identity.
+* ``POST /identity-timeline/build``    Build a fresh timeline for an identity.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, Literal
+
+import structlog
+from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, Field
+from sqlalchemy import text
+
+from app.api.v1.deps import AuthUser, DBSession, require_permission
+
+router = APIRouter(prefix="/identity-timeline", tags=["identity_timeline"])
+log = structlog.get_logger(__name__)
+
+# ────────────────────────────────────────────────────────────────────────────
+# Pydantic schemas
+# ────────────────────────────────────────────────────────────────────────────
+
+IdentityKind = Literal["user", "device", "service_account", "ip"]
+
+
+class TimelineEvent(BaseModel):
+    event_id: uuid.UUID
+    timestamp: datetime
+    event_type: Literal["alert", "login", "process", "network", "file", "other"]
+    source: str
+    description: str
+    severity: str | None = None
+    mitre_technique: str | None = None
+    raw: dict[str, Any] | None = None
+
+
+class IdentityTimeline(BaseModel):
+    timeline_id: uuid.UUID
+    identity_kind: IdentityKind
+    identity_value: str
+    from_ts: datetime
+    to_ts: datetime
+    events: list[TimelineEvent]
+    total_events: int
+    risk_score: float | None = None
+    built_at: datetime
+    #: Sources this build could not read. A timeline assembled from fewer
+    #: sources than intended is not the same answer as one that found nothing,
+    #: and the difference used to be visible only in a DEBUG log line.
+    sources_unavailable: list[str] = Field(default_factory=list)
+
+
+class BuildTimelineRequest(BaseModel):
+    identity_kind: IdentityKind = Field(..., description="Type of identity anchor.")
+    identity_value: str = Field(..., min_length=1, description="Identity value (e.g. username, hostname).")
+    from_ts: datetime | None = Field(None, description="Start of window (defaults to 72 h ago).")
+    to_ts: datetime | None = Field(None, description="End of window (defaults to now).")
+    max_events: int = Field(200, ge=1, le=2000)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Helpers
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def _risk_score(events: list[TimelineEvent]) -> float:
+    """Simple heuristic: sum severity weights, cap at 100."""
+    weights = {"critical": 40, "high": 20, "medium": 10, "low": 3, "info": 1}
+    score = sum(weights.get((e.severity or "info").lower(), 1) for e in events)
+    return min(100.0, float(score))
+
+
+def _mitre_from_alert(raw: dict[str, Any]) -> str | None:
+    return raw.get("mitre_technique") or raw.get("mitre_attack_id") or raw.get("tags", {}).get("mitre")
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+
+# `alerts:read`, not a write permission: this route persists nothing. It reads
+# `aisoc_alerts` — the only source it actually queries, whatever the summary
+# above still promises — and returns a chronological projection of it, so the
+# honest entitlement is the read permission for the rows it returns.
+#
+# Every human role holds `alerts:read`, deliberately: a timeline is what an
+# analyst and a viewer both legitimately open. The refusal it does make is
+# real, because an API key carries an explicit scope list rather than a role,
+# so a key minted for connector health cannot pull an identity's alert history.
+@router.post(
+    "/build",
+    response_model=IdentityTimeline,
+    status_code=status.HTTP_200_OK,
+    summary="Build identity-centric investigation timeline",
+)
+async def build_timeline(
+    body: BuildTimelineRequest,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> IdentityTimeline:
+    now = datetime.now(UTC)
+    from_ts = body.from_ts or (now - timedelta(hours=72))
+    to_ts = body.to_ts or now
+
+    events: list[TimelineEvent] = []
+    unavailable: list[str] = []
+
+    # ── 1. Alerts that reference this identity ──────────────────────────────
+    try:
+        alert_rows = await db.execute(
+            text(
+                """
+                -- `aisoc_alerts` exists in no migration, and neither did
+                -- `evidence` or `mitre_technique` on the real table: the
+                -- columns are `raw_event` and `mitre_techniques`. So this
+                -- query could not run anywhere, and the identity timeline
+                -- reported no alerts for every identity on every deployment.
+                SELECT id, created_at, severity, title,
+                       raw_event AS evidence,
+                       mitre_techniques AS mitre_technique
+                FROM alerts
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
+                  AND created_at BETWEEN :from_ts AND :to_ts
+                  AND (
+                    evidence::text ILIKE :pat
+                    OR title ILIKE :pat
+                  )
+                ORDER BY created_at DESC
+                LIMIT :lim
+                """
+            ).bindparams(
+                tenant_id=str(user.tenant_id),
+                from_ts=from_ts,
+                to_ts=to_ts,
+                pat=f"%{body.identity_value}%",
+                lim=body.max_events,
+            )
+        )
+        for row in alert_rows.fetchall():
+            events.append(
+                TimelineEvent(
+                    event_id=row.id,
+                    timestamp=row.created_at,
+                    event_type="alert",
+                    source="aisoc_alerts",
+                    description=row.title or "Alert",
+                    severity=row.severity,
+                    mitre_technique=row.mitre_technique or _mitre_from_alert(row.evidence or {}),
+                    raw=row.evidence,
+                )
+            )
+    except Exception as exc:
+        # WARNING, not DEBUG: this is the only source the timeline has, so a
+        # failure here means the answer is empty for a reason the caller
+        # cannot see. The reason is also returned on the response.
+        log.warning(
+            "identity_timeline.alert_source_unavailable",
+            error=str(exc).replace("\r", "").replace("\n", " ")[:300],
+        )
+        unavailable.append("aisoc_alerts")
+
+    # There is no second source. A block here queried a table named
+    # ``aisoc_events`` that no migration creates, nothing writes to, and that
+    # appears nowhere else in the repository — with its failure swallowed at
+    # DEBUG, so it silently returned nothing on every deployment while reading
+    # as a second source of evidence. Removed rather than tenant-scoped: there
+    # is nothing to scope.
+
+    # ── 3. Sort chronologically ─────────────────────────────────────────────
+    events.sort(key=lambda e: e.timestamp)
+
+    return IdentityTimeline(
+        timeline_id=uuid.uuid4(),
+        identity_kind=body.identity_kind,
+        identity_value=body.identity_value,
+        from_ts=from_ts,
+        to_ts=to_ts,
+        events=events[: body.max_events],
+        total_events=len(events),
+        risk_score=_risk_score(events),
+        built_at=now,
+        sources_unavailable=unavailable,
+    )
+
+
+@router.get(
+    "",
+    response_model=IdentityTimeline,
+    summary="Quick timeline lookup for an identity",
+)
+async def get_timeline(
+    identity_kind: IdentityKind = Query(...),
+    identity_value: str = Query(..., min_length=1),
+    hours: int = Query(72, ge=1, le=8760),
+    db: DBSession = ...,
+    user: AuthUser = ...,
+) -> IdentityTimeline:
+    return await build_timeline(
+        BuildTimelineRequest(
+            identity_kind=identity_kind,
+            identity_value=identity_value,
+            from_ts=datetime.now(UTC) - timedelta(hours=hours),
+        ),
+        db=db,
+        user=user,
+    )

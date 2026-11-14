@@ -1,0 +1,114 @@
+name: detections-validate
+
+# OSS detection-content contribution gate (t5-oss-detections).
+#
+# This workflow runs on every PR that touches the rules library or the
+# validator itself. The contributor's experience is:
+#
+#   1. They open a PR that adds/edits a YAML under
+#      `platform/backend/app/detections/rules/`.
+#   2. This workflow comments back within ~30s with a verdict.
+#   3. Pre-merge gate: the PR cannot land with H1–H6 / H8 errors.
+#      S-class warnings are surfaced but do not block.
+#
+# The job is intentionally minimal — we install only what the
+# validator needs (PyYAML + the in-repo `app.detections.contrib`
+# module) so cold start is fast and contributors aren't waiting on a
+# CI matrix to merge a one-line fix.
+
+on:
+  pull_request:
+    paths:
+      - 'platform/backend/app/detections/**'
+      - 'platform/backend/scripts/validate_detection.py'
+      - '.github/workflows/detections-validate.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'platform/backend/app/detections/**'
+
+permissions:
+  contents: read
+  pull-requests: write  # so we can post the verdict comment
+
+jobs:
+  validate:
+    name: Validate detection rules
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # we need HEAD~1 for the diff
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install minimal dependencies
+        working-directory: platform/backend
+        run: |
+          python -m pip install --upgrade pip
+          # The validator only needs PyYAML at import time.
+          # We install the full requirements file so the in-repo
+          # `app.detections` package can import its translator deps.
+          pip install -r requirements.txt
+
+      - name: Compute changed rule files
+        id: changed
+        run: |
+          # In a PR build the base ref is meaningful; on push to main
+          # we just validate everything under rules/.
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch origin "${{ github.base_ref }}" --depth=1
+            CHANGED=$(git diff --name-only --diff-filter=AMR \
+              "origin/${{ github.base_ref }}...HEAD" \
+              -- 'platform/backend/app/detections/rules/**' \
+              | tr '\n' ' ' || true)
+          else
+            CHANGED=""
+          fi
+          echo "files=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Detected changed rule files: $CHANGED"
+
+      - name: Run validator (changed files only)
+        if: steps.changed.outputs.files != ''
+        working-directory: platform/backend
+        run: |
+          # Map the workspace-rooted paths to backend-relative paths.
+          set -e
+          ARGS=""
+          for f in ${{ steps.changed.outputs.files }}; do
+            ARGS="$ARGS ${f#platform/backend/}"
+          done
+          echo "Validating: $ARGS"
+          python scripts/validate_detection.py $ARGS
+
+      - name: Run validator (full pack)
+        if: steps.changed.outputs.files == ''
+        working-directory: platform/backend
+        run: python scripts/validate_detection.py app/detections/rules
+
+      - name: Post verdict comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const conclusion = '${{ job.status }}';
+            const body = [
+              '### Detection content validation',
+              '',
+              `Status: **${conclusion}**`,
+              '',
+              'See the **Validate detection rules** job for the full',
+              'H1–H8 / S1–S4 report. Contribution policy lives in',
+              '[`CONTRIBUTING-DETECTIONS.md`](../blob/main/CONTRIBUTING-DETECTIONS.md).',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner, repo, issue_number, body,
+            });

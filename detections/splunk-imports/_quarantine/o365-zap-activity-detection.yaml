@@ -1,0 +1,42 @@
+id: splunk-security-content-4df275fd-a0e5-4246-8b92-d3201edaef7a
+name: O365 ZAP Activity Detection
+description: The following analytic detects when the Microsoft Zero-hour Automatic
+  Purge (ZAP) capability takes action against a user's mailbox. This capability is
+  an enhanced protection feature that retro-actively removes email with known malicious
+  content for user inboxes. Since this is a retroactive capability, there is still
+  a window in which the user may fall victim to the malicious content.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  - T1566.002
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/zero-hour-auto-purge?view=o365-worldwide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Operation=AlertEntityGenerated\
+    \ Name=\"*messages containing malicious*\"\n  | fromjson Data\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime values(zu) as\
+    \ url values(zfn) as file_name values(ms) as subject values(ttr) as result values(tsd)\
+    \ as src_user\n    BY AlertId,trc,signature,Name,dest,src,vendor_account,vendor_product\n\
+    \  | rename Name as signature, AlertId as signature_id, trc as user\n  | eval\
+    \ action = CASE(match(result,\"Success\"), \"blocked\", true(),\"allowed\"), url\
+    \ = split(url,\";\")\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_zap_activity_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4df275fd-a0e5-4246-8b92-d3201edaef7a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_zap_activity_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

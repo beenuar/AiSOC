@@ -1,0 +1,22 @@
+id: det-identity-282
+name: 1Password Time-Based Code Rejected
+description: The password was right and the code was not.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1621
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "totp_bad"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,8 @@
+{
+  "app": "thirdparty-importer",
+  "event_type": "oauth.token.grant",
+  "scope_set": [
+    "calendar.read"
+  ],
+  "user": "user@corp.com"
+}

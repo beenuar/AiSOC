@@ -1,0 +1,30 @@
+title: Sealed Court Record Accessed Without Court-Order Justification
+id: aisoc-vt-pub-0004-sealed-record-access
+status: experimental
+description: |
+  A court case marked as sealed, expunged, or under protective order
+  (juvenile, victim-of-crime, witness protection) was opened in the
+  court management system without a corresponding unseal-order
+  ticket. Privacy and judicial-integrity violation under state court
+  rules; also a leading indicator of journalist or PI source recruitment.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: gov
+  service: court_management
+tags:
+  - attack.t1087
+  - attack.discovery
+  - aisoc.vertical.public_sector
+  - aisoc.compliance.judicial
+detection:
+  selection:
+    event.module: gov.court_management
+    event.action: 'case.viewed'
+    case.flag|contains:
+      - 'sealed'
+      - 'expunged'
+      - 'protective_order'
+  filter:
+    unseal_order.active: true
+  condition: selection and not filter

@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "origin_matches_allowed_list": false
+}

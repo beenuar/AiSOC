@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-domain-prevalence
+name: domain_prevalence
+description: domain_prevalence
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule domain_prevalence {\n\n  meta:\n    author = \"Google Cloud Security\"\n\
+    \    description = \"Detects DNS events querying domains that have a low rolling\
+    \ max prevalence.\"\n    rule_id = \"mr_cf5dd851-d7e9-42b8-baf9-f4527ab61bf3\"\
+    \n    rule_name = \"Domain Prevalence\"\n    type = \"alert\"\n    tags = \"prevalence\"\
+    \n    data_source = \"extrahop, tanium, microsoft sysmon, gcp dns, crowdstrike\"\
+    \n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $dns.metadata.event_type\
+    \ = \"NETWORK_DNS\"\n    $dns.network.dns.questions.name = $domain\n\n    // derived\
+    \ from events ingested by Chronicle\n    $prevalence.graph.metadata.entity_type\
+    \ = \"DOMAIN_NAME\"\n    $prevalence.graph.metadata.source_type = \"DERIVED_CONTEXT\"\
+    \n    $prevalence.graph.entity.hostname = $domain\n    $prevalence.graph.entity.domain.prevalence.day_count\
+    \ = 10\n    $prevalence.graph.entity.domain.prevalence.rolling_max <= 3\n    $prevalence.graph.entity.domain.prevalence.rolling_max\
+    \ > 0\n\n  match:\n    $domain over 5m\n\n  outcome:\n    $risk_score = max(35)\n\
+    \    $event_count = count_distinct($dns.metadata.id)\n    $network_dns_questions_name\
+    \ = array_distinct($dns.network.dns.questions.name)\n    $network_dns_answers_data\
+    \ = array_distinct($dns.network.dns.answers.data)\n    // added to populate alert\
+    \ graph with additional context\n    $principal_ip = array_distinct($dns.principal.ip)\n\
+    \    $target_ip = array_distinct($dns.target.ip)\n    $principal_process_pid =\
+    \ array_distinct($dns.principal.process.pid)\n    $principal_process_file_full_path\
+    \ = array_distinct($dns.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($dns.principal.process.product_specific_process_id)\n    $principal_process_command_line\
+    \ = array_distinct($dns.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($dns.principal.process.file.sha256)\n    $principal_process_parent_process_product_specific_process_id\
+    \ = array_distinct($dns.principal.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($dns.principal.user.userid)\n\n\n\
+    \  condition:\n    $dns and $prevalence\n}"
+  chronicle_rule_name: domain_prevalence
+provenance:
+  source: chronicle/detection-rules
+  source_id: domain_prevalence
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/domain_prevalence.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

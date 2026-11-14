@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisoc-sdk"
+version = "4.0.0"
+description = "Python client SDK for AiSOC — typed httpx client"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+keywords = ["aisoc", "soc", "security", "client", "sdk"]
+authors = [{ name = "AiSOC Contributors", email = "oss@aisoc.io" }]
+dependencies = [
+    "httpx>=0.27.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-httpx>=0.30",
+    "mypy>=2.3.1,<3",
+    "ruff>=0.16.8,<0.17",
+]
+
+[project.urls]
+Homepage = "https://github.com/beenuar/AiSOC"
+Documentation = "https://beenuar.github.io/AiSOC"
+Repository = "https://github.com/beenuar/AiSOC"
+Issues = "https://github.com/beenuar/AiSOC/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/aisoc_sdk"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.mypy]
+strict = true
+# Pinned, like the other five trees that declare [tool.mypy]. Without it
+# mypy resolves the standard library for whatever interpreter it happens to
+# run on, so this tree's share of the recorded baseline moved whenever CI's
+# Python did — and the ratchet would red on a workflow change that touched
+# none of this code. 3.11 is the interpreter every service image ships and
+# the one CI now runs.
+python_version = "3.11"

@@ -1,0 +1,26 @@
+title: AWS EBS Snapshot Shared With External Account
+id: aisoc-id-cl-0010-snapshot-share
+status: stable
+description: |
+  EBS snapshot permissions modified to grant access to an external AWS
+  account or made public — classic data-exfiltration via snapshot.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1537
+  - attack.exfiltration
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'ec2.amazonaws.com'
+    event.action: 'ModifySnapshotAttribute'
+    aws.request_parameters|contains: 'createVolumePermission'
+  external:
+    aws.request_parameters|contains:
+      - '"add":'
+      - 'all'
+  condition: selection and external

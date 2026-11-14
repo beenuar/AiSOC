@@ -1,0 +1,24 @@
+# Prometheus datasource.
+#
+# The Tempo datasource already referenced `aisoc-prometheus` for its
+# trace-to-metrics and service-map links, and no datasource declared that
+# uid — so both links resolved to nothing. Grafana does not warn about a
+# dangling datasource reference; the feature simply does nothing when
+# clicked, which reads as "tracing is not wired up" rather than as a typo.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    uid: aisoc-prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      # Matches the scrape_interval in infra/docker/prometheus.yml. A
+      # mismatch makes rate() windows that look fine and quietly under- or
+      # over-sample.
+      timeInterval: 15s
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: aisoc-tempo

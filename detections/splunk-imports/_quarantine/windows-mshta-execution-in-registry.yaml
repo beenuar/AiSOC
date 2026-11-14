@@ -1,0 +1,45 @@
+id: splunk-security-content-e13ceade-b673-4d34-adc4-4d9c01729753
+name: Windows Mshta Execution In Registry
+description: The following analytic detects the execution of mshta.exe via registry
+  entries to run malicious scripts. It leverages registry activity logs to identify
+  entries containing "mshta," "javascript," "vbscript," or "WScript.Shell." This behavior
+  is significant as it indicates potential fileless malware, such as Kovter, which
+  uses encoded scripts in the registry to persist and execute without files. If confirmed
+  malicious, this activity could allow attackers to maintain persistence, execute
+  arbitrary code, and evade traditional file-based detection methods, posing a significant
+  threat to system integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/threat-detection-report/techniques/mshta/
+- https://learn.microsoft.com/en-us/microsoft-365/security/intelligence/fileless-threats?view=o365-worldwide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Registry\n  WHERE Registry.registry_value_data\
+    \ = \"*mshta*\"\n    OR\n    Registry.registry_value_data IN (\"*javascript:*\"\
+    , \"*vbscript:*\",\"*WScript.Shell*\")\n  BY Registry.action Registry.dest Registry.process_guid\n\
+    \     Registry.process_id Registry.registry_hive Registry.registry_path\n    \
+    \ Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name\n\
+    \     Registry.registry_value_type Registry.status Registry.user\n     Registry.vendor_product\n\
+    | `drop_dm_object_name(Registry)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_mshta_execution_in_registry_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e13ceade-b673-4d34-adc4-4d9c01729753
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_mshta_execution_in_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

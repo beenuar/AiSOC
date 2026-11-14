@@ -1,0 +1,58 @@
+id: splunk-security-content-603ebac2-f157-4df7-a6ac-34e8d0350f86
+name: O365 BEC Email Hiding Rule Created
+description: This analytic detects mailbox rule creation, a common technique used
+  in Business Email Compromise. It uses a scoring mechanism to identify a combination
+  of attributes often featured in mailbox rules created by attackers. This may indicate
+  that an attacker has gained access to the account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1564/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange Operation IN ("New-InboxRule",
+    "Set-InboxRule")
+
+    | stats min(_time) as firstTime, max(_time) as lastTime, values(Operation) as
+    Operation, latest(Name) as Name, latest(MarkAsRead) as MarkAsRead, latest(MoveToFolder)
+    as MoveToFolder by object_id user
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | lookup ut_shannon_lookup word as Name
+
+    | eval entropy_score=if(ut_shannon<=2, 1, 0)
+
+    | eval len_score=if(len(Name)<=3, 1,0)
+
+    | eval read_score=if(MarkAsRead="True", 1, 0)
+
+    | eval folder_score=if(match(MoveToFolder, "^(RSS|Conversation History|Archive)"),
+    1, 0)
+
+    | eval suspicious_score=entropy_score+len_score+read_score+folder_score
+
+    | where suspicious_score>2
+
+    | `o365_bec_email_hiding_rule_created_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 603ebac2-f157-4df7-a6ac-34e8d0350f86
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_bec_email_hiding_rule_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

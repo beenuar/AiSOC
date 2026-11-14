@@ -1,0 +1,55 @@
+id: splunk-security-content-7f5fb3e1-4209-4914-90db-0ec21b556368
+name: Hosts receiving high volume of network traffic from email server
+description: The following analytic identifies hosts receiving an unusually high volume
+  of network traffic from an email server. It leverages the Network_Traffic data model
+  to sum incoming bytes to clients from email servers, comparing current traffic against
+  historical averages and standard deviations. This activity is significant as it
+  may indicate data exfiltration by a malicious actor using the email server. If confirmed
+  malicious, this could lead to unauthorized data access and potential data breaches,
+  compromising sensitive information and impacting organizational security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` sum(All_Traffic.bytes_in)
+    as bytes_in from datamodel=Network_Traffic where All_Traffic.dest_category=email_server
+    by All_Traffic.src_ip _time span=1d | `drop_dm_object_name("All_Traffic")` | eventstats
+    avg(bytes_in) as avg_bytes_in stdev(bytes_in) as stdev_bytes_in | eventstats count
+    as num_data_samples avg(eval(if(_time < relative_time(now(), "@d"), bytes_in,
+    null))) as per_source_avg_bytes_in stdev(eval(if(_time < relative_time(now(),
+    "@d"), bytes_in, null))) as per_source_stdev_bytes_in by src_ip | eval minimum_data_samples
+    = 4, deviation_threshold = 3
+
+    | where num_data_samples >= minimum_data_samples AND bytes_in > (avg_bytes_in
+    + (deviation_threshold * stdev_bytes_in)) AND bytes_in > (per_source_avg_bytes_in
+    + (deviation_threshold * per_source_stdev_bytes_in)) AND _time >= relative_time(now(),
+    "@d")
+
+    | eval num_standard_deviations_away_from_server_average = round(abs(bytes_in -
+    avg_bytes_in) / stdev_bytes_in, 2), num_standard_deviations_away_from_client_average
+    = round(abs(bytes_in - per_source_avg_bytes_in) / per_source_stdev_bytes_in, 2)
+
+    | table src_ip, _time, bytes_in, avg_bytes_in, per_source_avg_bytes_in, num_standard_deviations_away_from_server_average,
+    num_standard_deviations_away_from_client_average
+
+    | `hosts_receiving_high_volume_of_network_traffic_from_email_server_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7f5fb3e1-4209-4914-90db-0ec21b556368
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/hosts_receiving_high_volume_of_network_traffic_from_email_server.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

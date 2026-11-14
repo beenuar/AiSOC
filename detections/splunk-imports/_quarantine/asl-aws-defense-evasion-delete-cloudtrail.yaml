@@ -1,0 +1,42 @@
+id: splunk-security-content-1f0b47e5-0134-43eb-851c-e3258638945e
+name: ASL AWS Defense Evasion Delete Cloudtrail
+description: The following analytic detects AWS `DeleteTrail` events within CloudTrail
+  logs. It leverages Amazon Security Lake logs parsed in the Open Cybersecurity Schema
+  Framework (OCSF) format to identify when a CloudTrail is deleted. This activity
+  is significant because adversaries may delete CloudTrail logs to evade detection
+  and operate with stealth. If confirmed malicious, this action could allow attackers
+  to cover their tracks, making it difficult to trace their activities and investigate
+  other potential compromises within the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=DeleteTrail\n  | fillnull\n  |\
+    \ stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor.user.uid\
+    \ api.operation api.service.name\n       http_request.user_agent src_endpoint.ip\
+    \ actor.user.account.uid\n       cloud.provider cloud.region\n  | rename actor.user.uid\
+    \ as user api.operation as action api.service.name as dest http_request.user_agent\
+    \ as user_agent src_endpoint.ip as src actor.user.account.uid as vendor_account\
+    \ cloud.provider as vendor_product cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `asl_aws_defense_evasion_delete_cloudtrail_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1f0b47e5-0134-43eb-851c-e3258638945e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_defense_evasion_delete_cloudtrail.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

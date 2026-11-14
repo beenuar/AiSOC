@@ -1,0 +1,26 @@
+id: det-threat-anomaly-010
+name: Identity-Provider Change by a Principal Who Does Not Normally Make Them
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'Identity-Provider
+  Change by a Principal Who Does Not Normally Make Them'. Watch the 2 documented false-positive cases
+  before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556.007
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: okta
+  service: identity
+detection:
+  condition: |
+    event_type STARTSWITH "system.idp"
+    AND baseline_action_rarity >= 0.95
+false_positives:
+- A federation migration
+- An identity team member's first IdP change
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

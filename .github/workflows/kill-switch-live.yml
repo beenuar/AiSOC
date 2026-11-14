@@ -1,0 +1,118 @@
+# The kill switch, against real Postgres as the runtime role.
+#
+# Why this is a live job rather than part of the general Python suite:
+# the whole subject is what a row-level security policy does to the role the
+# services actually connect as. `061_runtime_app_role.sql` makes `aisoc_app`
+# NOSUPERUSER NOBYPASSRLS and both tables are FORCE ROW LEVEL SECURITY, so
+# the defect these suites pin — a global row no session could write — is
+# invisible to every other role. Seeding it as the migration owner succeeds
+# and proves nothing, which is precisely the workaround that hid it.
+#
+# No `paths:` filter. An emergency stop must grade every pull request, not
+# only ones that touch a named path: the ways this breaks are a policy edit
+# in some other migration, a dependency sweep moving the global routes onto
+# a tenant-scoped session, and a permission rename — none of which are under
+# the paths anyone would think to list.
+name: Kill switch (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: kill-switch-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  kill-switch-live:
+    name: The platform-wide stop can be engaged, and stops closure
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. POSTGRES_USER (aisoc) is a superuser
+      # and ignores every policy even under FORCE ROW LEVEL SECURITY; the
+      # suites refuse to run against a role that can bypass, rather than
+      # passing for the wrong reason.
+      ISOLATION_KILL_SWITCH_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      SECRET_KEY: ci-kill-switch-signing-secret-at-least-32-chars
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH LOGIN PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # Asserted rather than assumed. If this role could bypass a policy,
+      # every suite below would pass against the pre-fix tree.
+      - name: The runtime role cannot walk past a policy
+        run: |
+          set -euo pipefail
+          bad=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM pg_roles WHERE rolname = 'aisoc_app' AND (rolsuper OR rolbypassrls)")
+          if [ "$bad" != "0" ]; then
+            echo "FAIL: aisoc_app holds SUPERUSER or BYPASSRLS, so these suites would verify nothing."
+            exit 1
+          fi
+          echo "OK: aisoc_app is subject to row-level security."
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: The global row is writable by the runtime role, and nothing else is
+        working-directory: services/api
+        run: python -m pytest ../../tests/isolation/test_kill_switch_global_live.py -v --tb=short -rs
+
+      - name: The platform-wide stop is reachable through the product
+        working-directory: services/api
+        run: python -m pytest ../../tests/isolation/test_kill_switch_endpoint_live.py -v --tb=short -rs
+
+      # `services/agents` ships a different package also called `app`, so
+      # importing one shadows the other. The closure reader lives in that one,
+      # and it is installed after the API legs have run for that reason.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: An engaged platform switch actually stops automatic closure
+        working-directory: services/agents
+        run: python -m pytest ../../tests/isolation/test_kill_switch_closure_live.py -v --tb=short -rs

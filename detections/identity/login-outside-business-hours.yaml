@@ -1,0 +1,27 @@
+id: det-identity-005
+name: Privileged Login Outside Business Hours
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Privileged Login
+  Outside Business Hours'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND outcome == "SUCCESS"
+    AND user_role IN ["admin", "privileged"]
+    AND hour_of_day_local NOT IN [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+false_positives:
+- On-call rotation outside hours (must be on-call)
+- Travel by privileged user (tag travel)
+playbook: tpl-account-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

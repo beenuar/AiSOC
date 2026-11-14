@@ -1,0 +1,24 @@
+title: Okta MFA Factor Reset Out-of-Process
+id: aisoc-id-id-0019-okta-factor-reset
+status: stable
+description: |
+  Okta MFA factor reset for a user. Frequently abused via helpdesk
+  social engineering (e.g., Scattered Spider) to enroll attacker-
+  controlled factors after impersonating the user.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1556.006
+  - attack.defense_evasion
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action:
+      - 'user.mfa.factor.reset_all'
+      - 'user.mfa.factor.deactivate'
+      - 'user.mfa.factor.update'
+  condition: selection

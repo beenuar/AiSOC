@@ -1,0 +1,4 @@
+{
+  "host": "store.corp.com",
+  "request_uri": "/search?q=<script>alert(document.cookie)</script>"
+}

@@ -1,0 +1,39 @@
+id: splunk-security-content-8158ccc4-6038-11eb-ae93-0242ac130002
+name: O365 Excessive SSO logon errors
+description: The following analytic detects accounts experiencing a high number of
+  Single Sign-On (SSO) logon errors. It leverages data from the `o365_management_activity`
+  dataset, focusing on failed user login attempts with SSO errors. This activity is
+  significant as it may indicate brute-force attempts or the hijacking/reuse of SSO
+  tokens. If confirmed malicious, attackers could potentially gain unauthorized access
+  to user accounts, leading to data breaches, privilege escalation, or further lateral
+  movement within the organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - cloud
+references:
+- https://stealthbits.com/blog/bypassing-mfa-with-pass-the-cookie/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory LogonError=*Sso*\
+    \ Operation=UserLoginFailed\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime values(user) as user\n    BY src vendor_account vendor_product\n\
+    \       dest signature user_agent\n  | where count >= 5\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_excessive_sso_logon_errors_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8158ccc4-6038-11eb-ae93-0242ac130002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_excessive_sso_logon_errors.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

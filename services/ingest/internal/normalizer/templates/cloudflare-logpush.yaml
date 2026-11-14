@@ -1,0 +1,45 @@
+# Cloudflare Logpush HTTP destination template.
+#
+# Logpush ships newline-delimited JSON to an HTTP endpoint. The inbox
+# handler splits ND-JSON into individual events before applying this
+# template. The shape varies per dataset (http_requests, firewall_events,
+# zero_trust_network_sessions, etc.); this template covers firewall +
+# WAF events, which is the most common security feed.
+#
+# Reference:
+#   https://developers.cloudflare.com/logs/logpush/logpush-job/datasets/
+#   https://developers.cloudflare.com/logs/reference/log-fields/
+id: cloudflare-logpush
+vendor_name: Cloudflare
+product_name: Cloudflare Logpush
+class_uid: 4001
+class_name: Network Activity
+activity_id: 6
+field_map:
+  RayID: finding.uid
+  Action: activity_name
+  ClientIP: src_endpoint.ip
+  ClientCountry: src_endpoint.location.country
+  ClientASN: src_endpoint.autonomous_system.number
+  ClientASNDescription: src_endpoint.autonomous_system.name
+  ClientRequestHost: dst_endpoint.hostname
+  ClientRequestPath: http_request.url.path
+  ClientRequestMethod: http_request.http_method
+  ClientRequestUserAgent: http_request.user_agent
+  EdgeResponseStatus: http_response.code
+  RuleID: finding.related_events.id
+  RuleMessage: message
+  Source: source
+  ZoneName: dst_endpoint.domain
+severity_field: Action
+severity_map:
+  log: 1
+  challenge: 2
+  jschallenge: 2
+  managed_challenge: 2
+  block: 4
+time_field: EdgeStartTimestamp
+message_field: RuleMessage
+constants:
+  source_type: cloudflare-logpush
+  metadata.product.vendor_name: Cloudflare

@@ -1,0 +1,46 @@
+id: splunk-security-content-5c7ee6ad-baf4-44fb-b2f0-0cfeddf82dbc
+name: Windows User Execution Malicious URL Shortcut File
+description: The following analytic detects the creation URL shortcut files, often
+  used by malware like CHAOS ransomware. It leverages the Endpoint.Filesystem datamodel
+  to identify ".url" files created outside common directories, such as "Program Files".
+  This activity can be significant as ".URL" files can be used as mean to trick the
+  user into visiting certain websites unknowingly, or when placed in certain locations
+  such as "\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\",
+  it may allow the execution of malicious code upon system reboot. If confirmed malicious,
+  this could allow an attacker to achieve persistence and execute harmful payloads,
+  potentially leading to further system compromise and data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1204/002/
+- https://www.fortinet.com/blog/threat-research/chaos-ransomware-variant-sides-with-russia
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '|tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Filesystem where NOT Filesystem.file_path
+    IN ("*:\\Program Files\\*", "*:\\Program Files (x86)\\*", "*\\AppData\\Roaming\\Microsoft\\Office\\Recent\\*",
+    "*:\\Windows\\WinSxS\\*") Filesystem.file_name=*.url by Filesystem.action Filesystem.dest
+    Filesystem.file_access_time Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time
+    Filesystem.file_name Filesystem.file_path Filesystem.file_acl Filesystem.file_size
+    Filesystem.process_guid Filesystem.process_id Filesystem.user Filesystem.vendor_product
+    | `drop_dm_object_name(Filesystem)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_user_execution_malicious_url_shortcut_file_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 5c7ee6ad-baf4-44fb-b2f0-0cfeddf82dbc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_user_execution_malicious_url_shortcut_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

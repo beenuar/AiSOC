@@ -1,0 +1,4 @@
+{
+  "event_type": "ES_EVENT_TYPE_NOTIFY_WRITE",
+  "path": "head-com.apple.backgroundtaskmanagement.plist"
+}

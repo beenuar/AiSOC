@@ -1,0 +1,45 @@
+id: splunk-security-content-a26d9db4-c883-11eb-9d75-acde48001122
+name: Powershell Fileless Process Injection via GetProcAddress
+description: The following analytic detects the use of `GetProcAddress` in PowerShell
+  script blocks, leveraging PowerShell Script Block Logging (EventCode=4104). This
+  method captures the full command sent to PowerShell, which is then logged in Windows
+  event logs. The presence of `GetProcAddress` is unusual for typical PowerShell scripts
+  and often indicates malicious activity, as many attack toolkits use it to achieve
+  code execution. If confirmed malicious, this activity could allow an attacker to
+  execute arbitrary code, potentially leading to system compromise. Analysts should
+  review parallel processes and the entire logged script block for further investigation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://help.splunk.com/en/security-offerings/splunk-user-behavior-analytics/get-data-in/5.4.1/add-other-data-to-splunk-uba/configure-powershell-logging-to-see-powershell-anomalies-in-splunk-uba.
+- https://blog.palantir.com/tampering-with-windows-event-tracing-background-offense-and-defense-4be7ac62ac63
+- https://static1.squarespace.com/static/552092d5e4b0661088167e5c/t/59c1814829f18782e24f1fe2/1505853768977/Windows+PowerShell+Logging+Cheat+Sheet+ver+Sept+2017+v2.1.pdf
+- https://www.crowdstrike.com/blog/investigating-powershell-command-and-script-logging/
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=*getprocaddress*\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `powershell_fileless_process_injection_via_getprocaddress_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a26d9db4-c883-11eb-9d75-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_fileless_process_injection_via_getprocaddress.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

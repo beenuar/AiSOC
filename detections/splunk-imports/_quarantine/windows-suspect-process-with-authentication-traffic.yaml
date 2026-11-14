@@ -1,0 +1,47 @@
+id: splunk-security-content-953322db-128a-4ce9-8e89-56e039e33d98
+name: Windows Suspect Process With Authentication Traffic
+description: The following analytic detects executables running from public or temporary
+  locations that are communicating over Windows domain authentication ports/protocols
+  such as LDAP (389), LDAPS (636), and Kerberos (88). It leverages network traffic
+  data to identify processes originating from user-controlled directories. This activity
+  is significant because legitimate applications rarely run from these locations and
+  attempt domain authentication, making it a potential indicator of compromise. If
+  confirmed malicious, attackers could leverage this to access domain resources, potentially
+  leading to further exploitation and lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://book.hacktricks.xyz/network-services-pentesting/pentesting-kerberos-88
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime values(All_Traffic.process_id) as process_id  from datamodel=Network_Traffic.All_Traffic
+    where All_Traffic.dest_port IN ("88","389","636")  AND All_Traffic.app IN ("*\\users\\*",
+    "*\\programdata\\*", "*\\temp\\*", "*\\Windows\\Tasks\\*", "*\\appdata\\*", "*\\perflogs\\*")
+    by All_Traffic.action All_Traffic.app All_Traffic.dest All_Traffic.dest_ip All_Traffic.dest_port
+    All_Traffic.direction All_Traffic.dvc All_Traffic.protocol All_Traffic.protocol_version
+    All_Traffic.src All_Traffic.src_ip All_Traffic.src_port All_Traffic.transport
+    All_Traffic.user All_Traffic.vendor_product | `drop_dm_object_name(All_Traffic)`  |
+    rex field=app ".*\\\(?<process_name>.*)$" | `security_content_ctime(firstTime)`  |
+    `security_content_ctime(lastTime)` | `windows_suspect_process_with_authentication_traffic_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 953322db-128a-4ce9-8e89-56e039e33d98
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_suspect_process_with_authentication_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

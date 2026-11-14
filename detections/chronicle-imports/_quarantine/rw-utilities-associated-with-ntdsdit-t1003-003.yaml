@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-rw-utilities-associated-with-ntdsdit-t1003-003
+name: rw_utilities_associated_with_ntdsdit_T1003_003
+description: rw_utilities_associated_with_ntdsdit_T1003_003
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule rw_utilities_associated_with_ntdsdit_T1003_003 {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects process launches from\
+    \ processes related to ntds against key servers\"\n    rule_id = \"mr_03db3339-09ba-4c9c-b3d6-1b81998a1de4\"\
+    \n    rule_name = \"MITRE ATT&CK T1003.003 RW Utilities Associated With Ntds.dit\"\
+    \n    type = \"alert\"\n    tags = \"list\"\n    assumption = \"Assumes lists\
+    \ for key servers and ntds suspicious processes have been created\"\n    data_source\
+    \ = \"microsoft sysmon, microsoft windows events\"\n    platform = \"Windows\"\
+    \n    tactic = \"TA0006\"\n    technique = \"T1003.003\"\n    severity = \"High\"\
+    \n    priority = \"High\"\n\n  events:\n    $process.metadata.event_type = \"\
+    PROCESS_LAUNCH\"\n    // ntds_suspicious_processes includes values like ntdsutil,\
+    \ vssadmin, diskshadow, esentutl\n    // Parses full_path for the file name to\
+    \ match list (excluding .exe)\n    re.capture($process.target.process.file.full_path,\
+    \ /.*\\\\(.*).exe/) in %ntds_suspicious_processes\n    // Replace .stackedpad.local\
+    \ with your domain if your key_servers list just contains hostname versus fqdn\n\
+    \    // If using fqdn in your list, this re.replace function can be removed and\
+    \ a string match could be used instead\n    re.replace($process.principal.hostname,\
+    \ \".stackedpads.local\", \"\") in %key_servers\n    $process.metadata.event_type\
+    \ = $event_type\n\n match:\n  $event_type over 5m\n\n outcome:\n    $risk_score\
+    \ = 85\n    $event_count = count_distinct($process.metadata.id)\n    // added\
+    \ to populate alert graph with additional context\n    $principal_hostname = array_distinct($process.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($process.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($process.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($process.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($process.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($process.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    $process\n\
+    }"
+  chronicle_rule_name: rw_utilities_associated_with_ntdsdit_T1003_003
+provenance:
+  source: chronicle/detection-rules
+  source_id: rw_utilities_associated_with_ntdsdit_T1003_003
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/rw_utilities_associated_with_ntdsdit_T1003_003.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

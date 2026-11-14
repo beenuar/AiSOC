@@ -1,0 +1,7 @@
+{
+  "baseline_peer_deviation": 0.6,
+  "eventName": "CreateUser",
+  "eventSource": "iam.amazonaws.com",
+  "group": "platform-engineering",
+  "user": "rob.t@example.com"
+}

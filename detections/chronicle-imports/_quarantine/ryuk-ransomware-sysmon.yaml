@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-ryuk-ransomware-sysmon
+name: ryuk_ransomware_sysmon
+description: ryuk_ransomware_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ryuk_ransomware_sysmon {\n meta:\n    author = \"Alexandr\
+    \ Yampolskyi, SOC Prime\"\n    description = \"Ryuk Ransomware Detector.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/dZKqRzZUY7ki\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/01/03\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, Defense Evasion, t1112, Impact,\
+    \ t1486\"\n\n  events:\n($selection1.metadata.product_event_type = \"1\" and (($selection1.target.file.md5\
+    \ = \"c0202cf6aeab8437c638533d14563d35\" or $selection1.target.file.md5 = \"d348f536e214a47655af387408b4fca5\"\
+    \ or $selection1.target.file.md5 = \"958c594909933d4c82e93c22850194aa\" or $selection1.target.file.md5\
+    \ = \"86c314bc2dc37ba84f7364acd5108c2b\" or $selection1.target.file.md5 = \"29340643ca2e6677c19e1d3bf351d654\"\
+    \ or $selection1.target.file.md5 = \"cb0c1248d3899358a375888bb4e8f3fe\" or $selection1.target.file.md5\
+    \ = \"1354ac0d5be0c8d03f4e3aba78d2223e\" or $selection1.target.file.md5 = \"5ac0f050f93f86e69026faea1fbb4450\"\
+    \ or $selection1.target.file.md5 = \"965884f19026913b2c57b8cd4a86455a61383de01dabb69c557f45bb848f6c26\"\
+    \ or $selection1.target.file.md5 = \"b8fcd4a3902064907fb19e0da3ca7aed72a7e6d1f94d971d1ee7a4d3af6a800d\"\
+    \ or $selection1.target.file.md5 = \"795db7bdad1befdd3ad942be79715f6b0c5083d859901b81657b590c9628790f\"\
+    ) or re.regex($selection1.target.process.command_line, `.*REG ADD \\\"HKEY_CURRENT_USER\\\
+    \\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\" /v \\\"svchos\\\
+    \" /t REG_SZ /d \\\"C:\\\\Users\\\\admin\\\\AppData\\\\Local.*`)))\n\n  condition:\n\
+    \    $selection1\n}"
+  chronicle_rule_name: ryuk_ransomware_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: ryuk_ransomware_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/ryuk_ransomware__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

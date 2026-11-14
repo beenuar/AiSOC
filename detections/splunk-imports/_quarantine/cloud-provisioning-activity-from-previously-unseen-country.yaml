@@ -1,0 +1,44 @@
+id: splunk-security-content-94994255-3acf-4213-9b3f-0494df03bb31
+name: Cloud Provisioning Activity From Previously Unseen Country
+description: The following analytic detects cloud provisioning activities originating
+  from previously unseen countries. It leverages cloud infrastructure logs and compares
+  the geographic location of the source IP address against a baseline of known locations.
+  This activity is significant as it may indicate unauthorized access or potential
+  compromise of cloud resources. If confirmed malicious, an attacker could gain control
+  over cloud assets, leading to data breaches, service disruptions, or further infiltration
+  into the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime, latest(_time) as lastTime FROM\
+    \ datamodel=Change\n  WHERE (\n        All_Changes.action=started\n        OR\n\
+    \        All_Changes.action=created\n    )\n    All_Changes.status=success\n \
+    \ BY All_Changes.src, All_Changes.user, All_Changes.object,\n     All_Changes.command\n\
+    | `drop_dm_object_name(\"All_Changes\")`\n| iplocation src\n| where isnotnull(Country)\n\
+    | lookup previously_seen_cloud_provisioning_activity_sources Country as Country\
+    \ OUTPUT firstTimeSeen, enough_data\n| eventstats max(enough_data) as enough_data\n\
+    | where enough_data=1\n| eval firstTimeSeenCountry=min(firstTimeSeen)\n| where\
+    \ isnull(firstTimeSeenCountry) OR firstTimeSeenCountry > relative_time(now(),\
+    \ \"-24h@h\")\n| `security_content_ctime(firstTime)`\n| table firstTime, src,\
+    \ Country, user, object, command\n| `cloud_provisioning_activity_from_previously_unseen_country_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 94994255-3acf-4213-9b3f-0494df03bb31
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_provisioning_activity_from_previously_unseen_country.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

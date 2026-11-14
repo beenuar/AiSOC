@@ -1,0 +1,22 @@
+title: AWS IAM Access Key Created for Privileged Identity
+id: aisoc-id-0008-aws-iam-key-create
+status: stable
+description: |
+  CreateAccessKey on an IAM user or role flagged as privileged by the
+  IAM graph enrichment. Common persistence step after initial access.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1098
+  - attack.persistence
+  - aisoc.identity
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: cloudtrail
+    aws.eventName: 'CreateAccessKey'
+    enrich.identity.privileged: true
+  condition: selection

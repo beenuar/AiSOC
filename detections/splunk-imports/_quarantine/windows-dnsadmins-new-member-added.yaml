@@ -1,0 +1,42 @@
+id: splunk-security-content-27e600aa-77f8-4614-bc80-2662a67e2f48
+name: Windows DnsAdmins New Member Added
+description: The following analytic detects the addition of a new member to the DnsAdmins
+  group in Active Directory by leveraging Event ID 4732. This detection uses security
+  event logs to identify changes to this high-privilege group. Monitoring this activity
+  is crucial because members of the DnsAdmins group can manage the DNS service, often
+  running on Domain Controllers, and potentially execute malicious code with SYSTEM
+  privileges. If confirmed malicious, this activity could allow an attacker to escalate
+  privileges and gain control over critical domain services, posing a significant
+  security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1098/
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/from-dnsadmins-to-system-to-domain-compromise
+- https://www.hackingarticles.in/windows-privilege-escalation-dnsadmins-to-domainadmin/
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4732
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4732 TargetUserName=DnsAdmins\n  |\
+    \ stats min(_time) as firstTime max(_time) as lastTime values(TargetUserName)\
+    \ as target_users_added values(user) as user\n    BY dest src_user\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_dnsadmins_new_member_added_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 27e600aa-77f8-4614-bc80-2662a67e2f48
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_dnsadmins_new_member_added.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

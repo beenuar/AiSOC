@@ -1,0 +1,24 @@
+id: det-endpoint-290
+name: macOS Keychain Dumping Attempt
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Keychain
+  Dumping Attempt'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1555.001
+- tlp.white
+category: endpoint
+log_source:
+  product: osquery
+  service: processes
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ANY ["dump-keychain -d", "find-certificate -p", "keychaindump", "Library/Keychains/"]
+false_positives:
+- Authorised credential management or backup script
+playbook: tpl-credential-theft
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

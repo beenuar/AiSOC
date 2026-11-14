@@ -1,0 +1,154 @@
+# Hunt reports — through the real app and real Postgres (depth 9.5).
+#
+# Why live rather than the usual SQLite stand-in: the report row has JSONB
+# citations with a `jsonb_typeof` CHECK and two columns named with reserved
+# words (`"where"`, `"when"`), and the builders read `alerts.entities`,
+# `alerts.affected_hosts` (a JSONB *array*, not the singular text column a
+# reader expects) and the `investigation_runs` → `investigation_events` join
+# that is the only path from a case to its ledger.
+#
+# That decision paid for itself three times on the first run: the singular
+# `affected_host` does not exist, `investigation_events` has no `case_id` at
+# all, and `investigation_runs.case_id` is TEXT rather than UUID so binding
+# a UUID raises in asyncpg instead of coercing. Each would have shipped
+# under a stand-in.
+#
+# The suite skips when no database answers, so this job sets
+# HUNT_REPORT_PROOF_REQUIRED=1: here, a skip is a failure.
+#
+# No `paths:` filter: a guard that only grades pull requests touching a
+# named path is one the next refactor walks around.
+name: Hunt reports (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: hunt-report-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  hunt-report-live:
+    name: A hunt that found something becomes a cited report
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # aisoc-db-role: owner — the suite creates scratch tenants and users, which the DML-only runtime role cannot
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment: the suite mints real JWTs and travels
+      # through the real auth dependencies.
+      ENVIRONMENT: production
+      SECRET_KEY: ci-hunt-report-signing-secret-at-least-32-chars
+      HUNT_REPORT_PROOF_REQUIRED: "1"
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: A hunt that found something becomes a cited report
+        working-directory: services/api
+        run: python -m pytest tests/test_hunt_reports.py -v --tb=short
+
+      # ── Negative controls ──────────────────────────────────────────────
+      #
+      # Each puts a defect back and requires the matching assertion to go
+      # red, so a suite that later stops exercising the path cannot stay
+      # green.
+
+      - name: Allowing an uncited report makes the suite fail
+        working-directory: services/api
+        run: |
+          cp app/services/hunt_report.py /tmp/hunt_report.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/hunt_report.py")
+          s = p.read_text()
+          needle = "    if not report.is_citable():"
+          if needle not in s:
+              print("negative control: the citation refusal is no longer in the shape this control edits")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    if False:  # NEGATIVE CONTROL", 1))
+          PY
+          if python -m pytest tests/test_hunt_reports.py -q >/dev/null 2>&1; then
+            cp /tmp/hunt_report.bak app/services/hunt_report.py
+            echo "FAIL: the suite passed while an uncited report could be stored."
+            exit 1
+          fi
+          cp /tmp/hunt_report.bak app/services/hunt_report.py
+          echo "OK: allowing an uncited report makes the suite fail, as it must."
+
+      - name: Filling an empty section with a confident sentence makes the suite fail
+        working-directory: services/api
+        run: |
+          cp app/services/hunt_report.py /tmp/hunt_report.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/hunt_report.py")
+          s = p.read_text()
+          needle = "Not recorded. Nothing in the data supported this section."
+          if needle not in s:
+              print("negative control: the absent-section marker is gone; this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "No activity of this kind was observed.", 1))
+          PY
+          if python -m pytest tests/test_hunt_reports.py -q >/dev/null 2>&1; then
+            cp /tmp/hunt_report.bak app/services/hunt_report.py
+            echo "FAIL: the suite passed while an empty section claimed nothing happened."
+            exit 1
+          fi
+          cp /tmp/hunt_report.bak app/services/hunt_report.py
+          echo "OK: inventing a sentence for an empty section makes the suite fail, as it must."
+
+      - name: Reporting a hunt that never ran makes the suite fail
+        working-directory: services/api
+        run: |
+          cp app/services/hunt_report.py /tmp/hunt_report.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/hunt_report.py")
+          s = p.read_text()
+          needle = '    if hunt["last_run_at"] is None:'
+          if needle not in s:
+              print("negative control: the never-run refusal is no longer in the shape this control edits")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    if False:  # NEGATIVE CONTROL", 1))
+          PY
+          if python -m pytest tests/test_hunt_reports.py -q >/dev/null 2>&1; then
+            cp /tmp/hunt_report.bak app/services/hunt_report.py
+            echo "FAIL: the suite passed while a hunt that never executed produced a report."
+            exit 1
+          fi
+          cp /tmp/hunt_report.bak app/services/hunt_report.py
+          echo "OK: reporting a hunt that never ran makes the suite fail, as it must."

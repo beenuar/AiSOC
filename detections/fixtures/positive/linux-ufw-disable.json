@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-disable-suffix",
+  "exe": "head-/ufw",
+  "syscall": "execve"
+}

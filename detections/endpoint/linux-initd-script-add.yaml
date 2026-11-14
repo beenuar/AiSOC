@@ -1,0 +1,25 @@
+id: det-endpoint-137
+name: /etc/init.d/ Script Added By Non-Pkg Process
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by '/etc/init.d/ Script
+  Added By Non-Pkg Process'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1037.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "openat"
+    AND path CONTAINS "/etc/init.d/"
+    AND exe NOT ENDSWITH_ANY ["/dpkg", "/rpm"]
+false_positives:
+- Sanctioned automation/IaC pipeline
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

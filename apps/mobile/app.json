@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "AiSOC Responder",
+    "slug": "aisoc-responder",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "aisoc",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "backgroundColor": "#0b1020",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.aisoc.responder",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Confirm your identity before approving an action that changes your estate."
+      }
+    },
+    "android": {
+      "package": "com.aisoc.responder",
+      "adaptiveIcon": { "backgroundColor": "#0b1020" },
+      "permissions": ["USE_BIOMETRIC", "POST_NOTIFICATIONS"]
+    },
+    "plugins": ["expo-router", "expo-secure-store", "expo-notifications", "expo-local-authentication"],
+    "extra": {
+      "apiBaseUrl": "http://localhost:8000"
+    }
+  }
+}

@@ -1,0 +1,28 @@
+# Microsoft 365 Management Activity API. Event types are the `Operation`
+# values, which span every workload in one stream.
+source: m365_audit
+event_type_path: Operation
+fixture_files:
+  - services/connectors/tests/test_saas_connectors.py
+events:
+  UserLoggedIn:
+    action: user.logged.in
+    sensitivity: low
+    attack: [T1078]
+  Add member to role:
+    action: add.member.to.role
+    sensitivity: high
+    attack: [T1098.003]
+  New-InboxRule:
+    # An inbox rule created by an attacker is how a compromised mailbox
+    # stays quiet: replies to the real owner are filed away unread.
+    action: new.inbox.rule
+    sensitivity: high
+    attack: [T1114.003]
+  FileAccessed:
+    action: file.accessed
+    sensitivity: info
+  FilePreviewed:
+    action: file.previewed
+    sensitivity: info
+unclassified: {}

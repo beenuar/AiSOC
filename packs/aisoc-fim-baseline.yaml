@@ -1,0 +1,92 @@
+id: aisoc-fim-baseline
+name: AiSOC File Integrity — Baseline
+version: 1.0.0
+platforms: [linux, darwin]
+description: |
+  Monitors critical system configuration and credential files for unauthorized
+  modifications. Covers /etc/passwd, /etc/shadow, /etc/sudoers, and SSH
+  authorized_keys files. Aligns with MITRE ATT&CK T1098 (Account Manipulation)
+  and T1078 (Valid Accounts).
+
+queries:
+  passwd_changes:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256, atime, mtime, ctime
+      FROM file_events
+      WHERE target_path IN ('/etc/passwd', '/etc/shadow', '/etc/group', '/etc/gshadow')
+    interval: 30
+    severity: high
+    description: Detect writes to /etc/passwd, /etc/shadow, /etc/group
+    mitre: [T1098, T1078]
+    references:
+      - https://attack.mitre.org/techniques/T1098/
+
+  sudoers_changes:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256, atime, mtime, ctime
+      FROM file_events
+      WHERE target_path LIKE '/etc/sudoers%'
+        OR target_path LIKE '/etc/sudoers.d/%'
+    interval: 30
+    severity: high
+    description: Detect modifications to sudoers configuration
+    mitre: [T1548.003]
+    references:
+      - https://attack.mitre.org/techniques/T1548/003/
+
+  ssh_authorized_keys:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256, atime, mtime, ctime
+      FROM file_events
+      WHERE target_path LIKE '%/.ssh/authorized_keys'
+    interval: 60
+    severity: high
+    description: Detect changes to SSH authorized_keys files
+    mitre: [T1098.004]
+    references:
+      - https://attack.mitre.org/techniques/T1098/004/
+
+  sshd_config:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256, atime, mtime, ctime
+      FROM file_events
+      WHERE target_path IN ('/etc/ssh/sshd_config', '/etc/ssh/sshd_config.d')
+    interval: 60
+    severity: medium
+    description: Detect changes to SSH server configuration
+    mitre: [T1098]
+    references:
+      - https://attack.mitre.org/techniques/T1098/
+
+  hosts_file:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256, atime, mtime, ctime
+      FROM file_events
+      WHERE target_path IN ('/etc/hosts', '/etc/resolv.conf')
+    interval: 120
+    severity: medium
+    description: Detect modifications to DNS resolution files
+    mitre: [T1565]
+    references:
+      - https://attack.mitre.org/techniques/T1565/
+
+file_paths:
+  etc_critical:
+    - /etc/passwd
+    - /etc/shadow
+    - /etc/group
+    - /etc/gshadow
+    - /etc/sudoers
+    - /etc/sudoers.d/%%
+    - /etc/hosts
+    - /etc/resolv.conf
+    - /etc/ssh/sshd_config
+    - /etc/ssh/sshd_config.d/%%
+  ssh_keys:
+    - /root/.ssh/authorized_keys
+    - /home/%%/.ssh/authorized_keys

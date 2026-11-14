@@ -1,0 +1,57 @@
+[
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef0",
+    "date_create": 1791367200,
+    "action": "user_login",
+    "actor": {
+      "type": "user",
+      "user": { "id": "W123AB456", "name": "alice", "email": "alice@example.com", "team": "T1234ABCD" }
+    },
+    "entity": { "type": "user", "user": { "id": "W123AB456", "name": "alice", "email": "alice@example.com" } },
+    "context": {
+      "location": { "type": "enterprise", "id": "E1701", "name": "Example", "domain": "example" },
+      "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      "ip_address": "203.0.113.21"
+    }
+  },
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef1",
+    "date_create": 1791367800,
+    "action": "file_downloaded",
+    "actor": { "type": "user", "user": { "id": "W123AB456", "name": "alice", "email": "alice@example.com" } },
+    "entity": { "type": "file", "file": { "id": "F0123ABCD", "name": "q4-forecast.xlsx", "filetype": "xlsx", "title": "Q4 forecast" } },
+    "context": { "ua": "Slack/4.37.101 CFNetwork/1494.0.7 Darwin/23.4.0", "ip_address": "203.0.113.21" }
+  },
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef2",
+    "date_create": 1791368400,
+    "action": "app_installed",
+    "actor": { "type": "user", "user": { "id": "WADMIN0001", "name": "admin", "email": "admin@example.com" } },
+    "entity": { "type": "app", "app": { "id": "A0123ABCD", "name": "Unvetted Exporter", "is_distributed": false, "scopes": ["files:read", "channels:history"] } },
+    "context": { "ua": "Mozilla/5.0", "ip_address": "203.0.113.22" }
+  },
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef3",
+    "date_create": 1791369000,
+    "action": "user_session_reset_by_admin",
+    "actor": { "type": "user", "user": { "id": "WADMIN0001", "name": "admin", "email": "admin@example.com" } },
+    "entity": { "type": "user", "user": { "id": "W123AB456", "name": "alice" } },
+    "context": { "ua": "Mozilla/5.0", "ip_address": "203.0.113.22" }
+  },
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef4",
+    "date_create": 1791369600,
+    "action": "public_channel_created",
+    "actor": { "type": "user", "user": { "id": "W123AB456", "name": "alice" } },
+    "entity": { "type": "channel", "channel": { "id": "C0123ABCD", "name": "incident-2026-10-07", "privacy": "public", "is_shared": false } },
+    "context": { "ua": "Mozilla/5.0", "ip_address": "203.0.113.21" }
+  },
+  {
+    "id": "0123a45b-6c7d-8e90-1234-56789abcdef5",
+    "date_create": 1791370200,
+    "action": "organization_export_started",
+    "actor": { "type": "user", "user": { "id": "WOWNER0001", "name": "owner", "email": "owner@example.com" } },
+    "entity": { "type": "workspace", "workspace": { "id": "T1234ABCD", "name": "Example", "domain": "example" } },
+    "context": { "ua": "Mozilla/5.0", "ip_address": "203.0.113.23" }
+  }
+]

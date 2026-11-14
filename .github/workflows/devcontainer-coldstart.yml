@@ -1,0 +1,203 @@
+name: Devcontainer · cold-start KPI
+
+# Asserts the documented Codespaces cold-start budget — from a fresh image
+# pull to a green `aisoc-acceptance --cold` run.
+#
+# This is the gate behind the "~30 s cold-start" claim in
+# `apps/docs/docs/operations/codespaces.md` and the plan that drove the
+# Phase-3 friction-cut workstream. If this job goes red, we're back to a
+# ~5-min cold boot and the README's "Try AiSOC in 60 seconds" promise no
+# longer holds for Codespaces users — release-blocking.
+#
+# Strategy: probe the image Codespaces would resolve and verify it is
+# immediately useful as a dev environment. On `main` that is the published
+# `ghcr.io/beenuar/aisoc-devcontainer:latest`; on a pull request touching
+# `.devcontainer/**` it is built from the PR's own source, because probing
+# `:latest` from a PR can only ever validate the *previous* image. We measure
+# two budgets independently:
+#
+#   1. image pull — the "before any keystroke is possible" phase.
+#      Budget: 60 s.
+#   2. toolchain ready — every executable a contributor needs on PATH
+#      (node, pnpm, python3.11, uv, ruff, go, gh, docker, docker compose,
+#      rg, jq) responds to `--version` from inside a single `docker run`.
+#      This is what the user actually experiences when they open
+#      Codespaces: from `docker pull` complete to first usable shell.
+#      Budget: 30 s.
+#
+# We deliberately do NOT boot the full `infra/compose/docker-compose.demo.yml`
+# stack here — that's an acceptance gate, not a cold-start KPI. The full
+# stack acceptance gate lives in the WS-A buyer-journey workflow.
+#
+# A regression on either budget fails the workflow.
+
+on:
+  workflow_run:
+    workflows: ['Devcontainer · build & publish']
+    types: [completed]
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - '.devcontainer/**'
+      - '.github/workflows/devcontainer-coldstart.yml'
+  # A PR that changes `.devcontainer/**` builds the image from *its own*
+  # source and probes that, rather than the published `:latest`.
+  #
+  # It used to probe `:latest` on the grounds that this "validates the
+  # workflow's logic without needing a fresh image". The consequence is that
+  # a PR could only ever validate the *previous* image, so a Dockerfile
+  # change was unverifiable until after it shipped — which is how a
+  # devcontainer whose non-root user was not in the `docker` group reached
+  # `main` (#716).
+  pull_request:
+    branches: [main]
+    paths:
+      - '.devcontainer/**'
+      - '.github/workflows/devcontainer-coldstart.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: devcontainer-coldstart-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  cold-start:
+    name: Pull + boot + acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # Phase budgets (seconds). Kept here so a diff in this file is the
+    # canonical record of any KPI change.
+    env:
+      PHASE_PULL_BUDGET: '60'
+      PHASE_TOOLCHAIN_BUDGET: '30'
+      # Built from source on a PR, pulled from GHCR otherwise. Referenced by
+      # every phase so the thing measured and the thing probed cannot drift.
+      PROBE_IMAGE: >-
+        ${{ github.event_name == 'pull_request'
+            && 'aisoc-devcontainer:pr'
+            || 'ghcr.io/beenuar/aisoc-devcontainer:latest' }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Log in to GHCR
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # On a pull request the image under test is the one this PR would
+      # publish, so it is built here. The pull budget is a property of the
+      # published image and is measured on the `main` paths only.
+      - name: Build the image from this PR's source
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          docker build -t "$PROBE_IMAGE" .devcontainer
+          echo "::notice title=devcontainer-probe::built from this PR"
+
+      - name: Phase 1 — pull prebuilt image (KPI budget ${{ env.PHASE_PULL_BUDGET }}s)
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          docker pull "$PROBE_IMAGE"
+          elapsed=$(( $(date +%s) - start ))
+          echo "::notice title=devcontainer-pull-seconds::${elapsed}"
+          if [ "$elapsed" -gt "${PHASE_PULL_BUDGET}" ]; then
+            echo "::error::Devcontainer pull took ${elapsed}s, over budget of ${PHASE_PULL_BUDGET}s." >&2
+            exit 1
+          fi
+
+      - name: Phase 2 — toolchain ready (KPI budget ${{ env.PHASE_TOOLCHAIN_BUDGET }}s)
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          # Single `docker run` exec'ing one batch-script that pokes every
+          # tool we promise in `apps/docs/docs/operations/codespaces.md`.
+          # If any binary is missing or unconfigured the run fails fast,
+          # surfacing exactly which `--version` invocation broke. Output is
+          # streamed directly to the job log — no inside-container
+          # redirection that would swallow errors on container exit.
+          docker run --rm \
+            "$PROBE_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              echo "── node ──";            node --version
+              echo "── pnpm ──";            pnpm --version
+              echo "── python3.11 ──";      python3.11 --version
+              echo "── uv ──";              uv --version
+              echo "── ruff ──";            ruff --version
+              echo "── go ──";              go version
+              echo "── gh ──";              gh --version | head -1
+              echo "── docker (cli) ──";    docker --version
+              echo "── docker compose ──";  docker compose version
+              echo "── ripgrep ──";         rg --version | head -1
+              echo "── jq ──";              jq --version
+              # Issue #716: the probe above asserted the docker *CLI* exists,
+              # which it does without any daemon — so a container that could
+              # never run `pnpm aisoc:demo` passed this check for months.
+              # A daemon needs runtime options the image cannot grant itself,
+              # so it is verified in Phase 3 against a container started the
+              # way devcontainer.json starts one, not here.
+              echo "── docker socket access ──"
+              getent group docker
+              id node | grep -q "(docker)" || {
+                echo "node is not in the docker group — it cannot reach the socket" >&2
+                exit 1
+              }
+            '
+          elapsed=$(( $(date +%s) - start ))
+          echo "::notice title=devcontainer-toolchain-seconds::${elapsed}"
+          if [ "$elapsed" -gt "${PHASE_TOOLCHAIN_BUDGET}" ]; then
+            echo "::error::Devcontainer toolchain check took ${elapsed}s, over budget of ${PHASE_TOOLCHAIN_BUDGET}s." >&2
+            exit 1
+          fi
+
+      - name: Phase 3 — a Docker daemon actually starts (issue #716)
+        # The gap that let the Codespaces quickstart stay broken: Phase 2
+        # proves the CLI is installed, which says nothing about whether
+        # `pnpm aisoc:demo` can run. The binaries were baked in without the
+        # runtime options the docker-in-docker feature also supplies, so the
+        # container had CapEff: 0 and dockerd could never start.
+        #
+        # This runs the real script under the same flags devcontainer.json
+        # passes. Drop either `--privileged` or the /var/lib/docker volume and
+        # it fails, which is the point — a passing Phase 2 with a failing
+        # Phase 3 is exactly the state #716 described.
+        run: |
+          set -euo pipefail
+          start=$(date +%s)
+          docker run --rm --privileged --init \
+            -v aisoc-coldstart-dind:/var/lib/docker \
+            -v "$PWD/.devcontainer:/probe/.devcontainer:ro" \
+            -w /probe \
+            "$PROBE_IMAGE" \
+            bash -lc '
+              set -euo pipefail
+              bash .devcontainer/start-docker.sh
+              echo "── daemon reachable as the non-root user ──"
+              docker info --format "server: {{.ServerVersion}} | driver: {{.Driver}}"
+              echo "── compose can talk to it ──"
+              docker compose version
+              echo "── and it can actually run something ──"
+              docker run --rm hello-world >/dev/null && echo "container ran"
+            '
+          echo "::notice title=devcontainer-dockerd-seconds::$(( $(date +%s) - start ))"
+
+      - name: Clean up the probe volume
+        if: always()
+        run: docker volume rm -f aisoc-coldstart-dind || true

@@ -1,0 +1,23 @@
+id: det-application-150
+name: GitLab Protected Branch Removed
+description: Removing protection lets the branch be rewritten.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "removed_protected_branch"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

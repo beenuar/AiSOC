@@ -1,0 +1,5 @@
+{
+  "action": "workspace_member_joined",
+  "baseline_action_rarity": 0.02,
+  "user": "ken.o@example.com"
+}

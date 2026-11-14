@@ -1,0 +1,68 @@
+id: splunk-security-content-dd16294f-44d2-40b4-a869-542c0b85113a
+name: Linux Auditd Copy Fail Privilege Escalation
+description: 'Detects the exploitation pattern associated with Copy Fail.
+
+  Copy Fail (CVE-2026-31431) is a logic bug in the Linux kernel''s authentication
+  cryptographic template.
+
+  It lets an unprivileged local user trigger a deterministic, controlled 4-byte write
+  into the page cache of any readable file on the system.
+
+  A single 732-byte Python script can edit a setuid binary and obtain root on essentially
+  all Linux distributions shipped since 2017.
+
+  This search relies on the auditd configuration linked in the references section.
+  If you are using a custom configuration, make sure the Key names are the same or
+  adapt the search accordingly.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://xint.io/blog/copy-fail-linux-distributions
+- https://github.com/theori-io/copy-fail-CVE-2026-31431
+- https://github.com/Neo23x0/auditd/blob/master/audit.rules
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`\ntype=SYSCALL\nkey IN (\n    \"af_alg\",\n    \"process_creation\"\
+    ,\n    \"splice_user\"\n)\n| eval setuid_binary = case(\n    name IN (\n     \
+    \   \"/usr/bin/chfn\",\n        \"/usr/bin/chsh\",\n        \"/usr/bin/fusermount3\"\
+    ,\n        \"/usr/bin/gpasswd\",\n        \"/usr/bin/mount\",\n        \"/usr/bin/newgrp\"\
+    ,\n        \"/usr/bin/passwd\",\n        \"/usr/bin/su\",\n        \"/usr/bin/sudo\"\
+    ,\n        \"/usr/bin/umount\",\n        \"/usr/lib/dbus-1.0/dbus-daemon-launch-helper\"\
+    ,\n        \"/usr/lib/landscape/apt-update\",\n        \"/usr/lib/openssh/ssh-keysign\"\
+    ,\n        \"/usr/lib/polkit-1/polkit-agent-helper-1\"\n    ), name,\n    exe\
+    \ IN (\n        \"/usr/bin/chfn\",\n        \"/usr/bin/chsh\",\n        \"/usr/bin/fusermount3\"\
+    ,\n        \"/usr/bin/gpasswd\",\n        \"/usr/bin/mount\",\n        \"/usr/bin/newgrp\"\
+    ,\n        \"/usr/bin/passwd\",\n        \"/usr/bin/su\",\n        \"/usr/bin/sudo\"\
+    ,\n        \"/usr/bin/umount\",\n        \"/usr/lib/dbus-1.0/dbus-daemon-launch-helper\"\
+    ,\n        \"/usr/lib/landscape/apt-update\",\n        \"/usr/lib/openssh/ssh-keysign\"\
+    ,\n        \"/usr/lib/polkit-1/polkit-agent-helper-1\"\n    ), exe,\n    true(),\
+    \ null()\n)\n| eval indicator = case(\n    key=\"af_alg\",        \"AF_ALG socket\"\
+    ,\n    key=\"splice_user\",   \"splice syscall\",\n    isnotnull(setuid_binary),\
+    \ \"setuid_exec:\" . setuid_binary,\n    true(),              null()\n)\n| where\
+    \ isnotnull(indicator)\n| stats\n    dc(indicator) as unique_signals\n    max(_time)\
+    \ as lastTime\n    min(_time) as firstTime\n    values(comm) as comm\n    values(exe)\
+    \ as exe\n    values(name) as name\n    values(host) as dest\n    values(indicator)\
+    \ as signals\n    values(setuid_binary) as setuid_binaries\n    values(pid) as\
+    \ pid\n    values(ppid) as ppid\n    values(uid) as uid\n    by auid\n| where\
+    \ unique_signals >= 3\n| eval risk_score_factor = unique_signals * 25\n| sort\
+    \ - risk_score_factor\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_auditd_copy_fail_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dd16294f-44d2-40b4-a869-542c0b85113a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_copy_fail_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

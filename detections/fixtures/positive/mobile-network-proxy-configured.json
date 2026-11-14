@@ -1,0 +1,4 @@
+{
+  "event_type": "config_change",
+  "key": "http_proxy"
+}

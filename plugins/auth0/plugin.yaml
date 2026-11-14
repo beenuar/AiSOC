@@ -1,0 +1,27 @@
+id: auth0
+name: Auth0 Tenant Logs Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Auth0 tenant logs. Pulls login events, MFA events, and admin actions via the
+  Management API.
+author: AiSOC Core Team
+tags: [iam, auth0, okta, identity]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/auth0.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [domain, client_id, client_secret]
+  properties:
+    domain:
+      type: string
+      description: Auth0 Domain
+    client_id:
+      type: string
+      description: M2M Client ID
+    client_secret:
+      type: string
+      description: M2M Client Secret
+      secret: true

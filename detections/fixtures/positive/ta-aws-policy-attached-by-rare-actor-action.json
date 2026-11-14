@@ -1,0 +1,7 @@
+{
+  "baseline_action_rarity": 0.998,
+  "eventName": "AttachUserPolicy",
+  "eventSource": "iam.amazonaws.com",
+  "policy_arn": "arn:aws:iam::aws:policy/AdministratorAccess",
+  "user": "svc-reporting@example.com"
+}

@@ -1,0 +1,24 @@
+id: det-cloud-189
+name: Cloud Provider SAML IdP Trust Changed
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Cloud Provider SAML
+  IdP Trust Changed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: cloud
+log_source:
+  product: multi-cloud
+  service: iam
+detection:
+  condition: |
+    event_name IN ["UpdateSAMLProvider", "Update federation configuration", "SetIdentityProvider"]
+    AND metadata_url_changed == true
+false_positives:
+- IdP migration (must be ticketed)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

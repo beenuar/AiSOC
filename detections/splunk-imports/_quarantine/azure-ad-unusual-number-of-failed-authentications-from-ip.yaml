@@ -1,0 +1,48 @@
+id: splunk-security-content-3d8d3a36-93b8-42d7-8d91-c5f24cec223d
+name: Azure AD Unusual Number of Failed Authentications From Ip
+description: The following analytic identifies a single source IP failing to authenticate
+  with multiple valid users, potentially indicating a Password Spraying attack against
+  an Azure Active Directory tenant. It uses Azure SignInLogs data and calculates the
+  standard deviation for source IPs, applying the 3-sigma rule to detect unusual numbers
+  of failed authentication attempts. This activity is significant as it may signal
+  an adversary attempting to gain initial access or elevate privileges. If confirmed
+  malicious, this could lead to unauthorized access, privilege escalation, and potential
+  compromise of sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs properties.status.errorCode=50126\
+    \ properties.authenticationDetails{}.succeeded=false\n  | rename properties.*\
+    \ as *\n  | bucket span=5m _time\n  | stats dc(userPrincipalName) AS unique_accounts\
+    \ values(userPrincipalName) as userPrincipalName values(dest) as dest  values(user)\
+    \ as user\n    BY _time, src, vendor_account,\n       vendor_product\n  | eventstats\
+    \ avg(unique_accounts) as ip_avg, stdev(unique_accounts) as ip_std\n    BY src\n\
+    \  | eval upperBound=(ip_avg+ip_std*3)\n  | eval isOutlier=if(unique_accounts\
+    \ > 10 and unique_accounts >= upperBound, 1,0)\n  | where isOutlier = 1\n  | `azure_ad_unusual_number_of_failed_authentications_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3d8d3a36-93b8-42d7-8d91-c5f24cec223d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_unusual_number_of_failed_authentications_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

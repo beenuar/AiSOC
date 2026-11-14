@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_critical_sudoers_write",
+  "exe": "/usr/sbin/visudo",
+  "syscall": "openat",
+  "path": "/etc/sudoers",
+  "uid": 0,
+  "comm": "visudo"
+}

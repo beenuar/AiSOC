@@ -1,0 +1,4 @@
+{
+  "container_privileged": true,
+  "event_type": "create_pod"
+}

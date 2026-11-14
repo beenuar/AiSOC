@@ -1,0 +1,43 @@
+id: splunk-security-content-f616c4f3-bde9-41cf-856c-019b65f668bb
+name: Linux Auditd Database File And Directory Discovery
+description: The following analytic detects suspicious database file and directory
+  discovery activities, which may signal an attacker attempt to locate and assess
+  critical database assets on a compromised system. This behavior is often a precursor
+  to data theft, unauthorized access, or privilege escalation, as attackers seek to
+  identify valuable information stored in databases. By monitoring for unusual or
+  unauthorized attempts to locate database files and directories, this analytic aids
+  in early detection of potential reconnaissance or data breach efforts, enabling
+  security teams to respond swiftly and mitigate the risk of further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1083
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+- https://github.com/peass-ng/PEASS-ng/tree/master/linPEAS
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` execve_command IN (\"*find*\", \"*grep*\") AND execve_command\
+    \ IN(\"*.db*\", \"*.sql*\", \"*.sqlite*\", \"*.mdb*\", \"*.accdb*\", \"*.mdf*\"\
+    , \"*.ndf*\", \"*.ldf*\", \"*.frm*\", \"*.myd*\", \"*.myi*\", \"*.dbf*\", \"*.db2*\"\
+    , \"*.dbc*\", \"*.fpt*\", \"*.ora*\")\n  | rename host as dest\n  | rename comm\
+    \ as process_name\n  | rename exe as process\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY argc execve_command dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_database_file_and_directory_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f616c4f3-bde9-41cf-856c-019b65f668bb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_database_file_and_directory_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

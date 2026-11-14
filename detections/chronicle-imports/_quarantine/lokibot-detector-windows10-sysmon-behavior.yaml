@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-lokibot-detector-windows10-sysmon-behavior
+name: lokibot_detector_windows10_sysmon_behavior
+description: lokibot_detector_windows10_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule lokibot_detector_windows10_sysmon_behavior {\n meta:\n  \
+    \  author = \"Lee Archinal\"\n    description = \"This content detects a sample\
+    \ of the LokiBot as observed in a private malware lab and detonated on a Windows\
+    \ 10 machine.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/R26MTl0rrjvg\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/08/10\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"defense_evasion, execution, persistence, privilege_escalation,\
+    \ t1085, t1053\"\n\n  events:\n($selection1.metadata.product_event_type = \"1\"\
+    \ and (((($selection1.target.process.file.full_path = \"C:\\\\Windows\\\\SysWOW64\\\
+    \\Fondue.exe\" or $selection1.target.process.file.full_path = \"C:\\\\Windows\\\
+    \\System32\\\\Fondue.exe\" or $selection1.target.process.file.full_path = \"C:\\\
+    \\Windows\\\\System32\\\\OptionalFeatures.exe\") and ($selection1.target.process.command_line\
+    \ = \"C:\\\\Windows\\\\system32\\\\fondue.exe /enable-feature:NetFx3 /caller-name:mscoreei.dll\"\
+    \ or $selection1.target.process.command_line = \"C:\\\\Windows\\\\sysnative\\\\\
+    FonDUE.EXE /enable-feature:NetFx3 /caller-name:mscoreei.dll\" or $selection1.target.process.command_line\
+    \ = \"C:\\\\Windows\\\\system32\\\\OptionalFeatures.EXE /enable-feature:NetFx3\
+    \ /caller-name:mscoreei.dll\")) or ($selection1.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\System32\\\\rundll32.exe\" and re.regex($selection1.target.process.command_line,\
+    \ `C:\\\\Windows\\\\System32\\\\rundll32\\.exe C:\\\\Windows\\\\System32\\\\shell32\\\
+    .dll,SHCreateLocalServerRunDll .* -Embedding`))) or ($selection1.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\SysWOW64\\\\schtasks.exe\" and re.regex($selection1.target.process.command_line,\
+    \ `C:\\\\Windows\\\\System32\\\\schtasks\\.exe /Create /TN Updates\\\\&startupname&\
+    \ /XML .*\\\\AppData\\\\Local\\\\Temp.*\\.tmp`))))\n\n  condition:\n    $selection1\n\
+    }"
+  chronicle_rule_name: lokibot_detector_windows10_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: lokibot_detector_windows10_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/lokibot_detector__windows10___sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,33 @@
+title: FOIA-Pattern Bulk Document Pull from Internal Agency Repository
+id: aisoc-vt-pub-0005-foia-exfiltration-pattern
+status: experimental
+description: |
+  Internal agency document repository accessed in a pattern matching
+  FOIA-style enumeration (sequential record IDs, broad date-range
+  pulls, cross-program scope) by an identity not assigned to the
+  records or disclosure unit. Common pattern for insider leaking to
+  press, foreign service recruitment, or pre-resignation document
+  harvest by departing officials.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: gov
+  service: document_repository
+tags:
+  - attack.t1530
+  - attack.collection
+  - aisoc.vertical.public_sector
+  - aisoc.insider_threat
+detection:
+  selection:
+    event.module: gov.document_repository
+    event.action: 'document.viewed'
+  filter:
+    actor.unit|in:
+      - 'records'
+      - 'foia'
+      - 'disclosure'
+  pattern:
+    sequential_id_pull: true
+    cross_program_scope: true
+  condition: selection and pattern and not filter

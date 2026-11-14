@@ -1,0 +1,46 @@
+id: splunk-security-content-23add2a8-ea22-4fd4-8bc0-8c0b822373a1
+name: Windows Group Policy Object Created
+description: The following analytic detects the creation of a new Group Policy Object
+  (GPO) by leveraging Event IDs 5136 and 5137. This detection uses directory service
+  change events to identify when a new GPO is created. Monitoring GPO creation is
+  crucial as adversaries can exploit GPOs to escalate privileges or deploy malware
+  across an Active Directory network. If confirmed malicious, this activity could
+  allow attackers to control system configurations, deploy ransomware, or propagate
+  malware, leading to widespread compromise and significant operational disruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1484/
+- https://attack.mitre.org/techniques/T1484/001
+- https://www.trustedsec.com/blog/weaponizing-group-policy-objects-access/
+- https://adsecurity.org/?p=2716
+- https://www.bleepingcomputer.com/news/security/lockbit-ransomware-now-encrypts-windows-domains-using-group-policies/
+- https://www.varonis.com/blog/group-policy-objects
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5137 OR (EventCode=5136 AttributeValue!=\"\
+    New Group Policy Object\" AND (AttributeLDAPDisplayName=displayName OR AttributeLDAPDisplayName=gPCFileSysPath)\
+    \ ) ObjectClass=groupPolicyContainer\n  | stats values(AttributeValue) as details\
+    \ values(SubjectUserSid) as User values(ObjectDN) as ObjectDN\n    BY ObjectGUID\
+    \ Computer dest\n  | eval GPO_Name = mvindex(details, 0)\n  | eval GPO_Path =\
+    \ mvindex(details, 1)\n  | fields - details\n  | `windows_group_policy_object_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 23add2a8-ea22-4fd4-8bc0-8c0b822373a1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_group_policy_object_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

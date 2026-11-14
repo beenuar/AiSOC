@@ -1,0 +1,52 @@
+id: splunk-security-content-dc2f58bc-8cd2-4e51-962a-694b963acde0
+name: Windows AD Privileged Object Access Activity
+description: The following analytic detects access attempts to privileged Active Directory
+  objects, such as Domain Admins or Enterprise Admins. It leverages Windows Security
+  Event Code 4662 to identify when these sensitive objects are accessed. This activity
+  is significant because such objects should rarely be accessed by normal users or
+  processes, and unauthorized access attempts may indicate attacker enumeration or
+  lateral movement within the domain. If confirmed malicious, this activity could
+  allow attackers to escalate privileges, persist in the environment, or gain control
+  over critical domain resources.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/securonix-tech-blog/detecting-ldap-enumeration-and-bloodhound-s-sharphound-collector-using-active-directory-decoys-dfc840f2f644
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4662
+- https://attack.mitre.org/tactics/TA0007/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4662 ObjectName IN ( \"CN=Account\
+    \ Operators,*\", \"CN=Administrators,*\", \"CN=Backup Operators,*\", \"CN=Cert\
+    \ Publishers,*\", \"CN=Certificate Service DCOM Access,*\", \"CN=Domain Admins,*\"\
+    , \"CN=Domain Controllers,*\", \"CN=Enterprise Admins,*\", \"CN=Enterprise Read-only\
+    \ Domain Controllers,*\", \"CN=Group Policy Creator Owners,*\", \"CN=Incoming\
+    \ Forest Trust Builders,*\", \"CN=Microsoft Exchange Servers,*\", \"CN=Network\
+    \ Configuration Operators,*\", \"CN=Power Users,*\", \"CN=Print Operators,*\"\
+    , \"CN=Read-only Domain Controllers,*\", \"CN=Replicators,*\", \"CN=Schema Admins,*\"\
+    , \"CN=Server Operators,*\", \"CN=Exchange Trusted Subsystem,*\", \"CN=Exchange\
+    \ Windows Permission,*\", \"CN=Organization Management,*\")\n  | rex field=ObjectName\
+    \ \"CN\\=(?<object_name>[^,]+)\"\n  | stats values(Computer) as dest, values(object_name)\
+    \ as object_name, dc(ObjectName) as object_count, min(_time) as firstTime, max(_time)\
+    \ as lastTime, count\n    BY SubjectUserName\n  | rename SubjectUserName as user\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_ad_privileged_object_access_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dc2f58bc-8cd2-4e51-962a-694b963acde0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_privileged_object_access_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,40 @@
+id: splunk-security-content-7ed272a4-9c77-11eb-af22-acde48001122
+name: Windows Multiple Users Failed To Authenticate From Host Using NTLM
+description: The following analytic identifies a single source endpoint failing to
+  authenticate with 30 unique valid users using the NTLM protocol. It leverages EventCode
+  4776 from Domain Controller logs, focusing on error code 0xC000006A, which indicates
+  a bad password. This behavior is significant as it may indicate a Password Spraying
+  attack, where an adversary attempts to gain initial access or elevate privileges.
+  If confirmed malicious, this activity could lead to unauthorized access to sensitive
+  information or further compromise of the Active Directory environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/audit-credential-validation
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4776
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4776 TargetUserName!=*$ Status=0xC000006A\n\
+    \  | bucket span=5m _time\n  | stats dc(TargetUserName) AS unique_accounts values(TargetUserName)\
+    \ as tried_accounts values(dest) as dest\n    BY _time, Workstation\n  | where\
+    \ unique_accounts > 30\n  | `windows_multiple_users_failed_to_authenticate_from_host_using_ntlm_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7ed272a4-9c77-11eb-af22-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_multiple_users_failed_to_authenticate_from_host_using_ntlm.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

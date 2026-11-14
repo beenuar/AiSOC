@@ -1,0 +1,25 @@
+title: RDP Inbound From Internet
+id: aisoc-id-nw-0008-rdp-inbound
+status: stable
+description: |
+  Inbound RDP (TCP 3389) connection from a public IP to an internal
+  host. Common initial access vector for ransomware groups; almost
+  always a policy violation.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1133
+  - attack.t1021.001
+  - attack.initial_access
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'inbound'
+    destination.port: 3389
+  external_src:
+    enrich.flow.src_external: true
+  condition: selection and external_src

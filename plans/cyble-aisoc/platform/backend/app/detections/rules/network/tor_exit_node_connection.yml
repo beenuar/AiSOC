@@ -1,0 +1,23 @@
+title: Outbound Connection to Tor Exit Node
+id: aisoc-id-nw-0005-tor
+status: stable
+description: |
+  Internal host establishes connection to a known Tor exit node.
+  Out-of-policy for most enterprises and frequently used by malware
+  for anonymized C2 or by insiders for exfil.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1090.003
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'outbound'
+  tor:
+    enrich.threatintel.dst_tor_exit: true
+  condition: selection and tor

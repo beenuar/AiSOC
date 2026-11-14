@@ -1,0 +1,25 @@
+id: det-threat-anomaly-004
+name: AWS S3 Read Volume Far Above This Principal's Normal
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'AWS S3 Read
+  Volume Far Above This Principal's Normal'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: aws
+  service: s3
+detection:
+  condition: |
+    eventSource == "s3.amazonaws.com"
+    AND baseline_principal_volume_z >= 3.0
+false_positives:
+- A genuine bulk export or migration
+- A first full backup after onboarding
+playbook: tpl-data-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,24 @@
+id: det-identity-115
+name: Okta API Token Created With Admin Role
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta API Token
+  Created With Admin Role'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "system.api_token.create"
+    AND scope CONTAINS "admin"
+false_positives:
+- Approved automation
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

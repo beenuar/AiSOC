@@ -1,0 +1,6 @@
+{
+  "forward_destination_external": true,
+  "forward_to": "external@personal-mail.tld",
+  "operation_name": "New-InboxRule",
+  "user": "ceo@corp.com"
+}

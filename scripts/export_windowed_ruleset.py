@@ -1,0 +1,500 @@
+#!/usr/bin/env python3
+"""Export windowed detection rules for `services/fusion` to load at startup.
+
+The windowed engine shipped with three hardcoded rules and no way to add a
+fourth without editing the module. That mattered beyond inconvenience: a large
+share of the 2,005 quarantined Splunk rules are `| stats count ... by`
+aggregations. They cannot be expressed in the stateless `match_when` at all,
+because that matcher evaluates one event in isolation, and until now they had
+nowhere else to go — which is most of why the quarantine has stayed at ~2,000
+rules.
+
+The JSON is a build artifact and `--check` fails CI when it drifts from this
+file, so the deployed engine cannot silently diverge from the committed
+corpus.
+
+This used to claim it "mirrors `export_detection_ruleset.py` exactly: specs
+are the source of truth". It does not, and the difference is worth stating
+rather than papering over: the stateless exporter reads spec *modules*, while
+the rules here are a literal list in this script. That is a deliberate
+tradeoff at this corpus size — eight rules do not need a module per rule, and
+a reader can see the whole windowed corpus on one screen — but it is a
+different arrangement, and describing it as identical sent anyone looking for
+`detections/windowed/` somewhere that does not exist.
+
+A windowed rule is deliberately a narrow shape — match, group by one entity,
+count, threshold, window. It is not a general aggregation language. Anything
+needing joins, subsearches or multi-field grouping is out of scope here and
+should stay quarantined with an honest reason rather than be half-translated.
+
+Two sources feed the artefact. The list in this file is authored here, for the
+reason above. The second source is `scripts/windowed_translation.py`, which
+derives a windowed rule from each `det-*` spec that named a counter no source
+emits — threshold, window and selector all read off the original's own
+clauses, so a translated rule cannot drift from the number its author chose.
+Rules that cannot be expressed as a count over a window are refused there with
+a reason rather than half-translated into this file.
+
+Usage:
+    python3 scripts/export_windowed_ruleset.py           # write the JSON
+    python3 scripts/export_windowed_ruleset.py --check   # fail on drift
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+from pathlib import Path
+
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+ROOT = repo_root()
+OUT = ROOT / "services" / "fusion" / "app" / "data" / "windowed_ruleset.json"
+
+#: Windowed rules, authored here rather than in the engine module.
+#:
+#: Thresholds are chosen to be defensible rather than impressive. A brute-force
+#: rule that fires on three failures generates more work than it saves, and the
+#: fastest way to have a detection corpus ignored is to ship it noisy.
+#:
+#: `group_by` names the entity the count accumulates against, and it must be a
+#: field some connector actually emits — `scripts/check_detection_fields.py`
+#: gates the stateless corpus for exactly this and the same discipline applies
+#: here.
+WINDOWED_RULES: list[dict] = [
+    {
+        "id": "wd-ai-agent-tool-denials",
+        "name": "AI agent repeatedly denied a tool call",
+        "severity": "high",
+        "category": "application",
+        "mitre": ["T1078"],
+        "match_when": {"outcome": "denied"},
+        "group_by": "agent_id",
+        "threshold": 10,
+        "window_seconds": 300,
+        # A single denial is routine: agents retry, and tools go down. Ten in
+        # five minutes from one agent is the shape that separates an agent
+        # probing its boundaries — or being steered into doing so — from one
+        # that is merely misconfigured. The stateless
+        # `ai-agent-tool-call-failed-repeatedly` rule exists as the low-severity
+        # building block for precisely this, and says so in its description.
+    },
+    {
+        "id": "wd-ai-model-fanout",
+        "name": "AI agent called an unusual number of distinct models",
+        "severity": "medium",
+        "category": "application",
+        "mitre": ["T1078"],
+        "match_when": {"tool_name_startswith": "model:"},
+        "group_by": "agent_id",
+        "threshold": 50,
+        "window_seconds": 300,
+        # Model-shopping at volume is either a runaway loop burning budget or
+        # someone enumerating which providers a key can reach. Both are worth
+        # a look, neither is worth a critical.
+    },
+    {
+        "id": "wd-mfa-fatigue",
+        "name": "MFA fatigue: repeated push denials for one account",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1621"],
+        "match_when": {"event_type": "authentication", "outcome": "denied"},
+        "group_by": "user",
+        "threshold": 8,
+        "window_seconds": 600,
+        # The attack works by wearing the user down, so the signal is
+        # repetition against a single account rather than any one denial.
+    },
+    {
+        "id": "wd-impossible-travel-volume",
+        "name": "Many distinct source IPs authenticating one account",
+        "severity": "medium",
+        "category": "identity",
+        "mitre": ["T1078"],
+        "match_when": {"event_type": "authentication"},
+        "group_by": "user",
+        "threshold": 25,
+        "window_seconds": 900,
+        # Volume-based rather than geo-based on purpose: geo needs an enrichment
+        # this pipeline does not compute, and inventing a `geo_distance_km`
+        # field would produce a rule that can never fire — the exact defect
+        # `check_detection_fields.py` was written to catch.
+    },
+    {
+        "id": "wd-data-egress-burst",
+        "name": "Burst of outbound transfers from one host",
+        "severity": "high",
+        "category": "data-exfil",
+        "mitre": ["T1041"],
+        "match_when": {"event_type": "network"},
+        "group_by": "hostname",
+        "threshold": 200,
+        "window_seconds": 300,
+    },
+    {
+        # `events_per_minute_gt` is the single largest unreachable family —
+        # sixteen `det-*` rules name it and none of them can fire, because
+        # nothing computes a per-minute rate for a single event.
+        "id": "wd-high-rate-activity-per-actor",
+        "name": "Sustained high-rate activity from one actor",
+        "severity": "medium",
+        "category": "identity",
+        "mitre": ["T1078"],
+        "match_when": {},
+        "group_by": "user",
+        "threshold": 120,
+        "window_seconds": 60,
+    },
+    {
+        "id": "wd-high-rate-activity-per-source",
+        "name": "Sustained high-rate activity from one source address",
+        "severity": "medium",
+        "category": "network",
+        "mitre": ["T1071"],
+        "match_when": {},
+        "group_by": "src_ip",
+        "threshold": 300,
+        "window_seconds": 60,
+    },
+    {
+        # Distinct, not count. "Fifty reads by one principal" is a script
+        # retrying; "fifty *different* secrets read by one principal" is a
+        # vault being walked. Counting events cannot tell those apart.
+        "id": "wd-secret-enumeration",
+        "name": "Many distinct secrets read by one principal",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1552.007"],
+        "match_when": {"event_type": "secret_access"},
+        "group_by": "user",
+        "distinct_by": "secret_name",
+        "threshold": 15,
+        "window_seconds": 300,
+    },
+    {
+        "id": "wd-horizontal-scan",
+        "name": "One source touching many distinct destinations",
+        "severity": "medium",
+        "category": "network",
+        "mitre": ["T1046"],
+        "match_when": {"event_type": "network"},
+        "group_by": "src_ip",
+        "distinct_by": "dst_ip",
+        "threshold": 40,
+        "window_seconds": 120,
+    },
+    {
+        "id": "wd-bulk-object-deletion",
+        "name": "Bulk object deletion by one principal",
+        "severity": "high",
+        "category": "cloud",
+        "mitre": ["T1485"],
+        "match_when": {"event_type": "delete"},
+        "group_by": "user",
+        "threshold": 50,
+        "window_seconds": 300,
+    },
+    # ---------------------------------------------------------------------
+    # Windows aggregations.
+    #
+    # These could not be written before, for a reason that had nothing to do
+    # with the windowed engine: a Windows event nests its payload under
+    # `EventData` and its header under `System`, one level deeper than either
+    # engine flattens, so `EventID` and `Computer` read as absent and any rule
+    # naming them would have counted nothing forever. The `windows_event`
+    # connector now lifts both containers, which is what makes the group_by
+    # fields below real.
+    #
+    # `EventID` is matched as an anchored pattern rather than with equality
+    # because collectors disagree about whether it arrives as `4625` or
+    # `"4625"`, and `pattern_match_any` compares the string form of whatever
+    # turned up. An `EventID: 4625` equality clause would match one collector
+    # and silently not the other.
+    # ---------------------------------------------------------------------
+    {
+        "id": "wd-windows-failed-logons-per-host",
+        "name": "Repeated failed Windows logons against one host",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1110"],
+        "match_when": {"EventID_pattern_match_any": ["^4625$"]},
+        "group_by": "Computer",
+        "threshold": 15,
+        "window_seconds": 600,
+        # Higher than the generic `wd-bruteforce-auth` threshold of five on
+        # purpose: a Windows host aggregates failures from every account and
+        # every service on it, so five is background noise there in a way it
+        # is not for a single identity.
+    },
+    {
+        "id": "wd-windows-password-spray",
+        "name": "Windows logon failures across many accounts from one source",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1110.003"],
+        "match_when": {"EventID_pattern_match_any": ["^4625$"]},
+        "group_by": "IpAddress",
+        "distinct_by": "TargetUserName",
+        "threshold": 10,
+        "window_seconds": 900,
+        # Distinct accounts, not attempts. One account failing repeatedly is a
+        # forgotten password; ten different accounts failing once each from one
+        # address is someone working through a user list.
+    },
+    {
+        "id": "wd-windows-service-install-burst",
+        "name": "Several new Windows services installed on one host",
+        "severity": "high",
+        "category": "endpoint",
+        "mitre": ["T1543.003"],
+        "match_when": {"EventID_pattern_match_any": ["^7045$"]},
+        "group_by": "Computer",
+        "threshold": 4,
+        "window_seconds": 600,
+        # Service installation is rare outside patching, so the threshold is
+        # low. Patch windows are the expected false positive and are better
+        # handled by a maintenance-window suppression than by a number nobody
+        # can justify.
+    },
+    {
+        "id": "wd-windows-account-creation-burst",
+        "name": "One actor created several Windows accounts",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1136.002"],
+        "match_when": {"EventID_pattern_match_any": ["^4720$"]},
+        "group_by": "SubjectUserName",
+        "distinct_by": "TargetUserName",
+        "threshold": 5,
+        "window_seconds": 900,
+    },
+    {
+        "id": "wd-windows-scheduled-task-burst",
+        "name": "Several scheduled tasks registered on one host",
+        "severity": "medium",
+        "category": "endpoint",
+        "mitre": ["T1053.005"],
+        "match_when": {"EventID_pattern_match_any": ["^4698$"]},
+        "group_by": "Computer",
+        "threshold": 5,
+        "window_seconds": 600,
+    },
+    {
+        "id": "wd-sysmon-remote-thread-fanout",
+        "name": "One process created remote threads in many others",
+        "severity": "high",
+        "category": "endpoint",
+        "mitre": ["T1055"],
+        "match_when": {"EventID_pattern_match_any": ["^8$"]},
+        "group_by": "SourceImage",
+        "distinct_by": "TargetImage",
+        "threshold": 5,
+        "window_seconds": 300,
+        # Injecting into one process has a long list of benign explanations.
+        # Injecting into five different ones inside five minutes has very few.
+    },
+    {
+        "id": "wd-sysmon-dns-query-fanout",
+        "name": "One process resolved an unusual number of distinct domains",
+        "severity": "medium",
+        "category": "network",
+        "mitre": ["T1071.004"],
+        "match_when": {"EventID_pattern_match_any": ["^22$"]},
+        "group_by": "Image",
+        "distinct_by": "QueryName",
+        "threshold": 150,
+        "window_seconds": 300,
+        # Aimed at DNS tunnelling and at domain-generation algorithms, both of
+        # which show up as one binary resolving far more names than it has any
+        # reason to. Browsers legitimately clear this bar, which is why the
+        # grouping is per-image rather than per-host.
+    },
+    {
+        "id": "wd-sysmon-process-spawn-burst",
+        "name": "One parent process spawned an unusual number of children",
+        "severity": "medium",
+        "category": "endpoint",
+        "mitre": ["T1059"],
+        "match_when": {"EventID_pattern_match_any": ["^1$"]},
+        "group_by": "ParentImage",
+        "threshold": 100,
+        "window_seconds": 120,
+        # Script-driven enumeration and mass encryption both look like this.
+        # Build agents and installers do too, so this is deliberately medium.
+    },
+    # ── Adversary-in-the-middle, on sessions (depth 7.3) ────────────────────
+    #
+    # An AiTM proxy relays the victim's credentials *and* their MFA response,
+    # so the sign-in is legitimate by every check the identity provider
+    # makes: SPF on the lure passes or fails elsewhere, the password is
+    # right, the push is approved by the real person. There is no failed
+    # authentication to count and no impossible travel to measure, because
+    # the proxy often sits in the same country.
+    #
+    # What gives it away is the *stolen session* being used from somewhere
+    # the session was never established. So the entity these rules group by
+    # is `session_id`, not the user — which is why 7.3 needed the connector
+    # hoist first: Okta and Entra both carry a session identity and neither
+    # `normalize()` emitted it, so this family had nothing to group by and
+    # could not have been written at all.
+    #
+    # Thresholds are 2 rather than a larger number on purpose. These are
+    # `distinct_by` rules: two *different* networks for one session is the
+    # whole signal, and raising it to three would mean the detection only
+    # fires on an attacker careless enough to rotate twice.
+    #
+    # `session_id_neq: None` is "the event carries a session id", spelled
+    # with an operator that exists rather than an `_exists` one that does
+    # not: `_check` returns False for a missing field under `neq` and True
+    # for a present one, which is exactly the test. Inventing `_exists`
+    # would have read as a field literally named `session_id_exists`, which
+    # nothing emits — the `approver_role_neq` defect, one release later.
+    {
+        "id": "wd-aitm-session-replayed-from-new-asn",
+        "name": "One session used from two different networks",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1539", "T1557"],
+        "match_when": {"session_id_neq": None},
+        "group_by": "session_id",
+        "distinct_by": "src_asn",
+        "threshold": 2,
+        "window_seconds": 3600,
+        # An hour, because a session cookie is worth stealing precisely
+        # because it outlives the sign-in; a five-minute window would miss
+        # the replay and a day-long one would catch a laptop moving from an
+        # office to a home connection, which is the same shape and is not
+        # this.
+    },
+    {
+        "id": "wd-aitm-session-replayed-from-new-client",
+        "name": "One session used from two different client families",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1539", "T1550.004"],
+        "match_when": {"session_id_neq": None},
+        "group_by": "session_id",
+        "distinct_by": "client_browser",
+        "threshold": 2,
+        "window_seconds": 3600,
+        # The second half of the same signal, and the one a network-level
+        # evasion does not avoid: a session established in a browser and
+        # next used by a toolkit's HTTP client changes the client family
+        # whatever address it comes from. Browser rather than the raw user
+        # agent, because a Chrome auto-update changes the string and not the
+        # family.
+    },
+    {
+        "id": "wd-aitm-session-left-the-country-it-started-in",
+        "name": "One session used from two different countries",
+        "severity": "high",
+        "category": "identity",
+        "mitre": ["T1539"],
+        "match_when": {"session_id_neq": None},
+        "group_by": "session_id",
+        "distinct_by": "src_country",
+        "threshold": 2,
+        "window_seconds": 3600,
+        # Deliberately a *session* rule and not an impossible-travel rule.
+        # Impossible travel compares two sign-ins by one user and is defeated
+        # by a proxy in the victim's own country; this compares two uses of
+        # one session, where any country change at all is a claim the session
+        # cannot support.
+    },
+    {
+        "id": "wd-aitm-mfa-then-session-from-new-asn",
+        "name": "An MFA-satisfied sign-in, then the same session used from another network",
+        "severity": "critical",
+        "category": "identity",
+        "mitre": ["T1557", "T1539"],
+        "sequence": [
+            {"mfa_satisfied": True},
+            {"session_id_neq": None},
+        ],
+        "ordered": True,
+        "group_by": "session_id",
+        "window_seconds": 1800,
+        # Critical, and the only one of the family that is. The ordering is
+        # the detection: a session used from two networks is suspicious, and
+        # a session that *satisfied MFA* and was then used elsewhere within
+        # half an hour is the AiTM pattern with the step the attacker needed
+        # the proxy for already recorded. A threshold rule cannot express it
+        # — that is the whole reason 3.2's ordered sequences exist.
+    },
+]
+
+
+def all_rules() -> list[dict]:
+    """Three sources, kept in their own blocks so a change to one is legible.
+
+    Authored here; translated from the `det-*` corpus by
+    `windowed_translation.py`; compiled from Sigma correlation documents by
+    `sigma_correlation.py`. One artefact rather than three, because the
+    engine has one loader and a second file is a second thing that can go
+    stale unnoticed.
+    """
+    from check_sigma_correlations import compile_corpus  # noqa: PLC0415
+    from windowed_translation import translated_rules  # noqa: PLC0415
+
+    correlations, _refused, _seen = compile_corpus()
+    return [*WINDOWED_RULES, *translated_rules(), *correlations]
+
+
+def build() -> dict:
+    rules = all_rules()
+    return {"count": len(rules), "rules": rules}
+
+
+def _strip_count(payload: dict) -> list:
+    return payload.get("rules") or []
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true", help="fail if the committed JSON is stale")
+    args = parser.parse_args()
+
+    payload = build()
+    rules = payload["rules"]
+    rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
+
+    ids = [r["id"] for r in rules]
+    if len(ids) != len(set(ids)):
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        print(f"ERROR: duplicate windowed rule ids: {duplicates}", file=sys.stderr)
+        return 2
+
+    if args.check:
+        if not OUT.exists():
+            print(f"ERROR: {OUT.relative_to(ROOT)} missing — run scripts/export_windowed_ruleset.py", file=sys.stderr)
+            return 1
+        if _strip_count(json.loads(OUT.read_text(encoding="utf-8"))) != _strip_count(payload):
+            print(
+                f"ERROR: {OUT.relative_to(ROOT)} is stale. Run: python3 scripts/export_windowed_ruleset.py",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"OK: windowed ruleset current ({len(rules)} rules)")
+        return 0
+
+    OUT.parent.mkdir(parents=True, exist_ok=True)
+    OUT.write_text(rendered, encoding="utf-8")
+    translated = sum(1 for rule in rules if rule.get("translated_from"))
+    correlations = sum(1 for rule in rules if rule.get("correlation_type"))
+    print(
+        f"wrote {OUT.relative_to(ROOT)} — {len(rules)} windowed rules "
+        f"({len(WINDOWED_RULES)} authored, {translated} translated, {correlations} Sigma correlations)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

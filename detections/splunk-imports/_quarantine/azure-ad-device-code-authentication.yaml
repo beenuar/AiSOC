@@ -1,0 +1,46 @@
+id: splunk-security-content-d68d8732-6f7e-4ee5-a6eb-737f2b990b91
+name: Azure AD Device Code Authentication
+description: The following analytic identifies Azure Device Code Phishing attacks,
+  which can lead to Azure Account Take-Over (ATO). It leverages Azure AD SignInLogs
+  to detect suspicious authentication requests using the device code authentication
+  protocol. This activity is significant as it indicates potential bypassing of Multi-Factor
+  Authentication (MFA) and Conditional Access Policies (CAPs) through phishing emails.
+  If confirmed malicious, attackers could gain unauthorized access to Azure AD, Exchange
+  mailboxes, and Outlook Web Application (OWA), leading to potential data breaches
+  and unauthorized data access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  - T1566.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1528
+- https://github.com/rvrsh3ll/TokenTactics
+- https://embracethered.com/blog/posts/2022/device-code-phishing/
+- https://0xboku.com/2021/07/12/ArtOfDeviceCodePhish.html
+- https://learn.microsoft.com/en-us/azure/active-directory/develop/v2-oauth2-device-code
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs \"properties.authenticationProtocol\"\
+    =deviceCode\n  | rename properties.* as *\n  | rename userAgent as user_agent\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product user_agent\n     \
+    \  category\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_device_code_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d68d8732-6f7e-4ee5-a6eb-737f2b990b91
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_device_code_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

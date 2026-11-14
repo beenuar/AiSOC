@@ -1,0 +1,6 @@
+{
+  "event_type": "user.authentication.sso",
+  "issuer_valid": false,
+  "notbefore_in_future": false,
+  "user": "user@corp.com"
+}

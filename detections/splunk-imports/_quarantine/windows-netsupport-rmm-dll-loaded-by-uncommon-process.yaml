@@ -1,0 +1,53 @@
+id: splunk-security-content-125f96f9-6f34-418b-b868-c4a8d7fb865f
+name: Windows NetSupport RMM DLL Loaded By Uncommon Process
+description: 'The following analytic detects the loading of specific dynamic-link
+  libraries (DLLs) associated with the NetSupport Remote Manager (RMM) tool by any
+  process on a Windows system.
+
+  Modules such as CryptPak.dll, HTCTL32.DLL, IPCTL32.DLL, keyshowhook.dll, pcicapi.DLL,
+  PCICL32.DLL, and TCCTL32.DLL, are integral to NetSupport''s functionality.
+
+  This detection is particularly valuable when these modules are loaded by processes
+  running from unusual directories (e.g., Downloads, ProgramData, or user-specific
+  folders) rather than the legitimate Program Files installation path, or by executables
+  that have been renamed but retain the internal "client32" identifier.
+
+  This helps to identify instances where the legitimate NetSupport tool is being misused
+  by adversaries as a Remote Access Trojan (RAT).'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://www.linkedin.com/posts/mauricefielenbach_cybersecurity-incidentresponse-dfir-activity-7394805779448418304-g0gZ?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAuFTjIB5weY_kcyu4qp3kHbI4v49tO0zEk
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://www.esentire.com/blog/evalusion-campaign-delivers-amatera-stealer-and-netsupport-rat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=7\nImageLoaded IN (\n  \"*\\\\CryptPak.dll\",\n\
+    \  \"*\\\\HTCTL32.DLL\",\n  \"*\\\\pcicapi.dll\",\n  \"*\\\\pcichek.dll\",\n \
+    \ \"*\\\\PCICL32.DLL\",\n  \"*\\\\TCCTL32.DLL\"\n)\nNOT Image IN (\"C:\\\\Program\
+    \ Files\\\\*\", \"C:\\\\Program Files (x86)\\\\*\")\nSignature = \"NetSupport\
+    \ Ltd*\"\n| fillnull\n| stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \  by Image ImageLoaded dest loaded_file loaded_file_path original_file_name process_exec\n\
+    \     process_guid process_hash process_id process_name process_path service_dll_signature_exists\n\
+    \     service_dll_signature_verified signature signature_id user_id vendor_product\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_netsupport_rmm_dll_loaded_by_uncommon_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 125f96f9-6f34-418b-b868-c4a8d7fb865f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_netsupport_rmm_dll_loaded_by_uncommon_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

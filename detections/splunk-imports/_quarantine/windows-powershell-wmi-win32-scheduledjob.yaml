@@ -1,0 +1,41 @@
+id: splunk-security-content-47c69803-2c09-408b-b40a-063c064cbb16
+name: Windows PowerShell WMI Win32 ScheduledJob
+description: The following analytic detects the use of the Win32_ScheduledJob WMI
+  class via PowerShell script block logging. This class, which manages scheduled tasks,
+  is disabled by default due to security concerns and must be explicitly enabled through
+  registry modifications. The detection leverages PowerShell event code 4104 and script
+  block text analysis. Monitoring this activity is crucial as it may indicate malicious
+  intent, especially if the class was enabled by an attacker. If confirmed malicious,
+  this could allow attackers to persist in the environment by creating scheduled tasks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://securityonline.info/wmiexec-regout-get-outputdata-response-from-registry/
+- https://learn.microsoft.com/en-us/windows/win32/cimwin32prov/win32-scheduledjob
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=\"*win32_scheduledjob*\"\
+    \n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powershell_wmi_win32_scheduledjob_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 47c69803-2c09-408b-b40a-063c064cbb16
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_wmi_win32_scheduledjob.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

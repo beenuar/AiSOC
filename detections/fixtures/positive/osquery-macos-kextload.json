@@ -1,0 +1,4 @@
+{
+  "event_type": "osquery_query_row",
+  "name": "kextload"
+}

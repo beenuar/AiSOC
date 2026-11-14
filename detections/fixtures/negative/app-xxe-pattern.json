@@ -1,0 +1,4 @@
+{
+  "body": "prefix-<!ENTITY-suffix",
+  "event_type": "not-http_request"
+}

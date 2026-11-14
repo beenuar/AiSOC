@@ -1,0 +1,26 @@
+title: Unknown Process Executed on Point-of-Sale Terminal
+id: aisoc-vt-ret-0001-pos-unknown-process
+status: experimental
+description: |
+  A process executed on a host tagged as point-of-sale (POS) that is
+  not on the tenant's POS process allowlist. POS terminals run a
+  small, well-known process set; anything new is either a RAM scraper,
+  remote access tool, or shimming/skimming binary.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: edr
+  service: process
+tags:
+  - attack.t1059
+  - attack.execution
+  - aisoc.vertical.retail
+  - aisoc.compliance.pci
+detection:
+  selection:
+    event.module: edr.process
+    event.action: 'process.started'
+    host.role: 'pos'
+  filter:
+    process.in_pos_allowlist: true
+  condition: selection and not filter

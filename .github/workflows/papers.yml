@@ -1,0 +1,135 @@
+name: Public papers (regenerate PDFs)
+
+# Renders every white paper to PDF so a markdown change that breaks
+# rendering is caught, and reports any committed PDF that is older than
+# its source.
+#
+# This workflow does not commit anything. It used to push refreshed PDFs
+# straight to main, which stopped being possible when main became
+# branch-protected: the push is rejected with GH006 and the run fails.
+# Because the commit-back step was skipped on pull requests, it passed on
+# every branch and failed only on main, so the breakage was invisible to
+# anyone opening a PR. Redirecting it to open a pull request instead is
+# not available either — this repository has Actions set to read-only
+# permissions with PR creation disabled.
+#
+# So staleness is reported rather than repaired, and refreshing a PDF is
+# a local `make papers` followed by a commit. The check compares the
+# digest of each markdown source against the digest recorded when its PDF
+# was last rendered, held in apps/web/public/papers/render-manifest.json.
+# It deliberately does not compare PDF bytes: WeasyPrint stamps a
+# creation timestamp into its output and glyph metrics depend on the
+# host's installed fonts, so two correct renders of one source differ.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/content/papers/**.md"
+      # Papers embed console captures, so refreshing a screenshot
+      # changes the rendered PDF while leaving every other path here
+      # untouched — the published PDF would keep showing the old
+      # console and nothing would say so.
+      - "apps/web/public/screenshots/**"
+      - "apps/web/public/papers/render-manifest.json"
+      - "scripts/render_white_paper.py"
+      - "Makefile"
+      - ".github/workflows/papers.yml"
+  pull_request:
+    paths:
+      - "apps/web/content/papers/**.md"
+      # Papers embed console captures, so refreshing a screenshot
+      # changes the rendered PDF while leaving every other path here
+      # untouched — the published PDF would keep showing the old
+      # console and nothing would say so.
+      - "apps/web/public/screenshots/**"
+      - "apps/web/public/papers/render-manifest.json"
+      - "scripts/render_white_paper.py"
+      - "Makefile"
+      - ".github/workflows/papers.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: papers-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  render:
+    name: Render every paper to PDF
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # Ahead of the gate, so a staleness check that has stopped detecting
+      # anything cannot report the tree clean.
+      - name: The staleness check still detects what it claims to
+        run: python3 scripts/render_white_paper.py --self-test
+
+      # Runs before anything is rendered. `make papers` rewrites the
+      # manifest, so checking afterwards would compare the tree against
+      # itself and pass whatever the committed PDFs contain.
+      - name: Every committed PDF is current with its source
+        run: python3 scripts/render_white_paper.py --check
+
+      # WeasyPrint needs Pango / Cairo / GLib at the system level — the
+      # same native deps that services/api/Dockerfile installs. Pinning
+      # the exact apt package set means a Debian repo nudge doesn't
+      # silently change the rendered output.
+      - name: Install WeasyPrint native dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            libpango-1.0-0 libpangoft2-1.0-0 \
+            libcairo2 libgdk-pixbuf-2.0-0 \
+            libffi-dev shared-mime-info fonts-inter
+
+      # Upper-bounded so a major release cannot change rendering without
+      # someone choosing it. The exact version is not pinned because
+      # nothing compares rendered bytes.
+      - name: Install render_white_paper Python deps
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet 'markdown>=3.5,<4' 'weasyprint>=60,<70'
+
+      - name: Render every paper (make papers)
+        run: make papers
+
+      - name: Every source produced a PDF
+        run: |
+          set -euo pipefail
+          missing=0
+          for src in apps/web/content/papers/*.md; do
+            name="$(basename "${src%.md}")"
+            case "$name" in _*) continue ;; esac
+            if [ ! -s "apps/web/public/papers/$name.pdf" ]; then
+              echo "::error::$src rendered no PDF at apps/web/public/papers/$name.pdf"
+              missing=$((missing + 1))
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "$missing paper(s) failed to render."
+            exit 1
+          fi
+          echo "Every paper source rendered to a non-empty PDF."
+
+      - name: Upload rendered PDFs as artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: papers-pdf-${{ github.sha }}
+          path: apps/web/public/papers/*.pdf
+          if-no-files-found: error
+          retention-days: 30

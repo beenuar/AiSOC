@@ -1,0 +1,195 @@
+# White-label, through the real app and real Postgres.
+#
+# Fix pass 4.3.
+#
+# Why live and not offline
+# ------------------------
+# Three of this item's properties cannot be answered anywhere else.
+#
+# The brand asset route answering 401 to the exact request an `<img>` makes
+# is a property of the real route with its real auth dependency. The console
+# component test can show the `src` is an object URL; only this can show why
+# it has to be.
+#
+# A `report_templates` row stores its recipients in a Postgres `text[]`,
+# which SQLite cannot bind, so the delivery branch of `run_once` never
+# executes in the offline suite -- which is also how both report workers came
+# to write a `status` value the column's CHECK refuses, raising on commit on
+# every real deployment while every offline suite passed. The offline suites
+# build their tables from the ORM model, and the model declares no CHECK.
+#
+# `ENVIRONMENT=test`, never `development`: `development` is in
+# `AUTH_BYPASS_ENVIRONMENTS`, so an uncredentialed request resolves to a demo
+# administrator -- which would turn the suite's first assertion, whose whole
+# subject is what happens *without* a credential, into a test of nothing.
+#
+# No `paths:` filter. Branding is resolved by workers, two renderers, a route
+# and the console shell; a change in any of them can reach it, and a filtered
+# gate is absent exactly when something unexpected moved.
+name: White-label (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: white-label-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  white-label-live:
+    name: A white-labelled organisation's reports and assets carry its brand
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, so running as the owner would
+      # pass for a reason no deployment enjoys.
+      WL_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The renderers, offline. These assert on the HTML and the markdown that
+      # become the PDFs, so they do not need the native WeasyPrint stack.
+      - name: Resolver, renderers and the scheduled artefacts
+        working-directory: services/api
+        run: >-
+          python -m pytest
+          tests/test_branding.py
+          tests/test_white_label_notifications.py
+          tests/test_white_label_scheduled_reports.py
+          tests/test_white_label_investigation_summary.py
+          tests/test_report_artefact_status_vocabulary.py
+          -v --tb=short
+
+      - name: The asset route, the scheduled email and the closed summary
+        working-directory: services/api
+        env:
+          ISOLATION_WHITE_LABEL_DSN: ${{ env.WL_DSN }}
+          DATABASE_URL: ${{ env.WL_DSN }}
+        run: python -m pytest ../../tests/isolation/test_white_label_live.py -v --tb=short
+
+      # A skip in a live job is a failure. `pytest.importorskip` and a missing
+      # DSN both turn "this never ran" into a green run, which is the shape
+      # that let the public scoreboard sit ten weeks stale while its workflow
+      # reported success.
+      - name: The live suite ran rather than skipped
+        working-directory: services/api
+        env:
+          ISOLATION_WHITE_LABEL_DSN: ${{ env.WL_DSN }}
+          DATABASE_URL: ${{ env.WL_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_white_label_live.py -q 2>&1 | tee /tmp/wl.txt
+          if grep -qE "[0-9]+ skipped" /tmp/wl.txt; then
+            echo "FAIL: the live white-label suite skipped. A live job that skips has proved nothing."
+            exit 1
+          fi
+
+      # The negative control.
+      #
+      # Putting the platform name back on the scheduled report's envelope must
+      # make the suite go red. Without it, "the envelope said Acme Shield"
+      # would pass equally well against a suite that never read the envelope.
+      - name: The suite fails when the envelope carries the platform name again
+        working-directory: services/api
+        env:
+          ISOLATION_WHITE_LABEL_DSN: ${{ env.WL_DSN }}
+          DATABASE_URL: ${{ env.WL_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/workers/report_scheduler.py /tmp/report_scheduler.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/workers/report_scheduler.py")
+          s = p.read_text()
+          needle = 'subject=f"[{branding.product_name}] {artefact.title}",'
+          if needle not in s:
+              print("negative control could not find the branded subject to revert; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, 'subject=f"[AiSOC] {artefact.title}",', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_white_label_live.py -q >/dev/null 2>&1; then
+            cp /tmp/report_scheduler.bak app/workers/report_scheduler.py
+            echo "FAIL: the suite passed with the platform name back on the envelope."
+            exit 1
+          fi
+          cp /tmp/report_scheduler.bak app/workers/report_scheduler.py
+          echo "OK: reverting the branded subject makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_white_label_live.py -q
+
+      # The second negative control, for the defect this item's live suite
+      # surfaced rather than the one it was written for. Restoring the status
+      # value the column refuses must break the scheduled-report case, because
+      # a worker that cannot commit cannot deliver a branded anything.
+      - name: The suite fails when the worker writes a status the column refuses
+        working-directory: services/api
+        env:
+          ISOLATION_WHITE_LABEL_DSN: ${{ env.WL_DSN }}
+          DATABASE_URL: ${{ env.WL_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/workers/report_scheduler.py /tmp/report_scheduler.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/workers/report_scheduler.py")
+          s = p.read_text()
+          if 'status="completed",' not in s:
+              print("negative control could not find the status write to revert")
+              sys.exit(1)
+          p.write_text(s.replace('status="completed",', 'status="generated",', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_white_label_live.py -q >/dev/null 2>&1; then
+            cp /tmp/report_scheduler.bak app/workers/report_scheduler.py
+            echo "FAIL: the suite passed with a status the CHECK constraint refuses."
+            exit 1
+          fi
+          cp /tmp/report_scheduler.bak app/workers/report_scheduler.py
+          echo "OK: an unwritable artefact makes the suite fail, as it must."
+
+      - name: Branding and metering declarations still hold their shape
+        run: |
+          python3 scripts/check_whitelabel_metering.py --self-test
+          python3 scripts/check_whitelabel_metering.py

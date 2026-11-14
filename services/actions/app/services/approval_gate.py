@@ -1,0 +1,182 @@
+"""The gate that actually runs on ``POST /actions``, combining both axes.
+
+``BlastRadiusGate`` asks one question: is this verb's blast radius within the
+auto-execute limit. That is a property of the verb alone, so the same answer
+comes back for a 40%-confidence guess and a corroborated finding.
+
+``approval_matrix.evaluate`` asks the other one — confidence against the
+action's declared impact, under the tenant's autonomy tier — and it was
+written, documented, unit-tested, listed in the claim-to-gate matrix as
+GATED, and **called by nothing**. A repository-wide search for
+``approval_matrix`` found the module, its own test, the contract checker and
+two doc mentions. The gate the docs described was not the gate that ran.
+
+This module runs both and takes the stricter, which is the composition rule
+the matrix already states for its own three inputs: each can raise a
+requirement, none can lower it. So switching it on cannot make anything
+auto-execute that did not before.
+
+Every ``ActionType`` member now resolves to a capability contract, and
+``scripts/check_action_contract.py`` fails if one stops doing so.
+
+The last hold-out was ``notify_slack``. It was never a missing capability:
+the verb is ``notify``, it has a contract, and ``SlackNotify`` already
+bridged the two. What was missing was anything connecting a lookup *by
+ActionType value* to that bridge, so this gate found no contract, skipped
+the confidence matrix and let blast radius decide alone — a 40%-confidence
+guess and a corroborated finding got the same answer for the one verb most
+likely to be auto-executed. ``contract_for_action_type`` closes it by alias
+rather than by rename, because ``action_type`` is persisted operator intent
+(see the note on ``ACTION_TYPE_CAPABILITY_ALIASES``).
+
+An unmapped verb is still possible in principle, and is still recorded at
+debug rather than guessed at: inventing an impact for a verb nobody declared
+is how a gate starts certifying things it never examined.
+
+A request with no ``confidence`` is treated as the lowest band. For anything
+above READ_ONLY impact that means analyst approval, which is a real tightening
+of the previous behaviour and is the intended direction.
+"""
+
+from __future__ import annotations
+
+import structlog
+
+from app.live_actions.capability_contracts import contract_for_action_type
+from app.live_actions.contract import ApprovalRequirement
+from app.models.action import ActionRequest, ActionStatus, BlastRadius
+from app.services.approval_matrix import DEFAULT_TIER, evaluate_contract
+from app.services.asset_lookup import asset_criticality_for_target
+
+logger = structlog.get_logger()
+
+#: Conservative default when no tenant policy can be read. Not a local
+#: literal: ``dispatcher.configured_tier``, this gate and the console's
+#: autonomy page all have to name the same tier, and three copies of "L1" is
+#: three chances for one of them to move.
+_DEFAULT_TIER = DEFAULT_TIER
+
+
+def _tier_label(tier: object) -> str:
+    """Map a ``MaturityTier`` (or anything tier-shaped) onto ``L0``..``L4``."""
+    name = getattr(tier, "name", None)
+    if isinstance(name, str) and name.startswith("L"):
+        return name.split("_")[0]
+    value = getattr(tier, "value", tier)
+    if isinstance(value, int) and 0 <= value <= 4:
+        return f"L{value}"
+    return _DEFAULT_TIER
+
+
+async def _resolve_tier(tenant_id: object) -> str:
+    """The tenant's autonomy tier, falling back to the deployment default.
+
+    Imported lazily: ``resolve_tenant_policy`` reaches for a database, and the
+    submit path has to keep working in the many tests and deployments that
+    have none.
+    """
+    try:
+        from app.services.tenant_policy import resolve_tenant_policy
+
+        policy = await resolve_tenant_policy(tenant_id)
+    except Exception as exc:  # noqa: BLE001 — no policy store is a normal state
+        logger.debug("approval_gate.tier_unresolved", error=str(exc))
+        return _DEFAULT_TIER
+    return _tier_label(getattr(policy, "tier", None))
+
+
+def effective_tier(status: ActionStatus, requirement: ApprovalRequirement | None) -> str:
+    """The approval tier this submission actually landed at.
+
+    Composed from both gates rather than read off the matrix, because they
+    disagree in one direction that matters: the matrix can say AUTOMATIC
+    while blast radius still routes the action to a human. Recording the
+    matrix's answer there would count a queued action as unattended, which
+    is the single number an operator reads this meter for.
+
+    A verb with no capability contract has no graded requirement, so the
+    status is all there is to go on — and the status is enough to answer
+    "did a human have to act", which is what the tier is metered for.
+    """
+    if status == ActionStatus.REJECTED and requirement == ApprovalRequirement.PROHIBITED:
+        return ApprovalRequirement.PROHIBITED.value
+    if status == ActionStatus.AWAITING_APPROVAL:
+        if requirement in (ApprovalRequirement.ANALYST, ApprovalRequirement.MANDATORY_HUMAN):
+            return requirement.value
+        return ApprovalRequirement.ANALYST.value
+    return ApprovalRequirement.AUTOMATIC.value
+
+
+async def apply_matrix(
+    request: ActionRequest,
+    status: ActionStatus,
+    blast_radius: BlastRadius,
+    reason: str,
+) -> tuple[ActionStatus, str, str]:
+    """Raise the blast-radius verdict to whatever the matrix demands.
+
+    Returns the (possibly unchanged) status, the reason that decided it,
+    and the approval tier the submission landed at. Never lowers: a
+    blast-radius gate that already demands approval keeps demanding it
+    whatever the confidence says.
+
+    The tier is returned rather than logged and dropped. It was computed on
+    every submission and discarded, so `aisoc_action_records` could say how
+    many actions a tenant ran and not how many of them ran unattended.
+    """
+    contract = contract_for_action_type(request.action_type.value)
+    if contract is None:
+        logger.debug(
+            "approval_gate.no_capability_contract",
+            action_type=request.action_type.value,
+            note="blast radius decides alone; impact is unknown for this verb",
+        )
+        return status, reason, effective_tier(status, None)
+
+    # The same shared grading the registry door runs. This used to unpack the
+    # contract into `evaluate`'s arguments here, and the dispatcher unpacked
+    # it again over there — two call sites, and only one of them grew a
+    # read-only bypass when the matrix's L1 ceiling turned out to gate reads.
+    # `search_siem` is read_only/automatic and came back `awaiting_approval`
+    # through this door at the default tier while executing through the
+    # other. One function now answers for both.
+    decision = evaluate_contract(
+        contract=contract,
+        confidence=request.confidence,
+        tier=await _resolve_tier(request.tenant_id),
+        asset_criticality=await asset_criticality_for_target(request.tenant_id, request.target),
+    )
+
+    if decision.is_blocked:
+        logger.info(
+            "Action prohibited by contract",
+            action_type=request.action_type.value,
+            impact=decision.impact.value,
+            reason=decision.reason,
+        )
+        return ActionStatus.REJECTED, decision.reason, effective_tier(ActionStatus.REJECTED, decision.requirement)
+
+    if decision.requirement == ApprovalRequirement.AUTOMATIC:
+        # The matrix is content. Blast radius may still have gated it, and
+        # that verdict stands.
+        return status, reason, effective_tier(status, decision.requirement)
+
+    if status == ActionStatus.AWAITING_APPROVAL:
+        # Already gated. Keep the matrix's reason, which names confidence and
+        # impact — more use to the approver than "blast radius exceeded".
+        return status, decision.reason, effective_tier(status, decision.requirement)
+
+    logger.info(
+        "Action requires approval (confidence x impact)",
+        action_type=request.action_type.value,
+        blast_radius=blast_radius,
+        impact=decision.impact.value,
+        confidence=decision.confidence,
+        tier=decision.tier,
+        reason=decision.reason,
+    )
+    return (
+        ActionStatus.AWAITING_APPROVAL,
+        decision.reason,
+        effective_tier(ActionStatus.AWAITING_APPROVAL, decision.requirement),
+    )

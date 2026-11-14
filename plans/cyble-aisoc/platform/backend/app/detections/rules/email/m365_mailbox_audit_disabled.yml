@@ -1,0 +1,28 @@
+title: M365 Mailbox Audit Logging Disabled
+id: aisoc-id-em-0009-audit-disabled
+status: stable
+description: |
+  Mailbox auditing was disabled or audit log retention reduced.
+  Common post-compromise step by BEC actors to hide subsequent
+  activity from defenders.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: m365
+  service: exchange
+tags:
+  - attack.t1562.008
+  - attack.defense_evasion
+  - aisoc.email
+detection:
+  selection:
+    event.module: m365
+    email.operation|contains:
+      - 'Set-MailboxAuditBypassAssociation'
+      - 'Set-Mailbox'
+  audit_off:
+    email.parameters|contains:
+      - 'AuditEnabled:False'
+      - 'AuditEnabled $false'
+      - 'AuditBypassEnabled:True'
+  condition: selection and audit_off

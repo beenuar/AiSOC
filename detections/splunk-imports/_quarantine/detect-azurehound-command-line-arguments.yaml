@@ -1,0 +1,51 @@
+id: splunk-security-content-26f02e96-c300-11eb-b611-acde48001122
+name: Detect AzureHound Command-Line Arguments
+description: The following analytic detects the execution of the `Invoke-AzureHound`
+  command-line argument, commonly used by the AzureHound tool. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on process names and command-line
+  executions. This activity is significant because AzureHound is often used for reconnaissance
+  in Azure environments, potentially exposing sensitive information. If confirmed
+  malicious, this activity could allow an attacker to map out Azure Active Directory
+  structures, aiding in further attacks and privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  - T1069.002
+  - T1087.001
+  - T1087.002
+  - T1482
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/software/S0521/
+- https://github.com/BloodHoundAD/BloodHound/tree/master/Collectors
+- https://posts.specterops.io/introducing-bloodhound-4-0-the-azure-update-9b2b26c5e350
+- https://github.com/BloodHoundAD/Legacy-AzureHound.ps1/blob/master/AzureHound.ps1
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process\
+    \ IN (\"*invoke-azurehound*\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `detect_azurehound_command_line_arguments_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 26f02e96-c300-11eb-b611-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_azurehound_command_line_arguments.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,48 @@
+id: splunk-security-content-d2f36034-37fa-4bd4-8801-26807c15540f
+name: WinRAR Spawning Shell Application
+description: The following analytic detects the execution of Windows shell processes
+  initiated by WinRAR, such as "cmd.exe", "powershell.exe", "certutil.exe", "mshta.exe",
+  or "bitsadmin.exe". This detection leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on process and parent process relationships. This activity
+  is significant because it may indicate exploitation of the WinRAR CVE-2023-38831
+  vulnerability, where malicious scripts are executed from spoofed ZIP archives. If
+  confirmed malicious, this could lead to unauthorized access, financial loss, and
+  further malicious activities like data theft or ransomware attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.group-ib.com/blog/cve-2023-38831-winrar-zero-day/
+- https://github.com/BoredHackerBlog/winrar_CVE-2023-38831_lazy_poc
+- https://github.com/b1tg/CVE-2023-38831-winrar-exploit
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=winrar.exe\
+    \ `windows_shells`\n    OR\n    Processes.process_name IN (\"certutil.exe\",\"\
+    mshta.exe\",\"bitsadmin.exe\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `winrar_spawning_shell_application_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d2f36034-37fa-4bd4-8801-26807c15540f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/winrar_spawning_shell_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

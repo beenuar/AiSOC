@@ -1,0 +1,45 @@
+id: splunk-security-content-40c2ba5b-dd6a-496b-9e6e-c9524d0be167
+name: Windows IIS Components Module Failed to Load
+description: The following analytic detects when an IIS Module DLL fails to load due
+  to a configuration problem, identified by EventCode 2282. This detection leverages
+  Windows Application event logs to identify repeated failures in loading IIS modules.
+  Such failures can indicate misconfigurations or potential tampering with IIS components.
+  If confirmed malicious, this activity could lead to service disruptions or provide
+  an attacker with opportunities to exploit vulnerabilities within the IIS environment.
+  Immediate investigation is required to determine the legitimacy of the failing module
+  and to mitigate any potential security risks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://social.technet.microsoft.com/wiki/contents/articles/21757.event-id-2282-iis-worker-process-availability.aspx
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.crowdstrike.com/wp-content/uploads/2022/05/crowdstrike-iceapple-a-novel-internet-information-services-post-exploitation-framework-1.pdf
+- https://unit42.paloaltonetworks.com/unit42-oilrig-uses-rgdoor-iis-backdoor-targets-middle-east/
+- https://www.secureworks.com/research/bronze-union
+- https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/T1505.004
+- https://strontic.github.io/xcyclopedia/library/appcmd.exe-055B2B09409F980BF9B5A3969D01E5B2.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_application` EventCode=2282\n  | stats  count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY EventCode dest Name\n       ModuleDll\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_iis_components_module_failed_to_load_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 40c2ba5b-dd6a-496b-9e6e-c9524d0be167
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_iis_components_module_failed_to_load.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

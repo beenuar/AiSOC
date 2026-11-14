@@ -1,0 +1,54 @@
+{
+  "count": 3,
+  "rules": [
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-bruteforce-auth",
+      "match_when": {
+        "event_type": "authentication",
+        "outcome": "failure"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Brute-force: repeated authentication failures",
+      "severity": "high",
+      "threshold": 5,
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "group_by": "src_ip",
+      "id": "wd-password-spray",
+      "match_when": {
+        "event_type": "authentication",
+        "outcome": "failure"
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Password spray: auth failures across many accounts from one source",
+      "severity": "high",
+      "threshold": 10,
+      "window_seconds": 600
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-port-scan",
+      "match_when": {
+        "event_type": "network"
+      },
+      "mitre": [
+        "T1046"
+      ],
+      "name": "Port scan: many distinct connections from one source",
+      "severity": "medium",
+      "threshold": 50,
+      "window_seconds": 120
+    }
+  ],
+  "source": "services/fusion/app/services/windowed_detection.py::_BUILTIN_RULES",
+  "version": 1
+}

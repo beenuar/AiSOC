@@ -1,0 +1,153 @@
+id: aisoc-attck-defense-evasion
+name: AiSOC ATT&CK — Defense Evasion Detection
+version: 1.0.0
+platforms: [linux, darwin]
+description: |
+  Detects common defense evasion techniques including process injection signals,
+  binary masquerading, log clearing, and kernel module manipulation.
+  Aligns with MITRE ATT&CK T1562 (Impair Defenses), T1036 (Masquerading),
+  and T1014 (Rootkit).
+
+queries:
+  processes_with_deleted_binary:
+    sql: >
+      SELECT p.pid, p.name, p.path, p.cmdline, p.uid, p.gid, p.cwd,
+             p.start_time, f.inode
+      FROM processes p
+      LEFT JOIN file f ON p.path = f.path
+      WHERE f.inode IS NULL
+        AND p.path != ''
+    interval: 120
+    severity: high
+    description: Detect processes whose backing binary has been deleted (common in memory-only malware)
+    mitre: [T1055, T1027]
+    references:
+      - https://attack.mitre.org/techniques/T1055/
+      - https://attack.mitre.org/techniques/T1027/
+
+  hidden_processes:
+    sql: >
+      SELECT pid, name, path, cmdline, uid, gid
+      FROM processes
+      WHERE name LIKE '.%'
+        OR path LIKE '%/.'
+        OR cmdline LIKE '%--%'
+    interval: 120
+    severity: medium
+    description: Detect processes with hidden or suspicious naming
+    mitre: [T1036.005]
+    references:
+      - https://attack.mitre.org/techniques/T1036/005/
+
+  suid_binaries:
+    sql: >
+      SELECT f.path, f.filename, f.size, f.uid, f.gid, f.mode, f.mtime,
+             f.atime, f.ctime
+      FROM file f
+      WHERE (f.path LIKE '/usr/local/bin/%'
+         OR f.path LIKE '/tmp/%'
+         OR f.path LIKE '/var/%'
+         OR f.path LIKE '/dev/%'
+         OR f.path LIKE '/home/%')
+        AND f.mode LIKE '%s%'
+    interval: 600
+    severity: high
+    description: Detect unusual SUID/SGID binaries in non-standard locations
+    mitre: [T1548.001]
+    references:
+      - https://attack.mitre.org/techniques/T1548/001/
+
+  kernel_modules:
+    sql: >
+      SELECT name, size, used_by, status, address
+      FROM kernel_modules
+      WHERE status NOT IN ('Live', 'Loading')
+    interval: 300
+    severity: high
+    description: Detect kernel modules in unusual states (potential rootkit)
+    mitre: [T1014]
+    references:
+      - https://attack.mitre.org/techniques/T1014/
+
+  ld_preload:
+    sql: >
+      SELECT name, value
+      FROM environment
+      WHERE name IN ('LD_PRELOAD', 'LD_LIBRARY_PATH', 'DYLD_INSERT_LIBRARIES')
+    interval: 300
+    severity: high
+    description: Detect LD_PRELOAD or DYLD_INSERT_LIBRARIES environment hijacking
+    mitre: [T1574.006]
+    references:
+      - https://attack.mitre.org/techniques/T1574/006/
+
+  ld_preload_file:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE target_path = '/etc/ld.so.preload'
+        OR target_path = '/etc/ld.so.conf'
+        OR target_path LIKE '/etc/ld.so.conf.d/%'
+    interval: 60
+    severity: high
+    description: Detect changes to ld.so preload configuration
+    mitre: [T1574.006]
+    references:
+      - https://attack.mitre.org/techniques/T1574/006/
+
+  auditd_tampering:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE target_path IN ('/etc/audit/auditd.conf',
+                            '/etc/audit/rules.d',
+                            '/etc/audit/audit.rules')
+        OR target_path LIKE '/etc/audit/rules.d/%'
+    interval: 60
+    severity: high
+    description: Detect modifications to auditd configuration (defense evasion)
+    mitre: [T1562.001]
+    references:
+      - https://attack.mitre.org/techniques/T1562/001/
+
+  log_file_tampering:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE (target_path LIKE '/var/log/%'
+          OR target_path LIKE '/var/adm/%')
+        AND action IN ('DELETED', 'UPDATED')
+    interval: 60
+    severity: high
+    description: Detect deletion or truncation of log files
+    mitre: [T1070.002]
+    references:
+      - https://attack.mitre.org/techniques/T1070/002/
+
+  tmp_executable:
+    sql: >
+      SELECT p.pid, p.name, p.path, p.cmdline, p.uid, f.mode
+      FROM processes p
+      JOIN file f ON p.path = f.path
+      WHERE p.path LIKE '/tmp/%'
+        OR p.path LIKE '/dev/shm/%'
+        OR p.path LIKE '/var/tmp/%'
+    interval: 120
+    severity: high
+    description: Detect processes executing from /tmp, /dev/shm, or /var/tmp
+    mitre: [T1036.005, T1564]
+    references:
+      - https://attack.mitre.org/techniques/T1036/005/
+
+file_paths:
+  ld_preload:
+    - /etc/ld.so.preload
+    - /etc/ld.so.conf
+    - /etc/ld.so.conf.d/%%
+  audit_config:
+    - /etc/audit/%%
+  log_dirs:
+    - /var/log/%%

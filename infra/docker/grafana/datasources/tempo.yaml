@@ -1,0 +1,15 @@
+apiVersion: 1
+
+datasources:
+  - name: Tempo
+    type: tempo
+    uid: aisoc-tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      # Jump from a span to the metrics around it. Without this the two
+      # panes are separate tools that happen to share a login.
+      tracesToMetrics:
+        datasourceUid: aisoc-prometheus
+      serviceMap:
+        datasourceUid: aisoc-prometheus

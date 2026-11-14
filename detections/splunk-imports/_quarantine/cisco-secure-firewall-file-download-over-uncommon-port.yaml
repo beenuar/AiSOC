@@ -1,0 +1,44 @@
+id: splunk-security-content-f26445a8-a6a2-4855-bec0-0c39e52e5b8f
+name: Cisco Secure Firewall - File Download Over Uncommon Port
+description: The following analytic detects file transfers flagged as malware that
+  occurred over non-standard ports (other than 80 and 443). Adversaries may attempt
+  to bypass protocol-based detection or use alternate ports to blend in with other
+  traffic. This analytic identifies these non-conventional flows and surfaces potential
+  evasion techniques. If confirmed malicious this indicate potential malware delivery
+  or other nefarious activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1571
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=FileEvent FileDirection=\"Download\"\
+    \ NOT dest_port IN (80, 443)\n| lookup cisco_secure_firewall_filetype_lookup Name\
+    \ as FileType OUTPUT Description\n| stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n        values(file_name) as file_name\n        values(uri) as\
+    \ uri\n        values(ClientApplication) as ClientApplication\n        values(file_hash)\
+    \ as file_hash\n        values(SHA_Disposition) as SHA_Disposition\n        by\
+    \ FileDirection FileType app ThreatName dest_port Description src dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| table firstTime lastTime src dest dest_port\
+    \ FileDirection FileType Description uri ClientApplication file_name file_hash\
+    \ SHA_Disposition ThreatName\n| `cisco_secure_firewall___file_download_over_uncommon_port_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f26445a8-a6a2-4855-bec0-0c39e52e5b8f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___file_download_over_uncommon_port.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

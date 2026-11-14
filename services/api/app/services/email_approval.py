@@ -1,0 +1,521 @@
+"""
+Email approval fallback (T3.6).
+
+When Slack / Teams aren't configured or are unreachable, the action
+service can mint a signed approval URL and post it to the on-call email
+distribution list via Mailgun. The recipient clicks Approve / Deny;
+that URL hits ``services/api`` which verifies the HMAC signature and
+the 1-hour freshness window, then calls into ``services/actions`` to
+record the decision and writes an audit row.
+
+Design notes
+============
+
+* **No bespoke crypto.** We use ``hmac.compare_digest`` over
+  ``hashlib.sha256`` — the same primitive as the Slack/Teams shared
+  HMAC verifier. Keeps key rotation simple (one env var) and lets the
+  signed-URL format be reproduced manually for debug.
+* **URL-safe-base64 envelope.** The signed token is a single opaque
+  string that the recipient never has to URL-encode again. The token
+  encodes ``"<decision>|<action_id>|<case_id>|<expires_at>"`` plus the
+  signature; the API endpoint decodes, verifies, and dispatches.
+* **Mailgun client is injectable.** The default :class:`MailgunClient`
+  uses ``httpx`` with ``api`` auth. Tests pass a stub that records the
+  sent payload — no network. The Mailgun secret is *only* read inside
+  the client constructor, never at module scope.
+* **1-hour TTL** by default. Tunable through
+  ``AISOC_EMAIL_APPROVAL_TTL_SECONDS``. The expiry stamp is signed
+  alongside the rest of the payload so an attacker can't extend it
+  client-side.
+
+* **The approver is signed into the token.** Without that a signed URL
+  is a bearer credential: anyone holding the link approves, and the
+  resulting approval carries no identity for the actions service to
+  authorize — the same hole the ChatOps path had. The recipient address
+  travels inside the signature, and
+  ``app/api/v1/endpoints/email_approval.py`` forwards it as the
+  approver so the permission tier and separation of duties apply.
+
+The consuming endpoint is ``GET /api/v1/actions/email-decide``. It did
+not exist for several releases while ``approval_url`` defaulted to
+``/v1/actions/email-decide``, a path present nowhere else in the tree,
+so every rendered approve and deny button linked to a 404.
+
+* **The mail is white-labelled.** A managed-service provider's analyst
+  receives this in their own inbox, so the product name, the sender name,
+  the footer and the support contact come from
+  :mod:`app.services.branding.resolver` rather than from a literal. The
+  subject line read ``[AiSOC]`` for every organisation, and the resolved
+  ``sender_name`` -- the one field whose whole purpose is naming who mail
+  comes from -- was read by nothing in the tree.
+"""
+
+from __future__ import annotations
+
+import base64
+import hashlib
+import hmac
+import html
+import json
+import os
+import time
+from dataclasses import dataclass
+from typing import Any, Protocol
+from urllib.parse import urlencode
+
+import httpx
+import structlog
+
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding
+
+log = structlog.get_logger(__name__)
+
+DEFAULT_TTL_SECONDS = 3600  # 1 hour — T3.6 contract
+
+
+class EmailApprovalError(ValueError):
+    """Raised when a signed email-approval token fails verification."""
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Signing + verification
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True, frozen=True)
+class ApprovalToken:
+    """One parsed + verified email-approval token."""
+
+    decision: str  # "approved" | "rejected"
+    action_id: str
+    case_id: str
+    expires_at: int
+    #: The recipient the link was minted for. Signed, so the click carries an
+    #: identity the actions service can authorize — without it a signed URL is
+    #: a bearer credential that approves as nobody, which is the same hole the
+    #: ChatOps path had.
+    approver: str = ""
+
+    @property
+    def is_expired(self) -> bool:
+        return time.time() > self.expires_at
+
+
+def _b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def _b64url_decode(token: str) -> bytes:
+    pad = "=" * (-len(token) % 4)
+    return base64.urlsafe_b64decode(token + pad)
+
+
+def _canonical_payload(decision: str, action_id: str, case_id: str, expires_at: int, approver: str = "") -> str:
+    # The approver is appended rather than inserted so a token minted before
+    # approver binding still verifies (it signs the empty string). The
+    # endpoint refuses such a token anyway, because an approval needs an
+    # identity — but it should fail as "no approver" rather than as a
+    # signature mismatch, which would send an operator hunting a key problem.
+    return f"{decision}|{action_id}|{case_id}|{int(expires_at)}|{approver}"
+
+
+def _hmac_hex(payload: str, *, secret: str) -> str:
+    return hmac.new(secret.encode("utf-8"), payload.encode("utf-8"), hashlib.sha256).hexdigest()
+
+
+def issue_token(
+    *,
+    decision: str,
+    action_id: str,
+    case_id: str,
+    secret: str,
+    approver: str = "",
+    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    now: float | None = None,
+) -> str:
+    """
+    Mint a signed approval token (opaque base64-url string).
+
+    ``decision`` must be ``"approved"`` or ``"rejected"`` so the email
+    template generates one URL per choice and the recipient's click is
+    self-describing.
+
+    ``approver`` is the recipient address the link is minted for. It is signed
+    into the token so a click carries an identity the actions service can
+    authorize against; a token without one is a bearer credential that
+    approves as nobody.
+    """
+    if decision not in {"approved", "rejected"}:
+        raise EmailApprovalError(f"unsupported decision {decision!r}")
+    if not secret:
+        raise EmailApprovalError("signing secret is empty — refusing to issue")
+    if not action_id:
+        raise EmailApprovalError("action_id is required")
+
+    issued = float(now if now is not None else time.time())
+    expires_at = int(issued + max(60, int(ttl_seconds)))
+    canonical = _canonical_payload(decision, action_id, case_id, expires_at, approver)
+    signature = _hmac_hex(canonical, secret=secret)
+    envelope = json.dumps(
+        {
+            "d": decision,
+            "a": action_id,
+            "c": case_id,
+            "e": expires_at,
+            "p": approver,
+            "s": signature,
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    return _b64url_encode(envelope)
+
+
+def verify_token(token: str, *, secret: str, now: float | None = None) -> ApprovalToken:
+    """
+    Decode + verify a token issued by :func:`issue_token`.
+
+    Raises :class:`EmailApprovalError` on any failure — malformed
+    base64, missing fields, signature mismatch, expired window.
+    """
+    if not secret:
+        raise EmailApprovalError("signing secret is empty — refusing to verify")
+    if not token:
+        raise EmailApprovalError("empty token")
+
+    try:
+        raw = _b64url_decode(token)
+        envelope = json.loads(raw)
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise EmailApprovalError(f"malformed token: {exc}") from exc
+
+    decision = str(envelope.get("d") or "")
+    action_id = str(envelope.get("a") or "")
+    case_id = str(envelope.get("c") or "")
+    expires_at_raw = envelope.get("e")
+    approver = str(envelope.get("p") or "")
+    signature = str(envelope.get("s") or "")
+
+    if decision not in {"approved", "rejected"}:
+        raise EmailApprovalError(f"unsupported decision {decision!r}")
+    if not action_id:
+        raise EmailApprovalError("token missing action_id")
+    if not isinstance(expires_at_raw, int):
+        raise EmailApprovalError("token missing expires_at")
+
+    canonical = _canonical_payload(decision, action_id, case_id, int(expires_at_raw), approver)
+    expected = _hmac_hex(canonical, secret=secret)
+    if not hmac.compare_digest(expected, signature):
+        raise EmailApprovalError("signature mismatch")
+
+    current = float(now if now is not None else time.time())
+    if current > float(expires_at_raw):
+        raise EmailApprovalError("token expired")
+
+    return ApprovalToken(
+        decision=decision,
+        action_id=action_id,
+        case_id=case_id,
+        expires_at=int(expires_at_raw),
+        approver=approver,
+    )
+
+
+def approval_url(
+    *,
+    base_url: str,
+    endpoint_path: str = "/api/v1/actions/email-decide",
+    decision: str,
+    action_id: str,
+    case_id: str,
+    secret: str,
+    approver: str = "",
+    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    now: float | None = None,
+) -> str:
+    """Build the full signed URL embedded in the approval email.
+
+    The default path is the route that exists. It previously defaulted to
+    ``/v1/actions/email-decide``, which appeared nowhere else in the tree — so
+    every approve and deny button in a rendered email linked to a 404.
+    """
+    token = issue_token(
+        decision=decision,
+        action_id=action_id,
+        case_id=case_id,
+        secret=secret,
+        approver=approver,
+        ttl_seconds=ttl_seconds,
+        now=now,
+    )
+    qs = urlencode({"token": token})
+    return f"{base_url.rstrip('/')}{endpoint_path}?{qs}"
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Mailgun client
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class MailDeliveryClient(Protocol):
+    async def send(
+        self,
+        *,
+        to: list[str],
+        subject: str,
+        html: str,
+        text: str,
+        from_addr: str | None = None,
+        from_name: str | None = None,
+    ) -> dict[str, Any]:
+        # Protocol stub body uses ``pass`` rather than ``...`` to silence
+        # CodeQL ``py/ineffectual-statement``. Semantically identical for
+        # an unimplemented Protocol method.
+        pass
+
+
+def _esc(value: str) -> str:
+    """HTML-escape one interpolated value, quotes included.
+
+    The attribute values here sit in single quotes, which `html.escape`
+    covers along with the double kind.
+    """
+    return html.escape(str(value), quote=True)
+
+
+def _quoted_display_name(name: str) -> str:
+    """One RFC 5322 ``quoted-string`` for a ``From`` display name.
+
+    The name is operator-supplied through ``PUT /api/v1/branding``, and it is
+    about to be composed into a mail header. A carriage return or newline in
+    it is header injection -- the rest of the value becomes additional
+    headers, which is how a ``Bcc`` gets added to approval mail nobody else
+    was supposed to see. Control characters are removed rather than escaped
+    because none of them belong in a product name, and the backslash and
+    quote are escaped because a quoted-string is where this lands.
+    """
+    cleaned = "".join(character for character in name if character.isprintable())
+    escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped[:80]}"'
+
+
+def _default_from_addr(domain: str) -> str:
+    """Sender address when ``AISOC_APPROVAL_FROM_ADDR`` is unset.
+
+    Prefer the operator's own Mailgun sending domain: a From address on a
+    domain the deployment does not control fails SPF/DKIM and sends approval
+    mail that claims to come from someone else. With no domain configured we
+    fall back to the RFC 2606 reserved ``example.com``, which is visibly a
+    placeholder rather than a real party's address.
+    """
+    domain = (domain or "").strip().lstrip("@")
+    return f"approvals@{domain}" if domain else "approvals@example.com"
+
+
+class MailgunClient:
+    """
+    Minimal Mailgun client. Authenticates with the standard
+    ``api:<api_key>`` basic-auth header. Reads ``MAILGUN_API_KEY`` and
+    ``MAILGUN_DOMAIN`` from the environment unless overridden at
+    construction time so unit tests can pass deterministic fixtures.
+    """
+
+    def __init__(
+        self,
+        *,
+        api_key: str | None = None,
+        domain: str | None = None,
+        base_url: str = "https://api.mailgun.net/v3",
+        from_addr: str | None = None,
+        client: httpx.AsyncClient | None = None,
+    ) -> None:
+        self._api_key = api_key if api_key is not None else os.environ.get("MAILGUN_API_KEY", "")
+        self._domain = domain if domain is not None else os.environ.get("MAILGUN_DOMAIN", "")
+        self._base_url = base_url.rstrip("/")
+        self._from_addr = from_addr or os.environ.get("AISOC_APPROVAL_FROM_ADDR", "") or _default_from_addr(self._domain)
+        self._client = client or httpx.AsyncClient(timeout=10.0)
+
+    async def send(
+        self,
+        *,
+        to: list[str],
+        subject: str,
+        html: str,
+        text: str,
+        from_addr: str | None = None,
+        from_name: str | None = None,
+    ) -> dict[str, Any]:
+        if not self._api_key or not self._domain:
+            raise EmailApprovalError("Mailgun is not configured — set MAILGUN_API_KEY and MAILGUN_DOMAIN")
+        url = f"{self._base_url}/{self._domain}/messages"
+        # The address stays the operator's own sending domain whatever the
+        # display name says, because that is what SPF and DKIM are checked
+        # against. Only the name a recipient reads is white-labelled.
+        address = from_addr or self._from_addr
+        sender = f"{_quoted_display_name(from_name)} <{address}>" if from_name else address
+        data: dict[str, Any] = {
+            "from": sender,
+            "to": to,
+            "subject": subject,
+            "text": text,
+            "html": html,
+        }
+        response = await self._client.post(url, data=data, auth=("api", self._api_key))
+        response.raise_for_status()
+        return response.json() if response.content else {"ok": True}
+
+    async def aclose(self) -> None:
+        await self._client.aclose()
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# High-level send
+# ────────────────────────────────────────────────────────────────────────────
+
+
+def render_approval_email(
+    *,
+    case: dict[str, Any],
+    action: dict[str, Any],
+    approve_url: str,
+    reject_url: str,
+    web_base_url: str,
+    branding: Branding | None = None,
+) -> tuple[str, str, str]:
+    """
+    Render a plain-text + HTML approval email for a pending action.
+
+    Returns ``(subject, text_body, html_body)``.
+
+    ``branding`` defaults to the platform appearance, so an unbranded
+    deployment is unchanged. The approve and deny buttons keep their green
+    and red: those two colours mean "this one contains, this one does not"
+    and an organisation's palette must not be able to swap them.
+    """
+    brand = branding or DEFAULT_BRANDING
+    case_number = case.get("case_number") or str(case.get("id") or "")[:8] or "(unknown)"
+    action_type = action.get("action_type") or "unknown"
+    target = action.get("target") or "unknown"
+    rationale = (action.get("rationale") or "(no rationale provided)").strip()
+    product = brand.product_name
+    support = brand.support_url or brand.support_email
+
+    subject = f"[{product}] Approval needed: {action_type} on {target} — case {case_number}"
+
+    text_body = (
+        f"{product} approval request\n\n"
+        f"Case:     {case_number}\n"
+        f"Action:   {action_type}\n"
+        f"Target:   {target}\n"
+        f"Rationale: {rationale}\n\n"
+        f"Approve: {approve_url}\n"
+        f"Deny:    {reject_url}\n\n"
+        f"Open case in {product}: {web_base_url.rstrip('/')}/cases/{case.get('id') or ''}\n\n"
+        f"This link expires in 60 minutes. Replies to this email are not monitored.\n"
+        + (f"Support: {support}\n" if support else "")
+        + f"{brand.footer_text}\n"
+    )
+
+    # Everything interpolated below is escaped. The brand fields are
+    # operator-supplied free text, and ``rationale`` is the agent's summary of
+    # evidence an attacker influenced -- model output written into HTML that an
+    # on-call analyst opens in a mail client.
+    html_body = (
+        f"<p style='color:{_esc(brand.primary_color)};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px'>{_esc(product)}</p>"  # noqa: E501
+        f"<p><strong>{_esc(product)} approval request</strong></p>"
+        f"<table style='border-collapse:collapse'>"
+        f"<tr><td><strong>Case</strong></td><td>{_esc(case_number)}</td></tr>"
+        f"<tr><td><strong>Action</strong></td><td><code>{_esc(action_type)}</code></td></tr>"
+        f"<tr><td><strong>Target</strong></td><td><code>{_esc(target)}</code></td></tr>"
+        f"<tr><td><strong>Rationale</strong></td><td>{_esc(rationale)}</td></tr>"
+        f"</table>"
+        f"<p style='margin-top:16px'>"
+        f"<a href='{_esc(approve_url)}' style='background:#16a34a;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;margin-right:8px'>Approve</a>"  # noqa: E501
+        f"<a href='{_esc(reject_url)}' style='background:#dc2626;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none'>Deny</a>"  # noqa: E501
+        f"</p>"
+        f"<p style='color:#6b7280;font-size:12px'>This link expires in 60 minutes.</p>"
+        f"<hr style='border:none;border-top:2px solid {_esc(brand.accent_color)};margin:16px 0 8px'>"
+        f"<p style='color:#6b7280;font-size:11px'>{_esc(brand.footer_text)}" + (f"<br>Support: {_esc(support)}" if support else "") + "</p>"
+    )
+    return subject, text_body, html_body
+
+
+async def send_approval_email(
+    *,
+    recipients: list[str],
+    case: dict[str, Any],
+    action: dict[str, Any],
+    api_base_url: str,
+    web_base_url: str,
+    secret: str,
+    mailer: MailDeliveryClient,
+    branding: Branding | None = None,
+    ttl_seconds: int = DEFAULT_TTL_SECONDS,
+    now: float | None = None,
+) -> dict[str, Any]:
+    """
+    Mint signed approve/deny URLs, render the email body, and dispatch
+    through the configured mailer.
+
+    Returns ``{"sent": n, "responses": [...]}`` so a caller can persist the
+    mailer message ids for the case timeline.
+
+    One message per recipient, each carrying its own pair of tokens, because
+    the approver is signed into the token and the consuming endpoint refuses
+    a token that names nobody. Minting one pair for the whole list would make
+    every click record the same identity, which separation of duties cannot
+    be evaluated against -- and minting them with no approver at all, which
+    is what this function did while it had no caller, produces links that
+    ``/actions/email-decide`` rejects on arrival.
+    """
+    if not recipients:
+        raise EmailApprovalError("no recipients provided")
+    brand = branding or DEFAULT_BRANDING
+
+    action_id = str(action.get("id") or action.get("action_id") or "")
+    case_id = str(case.get("id") or "")
+    if not action_id:
+        raise EmailApprovalError("action.id is required")
+
+    responses: list[dict[str, Any]] = []
+    for recipient in recipients:
+        urls = {
+            decision: approval_url(
+                base_url=api_base_url,
+                decision=decision,
+                action_id=action_id,
+                case_id=case_id,
+                secret=secret,
+                approver=recipient,
+                ttl_seconds=ttl_seconds,
+                now=now,
+            )
+            for decision in ("approved", "rejected")
+        }
+        subject, text_body, html_body = render_approval_email(
+            case=case,
+            action=action,
+            approve_url=urls["approved"],
+            reject_url=urls["rejected"],
+            web_base_url=web_base_url,
+            branding=brand,
+        )
+        responses.append(
+            await mailer.send(
+                to=[recipient],
+                subject=subject,
+                html=html_body,
+                text=text_body,
+                from_name=brand.sender_name,
+            )
+        )
+
+    log.info(
+        "email_approval.sent",
+        action_id=action_id,
+        case_id=case_id,
+        recipients=len(recipients),
+        ttl_seconds=ttl_seconds,
+        white_labelled=brand.is_white_labelled,
+    )
+    return {"sent": len(responses), "responses": responses}

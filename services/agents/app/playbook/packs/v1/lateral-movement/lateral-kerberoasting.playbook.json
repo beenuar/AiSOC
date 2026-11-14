@@ -1,0 +1,90 @@
+{
+  "id": "lateral-kerberoasting-v1",
+  "name": "Lateral: Kerberoasting",
+  "description": "Triggered by abnormal SPN-ticket request volume from a single user. Resets impacted service-account credentials.",
+  "version": "1.0.0",
+  "tags": [
+    "lateral-movement",
+    "lateral",
+    "ad",
+    "mitre.t1558.003"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high"
+    ],
+    "tags": [
+      "lateral-movement"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "inv",
+      "name": "Investigate kerberoasting",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "reset-svc",
+      "name": "Reset impacted SVC accounts",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/service-accounts/bulk-reset",
+        "method": "POST",
+        "body_template": "{\"accounts\": {{context.impacted_svc_accounts}}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "disable-user",
+      "name": "Disable suspect user",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/disable",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "n1",
+      "name": "Page identity team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Kerberoasting by {{alert.user}}. SVC accounts reset.",
+        "service_key_env": "PD_IDENTITY_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open kerberoast ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Kerberoasting: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

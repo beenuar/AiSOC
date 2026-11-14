@@ -1,0 +1,56 @@
+id: splunk-security-content-f8db6e0b-55bb-40ca-bc85-2b3700adb0f8
+name: MacOS List Firewall Rules
+description: 'This analytic detects attempts to enumerate or verify the configuration
+  of the macOS application firewall.
+
+  Specifically, it monitors executions of `defaults read /Library/Preferences/com.apple.alf`
+  and `/usr/libexec/ApplicationFirewall/socketfilterfw --getglobalstate`.
+
+  These commands provide insight into firewall status, allowed applications, and explicit
+  authorization rules.
+
+  While they are legitimate administrative operations, adversaries may leverage them
+  to identify potential attack surfaces, determine whether the firewall is active,
+  or enumerate allowed network flows.
+
+  Monitoring for these commands, particularly when executed by non-administrative
+  users or at unusual times, can provide early indication of reconnaissance activity
+  on macOS endpoints'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1016
+  categories:
+  - endpoint
+references:
+- https://www.manpagez.com/man/8/socketfilterfw/
+- https://ss64.com/mac/defaults.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count\n  values(Processes.parent_process)\
+    \ AS parent_process\n  values(Processes.parent_process_exec) AS parent_process_exec\n\
+    \  values(Processes.parent_process_id) AS parent_process_id\n  values(Processes.parent_process_name)\
+    \ AS parent_process_name\n  values(Processes.parent_process_path) AS parent_process_path\n\
+    \  min(_time) as firstTime\n  max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes\
+    \ where\n(\nProcesses.process_name = \"defaults\"\nProcesses.process = \"* read\
+    \ *\",\nProcesses.process = \"*/Library/Preferences/com.apple.alf*\"\n)\nOR\n\
+    (\n  Processes.process_name = \"socketfilterfw\"\n  Processes.process = \"*--getglobalstate*\"\
+    \n)\n\nby Processes.action Processes.dest Processes.process Processes.process_hash\n\
+    \   Processes.process_id Processes.process_name Processes.process_path\n   Processes.user\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `macos_list_firewall_rules_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f8db6e0b-55bb-40ca-bc85-2b3700adb0f8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_list_firewall_rules.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,79 @@
+id: chronicle-detection-rules-malicious-base64-encoded-powershell-keywords-in-command-lines
+name: malicious_base64_encoded_powershell_keywords_in_command_lines
+description: malicious_base64_encoded_powershell_keywords_in_command_lines
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule malicious_base64_encoded_powershell_keywords_in_command_lines\
+    \ {\n meta:\n    author = \"John Lambert (rule)\"\n    description = \"Detects\
+    \ base64 encoded strings used in hidden malicious PowerShell command lines  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/CxEpTPaqa8n1\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, t1086\"\n\n  events:\n(re.regex($encoded.target.process.file.full_path,\
+    \ `.*\\\\powershell\\.exe`) and re.regex($encoded.target.process.command_line,\
+    \ `.* hidden .*`) and (re.regex($encoded.target.process.command_line, `.*AGkAdABzAGEAZABtAGkAbgAgAC8AdAByAGEAbgBzAGYAZQByA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*aXRzYWRtaW4gL3RyYW5zZmVy.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*IAaQB0AHMAYQBkAG0AaQBuACAALwB0AHIAYQBuAHMAZgBlAHIA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*JpdHNhZG1pbiAvdHJhbnNmZX.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*YgBpAHQAcwBhAGQAbQBpAG4AIAAvAHQAcgBhAG4AcwBmAGUAcg.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*Yml0c2FkbWluIC90cmFuc2Zlc.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*AGMAaAB1AG4AawBfAHMAaQB6AGUA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*JABjAGgAdQBuAGsAXwBzAGkAegBlA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*JGNodW5rX3Npem.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*QAYwBoAHUAbgBrAF8AcwBpAHoAZQ.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*RjaHVua19zaXpl.*`) or re.regex($encoded.target.process.command_line, `.*Y2h1bmtfc2l6Z.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*AE8ALgBDAG8AbQBwAHIAZQBzAHMAaQBvAG4A.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*kATwAuAEMAbwBtAHAAcgBlAHMAcwBpAG8Abg.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*lPLkNvbXByZXNzaW9u.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*SQBPAC4AQwBvAG0AcAByAGUAcwBzAGkAbwBuA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*SU8uQ29tcHJlc3Npb2.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*Ty5Db21wcmVzc2lvb.*`) or\
+    \ re.regex($encoded.target.process.command_line, `.*AE8ALgBNAGUAbQBvAHIAeQBTAHQAcgBlAGEAbQ.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*kATwAuAE0AZQBtAG8AcgB5AFMAdAByAGUAYQBtA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*lPLk1lbW9yeVN0cmVhb.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*SQBPAC4ATQBlAG0AbwByAHkAUwB0AHIAZQBhAG0A.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*SU8uTWVtb3J5U3RyZWFt.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*Ty5NZW1vcnlTdHJlYW.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*4ARwBlAHQAQwBoAHUAbgBrA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*5HZXRDaHVua.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*AEcAZQB0AEMAaAB1AG4Aaw.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*LgBHAGUAdABDAGgAdQBuAGsA.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*LkdldENodW5r.*`) or re.regex($encoded.target.process.command_line, `.*R2V0Q2h1bm.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*AEgAUgBFAEEARABfAEkATgBGAE8ANgA0A.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*QASABSAEUAQQBEAF8ASQBOAEYATwA2ADQA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*RIUkVBRF9JTkZPNj.*`) or\
+    \ re.regex($encoded.target.process.command_line, `.*SFJFQURfSU5GTzY0.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*VABIAFIARQBBAEQAXwBJAE4ARgBPADYANA.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*VEhSRUFEX0lORk82N.*`) or re.regex($encoded.target.process.command_line, `.*AHIAZQBhAHQAZQBSAGUAbQBvAHQAZQBUAGgAcgBlAGEAZA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*cmVhdGVSZW1vdGVUaHJlYW.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*MAcgBlAGEAdABlAFIAZQBtAG8AdABlAFQAaAByAGUAYQBkA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*NyZWF0ZVJlbW90ZVRocmVhZ.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*Q3JlYXRlUmVtb3RlVGhyZWFk.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*QwByAGUAYQB0AGUAUgBlAG0AbwB0AGUAVABoAHIAZQBhAGQA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*0AZQBtAG0AbwB2AGUA.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*1lbW1vdm.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*AGUAbQBtAG8AdgBlA.*`) or re.regex($encoded.target.process.command_line, `.*bQBlAG0AbQBvAHYAZQ.*`)\
+    \ or re.regex($encoded.target.process.command_line, `.*bWVtbW92Z.*`) or re.regex($encoded.target.process.command_line,\
+    \ `.*ZW1tb3Zl.*`)) and ($encoded.metadata.product_event_type = \"4688\" or $encoded.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $encoded\n}"
+  chronicle_rule_name: malicious_base64_encoded_powershell_keywords_in_command_lines
+provenance:
+  source: chronicle/detection-rules
+  source_id: malicious_base64_encoded_powershell_keywords_in_command_lines
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/malicious_base64_encoded_powershell_keywords_in_command_lines.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

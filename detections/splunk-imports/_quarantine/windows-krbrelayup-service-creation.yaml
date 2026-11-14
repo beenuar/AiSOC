@@ -1,0 +1,37 @@
+id: splunk-security-content-e40ef542-8241-4419-9af4-6324582ea60a
+name: Windows KrbRelayUp Service Creation
+description: The following analytic detects the creation of a service with the default
+  name "KrbSCM" associated with the KrbRelayUp tool. It leverages Windows System Event
+  Logs, specifically EventCode 7045, to identify this activity. This behavior is significant
+  as KrbRelayUp is a known tool used for privilege escalation attacks. If confirmed
+  malicious, this activity could allow an attacker to escalate privileges, potentially
+  gaining unauthorized access to sensitive systems and data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://github.com/Dec0ne/KrbRelayUp
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7045 ServiceName IN (\"KrbSCM\")\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest EventCode\
+    \ ImagePath\n       ServiceName StartType ServiceType\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_krbrelayup_service_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e40ef542-8241-4419-9af4-6324582ea60a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_krbrelayup_service_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

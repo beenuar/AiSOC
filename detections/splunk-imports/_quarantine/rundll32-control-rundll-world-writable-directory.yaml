@@ -1,0 +1,51 @@
+id: splunk-security-content-1adffe86-10c3-11ec-8ce6-acde48001122
+name: Rundll32 Control RunDLL World Writable Directory
+description: The following analytic detects the execution of rundll32.exe with the
+  `Control_RunDLL` command, loading files from world-writable directories such as
+  windows\temp, programdata, or appdata. This detection leverages Endpoint Detection
+  and Response (EDR) telemetry, focusing on process command-line data and specific
+  directory paths. This activity is significant as it may indicate an attempt to exploit
+  CVE-2021-40444 or similar vulnerabilities, allowing attackers to execute arbitrary
+  code. If confirmed malicious, this could lead to unauthorized code execution, privilege
+  escalation, or persistent access within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://strontic.github.io/xcyclopedia/library/rundll32.exe-111474C61232202B5B588D2B512CBB25.html
+- https://app.any.run/tasks/36c14029-9df8-439c-bba0-45f2643b0c70/
+- https://attack.mitre.org/techniques/T1218/011/
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-40444
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.002/T1218.002.yaml
+- https://redcanary.com/blog/intelligence-insights-december-2021/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where `process_rundll32`
+    Processes.process=*Control_RunDLL* AND Processes.process IN ("*\\appdata\\*",
+    "*\\windows\\temp\\*", "*\\programdata\\*") by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `rundll32_control_rundll_world_writable_directory_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1adffe86-10c3-11ec-8ce6-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/rundll32_control_rundll_world_writable_directory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

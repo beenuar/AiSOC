@@ -1,0 +1,6 @@
+{
+  "event_type": "snowflake.login",
+  "first_auth_factor": "PASSWORD",
+  "is_success": true,
+  "mfa_satisfied": false
+}

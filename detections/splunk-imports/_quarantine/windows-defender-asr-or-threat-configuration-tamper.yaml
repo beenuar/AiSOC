@@ -1,0 +1,54 @@
+id: splunk-security-content-d0c07718-19d1-4de2-aea9-e0ffff0ed986
+name: Windows Defender ASR or Threat Configuration Tamper
+description: 'The following analytic detects the use of commands to disable Attack
+  Surface Reduction (ASR) rules or change threat default actions in Windows Defender.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  command-line executions involving "Add-MpPreference" or "Set-MpPreference".
+
+  This activity is significant because adversaries often use it to bypass Windows
+  Defender, allowing malicious code to execute undetected.
+
+  If confirmed malicious, this behavior could enable attackers to evade antivirus
+  detection, maintain persistence, and execute further malicious activities without
+  interference from Windows Defender.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/defender/set-mppreference?view=windowsserver2025-ps#-attacksurfacereductionrules-actions
+- https://www.virustotal.com/gui/file/7e805617c313ec2fb59d86719c827074cb7dfbf8f0aa18194ac1ffe6c21c8967/behavior
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    Processes.process IN (\"*Add-MpPreference *\", \"*Set-MpPreference *\")\n\nProcesses.process\
+    \ IN (\n      \"*-AttackSurfaceReductionRules_Actions*\",\n      \"*-ThreatIDDefaultAction_Actions*\"\
+    \n      )\n\nProcesses.process IN (\n      \"*Allow*\",\n      \"*NoAction*\"\
+    ,\n      \"*Disabled*\",\n      \"*_Actions 6*\",\n      \"*_Actions 9*\",\n \
+    \     \"*_Actions 0*\")\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec\n   Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n   Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_defender_asr_or_threat_configuration_tamper_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d0c07718-19d1-4de2-aea9-e0ffff0ed986
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_defender_asr_or_threat_configuration_tamper.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

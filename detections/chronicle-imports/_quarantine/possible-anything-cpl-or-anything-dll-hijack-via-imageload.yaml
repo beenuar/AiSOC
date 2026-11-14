@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-possible-anything-cpl-or-anything-dll-hijack-via-imageload
+name: possible_anything_cpl_or_anything_dll_hijack__via_imageload
+description: possible_anything_cpl_or_anything_dll_hijack__via_imageload
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_anything_cpl_or_anything_dll_hijack__via_imageload\
+    \ {\n  meta:\n    author = \"SOC Prime Team, FireEye\"\n    description = \"This\
+    \ rule has been ported from Fireeye's HXIOC format to SIGMA. It detects anything.cpl\
+    \ being loaded by any process.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"['https://github.com/fireeye/red_team_tool_countermeasures/blob/ac479ae150e1541445023952f569b7ca0d190b7b/rules/DUEDLLIGENCE/supplemental/hxioc/anything.cpl%20Hijack%20(Methodology).ioc',\
+    \ 'https://github.com/fireeye/red_team_tool_countermeasures/blob/ac479ae150e1541445023952f569b7ca0d190b7b/rules/DUEDLLIGENCE/supplemental/hxioc/anything.dll%20Hijack%20(Methodology).ioc',\
+    \ 'https://github.com/fireeye/red_team_tool_countermeasures/blob/master/LICENSE.txt']\"\
+    \n    version = \"0.01\"\n    created = \"2020-12-10\"\n\n  events:\n    (re.regex($event.target.process.file.full_path,\
+    \ `anything.cpl`) or re.regex($event.target.process.file.full_path, `anything.dll`))\n\
+    \n  condition:\n    $event\n}"
+  chronicle_rule_name: possible_anything_cpl_or_anything_dll_hijack__via_imageload
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_anything_cpl_or_anything_dll_hijack__via_imageload
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/image_load/possible_anything_cpl_or_anything_dll_hijack__via_imageload.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

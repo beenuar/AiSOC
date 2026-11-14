@@ -1,0 +1,107 @@
+name: Sync Marketplace Index
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "marketplace/index.json"
+      - "marketplace/curated.json"
+      - "apps/web/public/marketplace/index.json"
+      - "apps/web/public/marketplace/curated.json"
+      - "scripts/build_marketplace.py"
+      - "scripts/curate_detections.py"
+      - "apps/docs/docs/detections/coverage.md"
+      - "detections/**"
+      - "playbooks/**"
+      - "plugins/**"
+  pull_request:
+    paths:
+      - "marketplace/index.json"
+      - "marketplace/curated.json"
+      - "apps/web/public/marketplace/index.json"
+      - "apps/web/public/marketplace/curated.json"
+      - "scripts/build_marketplace.py"
+      - "scripts/curate_detections.py"
+      - "apps/docs/docs/detections/coverage.md"
+      - "detections/**"
+      - "playbooks/**"
+      - "plugins/**"
+
+jobs:
+  sync:
+    name: Validate & sync marketplace/index.json
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install Python deps
+        run: pip install pyyaml
+
+      - name: Validate JSON syntax
+        run: python3 -c "import json; json.load(open('marketplace/index.json')); print('marketplace/index.json is valid JSON')"
+
+      - name: Verify on-disk index matches scripts/build_marketplace.py output
+        run: python3 scripts/build_marketplace.py --check
+
+      - name: Verify curated detections manifest is fresh & meets buyer-value floor
+        run: python3 scripts/curate_detections.py --check
+
+      - name: Check public copies are in sync
+        run: |
+          fail=0
+          if ! diff -q marketplace/index.json apps/web/public/marketplace/index.json > /dev/null 2>&1; then
+            echo "::error::apps/web/public/marketplace/index.json is out of sync with marketplace/index.json"
+            fail=1
+          fi
+          if ! diff -q marketplace/curated.json apps/web/public/marketplace/curated.json > /dev/null 2>&1; then
+            echo "::error::apps/web/public/marketplace/curated.json is out of sync with marketplace/curated.json"
+            fail=1
+          fi
+          if [ "$fail" -eq 1 ]; then
+            echo "Run: pnpm marketplace:sync"
+            exit 1
+          fi
+          echo "Public copies are in sync"
+
+      - name: Summarise items
+        if: always()
+        run: |
+          echo "### Marketplace Index Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          python3 - <<'PY' >> $GITHUB_STEP_SUMMARY
+          import json
+          d = json.load(open('marketplace/index.json'))
+          stats = d.get('stats', {})
+          mitre = d.get('mitre_coverage', {})
+          print('| Category   | Count |')
+          print('|------------|-------|')
+          print(f"| Total      | {stats.get('total', len(d['items']))} |")
+          print(f"| Playbooks  | {stats.get('playbooks', 0)} |")
+          print(f"| Detections | {stats.get('detections', 0)} |")
+          print(f"| Plugins    | {stats.get('plugins', 0)} |")
+          print(f"| Verified   | {stats.get('verified', 0)} |")
+          print(f"| Community  | {stats.get('community', 0)} |")
+          print()
+          print(f"**MITRE ATT&CK coverage:** {mitre.get('unique_techniques', 0)} unique techniques across {mitre.get('total_with_mitre', 0)} items.")
+          print()
+          try:
+              c = json.load(open('marketplace/curated.json'))
+              cs = c.get('stats', {})
+              print(f"**Curated v1.0 detections:** {cs.get('selected', 0)} (target ≥ {cs.get('min_total', 300)}, floor {cs.get('quality_floor', 0)}).")
+              print(f"**Curated unique techniques:** {cs.get('unique_techniques', 0)}.")
+              print()
+              print('| Family | Count | Target |')
+              print('|--------|-------|--------|')
+              for fid, info in c.get('families', {}).items():
+                  status = '✅' if info.get('covered') else '❌'
+                  print(f"| {info.get('label', fid)} | {info.get('count', 0)} | ≥ {cs.get('min_per_family', 25)} {status} |")
+          except FileNotFoundError:
+              print('_marketplace/curated.json not found — run `pnpm marketplace:curate`._')
+          PY

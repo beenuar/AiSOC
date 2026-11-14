@@ -1,0 +1,31 @@
+title: Path Traversal Attempt in Web Request
+id: aisoc-id-ws-0002-path-traversal
+status: stable
+description: |
+  Web request contains directory-traversal sequences (../, ..%2f,
+  %2e%2e/) targeting sensitive paths like /etc/passwd or
+  web.config.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1083
+  - attack.t1190
+  - attack.discovery
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  traversal:
+    url.path|re: '(?i)(\.\./|\.\.\\|%2e%2e[/\\]|%252e%252e[/\\])'
+  sensitive:
+    url.path|contains:
+      - 'etc/passwd'
+      - 'etc/shadow'
+      - 'web.config'
+      - 'wp-config.php'
+      - '.env'
+      - 'boot.ini'
+  condition: selection and traversal and sensitive

@@ -1,0 +1,45 @@
+id: splunk-security-content-6ece9ed0-5f92-4315-889d-48560472b188
+name: Windows Access Token Manipulation SeDebugPrivilege
+description: The following analytic detects a process enabling the "SeDebugPrivilege"
+  privilege token. It leverages Windows Security Event Logs with EventCode 4703, filtering
+  out common legitimate processes. This activity is significant because SeDebugPrivilege
+  allows a process to inspect and modify the memory of other processes, potentially
+  leading to credential dumping or code injection. If confirmed malicious, an attacker
+  could gain extensive control over system processes, enabling them to escalate privileges,
+  persist in the environment, or access sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.002
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4703
+- https://devblogs.microsoft.com/oldnewthing/20080314-00/?p=23113
+- https://blog.palantir.com/windows-privilege-abuse-auditing-detection-and-defense-3078a403d74e
+- https://atomicredteam.io/privilege-escalation/T1134.001/#atomic-test-2---%60sedebugprivilege%60-token-duplication
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.asyncrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4703 EnabledPrivilegeList = "*SeDebugPrivilege*"
+    AND NOT(ProcessName IN ("*\\Program File*", "*\\System32\\lsass.exe*", "*\\SysWOW64\\lsass.exe*",
+    "*\\SysWOW64\\svchost.exe*", "*\\System32\\svchost.exe*")) | stats count min(_time)
+    as firstTime max(_time) as lastTime by Computer ProcessName ProcessId SubjectDomainName
+    SubjectUserName SubjectUserSid TargetUserName TargetLogonId TargetDomainName EnabledPrivilegeList
+    action dest | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_access_token_manipulation_sedebugprivilege_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6ece9ed0-5f92-4315-889d-48560472b188
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_access_token_manipulation_sedebugprivilege.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

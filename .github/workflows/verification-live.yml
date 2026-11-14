@@ -1,0 +1,107 @@
+name: Stateful user verification (live)
+
+# Depth 5.4. The verification workflow is covered offline against a double
+# that honours the predicates the real statements carry, and a double cannot
+# answer the two questions that matter here: whether migration 102 applies,
+# and whether the conditional UPDATEs really are atomic claims. Postgres
+# answers both.
+#
+# The offline suite is the one that runs on every pull request; this one
+# grades the storage layer the offline suite stands in for.
+
+on:
+  pull_request:
+    paths:
+      - "services/api/migrations/104_playbook_verification.sql"
+      - "services/agents/app/playbook/pause.py"
+      - "services/agents/app/playbook/verification.py"
+      - "tests/isolation/test_verification_pause_live.py"
+      - ".github/workflows/verification-live.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Per commit on a push and per pull request on a PR. Keying on `github.ref`
+# makes a push to `main` cancel the run before it, which across this
+# repository left 0 of 22 required checks graded on all of the last 30
+# commits.
+concurrency:
+  group: verification-live-${{ github.event_name == 'push' && github.sha || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  verification-live:
+    name: A verification pause survives, escalates once and answers once
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # The suite connects as the DML-only runtime role, never the owner: a
+      # superuser ignores every RLS policy even under FORCE ROW LEVEL
+      # SECURITY, so the live tenancy case below would pass with the policy
+      # deleted. `aisoc` (the owner) applies migrations; `aisoc_app` is what
+      # the suite drives, same split as audit-retention-live.yml.
+      LIVE_DSN: postgresql://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The migration applying is itself the first assertion: `102` alters a
+      # CHECK constraint, and a constraint name that drifted would fail here
+      # rather than on somebody's deployment.
+      - name: The pause table carries the verification columns
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "SELECT verification_stage, verification_outcome FROM aisoc_playbook_pauses WHERE false;"
+
+      - name: The verification pause, against the real schema
+        working-directory: services/agents
+        env:
+          ISOLATION_VERIFICATION_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_verification_pause_live.py -v --tb=short -rs
+
+      # A suite that skipped reports the same word as one that passed, so the
+      # job asserts the DSN was set rather than trusting the run.
+      - name: No suite may report success having skipped
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -z "${LIVE_DSN}" ]; then
+            echo "::error::LIVE_DSN is empty, so the live suite skipped and this job proved nothing."
+            exit 1
+          fi

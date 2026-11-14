@@ -1,0 +1,5 @@
+{
+  "distinct_pid_5min": 150.0,
+  "path": "/etc/passwd",
+  "syscall": "openat"
+}

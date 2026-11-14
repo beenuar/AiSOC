@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-o365-group-creation-success
+name: o365_group_creation_success
+description: o365_group_creation_success
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_group_creation_success {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects when a group is created in Office 365.\"\n    rule_id\
+    \ = \"mr_d35822fd-c121-46eb-a232-772f8c1290bd\"\n    rule_name = \"Hunt for Office\
+    \ 365 group creation success\"\n    type = \"hunt\"\n    platform = \"azure\"\n\
+    \    data_source = \"o365\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n\
+    \  events:\n    $group.metadata.event_type = \"GROUP_CREATION\"\n    $group.metadata.product_event_type\
+    \ = \"Add group.\"\n    $group.metadata.product_name = \"Office 365\"\n    $group.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $group.security_result.action = \"ALLOW\"\n    $group.principal.user.userid\
+    \ = $user\n\n  match:\n    $user over 5m\n\n  outcome:\n    $risk_score = 35\n\
+    \    $event_count = count_distinct($group.metadata.id)\n    $user_agent = array_distinct($group.network.http.user_agent)\n\
+    \    $security_summary = array_distinct($group.security_result.summary)\n    $target_application\
+    \ = array_distinct($group.target.application)\n    //$principal_user_userid =\
+    \ array_distinct($group.principal.user.userid)\n    $group_name = array_distinct($group.target.group.group_display_name)\n\
+    \    $group_guid = array_distinct(re.replace($group.security_result.detection_fields[\"\
+    target_2\"], `^Group_`, \"\"))\n\n  condition:\n    $group\n}"
+  chronicle_rule_name: o365_group_creation_success
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_group_creation_success
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_group_creation_success.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

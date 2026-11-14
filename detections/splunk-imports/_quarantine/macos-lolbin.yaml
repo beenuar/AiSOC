@@ -1,0 +1,49 @@
+id: splunk-security-content-58d270fb-5b39-418e-a855-4b8ac046805e
+name: MacOS LOLbin
+description: 'The following analytic detects multiple executions of Living off the
+  Land (LOLbin) binaries on macOS within a short period.
+
+  It leverages osquery to monitor process events and identifies commands such as "find",
+  "crontab", "screencapture", "openssl", "curl", "wget", "killall", and "funzip".
+  This activity is significant as LOLbins are often used by attackers to perform malicious
+  actions while evading detection.
+
+  If confirmed malicious, this behavior could allow attackers to execute arbitrary
+  code, escalate privileges, or persist within the environment, posing a significant
+  security risk.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  categories:
+  - endpoint
+references:
+- https://osquery.readthedocs.io/en/stable/deployment/process-auditing/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`osquery_macro`\nname=es_process_events\ncolumns.cmdline IN (\n   \
+    \ \"chmod*\",\n    \"crontab*\",\n    \"curl*\",\n    \"find*\",\n    \"funzip*\"\
+    ,\n    \"killall*\",\n    \"openssl*\",\n    \"screencapture*\",\n    \"wget*\"\
+    ,\n)\n| rename columns.* as *\n| stats count min(_time) as firstTime\n       \
+    \       max(_time) as lastTime\n              values(cmdline) as cmdline\n   \
+    \           values(pid) as pid\n              values(parent) as parent\n     \
+    \         values(path) as path\n              values(signing_id) as signing_id\n\
+    \              dc(path) as dc_path\n    BY username host\n\n| rename username\
+    \ as user\n        cmdline as process\n        path as process_path\n        host\
+    \ as dest\n\n| where dc_path > 3\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `macos_lolbin_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 58d270fb-5b39-418e-a855-4b8ac046805e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/macos_lolbin.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

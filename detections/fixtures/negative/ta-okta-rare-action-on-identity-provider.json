@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.08,
+  "event_type": "system.idp.lifecycle.update",
+  "outcome": "SUCCESS",
+  "user": "sso-platform-admin@example.com"
+}

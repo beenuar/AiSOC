@@ -1,0 +1,71 @@
+id: splunk-security-content-ec99bb81-c31b-4837-8c7d-1b32aa70b337
+name: Cisco Secure Firewall - High Priority Intrusion Classification
+description: 'This analytic identifies high-severity intrusion events based on the
+  classification assigned to Snort rules within Cisco Secure Firewall logs.
+
+  It leverages Cisco Secure Firewall Threat Defense logs and focuses on events classified
+  as:
+
+
+  - A Network Trojan was Detected
+
+  - Successful Administrator Privilege Gain
+
+  - Successful User Privilege Gain
+
+  - Attempt to Login By a Default Username and Password
+
+  - Known malware command and control traffic
+
+  - Known malicious file or file based exploit
+
+  - Known client side exploit attempt
+
+  - Large Scale Information Leak"
+
+
+  These classifications typically represent significant threats such as remote code
+  execution, credential theft, lateral movement, or malware communication. Detection
+  of these classifications should be prioritized for immediate investigation.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  - T1003
+  - T1071
+  - T1190
+  - T1078
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent\n        class_desc\
+    \ IN (\"A Network Trojan was Detected\", \"Successful Administrator Privilege\
+    \ Gain\", \"Successful User Privilege Gain\", \"Attempt to Login By a Default\
+    \ Username and Password\", \"Known malware command and control traffic\", \"Known\
+    \ malicious file or file based exploit\", \"Known client side exploit attempt\"\
+    , \"Large Scale Information Leak\")\n| fillnull\n| stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n        values(signature_id) as signature_id\n     \
+    \   values(MitreAttackGroups) as MitreAttackGroups\n        values(InlineResult)\
+    \ as InlineResult\n        values(InlineResultReason) as InlineResultReason\n\
+    \        values(dest_port) as dest_port\n        values(rule) as rule\n      \
+    \  values(transport) as transport\n        values(app) as app\n        by src,\
+    \ dest, signature, class_desc\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___high_priority_intrusion_classification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ec99bb81-c31b-4837-8c7d-1b32aa70b337
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___high_priority_intrusion_classification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

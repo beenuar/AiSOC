@@ -1,0 +1,7 @@
+{
+  "baseline_location_rarity": 0.996,
+  "country": "KZ",
+  "eventName": "ListAccessKeys",
+  "eventSource": "iam.amazonaws.com",
+  "user": "dana.k@example.com"
+}

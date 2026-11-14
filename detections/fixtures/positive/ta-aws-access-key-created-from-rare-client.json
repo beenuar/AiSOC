@@ -1,0 +1,8 @@
+{
+  "baseline_client_family_rarity": 0.985,
+  "eventName": "CreateAccessKey",
+  "eventSource": "iam.amazonaws.com",
+  "src_ip": "203.0.113.44",
+  "user": "dana.k@example.com",
+  "user_agent": "python-requests/2.31.0"
+}

@@ -1,0 +1,43 @@
+id: splunk-security-content-2181ad1f-1e73-4d0c-9780-e8880482a08f
+name: Cloud API Calls From Previously Unseen User Roles
+description: The following analytic detects cloud API calls executed by user roles
+  that have not previously run these commands. It leverages the Change data model
+  in Splunk to identify commands executed by users with the user_type of AssumedRole
+  and a status of success. This activity is significant because new commands from
+  different user roles can indicate potential malicious activity or unauthorized actions.
+  If confirmed malicious, this behavior could lead to unauthorized access, data breaches,
+  or other damaging outcomes by exploiting new or unmonitored commands within the
+  cloud environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats earliest(_time) as firstTime, latest(_time) as lastTime FROM\
+    \ datamodel=Change\n  WHERE All_Changes.user_type=AssumedRole\n    AND\n    All_Changes.status=success\n\
+    \  BY All_Changes.user, All_Changes.command All_Changes.object\n| `drop_dm_object_name(\"\
+    All_Changes\")`\n| lookup previously_seen_cloud_api_calls_per_user_role user as\
+    \ user, command as command OUTPUT firstTimeSeen, enough_data\n| eventstats max(enough_data)\
+    \ as enough_data\n| where enough_data=1\n| eval firstTimeSeenUserApiCall=min(firstTimeSeen)\n\
+    | where isnull(firstTimeSeenUserApiCall) OR firstTimeSeenUserApiCall > relative_time(now(),\"\
+    -24h@h\")\n| table firstTime, user, object, command\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cloud_api_calls_from_previously_unseen_user_roles_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2181ad1f-1e73-4d0c-9780-e8880482a08f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_api_calls_from_previously_unseen_user_roles.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

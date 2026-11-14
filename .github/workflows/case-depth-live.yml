@@ -1,0 +1,162 @@
+# Case depth — through the real app and real Postgres (depth 9.3, parity 5.6).
+#
+# Why this needs a live database rather than the usual SQLite stand-in
+# --------------------------------------------------------------------
+# Every statement under test is Postgres-only by necessity: `uuid[]`
+# parameters, `array_agg(DISTINCT …)` over a `uuid[]` column, `unnest`,
+# `count(*) FILTER (WHERE …)` and `EXTRACT(EPOCH FROM …)`. A SQLite
+# stand-in would be a *different query* than the one that ships, which is the
+# "test double more capable than the real thing" failure this repository
+# keeps finding — and it found it again here: the first version of the case
+# merge assumed `aisoc_cases.alert_ids` was JSONB like the two columns beside
+# it. It is `uuid[]`, and the statement raised
+# `jsonb_array_elements_text(uuid[]) does not exist` on the first live run.
+#
+# The suites skip when no database answers, which is why this job sets
+# CASE_DEPTH_PROOF_REQUIRED=1: here, a skip is a failure.
+#
+# No `paths:` filter, for the reason alert-audit-live.yml states: a guard that
+# only grades pull requests touching a named path is one the next refactor
+# walks around.
+name: Case depth (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: case-depth-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  case-depth-live:
+    name: A merge keeps history, a bulk triage has a preflight, a mean has a denominator
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # aisoc-db-role: owner — the suite creates scratch tenants and users, which the DML-only runtime role cannot
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment: the suite mints real JWTs and travels
+      # through the real auth dependencies. A dev-mode principal would make
+      # "the actor is the authenticated analyst" pass for the wrong reason.
+      ENVIRONMENT: production
+      SECRET_KEY: ci-case-depth-signing-secret-at-least-32-chars
+      CASE_DEPTH_PROOF_REQUIRED: "1"
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Merge, bulk triage, custom fields and workload
+        working-directory: services/api
+        run: python -m pytest tests/test_case_depth.py -v --tb=short
+
+      # ── Negative controls ──────────────────────────────────────────────
+      #
+      # Each one puts a defect back and requires the matching assertion to go
+      # red. Without them a suite that stopped exercising the path — a fixture
+      # that seeds nothing, a skip that reads as a pass — stays green forever.
+
+      - name: Removing the bulk-triage preflight makes the suite fail
+        working-directory: services/api
+        run: |
+          cp app/services/case_depth.py /tmp/case_depth.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/case_depth.py")
+          s = p.read_text()
+          needle = "    if matched > max_count:"
+          if needle not in s:
+              print("negative control: no preflight comparison to remove — the service has "
+                    "been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    if False:  # NEGATIVE CONTROL", 1))
+          PY
+          if python -m pytest tests/test_case_depth.py -q >/dev/null 2>&1; then
+            cp /tmp/case_depth.bak app/services/case_depth.py
+            echo "FAIL: the suite passed with a bulk triage that writes past its stated max_count."
+            exit 1
+          fi
+          cp /tmp/case_depth.bak app/services/case_depth.py
+          echo "OK: removing the preflight makes the suite fail, as it must."
+
+      - name: Counting merged-away cases as work makes the workload proof fail
+        working-directory: services/api
+        run: |
+          cp app/services/case_depth.py /tmp/case_depth.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/case_depth.py")
+          s = p.read_text()
+          needle = "      AND merged_into_id IS NULL\n)"
+          if needle not in s:
+              print("negative control: the workload query no longer excludes merged cases "
+                    "in the shape this control edits")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "      -- NEGATIVE CONTROL\n)", 1))
+          PY
+          if python -m pytest tests/test_case_depth.py -q >/dev/null 2>&1; then
+            cp /tmp/case_depth.bak app/services/case_depth.py
+            echo "FAIL: the suite passed while a merge counted as throughput."
+            exit 1
+          fi
+          cp /tmp/case_depth.bak app/services/case_depth.py
+          echo "OK: counting merged cases makes the suite fail, as it must."
+
+      - name: Deleting the absorbed case instead of keeping it makes the merge proof fail
+        working-directory: services/api
+        run: |
+          cp app/services/case_depth.py /tmp/case_depth.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/case_depth.py")
+          s = p.read_text()
+          needle = "        text(\n            \"UPDATE aisoc_cases SET merged_into_id = :primary,"
+          if needle not in s:
+              print("negative control: the statement that marks the absorbed case was not found")
+              sys.exit(1)
+          s = s.replace(
+              needle,
+              "        text(\n            \"DELETE FROM aisoc_cases \"  # NEGATIVE CONTROL\n            \"-- UPDATE aisoc_cases SET merged_into_id = :primary,",
+              1,
+          )
+          p.write_text(s)
+          PY
+          if python -m pytest tests/test_case_depth.py -q >/dev/null 2>&1; then
+            cp /tmp/case_depth.bak app/services/case_depth.py
+            echo "FAIL: the suite passed with a merge that deletes the absorbed case."
+            exit 1
+          fi
+          cp /tmp/case_depth.bak app/services/case_depth.py
+          echo "OK: deleting the absorbed case makes the suite fail, as it must."

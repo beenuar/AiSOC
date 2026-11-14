@@ -1,0 +1,46 @@
+id: splunk-security-content-49862dd4-9cb2-4c48-a542-8c8a588d9361
+name: O365 Advanced Audit Disabled
+description: The following analytic detects instances where the O365 advanced audit
+  is disabled for a specific user within the Office 365 tenant. It uses O365 audit
+  logs, focusing on events related to audit license changes in AzureActiveDirectory
+  workloads. This activity is significant because the O365 advanced audit provides
+  critical logging and insights into user and administrator activities. Disabling
+  it can blind security teams to potential malicious actions. If confirmed malicious,
+  attackers could operate within the user's mailbox or account with reduced risk of
+  detection, leading to unauthorized data access, data exfiltration, or account compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/008/
+- https://www.mandiant.com/sites/default/files/2022-08/remediation-hardening-strategies-for-m365-defend-against-apt29-white-paper.pdf
+- https://www.csoonline.com/article/570381/microsoft-365-advanced-audit-what-you-need-to-know.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation="Change user license." | eval
+    property_name = mvindex (''ExtendedProperties{}.Name'', 1) | search property_name
+    = "extendedAuditEventCategory" | eval additionalDetails = mvindex(''ExtendedProperties{}.Value'',0)
+    | eval split_value=split(additionalDetails,"NewValue") | eval possible_plan=mvindex(split_value,
+    1) | rex field="possible_plan" "DisabledPlans=\[(?P<DisabledPlans>[^\]]+)\]" |
+    search DisabledPlans IN ("*M365_ADVANCED_AUDITING*") | fillnull | stats count
+    min(_time) as firstTime max(_time) as lastTime by signature dest user src vendor_account
+    vendor_product DisabledPlans object | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `o365_advanced_audit_disabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 49862dd4-9cb2-4c48-a542-8c8a588d9361
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_advanced_audit_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

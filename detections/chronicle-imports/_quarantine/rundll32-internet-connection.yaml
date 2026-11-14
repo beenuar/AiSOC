@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-rundll32-internet-connection
+name: rundll32_internet_connection
+description: rundll32_internet_connection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule rundll32_internet_connection {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects a rundll32 that communicates with public\
+    \ IP addresses  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/0Zg55ZhTC6ZE\"\n    version\
+    \ = \"0.01\"\n    created = \"2017/11/04\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"t1085, defense_evasion, execution\"\n\n  events:\n\
+    (($selection.metadata.product_event_type = \"3\" and re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\rundll32\\.exe`)) and not ((re.regex($selection.target.ip, `10\\..*`)\
+    \ or re.regex($selection.target.ip, `192\\.168\\..*`) or re.regex($selection.target.ip,\
+    \ `172\\..*`))))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: rundll32_internet_connection
+provenance:
+  source: chronicle/detection-rules
+  source_id: rundll32_internet_connection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/rundll32_internet_connection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

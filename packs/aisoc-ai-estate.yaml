@@ -1,0 +1,171 @@
+id: aisoc-ai-estate
+name: AiSOC AI Estate Discovery
+version: 1.0.0
+platforms: [linux, darwin, windows]
+description: |
+  Finds the AI estate on an endpoint using the osquery agent a fleet already
+  runs — depth plan 6.2, "endpoint discovery with no new agent".
+
+  Three things this pack looks for, because they are three different kinds of
+  evidence and a governance review needs all three:
+
+  * **Running coding agents and MCP server processes.** A process listing
+    answers "what is executing right now", and carries the command line,
+    which is the only place a disabled-permission-prompt flag ever appears.
+  * **MCP client configuration files.** A configuration says a server is
+    *wired in*, which survives a reboot and survives a process listing that
+    happened to miss the window. Every path below is taken from the client's
+    own published configuration documentation.
+  * **AI IDE extension directories.** An extension is installed software with
+    repository access and, in several cases, shell access.
+
+  Results land in `aisoc_ai_assets` through the fleetdm / osctrl connectors
+  and the fusion recorder, which classifies each row by the columns selected
+  here — `name`, `path`, `cmdline`, `directory`. **Changing a selected column
+  name breaks the classification silently**, so the queries below select the
+  columns the recorder reads rather than the minimum osquery needs.
+
+  Severity is `info` throughout, deliberately. Discovering that a developer
+  runs a coding agent is inventory, not a finding; what makes a row
+  interesting is the risk the inventory computes from it (nobody accountable,
+  permission prompts disabled, an unvetted source), and that judgement
+  belongs in one place rather than duplicated into a pack.
+
+queries:
+  coding_agent_processes:
+    sql: >
+      SELECT p.name AS name, p.path AS path, p.cmdline AS cmdline,
+             p.uid AS uid, p.start_time AS start_time, u.username AS username
+      FROM processes p
+      LEFT JOIN users u ON p.uid = u.uid
+      WHERE p.name IN (
+        'claude', 'codex', 'aider', 'goose', 'continue', 'opencode',
+        'gemini', 'copilot', 'copilot-language-server', 'amazonq', 'cline',
+        'claude.exe', 'codex.exe', 'aider.exe', 'gemini.exe', 'cline.exe'
+      )
+    interval: 300
+    severity: info
+    description: >
+      Coding agents running on this host, with the command line. An explicit
+      name list rather than a LIKE on '%agent%', which matches half an EDR
+      estate and would put somebody's antivirus on an AI inventory.
+    mitre: [T1059]
+    references:
+      - https://attack.mitre.org/techniques/T1059/
+
+  mcp_server_processes:
+    sql: >
+      SELECT p.name AS name, p.path AS path, p.cmdline AS cmdline,
+             p.uid AS uid, p.start_time AS start_time, u.username AS username
+      FROM processes p
+      LEFT JOIN users u ON p.uid = u.uid
+      WHERE p.name LIKE 'mcp-server%%'
+         OR p.name LIKE 'mcp_server%%'
+         OR p.name LIKE 'mcp-proxy%%'
+    interval: 300
+    severity: info
+    description: >
+      Local MCP servers. A prefix rather than a substring: '%mcp%' matches
+      mcpelauncher, and a false positive here puts a game launcher on a
+      security review.
+    mitre: [T1059]
+    references:
+      - https://modelcontextprotocol.io/
+
+  mcp_client_configurations:
+    sql: >
+      SELECT path, directory, filename, uid, mtime, size
+      FROM file
+      WHERE path LIKE '/Users/%%/Library/Application Support/Claude/claude_desktop_config.json'
+         OR path LIKE '/Users/%%/.claude.json'
+         OR path LIKE '/home/%%/.claude.json'
+         OR path LIKE '/Users/%%/.cursor/mcp.json'
+         OR path LIKE '/home/%%/.cursor/mcp.json'
+         OR path LIKE '/Users/%%/.codeium/windsurf/mcp_config.json'
+         OR path LIKE '/home/%%/.codeium/windsurf/mcp_config.json'
+         OR path LIKE '/Users/%%/Library/Application Support/Code/User/mcp.json'
+         OR path LIKE '/home/%%/.config/Code/User/mcp.json'
+         OR path LIKE '/Users/%%/.continue/config.json'
+         OR path LIKE '/home/%%/.continue/config.json'
+         OR path LIKE '/Users/%%/.aws/amazonq/mcp.json'
+         OR path LIKE '/home/%%/.aws/amazonq/mcp.json'
+         OR path LIKE '/Users/%%/.gemini/settings.json'
+         OR path LIKE '/home/%%/.gemini/settings.json'
+         OR path LIKE '/Users/%%/.codex/config.toml'
+         OR path LIKE '/home/%%/.codex/config.toml'
+    interval: 3600
+    severity: info
+    description: >
+      Configuration files the popular MCP clients read. Each path comes from
+      that client's own published documentation. The file's presence is the
+      evidence; its contents are deliberately not collected, because an MCP
+      configuration routinely carries bearer tokens for third-party servers
+      and an inventory has no business holding them.
+    mitre: [T1543]
+    references:
+      - https://modelcontextprotocol.io/docs/develop/connect-local-servers
+
+  ai_ide_extensions:
+    sql: >
+      SELECT path, directory, filename, uid, mtime
+      FROM file
+      WHERE (
+            path LIKE '/Users/%%/.vscode/extensions/%%/package.json'
+         OR path LIKE '/home/%%/.vscode/extensions/%%/package.json'
+         OR path LIKE '/Users/%%/.vscode-insiders/extensions/%%/package.json'
+         OR path LIKE '/Users/%%/.cursor/extensions/%%/package.json'
+         OR path LIKE '/home/%%/.cursor/extensions/%%/package.json'
+         OR path LIKE '/Users/%%/.windsurf/extensions/%%/package.json'
+      )
+      AND (
+            directory LIKE '%%github.copilot%%'
+         OR directory LIKE '%%continue.continue%%'
+         OR directory LIKE '%%codeium.codeium%%'
+         OR directory LIKE '%%amazonwebservices.amazon-q-vscode%%'
+         OR directory LIKE '%%tabnine.tabnine-vscode%%'
+         OR directory LIKE '%%sourcegraph.cody-ai%%'
+         OR directory LIKE '%%google.geminicodeassist%%'
+         OR directory LIKE '%%anthropic.claude-code%%'
+      )
+    interval: 3600
+    severity: info
+    description: >
+      AI assistant extensions installed in an editor. Filtered to a named set
+      rather than listing every extension: an editor has hundreds and a
+      handful are AI, and listing all of them would turn the AI inventory
+      into a package manifest.
+    mitre: [T1176]
+    references:
+      - https://attack.mitre.org/techniques/T1176/
+
+  provider_key_files:
+    sql: >
+      SELECT path, directory, filename, uid, mtime, size
+      FROM file
+      WHERE path LIKE '/Users/%%/.config/anthropic/%%'
+         OR path LIKE '/home/%%/.config/anthropic/%%'
+         OR path LIKE '/Users/%%/.openai/%%'
+         OR path LIKE '/home/%%/.openai/%%'
+         OR path LIKE '/Users/%%/.config/gcloud/application_default_credentials.json'
+    interval: 3600
+    severity: info
+    description: >
+      Model-provider credential material sitting on a laptop. The file's
+      presence and its mtime only; contents are never collected. A key on an
+      endpoint is the row that links a provider key to a device, which no
+      provider audit log can ever supply.
+    mitre: [T1552.001]
+    references:
+      - https://attack.mitre.org/techniques/T1552/001/
+
+file_paths:
+  mcp_client_config:
+    - /Users/%/Library/Application Support/Claude/claude_desktop_config.json
+    - /Users/%/.cursor/mcp.json
+    - /home/%/.cursor/mcp.json
+    - /Users/%/.codeium/windsurf/mcp_config.json
+    - /home/%/.continue/config.json
+  ai_ide_extensions:
+    - /Users/%/.vscode/extensions/%%
+    - /home/%/.vscode/extensions/%%
+    - /Users/%/.cursor/extensions/%%

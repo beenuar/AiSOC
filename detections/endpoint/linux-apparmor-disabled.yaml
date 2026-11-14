@@ -1,0 +1,25 @@
+id: det-endpoint-153
+name: AppArmor Profile Disabled
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'AppArmor Profile
+  Disabled'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH_ANY ["/aa-disable", "/apparmor_parser"]
+    AND argv CONTAINS "-R"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

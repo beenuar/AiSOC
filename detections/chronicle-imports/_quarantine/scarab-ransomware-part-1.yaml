@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-scarab-ransomware-part-1
+name: scarab_ransomware_part_1
+description: scarab_ransomware_part_1
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule scarab_ransomware_part_1 {\n meta:\n    author = \"Ariel\
+    \ Millahuel\"\n    description = \"This new version of Scarab Ransomware was discovered\
+    \ by the investigator M. Shahpasandi  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/r5jiwlzXUXDk\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"impact, T1486\"\n\n  events:\n($selection2.target.process.command_line\
+    \ = \"cmd.exe /c wbadmin DELETE SYSTEMSTATEBACKUP -keepVersions:0\" and ($selection2.metadata.product_event_type\
+    \ = \"4688\" or $selection2.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection2\n}"
+  chronicle_rule_name: scarab_ransomware_part_1
+provenance:
+  source: chronicle/detection-rules
+  source_id: scarab_ransomware_part_1
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/scarab_ransomware_part_2.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

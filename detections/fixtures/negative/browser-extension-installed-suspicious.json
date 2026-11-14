@@ -1,0 +1,5 @@
+{
+  "command_line": "chrome.exe --new-tab",
+  "host": "wks-001",
+  "image_basename": "chrome.exe"
+}

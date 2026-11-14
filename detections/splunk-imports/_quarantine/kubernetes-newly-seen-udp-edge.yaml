@@ -1,0 +1,43 @@
+id: splunk-security-content-49b7daca-4e3c-4899-ba15-9a175e056fa9
+name: Kubernetes newly seen UDP edge
+description: The following analytic detects UDP communication between a newly seen
+  source and destination workload pair within a Kubernetes cluster. It leverages Network
+  Performance Monitoring metrics collected via an OTEL collector and pulled from Splunk
+  Observability Cloud. This detection compares network activity over the last hour
+  with the past 30 days to identify new inter-workload communication. Such changes
+  in network behavior can indicate potential security threats or anomalies. If confirmed
+  malicious, unauthorized connections may enable attackers to infiltrate the application
+  ecosystem, leading to data breaches, privilege escalation, lateral movement, or
+  disruption of critical services.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats count(udp.packets) as udp.packets_count where `kubernetes_metrics`\
+    \ AND earliest=-1h by k8s.cluster.name source.workload.name dest.workload.name\n\
+    | eval current=\"True\"\n| append [ mstats count(udp.packets) as udp.packets_count\
+    \ where `kubernetes_metrics` AND earliest=-30d latest=-1h by source.workload.name\
+    \ dest.workload.name\n| eval current=\"false\" ]\n| eventstats values(current)\
+    \ as current\n  BY source.workload.name dest.workload.name\n| search current=\"\
+    true\" current!=\"false\"\n| rename k8s.cluster.name as host\n| `kubernetes_newly_seen_udp_edge_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 49b7daca-4e3c-4899-ba15-9a175e056fa9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_newly_seen_udp_edge.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

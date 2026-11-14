@@ -1,0 +1,62 @@
+id: chronicle-detection-rules-impacket-wmiexec-cisa-report
+name: impacket_wmiexec_cisa_report
+description: impacket_wmiexec_cisa_report
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule impacket_wmiexec_cisa_report {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects the artifacts generally associated with\
+    \ the use of wmiexec.py\"\n    rule_id = \"mr_ca682bc6-411b-46e5-88ef-1668032b14d1\"\
+    \n    rule_name = \"Impacket WMIExec CISA Report\"\n    type = \"alert\"\n   \
+    \ data_source = \"microsoft sysmon, microsoft windows events\"\n    tactic = \"\
+    TA0002\"\n    technique = \"T1047\"\n    reference = \"https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF\"\
+    \n    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    (\n \
+    \       $process.metadata.event_type = \"PROCESS_LAUNCH\" and\n        re.regex($process.target.process.command_line,\
+    \ `1&gt;.*\\\\ADMIN\\$\\\\__.*2&gt;&amp;1`) nocase\n    )\n    or\n    (\n   \
+    \     $process.metadata.event_type = \"FILE_CREATION\" and\n        re.regex($process.target.file.full_path,\
+    \ `\\\\windows\\\\__`) nocase\n    )\n    $process.principal.hostname = $hostname\n\
+    \n  match:\n    $hostname over 5m\n\n  outcome:\n    $risk_score = 65\n    //\
+    \ added to populate alert graph with additional context\n    $principal_hostname\
+    \ = array_distinct($process.principal.hostname)\n    $principal_process_pid =\
+    \ array_distinct($process.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($process.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($process.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($process.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($process.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n    $target_user_userid =\
+    \ array_distinct($process.target.user.userid)\n    $target_file_full_path = array_distinct($process.target.file.full_path)\n\
+    \n  condition:\n    $process\n}"
+  chronicle_rule_name: impacket_wmiexec_cisa_report
+provenance:
+  source: chronicle/detection-rules
+  source_id: impacket_wmiexec_cisa_report
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/impacket_wmiexec_cisa_report.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

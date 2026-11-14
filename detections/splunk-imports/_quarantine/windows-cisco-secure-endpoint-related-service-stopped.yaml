@@ -1,0 +1,47 @@
+id: splunk-security-content-df74f45f-01c8-4fd6-bcb8-f6a9ea58307a
+name: Windows Cisco Secure Endpoint Related Service Stopped
+description: The following analytic detects the suspicious termination of known services
+  commonly targeted by ransomware before file encryption. It leverages Windows System
+  Event Logs (EventCode 7036) to identify when critical services such as Volume Shadow
+  Copy, backup, and antivirus services are stopped. This activity is significant because
+  ransomware often disables these services to avoid errors and ensure successful file
+  encryption. If confirmed malicious, this behavior could lead to widespread data
+  encryption, rendering files inaccessible and potentially causing significant operational
+  disruption and data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://krebsonsecurity.com/2021/05/a-closer-look-at-the-darkside-ransomware-gang/
+- https://www.mcafee.com/blogs/other-blogs/mcafee-labs/mcafee-atr-analyzes-sodinokibi-aka-revil-ransomware-as-a-service-what-the-code-tells-us/
+- https://news.sophos.com/en-us/2020/04/24/lockbit-ransomware-borrows-tricks-to-keep-up-with-revil-and-maze/
+- https://blogs.vmware.com/security/2022/10/lockbit-3-0-also-known-as-lockbit-black.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` `normalized_service_binary_field`\n  | rename\
+    \ param1 as display_name\n  | rename param2 as status\n  | search EventCode=7036\
+    \ display_name IN (\"Cisco AMP Orbital\", \"*Cisco Secure Endpoint*\", \"*Cisco\
+    \ Security Connector Monitoring*\", \"CiscoSAM\", \"CiscoAMPHeurDriver\", \"CiscoAMPELAMDriver\"\
+    , \"CiscoAMPCEFWDriver\", \"ImmunetNetworkMonitorDriver\", \"ImmunetProtectDriver\"\
+    , \"ImmunetSelfProtectDriver\") status IN (\"stopped\", \"arrêté\")\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY EventCode display_name\
+    \ normalized_service_name\n       status dest\n  | `security_content_ctime(lastTime)`\n\
+    \  | `security_content_ctime(firstTime)`\n  | `windows_cisco_secure_endpoint_related_service_stopped_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: df74f45f-01c8-4fd6-bcb8-f6a9ea58307a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_cisco_secure_endpoint_related_service_stopped.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

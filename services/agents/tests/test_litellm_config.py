@@ -1,0 +1,147 @@
+"""Contract test for the LiteLLM gateway config (issue #478).
+
+`infra/litellm/config.yaml` is the single place that maps AiSOC's logical task
+aliases to real models. These assertions keep that file honest:
+
+* the shipped alias set is exactly AiSOC's seven workloads,
+* every alias resolves a `model` and a credential (env-based, never inline),
+* the prometheus observability callback stays wired (the /metrics contract that
+  `infra/docker/prometheus.yml` scrapes as job `aisoc-litellm`),
+* the master key is read from the environment, not committed, and
+* every logical role pinned in `app.llm.model_pins` has a matching gateway alias
+  (subset today, tightened to equality once PR2 pins all seven roles).
+"""
+
+from __future__ import annotations
+
+import pathlib
+
+import yaml
+from app.llm.model_pins import all_roles
+
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
+CONFIG_PATH = REPO_ROOT / "infra" / "litellm" / "config.yaml"
+
+# AiSOC's distinct LLM workloads (issue #478). Keep in lockstep with the alias
+# table in apps/docs/docs/operations/llm-gateway.md, and with ROLES in
+# services/api/app/services/model_aliases.py — a role declared in one and not
+# the others resolves to no model and fails at the first call.
+EXPECTED_ALIASES = {
+    "aisoc-triage",
+    "aisoc-recon",
+    "aisoc-investigation",
+    "aisoc-copilot",
+    "aisoc-summary",
+    "aisoc-report",
+    "aisoc-nl",
+    "aisoc-hunt",
+    "aisoc-detection",
+}
+
+
+def _load() -> dict:
+    assert CONFIG_PATH.is_file(), f"missing LiteLLM config at {CONFIG_PATH}"
+    with CONFIG_PATH.open(encoding="utf-8") as fh:
+        return yaml.safe_load(fh)
+
+
+def test_config_parses_and_has_model_list():
+    cfg = _load()
+    assert isinstance(cfg, dict)
+    assert isinstance(cfg.get("model_list"), list) and cfg["model_list"], "model_list must be a non-empty list"
+
+
+def test_shipped_aliases_are_the_declared_workloads():
+    cfg = _load()
+    aliases = {entry["model_name"] for entry in cfg["model_list"]}
+    assert aliases == EXPECTED_ALIASES, f"alias drift: {aliases ^ EXPECTED_ALIASES}"
+
+
+def test_every_alias_resolves_a_model_and_env_credential():
+    cfg = _load()
+    for entry in cfg["model_list"]:
+        params = entry.get("litellm_params", {})
+        assert params.get("model"), f"{entry['model_name']} has no model"
+        # A credential must be present, and if it's an inline api_key it MUST be
+        # an env reference — never a committed secret. api_base-only backends
+        # (local Ollama/vLLM) legitimately need no key.
+        api_key = params.get("api_key")
+        if api_key is not None:
+            assert str(api_key).startswith("os.environ/"), f"{entry['model_name']} inlines a non-env api_key"
+        assert api_key is not None or params.get("api_base"), f"{entry['model_name']} has neither api_key nor api_base"
+
+
+def test_prometheus_observability_is_wired():
+    cfg = _load()
+    callbacks = cfg.get("litellm_settings", {}).get("callbacks", [])
+    assert "prometheus" in callbacks, "prometheus callback missing — /metrics observability would be off"
+
+
+def test_master_key_comes_from_env():
+    cfg = _load()
+    master_key = cfg.get("general_settings", {}).get("master_key", "")
+    assert str(master_key).startswith("os.environ/"), "master_key must be an env reference, not a committed secret"
+
+
+def test_model_pins_roles_match_gateway_aliases_exactly():
+    # Ties the code's logical roles to the gateway config: every pinned role has
+    # an ``aisoc-<role>`` alias in the config, and vice versa — no drift either way.
+    assert {f"aisoc-{role}" for role in all_roles()} == EXPECTED_ALIASES
+
+
+# ---------------------------------------------------------------------------
+# Per-request timeout (issue #1241)
+# ---------------------------------------------------------------------------
+
+TIMEOUT_ENV_VAR = "AISOC_LITELLM_REQUEST_TIMEOUT"
+COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
+
+
+def test_request_timeout_is_operator_adjustable_without_editing_this_file():
+    """60s was a bare literal in a file every other value reads from the env.
+
+    The bundled 3B model on CPU-only inference can exceed it, and every call
+    then times out while Settings still reports the provider Live. Raising it
+    must not require editing a mounted config and rebuilding.
+    """
+    timeout = _load().get("litellm_settings", {}).get("request_timeout")
+    assert timeout is not None, "request_timeout must be declared — without it the gateway's own 6000s default applies"
+    assert str(timeout) == f"os.environ/{TIMEOUT_ENV_VAR}", (
+        f"request_timeout is {timeout!r}; an operator cannot change that without editing this file"
+    )
+
+
+def test_compose_supplies_a_default_for_the_timeout_variable():
+    """The default is load-bearing, not cosmetic.
+
+    LiteLLM resolves ``os.environ/...`` with ``get_secret``, which returns
+    ``None`` for an unset variable and assigns that straight onto
+    ``litellm.request_timeout``. Measured against
+    ``ghcr.io/berriai/litellm:v1.102.1``, a gateway in that state answers
+    200 on ``/health/liveliness`` and fails *every* completion with
+    ``float() argument must be a string or a real number, not 'NoneType'`` —
+    a healthy-looking gateway serving nothing, which is the shape of the defect
+    this knob exists to fix. So the variable must always have a value on the
+    supported path.
+    """
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    assert f"{TIMEOUT_ENV_VAR}: ${{{TIMEOUT_ENV_VAR}:-" in compose, (
+        f"docker-compose.yml must pass {TIMEOUT_ENV_VAR} to the litellm service with a `:-` default; "
+        "without one an unset variable silently breaks every completion"
+    )
+
+
+def test_num_retries_stays_a_literal():
+    """Not every setting can be env-driven, and this one must not be.
+
+    LiteLLM hands ``router_settings`` to ``Router.__init__`` with no type
+    coercion, and the retry path evaluates ``num_retries > 0`` — which raises
+    ``TypeError`` against the string an ``os.environ/...`` reference resolves
+    to, at exactly the moment a retry is needed. Pinned so a later "make
+    everything configurable" pass cannot quietly break failover.
+    """
+    num_retries = _load().get("router_settings", {}).get("num_retries")
+    assert isinstance(num_retries, int), (
+        f"num_retries must stay an int literal, got {num_retries!r}: "
+        "LiteLLM does not coerce router_settings and `num_retries > 0` raises on a string"
+    )

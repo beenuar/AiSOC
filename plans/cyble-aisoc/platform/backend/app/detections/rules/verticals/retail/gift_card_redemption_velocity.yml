@@ -1,0 +1,25 @@
+title: Gift Card Redemption Velocity Suggesting Resale Fraud
+id: aisoc-vt-ret-0004-gift-card-redemption-velocity
+status: experimental
+description: |
+  A single account or device fingerprint redeemed gift card balances
+  against many distinct card numbers within a short window. Classic
+  fraud pattern for cards purchased from resale markets after being
+  obtained through phishing or breach.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: commerce
+  service: gift_card
+tags:
+  - attack.t1078
+  - attack.impact
+  - aisoc.vertical.retail
+  - aisoc.fraud
+detection:
+  selection:
+    event.module: commerce.gift_card
+    event.action: 'balance.redeemed'
+  threshold:
+    distinct_cards_per_hour|gte: 10
+  condition: selection and threshold

@@ -1,0 +1,48 @@
+id: splunk-security-content-4e3e3b8c-6d3a-4b47-9f5a-9e3e0a0a6f2f
+name: Windows Cabinet File Extraction Via Expand
+description: 'Detects usage of expand.exe to extract Microsoft Cabinet (CAB) archives,
+  with
+
+  emphasis on extractions into `C:\\ProgramData` or similar staging locations. In
+
+  recent APT37 activity, a CAB payload (e.g., wonder.cab) was expanded into
+
+  ProgramData prior to persistence and execution. This behavior is a strong signal
+
+  for ingress tool transfer and staging of payloads.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.zscaler.com/blogs/security-research/apt37-targets-windows-rust-backdoor-and-python-loader
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\nfrom datamodel=Endpoint.Processes\nwhere Processes.process_name=\"\
+    expand.exe\"\n  (Processes.process=\"*-F:*\" OR Processes.process=\"*/F:*\")\n\
+    \  Processes.process=\"*\\\\ProgramData\\\\*\"\nby Processes.dest Processes.user\
+    \ Processes.parent_process_name Processes.process_name Processes.process Processes.original_file_name\
+    \ Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_path Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_path Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_cabinet_file_extraction_via_expand_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4e3e3b8c-6d3a-4b47-9f5a-9e3e0a0a6f2f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_cabinet_file_extraction_via_expand.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

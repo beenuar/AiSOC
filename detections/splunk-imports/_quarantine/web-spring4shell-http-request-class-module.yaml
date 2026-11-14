@@ -1,0 +1,43 @@
+id: splunk-security-content-fcdfd69d-0ca3-4476-920e-9b633cb4593e
+name: Web Spring4Shell HTTP Request Class Module
+description: The following analytic detects HTTP requests containing payloads related
+  to the Spring4Shell vulnerability (CVE-2022-22965). It leverages Splunk Stream HTTP
+  data to inspect the HTTP request body and form data for specific fields such as
+  "class.module.classLoader.resources.context.parent.pipeline.first". This activity
+  is significant as it indicates an attempt to exploit a critical vulnerability in
+  Spring Framework, potentially leading to remote code execution. If confirmed malicious,
+  this could allow attackers to gain unauthorized access, execute arbitrary code,
+  and compromise the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://github.com/DDuarte/springshell-rce-poc/blob/master/poc.py
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`stream_http` http_method IN (\"POST\")\n  | stats values(form_data)\
+    \ as http_request_body min(_time) as firstTime max(_time) as lastTime count\n\
+    \    BY src dest http_method\n       http_user_agent uri_path url\n       bytes_in\
+    \ bytes_out\n  | search http_request_body IN (\"*class.module.classLoader.resources.context.parent.pipeline.first.fileDateFormat=_*\"\
+    , \"*class.module.classLoader.resources.context.parent.pipeline.first.pattern*\"\
+    ,\"*suffix=.jsp*\")\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `web_spring4shell_http_request_class_module_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fcdfd69d-0ca3-4476-920e-9b633cb4593e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/web_spring4shell_http_request_class_module.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

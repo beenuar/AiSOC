@@ -1,0 +1,6 @@
+{
+  "dst_ip": "203.0.113.7",
+  "dst_port": 23,
+  "protocol": "TCP",
+  "src_host": "wks-001"
+}

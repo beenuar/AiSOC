@@ -1,0 +1,32 @@
+{
+  "name": "@aisoc/report-card",
+  "version": "0.1.0",
+  "description": "Shared, dependency-free renderer for AiSOC share cards (triage summaries, ATT&CK coverage grades, investigation-replay verdicts) as SVG + Markdown. Used by the aisoc CLI --share flag, the noise-tuning dashboard, and the web OG image routes.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean",
+    "dev": "tsup src/index.ts --format esm --dts --watch",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

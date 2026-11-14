@@ -1,0 +1,41 @@
+id: splunk-security-content-7d4c618e-4716-11ec-951c-3e22fbd008af
+name: Remote Process Instantiation via WinRM and PowerShell Script Block
+description: The following analytic detects the execution of PowerShell commands that
+  use the `Invoke-Command` cmdlet to start a process on a remote endpoint via the
+  WinRM protocol. It leverages PowerShell Script Block Logging (EventCode=4104) to
+  identify such activities. This behavior is significant as it may indicate lateral
+  movement or remote code execution attempts by adversaries. If confirmed malicious,
+  this activity could allow attackers to execute arbitrary code on remote systems,
+  potentially leading to further compromise and persistence within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/006/
+- https://pentestlab.blog/2018/05/15/lateral-movement-winrm/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText=\"*Invoke-Command*\" AND\
+    \ ScriptBlockText=\"*-ComputerName*\")\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `remote_process_instantiation_via_winrm_and_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7d4c618e-4716-11ec-951c-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/remote_process_instantiation_via_winrm_and_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

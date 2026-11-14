@@ -1,0 +1,42 @@
+id: splunk-security-content-ab73289e-2246-4de0-a14b-67006c72a893
+name: Windows ClipBoard Data via Get-ClipBoard
+description: The following analytic detects the execution of the PowerShell command
+  'Get-Clipboard' to retrieve clipboard data. It leverages PowerShell Script Block
+  Logging (EventCode 4104) to identify instances where this command is used. This
+  activity is significant because it can indicate an attempt to steal sensitive information
+  such as usernames, passwords, or other confidential data copied to the clipboard.
+  If confirmed malicious, this behavior could lead to unauthorized access to sensitive
+  information, potentially compromising user accounts and other critical assets.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1115
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1115/
+- https://github.com/carlospolop/PEASS-ng/tree/master/winPEAS
+- https://www.microsoft.com/en-us/security/blog/2022/10/14/new-prestige-ransomware-impacts-organizations-in-ukraine-and-poland/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Get-Clipboard*\"\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_clipboard_data_via_get_clipboard_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ab73289e-2246-4de0-a14b-67006c72a893
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_clipboard_data_via_get_clipboard.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

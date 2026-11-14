@@ -1,0 +1,41 @@
+id: splunk-security-content-fd22124e-dbac-4744-a8ce-be10d8ec3e26
+name: O365 Multiple Failed MFA Requests For User
+description: The following analytic identifies potential "MFA fatigue" attacks targeting
+  Office 365 users by detecting more than nine Multi-Factor Authentication (MFA) prompts
+  within a 10-minute timeframe. It leverages O365 management activity logs, focusing
+  on Azure Active Directory events with the UserLoginFailed operation, a Success ResultStatus,
+  and an ErrorNumber of 500121. This activity is significant as attackers may exploit
+  MFA fatigue to gain unauthorized access by overwhelming users with repeated MFA
+  requests. If confirmed malicious, this could lead to data breaches, unauthorized
+  data access, or further compromise within the O365 environment. Immediate investigation
+  is crucial.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1621
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1621/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory Operation=UserLoginFailed\
+    \ ResultStatus=Success ErrorNumber=500121\n  | bucket span=10m _time\n  | stats\
+    \ dc(_raw) as mfa_prompts values(LogonError) as LogonError values(signature) as\
+    \ signature values(action) as action values(src) as src\n    BY user _time vendor_account\n\
+    \       vendor_product dest\n  | where mfa_prompts > 9\n  | `o365_multiple_failed_mfa_requests_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fd22124e-dbac-4744-a8ce-be10d8ec3e26
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_failed_mfa_requests_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

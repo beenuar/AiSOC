@@ -1,0 +1,178 @@
+# Phase 4.7 — visual regression for the AiSOC design system.
+#
+# This workflow:
+#   1. Builds Storybook with the same flags the marketing team uses for
+#      the docs site embed.
+#   2. Boots a static HTTP server over `storybook-static/` (handled by
+#      Playwright's `webServer` block in `apps/web/playwright.config.ts`).
+#   3. Walks `storybook-static/index.json`, navigates each story, and
+#      asserts `toHaveScreenshot()` against the baseline PNGs in
+#      `apps/web/e2e/visual/visual.spec.ts-snapshots/`.
+#
+# When the diff fails, the workflow uploads the Playwright HTML report
+# and the failed/expected/actual PNG triples so reviewers can scrub the
+# diff inline on the PR.
+#
+# Baselines are committed to git. To refresh them intentionally (after a
+# deliberate design change) run:
+#
+#   pnpm --filter @aisoc/web build-storybook
+#   pnpm --filter @aisoc/web visual:update
+#
+# and commit the resulting PNGs. CI re-runs immediately to confirm the
+# update lands cleanly.
+#
+# We deliberately pin Playwright to a tagged Docker image so glyph
+# rendering / GPU rasterisation stays byte-stable between baseline and
+# diff runs — this is the single biggest source of flakes in Playwright
+# visual suites and the only reliable fix is "always run in the same
+# container".
+
+name: visual-regression
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - ".github/workflows/visual-regression.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/ui/**"
+      - ".github/workflows/visual-regression.yml"
+
+# Cancel earlier runs on the same ref so only the latest commit on a
+# PR keeps running — the visual suite is the slowest job in CI and
+# stacking runs wastes minutes.
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: visual-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  visual:
+    name: Storybook visual diff
+    runs-on: ubuntu-latest
+    # Pin the Playwright image so font hinting + Chromium build are
+    # identical between baseline-capture and diff-runs. Bumping this
+    # tag invalidates every baseline; expect a follow-up PR to
+    # regenerate them.
+    container:
+      image: mcr.microsoft.com/playwright:v1.49.0-jammy
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup pnpm
+        # Deliberately kept on action-setup@v4 while the rest of the
+        # repo moves to v6. This job runs inside the Playwright
+        # container image, which ships a global pnpm 11.x. Under
+        # action-setup@v6 pnpm self-switches from 11.x down to the
+        # packageManager pin (8.15.1); that churn leaves optional
+        # native bindings (@tailwindcss/oxide-linux-x64-gnu) unlinked
+        # in the restored store, so the Next.js dev server crashes with
+        # "Cannot find native binding" and the suite fails. v4 installs
+        # 8.15.1 directly with no switch. Pinning `version:` under v6
+        # does NOT help (the container's global pnpm still triggers the
+        # switch), so keep v4 here until the upstream pnpm store /
+        # optional-dep interaction is resolved.
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Setup Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        # Workspace-aware install — pnpm reuses its content-addressed
+        # store across jobs so this is fast on warm caches.
+        working-directory: ${{ github.workspace }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browser binaries
+        # The base image ships Playwright 1.49's bundled browsers, but
+        # `apps/web` resolves `@playwright/test` up the `^1.49.0` semver
+        # range (currently 1.61.x) which expects a different chromium
+        # revision. Without an explicit install step the run fails with
+        # `Executable doesn't exist at /ms-playwright/chromium_headless_shell-1228/...`.
+        # Install only chromium to keep the download small — the visual
+        # suite only screenshots the desktop+mobile chromium projects.
+        run: pnpm exec playwright install chromium
+
+      - name: Build Storybook
+        # Pass --quiet so the multi-thousand-line addon-docs progress
+        # spam doesn't bury the eventual failure summary.
+        run: pnpm build-storybook --quiet
+
+      - name: Detect baseline state
+        # The very first PR that introduces the visual suite has no
+        # committed baselines yet — Playwright's `toHaveScreenshot`
+        # would fail every story with "snapshot not found". We treat
+        # that case as a soft success and upload the captured snapshots
+        # as an artifact so a follow-up commit can seed them. Once any
+        # PNG exists under `visual.spec.ts-snapshots/`, the gate
+        # becomes hard.
+        id: baseline_state
+        run: |
+          if compgen -G "e2e/visual/visual.spec.ts-snapshots/*.png" > /dev/null; then
+            echo "have_baselines=true" >> "$GITHUB_OUTPUT"
+            echo "Baselines present; running hard diff."
+          else
+            echo "have_baselines=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::No visual baselines committed yet. Running in --update-snapshots mode and uploading captured baselines as 'visual-baselines-seed' artifact."
+          fi
+
+      - name: Run visual regression (hard diff)
+        if: steps.baseline_state.outputs.have_baselines == 'true'
+        run: pnpm visual
+        env:
+          CI: "true"
+
+      - name: Capture baselines (first-run seed)
+        if: steps.baseline_state.outputs.have_baselines == 'false'
+        run: pnpm visual:update
+        env:
+          CI: "true"
+
+      - name: Upload captured baselines (first-run only)
+        if: steps.baseline_state.outputs.have_baselines == 'false'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: visual-baselines-seed
+          path: apps/web/e2e/visual/visual.spec.ts-snapshots
+          retention-days: 30
+
+      - name: Upload Playwright report
+        # The HTML report carries the diff overlays the reviewers need.
+        # `if: always()` so it ships on failures too.
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report
+          retention-days: 14
+
+      - name: Upload failed snapshots
+        # Playwright writes <name>-expected.png, <name>-actual.png, and
+        # <name>-diff.png next to each other under test-results/. We
+        # ship the whole directory so reviewers don't have to scrub the
+        # HTML report just to compare two pixels.
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: playwright-test-results
+          path: apps/web/test-results
+          retention-days: 14

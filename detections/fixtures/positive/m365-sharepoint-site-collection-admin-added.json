@@ -1,0 +1,5 @@
+{
+  "operation": "SiteCollectionAdminAdded",
+  "actor": "user@corp.com",
+  "site": "https://corp.sharepoint.com/sites/project"
+}

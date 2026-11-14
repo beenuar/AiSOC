@@ -1,0 +1,4 @@
+{
+  "operation": "Get-ComplianceSearch",
+  "actor": "analyst@corp.com"
+}

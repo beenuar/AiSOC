@@ -1,0 +1,216 @@
+"""The route a playbook step reaches governed dispatch through.
+
+The playbook engine runs in ``services/agents``, which holds no credential
+vault and no tenant database session. It therefore cannot dispatch a response
+action, and until now it did not try: ``block_ip`` and ``isolate_host``
+returned ``{"simulated": true}`` from inside the engine and twelve further
+step types had no handler at all.
+
+This route is the hop between them. It authenticates the same two ways
+``alerts/{id}/source-writeback`` does — a session for a person, a shared
+service token for the agents worker — and delegates every question about
+whether the action may run to ``services/actions``, which owns the contract.
+
+One step, one request, one grading. A playbook is not approved as a unit:
+each step arrives here on its own and is graded on its own capability, so
+authorising a playbook cannot authorise whatever its steps happen to contain.
+"""
+
+from __future__ import annotations
+
+import uuid
+from typing import Annotated, Any
+
+import structlog
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.api.v1.deps import CurrentUser
+from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
+from app.db.database import get_db
+from app.services import playbook_references
+from app.services.playbook_step_dispatch import dispatch_step
+
+logger = structlog.get_logger(__name__)
+
+router = APIRouter(prefix="/playbook-steps", tags=["playbooks"])
+
+
+class StepDispatchRequest(BaseModel):
+    """One playbook step, expressed as the verb it names."""
+
+    capability: str = Field(description="Response verb, e.g. 'isolate_host'. Must be a registered capability.")
+    target: str = Field(default="", max_length=512, description="Host, user, address or id the verb acts on.")
+    params: dict[str, Any] = Field(default_factory=dict)
+    vendor_id: str = Field(default="", max_length=64, description="Pin a vendor. Honoured only if the tenant has it configured.")
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    #: Defaults to a preview. Every caller that wants a vendor touched has to
+    #: say so — a forgotten field should cost a preview, not a containment.
+    dry_run: bool = True
+    playbook_run_id: str = Field(default="", max_length=64)
+    playbook_step_id: str = Field(default="", max_length=64)
+    #: Required from a service caller, which has no session to read it from.
+    #: Ignored for a session caller, whose tenant comes from the session.
+    tenant_id: uuid.UUID | None = None
+
+
+def _resolve_caller(
+    body_tenant_id: uuid.UUID | None,
+    user: CurrentUser | None,
+    service_token: str | None,
+) -> tuple[uuid.UUID, str]:
+    """``(tenant_id, requested_by)`` for an authorised caller, or 401/403.
+
+    A session's tenant comes from the session. Taking the client's copy would
+    let any authenticated user drive a containment against another tenant's
+    estate through a playbook step.
+    """
+    if user is not None:
+        user.require_permission("actions:execute")
+        return user.tenant_id, f"user:{user.email}"
+
+    if service_token_valid(service_token):
+        if body_tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="a service caller must name the tenant it is acting for",
+            )
+        return body_tenant_id, "aisoc-playbook"
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="authentication required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@router.post("/dispatch", summary="Run one playbook step through governed action dispatch")
+async def dispatch_playbook_step(
+    body: StepDispatchRequest,
+    user: Annotated[CurrentUser | None, Depends(optional_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Dispatch one step and report what actually happened.
+
+    Never raises for an action-level outcome. A blocked action, an approval
+    queue, a missing integration and a vendor failure are all 200 with
+    ``executed: false`` and a status naming which one it was, so the engine
+    has a single shape to read. ``HTTPException`` is reserved for callers
+    this route will not serve at all.
+    """
+    tenant_id, requested_by = _resolve_caller(body.tenant_id, user, x_aisoc_service_token)
+
+    report = await dispatch_step(
+        db,
+        tenant_id=tenant_id,
+        capability=body.capability,
+        target=body.target,
+        params=body.params,
+        vendor_id=body.vendor_id,
+        confidence=body.confidence,
+        dry_run=body.dry_run,
+        requested_by=requested_by,
+        playbook_run_id=body.playbook_run_id,
+        playbook_step_id=body.playbook_step_id,
+    )
+    return report.as_dict()
+
+
+class ReferenceLookupRequest(BaseModel):
+    """The ``${NAME}`` tokens one ``http`` step needs resolved."""
+
+    names: list[str] = Field(default_factory=list, max_length=32)
+    #: Required from a service caller, which has no session to read it from.
+    tenant_id: uuid.UUID | None = None
+
+
+def _resolve_reference_caller(
+    body_tenant_id: uuid.UUID | None,
+    user: CurrentUser | None,
+    service_token: str | None,
+) -> uuid.UUID:
+    """``tenant_id`` for the one caller this route may answer, or 401/403.
+
+    Deliberately *not* :func:`_resolve_caller`. That resolver admits two
+    classes of caller because dispatch has two: a person pressing a button
+    and the engine running a step. This route has one. What it returns for
+    four of the five reference kinds is the decrypted secret itself — the
+    bearer header value, the webhook URL with its embedded token, the
+    PagerDuty routing key, the whole SMTP configuration — so admitting a
+    session here turns the API into a read-back channel for the plaintext
+    the vault exists to keep (GHSA-c5qq-vhf5-wjqc). ``actions:execute`` is
+    held by ``soc_analyst``, so that was every analyst on the platform.
+
+    Refused by *class of caller*, not by demanding a higher permission. A
+    tenant admin reading SMTP passwords back out of an API that was never
+    meant to emit them is the same disclosure with a longer path, and
+    nothing in the console reads this route: the only caller in the tree is
+    ``services/agents/app/playbook/references.py``, over the service token.
+
+    403 rather than 404 because there is nothing here to enumerate — the
+    refusal lands before any name is looked at, so the answer is identical
+    whatever was asked for, and an operator who gets it should be told why.
+    """
+    if service_token_valid(service_token):
+        if body_tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="a service caller must name the tenant it is acting for",
+            )
+        return body_tenant_id
+
+    if user is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "this route resolves decrypted integration secrets for the playbook engine and "
+                "is reachable only by an internal service peer; a session is never served here"
+            ),
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="authentication required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+@router.post("/references", summary="Resolve the named integrations a playbook http step addresses")
+async def resolve_playbook_references(
+    body: ReferenceLookupRequest,
+    user: Annotated[CurrentUser | None, Depends(optional_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Return the enabled references this tenant has for the names asked for.
+
+    A name that is absent or disabled is simply not in the response. The
+    engine reports which ones it needed and did not get; answering with an
+    empty string instead would substitute nothing into
+    ``${IDP_BASE_URL}/sessions`` and hand httpx a scheme-relative path.
+
+    Secret halves (bearer headers, webhook URLs) are returned to the agents
+    service, which is an authenticated internal peer holding the service
+    token, and are used for exactly one request. The engine records header
+    *names* in the run result, never values — the run record is readable by
+    anyone with access to the case. A session is never served here, whatever
+    permissions it holds.
+    """
+    # That last sentence is enforced by `_resolve_reference_caller` rather
+    # than merely asserted here. It used to read `_resolve_caller`, which
+    # also admits a session holding `actions:execute` — so the paragraph
+    # above was false for every `soc_analyst` on the platform
+    # (GHSA-c5qq-vhf5-wjqc). The reasoning lives on that function; this
+    # docstring is published as the operation's description in
+    # `docs/openapi.yaml`, so it stays about what the route does.
+    tenant_id = _resolve_reference_caller(body.tenant_id, user, x_aisoc_service_token)
+    try:
+        references = await playbook_references.resolve(db, tenant_id=tenant_id, names=list(body.names))
+    except playbook_references.ReferenceError as exc:
+        # A reference that exists and will not decrypt is reported, not
+        # treated as absent: "you have not configured this" would send an
+        # operator to add a row that is already there.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return {"references": references}

@@ -1,0 +1,31 @@
+title: Scheduled Task Created From Suspicious Path
+id: aisoc-id-ep-0029-schtasks-persist
+status: stable
+description: |
+  schtasks.exe creates a scheduled task whose action references a
+  user-writable directory (Temp, AppData, ProgramData) — common
+  persistence technique used after initial access.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: process_creation
+tags:
+  - attack.t1053.005
+  - attack.persistence
+  - aisoc.endpoint
+detection:
+  selection:
+    process.name|endswith: '\schtasks.exe'
+  create:
+    process.command_line|contains:
+      - ' /create'
+      - ' -create'
+  suspicious_path:
+    process.command_line|contains:
+      - '\AppData\'
+      - '\Temp\'
+      - '\ProgramData\'
+      - '\Public\'
+      - '\Users\Public\'
+  condition: selection and create and suspicious_path

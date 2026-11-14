@@ -1,0 +1,30 @@
+title: Command Shell Spawned from Browser
+id: aisoc-id-ep-0014-browser-spawn-shell
+status: stable
+description: |
+  Web browser process spawns cmd.exe / powershell.exe — typically only
+  occurs after a successful drive-by or HTML smuggling payload.
+author: Cyble AiSOC
+level: high
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1059
+  - attack.initial_access
+  - aisoc.endpoint
+detection:
+  parent_browser:
+    process.parent.executable|endswith:
+      - '\chrome.exe'
+      - '\msedge.exe'
+      - '\firefox.exe'
+      - '\brave.exe'
+  child_shell:
+    process.executable|endswith:
+      - '\cmd.exe'
+      - '\powershell.exe'
+      - '\pwsh.exe'
+      - '\wscript.exe'
+      - '\cscript.exe'
+  condition: parent_browser and child_shell

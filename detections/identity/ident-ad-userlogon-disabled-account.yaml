@@ -1,0 +1,24 @@
+id: det-identity-090
+name: Disabled AD Account Authenticated Successfully
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Disabled AD Account
+  Authenticated Successfully'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.002
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: auth
+detection:
+  condition: |
+    event_id == 4624
+    AND account_disabled == true
+false_positives:
+- Stale ticket cache
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

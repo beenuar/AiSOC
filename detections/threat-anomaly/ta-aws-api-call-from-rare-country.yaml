@@ -1,0 +1,27 @@
+id: det-threat-anomaly-003
+name: AWS Control-Plane Call From a Country This Principal Has Never Used
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'AWS Control-Plane
+  Call From a Country This Principal Has Never Used'. Watch the 3 documented false-positive cases before
+  tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078.004
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    eventSource == "iam.amazonaws.com"
+    AND baseline_location_rarity >= 0.95
+false_positives:
+- Travel
+- A VPN egress or cloud NAT in another region
+- A relocated contractor
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

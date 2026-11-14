@@ -1,0 +1,23 @@
+title: DNS Query to Newly Registered Domain
+id: aisoc-id-nw-0003-nrd
+status: experimental
+description: |
+  Internal host queries a domain registered within the last 7 days.
+  Strong signal for phishing infrastructure, malware C2, and
+  short-lived attack campaigns.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: network
+  service: dns
+tags:
+  - attack.t1071.004
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.protocol: 'dns'
+  nrd:
+    enrich.domain.age_days|lt: 7
+  condition: selection and nrd

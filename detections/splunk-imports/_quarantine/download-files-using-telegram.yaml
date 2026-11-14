@@ -1,0 +1,40 @@
+id: splunk-security-content-58194e28-ae5e-11eb-8912-acde48001122
+name: Download Files Using Telegram
+description: The following analytic detects suspicious file downloads by the Telegram
+  application on a Windows system. It leverages Sysmon EventCode 15 to identify instances
+  where Telegram.exe creates files with a Zone.Identifier, indicating a download.
+  This activity is significant as it may indicate an adversary using Telegram to download
+  malicious tools, such as network scanners, for further exploitation. If confirmed
+  malicious, this behavior could lead to network mapping, lateral movement, and potential
+  compromise of additional systems within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode= 15 process_name = \"telegram.exe\" TargetFilename\
+    \ = \"*:Zone.Identifier\"\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest dvc file_hash\n       file_name file_path process_exec\n\
+    \       process_guid process_id process_name\n       process_path signature signature_id\n\
+    \       user_id vendor_product Contents\n       Image\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `download_files_using_telegram_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 58194e28-ae5e-11eb-8912-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/download_files_using_telegram.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

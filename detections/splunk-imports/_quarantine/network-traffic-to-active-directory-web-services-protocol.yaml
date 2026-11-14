@@ -1,0 +1,45 @@
+id: splunk-security-content-68a0056c-34cb-455f-b03d-df935ea62c4f
+name: Network Traffic to Active Directory Web Services Protocol
+description: The following analytic identifies network traffic directed to the Active
+  Directory Web Services Protocol (ADWS) on port 9389. It leverages network traffic
+  logs, focusing on source and destination IP addresses, application names, and destination
+  ports. This activity is significant as ADWS is used to manage Active Directory,
+  and unauthorized access could indicate malicious intent. If confirmed malicious,
+  an attacker could manipulate Active Directory, potentially leading to privilege
+  escalation, unauthorized access, or persistent control over the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  - T1069.002
+  - T1087.001
+  - T1087.002
+  - T1482
+  categories:
+  - endpoint
+references:
+- https://github.com/FalconForceTeam/SOAPHound
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count FROM datamodel=Network_Traffic\n  WHERE All_Traffic.dest_port=9389\n\
+    \  BY All_Traffic.action All_Traffic.app All_Traffic.dest\n     All_Traffic.dest_ip\
+    \ All_Traffic.dest_port All_Traffic.direction\n     All_Traffic.dvc All_Traffic.protocol\
+    \ All_Traffic.protocol_version\n     All_Traffic.src All_Traffic.src_ip All_Traffic.src_port\n\
+    \     All_Traffic.transport All_Traffic.user All_Traffic.vendor_product\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `drop_dm_object_name(\"All_Traffic\")`\n\
+    | `network_traffic_to_active_directory_web_services_protocol_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 68a0056c-34cb-455f-b03d-df935ea62c4f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/network_traffic_to_active_directory_web_services_protocol.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

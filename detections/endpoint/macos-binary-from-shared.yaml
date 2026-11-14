@@ -1,0 +1,24 @@
+id: det-endpoint-228
+name: Mach-O Binary Executed From /Users/Shared
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Mach-O Binary Executed
+  From /Users/Shared'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1059.004
+- tlp.white
+category: endpoint
+log_source:
+  product: macos
+  service: endpointsecurity
+detection:
+  condition: |
+    event_type == "exec"
+    AND process_path STARTSWITH "/Users/Shared/"
+false_positives:
+- Multi-user enterprise tool
+playbook: tpl-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

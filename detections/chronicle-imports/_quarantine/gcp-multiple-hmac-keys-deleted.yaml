@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-gcp-multiple-hmac-keys-deleted
+name: gcp_multiple_hmac_keys_deleted
+description: gcp_multiple_hmac_keys_deleted
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule gcp_multiple_hmac_keys_deleted {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detect when multiple HMAC authentication keys\
+    \ are deleted from GCP Storage settings.\"\n    rule_id = \"mr_75b441f1-edde-4a33-bc12-06a92ccb9ba8\"\
+    \n    rule_name = \"GCP Multiple HMAC Keys Deleted\"\n    mitre_attack_tactic\
+    \ = \"Impact\"\n    mitre_attack_technique = \"Account Access Removal\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1531/\"\n    mitre_attack_version =\
+    \ \"v14.1\"\n    type = \"Alert\"\n    data_source = \"GCP Cloud Audit\"\n   \
+    \ platform = \"GCP\"\n    severity = \"High\"\n    priority = \"High\"\n\n  events:\n\
+    \    $gcp.metadata.event_type = \"RESOURCE_DELETION\"\n    $gcp.metadata.log_type\
+    \ = \"GCP_CLOUDAUDIT\"\n    $gcp.metadata.product_event_type = \"storage.hmacKeys.delete\"\
+    \n    $gcp.target.application = \"storage.googleapis.com\"\n    $gcp.target.user.userid\
+    \ = $user_id\n\n  match:\n    $user_id over 1h\n\n  outcome:\n    $risk_score\
+    \ = max(75)\n    $mitre_attack_tactic = \"Impact\"\n    $mitre_attack_technique\
+    \ = \"Account Access Removal\"\n    $mitre_attack_technique_id = \"T1531\"\n \
+    \   $event_count = count_distinct($gcp.metadata.id)\n    $network_http_user_agent\
+    \ = array_distinct($gcp.network.http.user_agent)\n    $principal_ip = array_distinct($gcp.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($gcp.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($gcp.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_id = array_distinct($gcp.principal.user.userid)\n    $principal_user_display_name\
+    \ = array_distinct($gcp.principal.user.user_display_name)\n    $target_resource_name\
+    \ = array_distinct($gcp.target.resource.name)\n\n  condition:\n    #gcp >= 2\n\
+    }"
+  chronicle_rule_name: gcp_multiple_hmac_keys_deleted
+provenance:
+  source: chronicle/detection-rules
+  source_id: gcp_multiple_hmac_keys_deleted
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/gcp/gcp_multiple_hmac_keys_deleted.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

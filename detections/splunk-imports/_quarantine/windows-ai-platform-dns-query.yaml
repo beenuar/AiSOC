@@ -1,0 +1,46 @@
+id: splunk-security-content-1ad89d24-c856-4a0e-8fdf-c20c7b9febe1
+name: Windows AI Platform DNS Query
+description: The following analytic detects DNS queries initiated by the Windows AI
+  Platform to domains associated with Hugging Face, OpenAI, and other popular providers
+  of machine learning models and services. Monitoring these DNS requests is important
+  because it can reveal when systems are accessing external AI platforms, which may
+  indicate the use of third-party AI resources or the transfer of sensitive data outside
+  the organization’s environment. Detecting such activity enables organizations to
+  enforce data governance policies, prevent unapproved use of external AI services,
+  and maintain visibility into potential data exfiltration risks. Proactive monitoring
+  provides better control over AI model usage and helps safeguard organizational data
+  flows.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.004
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/6284730
+- https://www.microsoft.com/en-us/security/blog/2025/11/03/sesameop-novel-backdoor-uses-openai-assistants-api-for-command-and-control/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=22 QueryName IN (\"router.huggingface.co\", \"api.openai.com\"\
+    )\n  | lookup update=true browser_app_list browser_process_name AS process_name\
+    \ OUTPUT isAllowed | search isAllowed!=true\n  | rename dvc as dest\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n  by answer answer_count\
+    \ dest process_exec process_guid process_name query query_count reply_code_id\
+    \ signature signature_id src user_id Image\n  vendor_product QueryName QueryResults\
+    \ QueryStatus\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    | `windows_ai_platform_dns_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1ad89d24-c856-4a0e-8fdf-c20c7b9febe1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ai_platform_dns_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

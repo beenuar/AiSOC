@@ -1,0 +1,4 @@
+{
+  "event_type": "auth_failure",
+  "result": "user_disabled"
+}

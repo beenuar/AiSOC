@@ -1,0 +1,28 @@
+title: LOLBAS — certutil.exe Used to Download File
+id: aisoc-id-ep-0001-certutil-download
+status: stable
+description: |
+  Certutil invoked with -urlcache / -split to fetch a remote payload.
+  Classic LOLBAS download abuse.
+author: Cyble AiSOC
+level: high
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1105
+  - attack.command_and_control
+  - aisoc.endpoint
+detection:
+  selection_img:
+    process.executable|endswith: '\certutil.exe'
+  selection_args:
+    process.command_line|contains:
+      - '-urlcache'
+      - '-split'
+      - '-f http'
+      - '-f https'
+  condition: selection_img and selection_args
+falsepositives:
+  - Legitimate certificate-revocation cache refresh — rare and
+    distinguishable by lack of an external URL.

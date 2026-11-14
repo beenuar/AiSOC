@@ -1,0 +1,59 @@
+id: chronicle-detection-rules-hacktool-dumpert-process-dumper-default-file
+name: hacktool_dumpert_process_dumper_default_file
+description: hacktool_dumpert_process_dumper_default_file
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule hacktool_dumpert_process_dumper_default_file {\n\n  meta:\n    author =\
+    \ \"Florian Roth (Nextron Systems)\"\n    description = \"Detects the creation\
+    \ of the default dump file used by Outflank Dumpert tool. A process dumper, which\
+    \ dumps the lsass process memory\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/file/file_event/file_event_win_hktl_dumpert.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"HackTool - Dumpert Process Dumper Default File\"\n    sigma_uuid\
+    \ = \"93d94efc-d7ad-4161-ad7d-1638c4f908d8\"\n    sigma_status = \"test\"\n  \
+    \  rule_id = \"mr_13ac04a7-8853-42c9-a243-9da5dc05cb66\"\n    tactic = \"TA0006\"\
+    \n    technique = \"T1003.001\"\n    data_source = \"Sysmon\"\n    platform =\
+    \ \"Windows\"\n    severity = \"Critical\"\n    priority = \"Critical\"\n    false_positives\
+    \ = \"Very unlikely\"\n\n  events:\n    $file.metadata.event_type = \"FILE_CREATION\"\
+    \n    re.regex($file.target.file.full_path, `dumpert.dmp$`) nocase\n\n    $file.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 5m\n\n  outcome:\n    //example\
+    \ usage of specifying test user and hostname to adjust risk score\n    $risk_score\
+    \ = max(if($file.principal.user.userid = \"user\" and $file.principal.hostname\
+    \ = \"hostname\", 0, 15))\n    $principal_hostname = array_distinct($file.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($file.principal.process.pid)\n  \
+    \  $principal_process_command_line = array_distinct($file.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($file.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($file.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($file.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($file.principal.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($file.principal.user.userid)\n  \
+    \  $target_file_sha256 = array_distinct($file.target.file.sha256)\n    $target_file_full_path\
+    \ = array_distinct($file.target.file.full_path)\n\n  condition:\n    $file\n}"
+  chronicle_rule_name: hacktool_dumpert_process_dumper_default_file
+provenance:
+  source: chronicle/detection-rules
+  source_id: hacktool_dumpert_process_dumper_default_file
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/hacktool_dumpert_process_dumper_default_file.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

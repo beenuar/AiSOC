@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-abusing-azure-browser-sso
+name: abusing_azure_browser_sso
+description: abusing_azure_browser_sso
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule abusing_azure_browser_sso {\n meta:\n    author = \"Den Iuzvyk\"\
+    \n    description = \"Detects abusing  Azure Browser SSO by requesting  OAuth\
+    \ 2.0 refresh tokens for an Azure-AD-authenticated Windows user (i.e. the machine\
+    \ is joined to Azure AD and a user logs in with their Azure AD account) wanting\
+    \ to perform SSO authentication in the browser. An attacker can use this to authenticate\
+    \ to Azure AD in a browser as that user.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/sX0F2FNTmN68\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"sysmon\"\n    product\
+    \ = \"windows\"\n    mitre = \"defense_evasion, privilege_escalation, t1073\"\n\
+    \n  events:\n(($selection_dll.metadata.product_event_type = \"7\" and re.regex($selection_dll.target.process.file.full_path,\
+    \ `.*MicrosoftAccountTokenProvider\\.dll`)) and not ((re.regex($selection_dll.target.process.file.full_path,\
+    \ `.*BackgroundTaskHost\\.exe`) or re.regex($selection_dll.target.process.file.full_path,\
+    \ `.*devenv\\.exe`) or re.regex($selection_dll.target.process.file.full_path,\
+    \ `.*iexplore\\.exe`) or re.regex($selection_dll.target.process.file.full_path,\
+    \ `.*MicrosoftEdge\\.exe`))))\n\n  condition:\n    $selection_dll\n}"
+  chronicle_rule_name: abusing_azure_browser_sso
+provenance:
+  source: chronicle/detection-rules
+  source_id: abusing_azure_browser_sso
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/abusing_azure_browser_sso.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

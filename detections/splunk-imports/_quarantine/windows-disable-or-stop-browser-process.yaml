@@ -1,0 +1,47 @@
+id: splunk-security-content-220d34b7-b6c7-45fe-8dbb-c35cdd9fe6d5
+name: Windows Disable or Stop Browser Process
+description: The following analytic detects the use of the taskkill command in a process
+  command line to terminate several known browser processes, a technique commonly
+  employed by the Braodo stealer malware to steal credentials. By forcefully closing
+  browsers like Chrome, Edge, and Firefox, the malware can unlock files that store
+  sensitive information, such as passwords and login data. This detection focuses
+  on identifying taskkill commands targeting these browsers, signaling malicious intent.
+  Early detection allows security teams to investigate and prevent further credential
+  theft and system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://x.com/suyog41/status/1825869470323056748
+- https://g0njxa.medium.com/from-vietnam-to-united-states-malware-fraud-and-dropshipping-98b7a7b2c36d
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process\
+    \ = \"*taskkill*\" Processes.process IN(\"*chrome.exe\",\"*firefox.exe\",\"*brave.exe\"\
+    ,\"*opera.exe\",\"*msedge.exe\",\"*chromium.exe\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_disable_or_stop_browser_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 220d34b7-b6c7-45fe-8dbb-c35cdd9fe6d5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_or_stop_browser_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

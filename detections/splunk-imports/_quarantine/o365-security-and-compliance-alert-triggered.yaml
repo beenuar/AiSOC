@@ -1,0 +1,48 @@
+id: splunk-security-content-5b367cdd-8dfc-49ac-a9b7-6406cf27f33e
+name: O365 Security And Compliance Alert Triggered
+description: The following analytic identifies alerts triggered by the Office 365
+  Security and Compliance Center, indicating potential threats or policy violations.
+  It leverages data from the `o365_management_activity` dataset, focusing on events
+  where the workload is SecurityComplianceCenter and the operation is AlertTriggered.
+  This activity is significant as it highlights security and compliance issues within
+  the O365 environment, which are crucial for maintaining organizational security.
+  If confirmed malicious, these alerts could indicate attempts to breach security
+  policies, leading to unauthorized access, data exfiltration, or other malicious
+  activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/004/
+- https://learn.microsoft.com/en-us/purview/alert-policies?view=o365-worldwide
+- https://learn.microsoft.com/en-us/purview/alert-policies
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Category=ThreatManagement\
+    \ Operation=AlertTriggered\n  | spath input=Data path=f3u output=user\n  | spath\
+    \ input=Data path=op output=operation\n  | spath input=_raw path=wl\n  | spath\
+    \ input=Data path=rid output=rule_id\n  | spath input=Data path=ad output=alert_description\n\
+    \  | spath input=Data path=lon output=operation_name\n  | spath input=Data path=an\
+    \ output=alert_name\n  | spath input=Data path=sev output=severity\n  | fillnull\n\
+    \  | stats count earliest(_time) as firstTime latest(_time) as lastTime\n    BY\
+    \ user, Name, rule_id,\n       alert_description, alert_name, severity,\n    \
+    \   dest, src, vendor_account,\n       vendor_product, signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_security_and_compliance_alert_triggered_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5b367cdd-8dfc-49ac-a9b7-6406cf27f33e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_security_and_compliance_alert_triggered.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: splunk-security-content-c8119b2f-d7f7-40be-940a-1c582870e8e2
+name: Kubernetes Previously Unseen Process
+description: The following analytic detects previously unseen processes within the
+  Kubernetes environment on master or worker nodes. It leverages process metrics collected
+  via an OTEL collector and hostmetrics receiver, and data is pulled from Splunk Observability
+  Cloud. This detection compares processes observed in the last hour against those
+  seen in the previous 30 days. Identifying new processes is crucial as they may indicate
+  unauthorized activity or attempts to compromise the node. If confirmed malicious,
+  these processes could lead to data exfiltration, privilege escalation, denial-of-service
+  attacks, or the introduction of malware, posing significant risks to the Kubernetes
+  cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats  count(process.memory.utilization) as process.memory.utilization_count\
+    \ where `kubernetes_metrics` AND earliest=-1h by host.name k8s.cluster.name k8s.node.name\
+    \ process.executable.name\n| eval current=\"True\"\n| append [mstats  count(process.memory.utilization)\
+    \ as process.memory.utilization_count where `kubernetes_metrics` AND earliest=-30d\
+    \ latest=-1h by host.name k8s.cluster.name k8s.node.name process.executable.name\
+    \ ]\n| stats count values(current) as current\n  BY host.name k8s.cluster.name\
+    \ k8s.node.name\n     process.executable.name\n| where count=1 and current=\"\
+    True\"\n| rename host.name as host\n| `kubernetes_previously_unseen_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c8119b2f-d7f7-40be-940a-1c582870e8e2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_previously_unseen_process.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

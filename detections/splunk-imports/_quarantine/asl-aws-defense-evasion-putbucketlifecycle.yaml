@@ -1,0 +1,46 @@
+id: splunk-security-content-986565a2-7707-48ea-9590-37929cebc938
+name: ASL AWS Defense Evasion PutBucketLifecycle
+description: The following analytic detects `PutBucketLifecycle` events in AWS CloudTrail
+  logs where a user sets a lifecycle rule for an S3 bucket with an expiration period
+  of fewer than three days. This detection leverages CloudTrail logs to identify suspicious
+  lifecycle configurations. This activity is significant because attackers may use
+  it to delete CloudTrail logs quickly, thereby evading detection and impairing forensic
+  investigations. If confirmed malicious, this could allow attackers to cover their
+  tracks, making it difficult to trace their actions and respond to the breach effectively.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485.001
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://stratus-red-team.cloud/attack-techniques/AWS/aws.defense-evasion.cloudtrail-lifecycle-rule/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=PutBucketLifecycle\n  | spath\
+    \ input=api.request.data path=LifecycleConfiguration.Rule.NoncurrentVersionExpiration.NoncurrentDays\
+    \ output=NoncurrentDays\n  | where NoncurrentDays < 3\n  | spath input=api.request.data\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY actor.user.uid api.operation api.service.name\n       http_request.user_agent\
+    \ src_endpoint.ip actor.user.account.uid\n       cloud.provider cloud.region NoncurrentDays\n\
+    \       bucketName\n  | rename actor.user.uid as user api.operation as action\
+    \ api.service.name as dest http_request.user_agent as user_agent src_endpoint.ip\
+    \ as src actor.user.account.uid as vendor_account cloud.provider as vendor_product\
+    \ cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `asl_aws_defense_evasion_putbucketlifecycle_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 986565a2-7707-48ea-9590-37929cebc938
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_defense_evasion_putbucketlifecycle.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

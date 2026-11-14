@@ -1,0 +1,553 @@
+"""
+Phase 4A — Ambient Copilot contextual actions.
+
+This router powers the contextual AI buttons that surface across every page in
+the AiSOC console (alerts, cases, detections, playbooks). Each "action" is a
+short, focused prompt with a curated system message and a small input shape;
+the LLM returns Markdown that the UI renders inline next to the entity the
+user is looking at.
+
+Why a dedicated module instead of reusing the generic Copilot chat?
+  • Determinism: each action has a fixed system prompt and known output shape,
+    so the UI can render confidence + suggested follow-ups consistently.
+  • Cheap: actions are single-shot calls, no conversation history to ship.
+  • Auditability: every contextual call logs to the investigation ledger if a
+    case_id is supplied, so analysts can replay why the agent suggested
+    something later.
+
+Endpoint surface (all under ``/api/v1/contextual``):
+    POST /action          — one-shot call returning ``ContextualActionResponse``
+    POST /action/stream   — NDJSON streaming variant (delta tokens)
+    GET  /actions         — catalogue of supported actions per page
+
+Page → action matrix (kept in sync with ``ContextualActions.tsx``):
+    alerts       → explain, false_positive, find_similar
+    cases        → draft_comms, exec_summary, post_mortem
+    detections   → why_noisy, tighten
+    playbooks    → explain, improve
+
+Falls back to a deterministic synthetic response if ``OPENAI_API_KEY`` is
+unset, so the demo path never breaks.
+"""
+
+from __future__ import annotations
+
+import json
+import time
+import uuid
+from collections.abc import AsyncIterator
+from datetime import UTC, datetime
+from typing import Any
+
+import structlog
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+
+from app.llm import safe_ainvoke, safe_astream
+from app.llm.factory import make_chat_model, resolve_api_key, resolve_model_alias
+from app.llm.prompt_registry import prompt_text
+from app.prompt_serialization import summarize_structure_for_llm
+from app.security.tenant_scope import require_console_or_service_auth
+
+logger = structlog.get_logger()
+
+#: Default-deny. The console reaches this router directly through a Next
+#: rewrite carrying the first-party access token, so the guard resolves
+#: either that session or a trusted service declaring the tenant it acts
+#: for — a bearer-token-only scheme would lock the browser out.
+router = APIRouter(prefix="/api/v1/contextual", tags=["contextual"], dependencies=[Depends(require_console_or_service_auth)])
+
+
+# ---------------------------------------------------------------------------
+# Request / response shapes
+# ---------------------------------------------------------------------------
+
+
+class ContextualActionRequest(BaseModel):
+    """A single contextual ambient-copilot call.
+
+    ``entity`` is optional — when the UI already has the alert / case / rule
+    rendered locally it ships the relevant fields so the backend can answer
+    without an extra round-trip. When omitted the backend produces a generic
+    answer based on ``entity_id`` alone.
+    """
+
+    page: str = Field(..., description="One of: alerts, cases, detections, playbooks")
+    action: str = Field(..., description="Action key. See /actions for the catalogue.")
+    entity_id: str = Field(..., description="ID of the alert / case / rule / playbook.")
+    entity: dict[str, Any] | None = Field(
+        default=None,
+        description="Optional snapshot of the entity the user is looking at.",
+    )
+    question: str | None = Field(
+        default=None,
+        description="Optional free-form follow-up question from the user.",
+    )
+    case_id: str | None = Field(
+        default=None,
+        description="If set, the call is logged to the investigation ledger.",
+    )
+
+
+class ContextualSuggestion(BaseModel):
+    label: str
+    action: str | None = None
+    href: str | None = None
+
+
+class ContextualActionResponse(BaseModel):
+    id: str
+    page: str
+    action: str
+    entity_id: str
+    title: str
+    content: str  # Markdown
+    confidence: float = Field(ge=0.0, le=1.0)
+    suggestions: list[ContextualSuggestion] = []
+    citations: list[dict[str, Any]] = []
+    model: str
+    elapsed_ms: int
+    fallback: bool = False
+    created_at: str
+
+
+class ContextualActionDescriptor(BaseModel):
+    key: str
+    label: str
+    description: str
+    icon: str | None = None
+
+
+class ContextualActionsCatalogue(BaseModel):
+    pages: dict[str, list[ContextualActionDescriptor]]
+
+
+# ---------------------------------------------------------------------------
+# Action registry — drives both the catalogue endpoint and the prompt builder
+# ---------------------------------------------------------------------------
+
+_ACTION_CATALOGUE: dict[str, list[dict[str, str]]] = {
+    "alerts": [
+        {
+            "key": "explain",
+            "label": "Explain this alert",
+            "description": "Break down what the alert means, why it fired, and the likely attacker behavior.",
+            "icon": "info",
+        },
+        {
+            "key": "false_positive",
+            "label": "Is this a false positive?",
+            "description": "Score the likelihood of FP and call out the signals on each side.",
+            "icon": "shield",
+        },
+        {
+            "key": "find_similar",
+            "label": "Find similar",
+            "description": "Suggest related alerts and the queries to find them.",
+            "icon": "search",
+        },
+    ],
+    "cases": [
+        {
+            "key": "draft_comms",
+            "label": "Draft customer comms",
+            "description": "Draft a customer-facing notification with appropriate tone and disclosure level.",
+            "icon": "mail",
+        },
+        {
+            "key": "exec_summary",
+            "label": "Summarize for exec brief",
+            "description": "One-paragraph executive summary with impact, status, and ask.",
+            "icon": "briefcase",
+        },
+        {
+            "key": "post_mortem",
+            "label": "Generate post-mortem",
+            "description": "Blameless post-mortem skeleton with timeline, root cause, and action items.",
+            "icon": "file-text",
+        },
+    ],
+    "detections": [
+        {
+            "key": "why_noisy",
+            "label": "Why is this rule noisy?",
+            "description": "Explain why this rule is generating excessive false positives.",
+            "icon": "volume",
+        },
+        {
+            "key": "tighten",
+            "label": "Suggest a tighter version",
+            "description": "Propose a refined rule with fewer false positives but the same true positives.",
+            "icon": "filter",
+        },
+    ],
+    "playbooks": [
+        {
+            "key": "explain",
+            "label": "Explain this playbook",
+            "description": "Walk through what each step does and what triggers each branch.",
+            "icon": "info",
+        },
+        {
+            "key": "improve",
+            "label": "Suggest improvements",
+            "description": "Identify gaps, missing approval gates, or rollback steps.",
+            "icon": "trending-up",
+        },
+    ],
+}
+
+
+# ---------------------------------------------------------------------------
+# Prompt builders
+# ---------------------------------------------------------------------------
+
+_TITLES: dict[tuple[str, str], str] = {
+    ("alerts", "explain"): "Alert explanation",
+    ("alerts", "false_positive"): "False-positive assessment",
+    ("alerts", "find_similar"): "Similar alerts",
+    ("cases", "draft_comms"): "Customer comms draft",
+    ("cases", "exec_summary"): "Executive summary",
+    ("cases", "post_mortem"): "Post-mortem skeleton",
+    ("detections", "why_noisy"): "Rule noise analysis",
+    ("detections", "tighten"): "Tighter rule proposal",
+    ("playbooks", "explain"): "Playbook walkthrough",
+    ("playbooks", "improve"): "Playbook improvements",
+}
+
+
+_FOLLOW_UPS: dict[tuple[str, str], list[ContextualSuggestion]] = {
+    ("alerts", "explain"): [
+        ContextualSuggestion(label="Is this a false positive?", action="false_positive"),
+        ContextualSuggestion(label="Find similar alerts", action="find_similar"),
+    ],
+    ("alerts", "false_positive"): [
+        ContextualSuggestion(label="Explain this alert", action="explain"),
+        ContextualSuggestion(label="Find similar alerts", action="find_similar"),
+    ],
+    ("alerts", "find_similar"): [
+        ContextualSuggestion(label="Explain this alert", action="explain"),
+    ],
+    ("cases", "draft_comms"): [
+        ContextualSuggestion(label="Generate exec brief", action="exec_summary"),
+    ],
+    ("cases", "exec_summary"): [
+        ContextualSuggestion(label="Draft customer comms", action="draft_comms"),
+        ContextualSuggestion(label="Generate post-mortem", action="post_mortem"),
+    ],
+    ("cases", "post_mortem"): [
+        ContextualSuggestion(label="Generate exec brief", action="exec_summary"),
+    ],
+    ("detections", "why_noisy"): [
+        ContextualSuggestion(label="Suggest a tighter version", action="tighten"),
+    ],
+    ("detections", "tighten"): [
+        ContextualSuggestion(label="Why is this rule noisy?", action="why_noisy"),
+    ],
+    ("playbooks", "explain"): [
+        ContextualSuggestion(label="Suggest improvements", action="improve"),
+    ],
+    ("playbooks", "improve"): [
+        ContextualSuggestion(label="Explain this playbook", action="explain"),
+    ],
+}
+
+
+#: The (page, action) pairs this endpoint serves. The prompt text for each
+#: lives in the registry as ``contextual.<page>.<action>``; this tuple is the
+#: routing table, so an unknown pair is a 400 rather than a KeyError raised
+#: from inside the model call.
+_CONTEXTUAL_ACTIONS: tuple[tuple[str, str], ...] = (
+    ("alerts", "explain"),
+    ("alerts", "false_positive"),
+    ("alerts", "find_similar"),
+    ("cases", "draft_comms"),
+    ("cases", "exec_summary"),
+    ("cases", "post_mortem"),
+    ("detections", "why_noisy"),
+    ("detections", "tighten"),
+    ("playbooks", "explain"),
+    ("playbooks", "improve"),
+)
+
+
+def _serialize_entity(entity: dict[str, Any] | None, entity_id: str) -> str:
+    if not entity:
+        return f"(no entity payload supplied; entity_id={entity_id})"
+    return summarize_structure_for_llm(
+        entity,
+        label="entity_snapshot",
+        max_lines=80,
+        max_depth=3,
+    )
+
+
+def _build_messages(req: ContextualActionRequest) -> tuple[str, str]:
+    """Return (system_prompt, user_prompt) for the (page, action) pair."""
+    key = (req.page, req.action)
+    if key not in _CONTEXTUAL_ACTIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown contextual action: page={req.page!r} action={req.action!r}",
+        )
+
+    system = prompt_text(f"contextual.{req.page}.{req.action}")
+    entity_blob = _serialize_entity(req.entity, req.entity_id)
+
+    user_lines = [
+        f"Page: {req.page}",
+        f"Action: {req.action}",
+        f"Entity ID: {req.entity_id}",
+        "",
+        "Entity snapshot:",
+        "```text",
+        entity_blob,
+        "```",
+    ]
+    if req.question:
+        user_lines.extend(["", f"Analyst follow-up: {req.question}"])
+
+    return system, "\n".join(user_lines)
+
+
+# ---------------------------------------------------------------------------
+# LLM dispatch
+# ---------------------------------------------------------------------------
+
+
+async def _call_llm(system: str, user: str, model: str) -> tuple[str, int]:
+    """Invoke the configured LLM. Returns (markdown, tokens_used).
+
+    Falls back to a deterministic stub response when ``OPENAI_API_KEY`` is
+    missing so the demo never hard-fails.
+    """
+    if not resolve_api_key(model):
+        return _fallback_response(system, user), 0
+
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+    except ImportError as exc:
+        logger.warning("contextual.llm.import_failed", error=str(exc))
+        return _fallback_response(system, user), 0
+
+    # Was a bare ``ChatOpenAI(model=model)`` — no base URL, so the copilot sent
+    # `aisoc-copilot` to the provider default and took the 404 as "no LLM".
+    llm = make_chat_model("copilot", temperature=0.2)
+    response = await safe_ainvoke(llm, [SystemMessage(content=system), HumanMessage(content=user)])
+    text = response.content if isinstance(response.content, str) else str(response.content)
+    tokens = 0
+    if hasattr(response, "response_metadata"):
+        tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
+    return text, tokens
+
+
+async def _stream_llm(system: str, user: str, model: str) -> AsyncIterator[str]:
+    """Yield response delta chunks. Used by the NDJSON streaming endpoint."""
+    if not resolve_api_key(model):
+        # Fake-stream the fallback in 8-character chunks for a nice UX in the
+        # demo path.
+        text = _fallback_response(system, user)
+        for i in range(0, len(text), 8):
+            yield text[i : i + 8]
+        return
+
+    try:
+        from langchain_core.messages import HumanMessage, SystemMessage
+    except ImportError:
+        text = _fallback_response(system, user)
+        for i in range(0, len(text), 8):
+            yield text[i : i + 8]
+        return
+
+    llm = make_chat_model("copilot", temperature=0.2, streaming=True)
+    async for chunk in safe_astream(llm, [SystemMessage(content=system), HumanMessage(content=user)]):
+        if hasattr(chunk, "content") and chunk.content:
+            yield chunk.content if isinstance(chunk.content, str) else str(chunk.content)
+
+
+def _fallback_response(system: str, user: str) -> str:
+    """Deterministic offline response so the contextual UI works without an LLM."""
+    # Keep this short and obviously synthetic so it doesn't get mistaken for
+    # genuine analysis in a screenshot.
+    return (
+        "## Heads up: LLM not configured\n\n"
+        "This deployment of AiSOC does not have `OPENAI_API_KEY` configured, "
+        "so the contextual Copilot cannot reach a language model right now. "
+        "You're seeing a deterministic placeholder response.\n\n"
+        "**To enable real contextual answers:**\n\n"
+        "1. Set `OPENAI_API_KEY` in your `.env` file — the gateway reads it\n"
+        "2. Bring up the `full` profile so the LiteLLM gateway runs; "
+        "`LLM_GATEWAY_URL` already points every service at it\n"
+        "3. Restart the `aisoc-agents` service\n\n"
+        "See the LLM-gateway docs for self-hosted model alternatives (Ollama, vLLM, Together)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/actions", response_model=ContextualActionsCatalogue, summary="List supported contextual actions")
+async def list_actions() -> ContextualActionsCatalogue:
+    return ContextualActionsCatalogue(
+        pages={page: [ContextualActionDescriptor(**item) for item in items] for page, items in _ACTION_CATALOGUE.items()}
+    )
+
+
+@router.post(
+    "/action",
+    response_model=ContextualActionResponse,
+    summary="One-shot contextual AI action",
+)
+async def run_action(req: ContextualActionRequest) -> ContextualActionResponse:
+    started = time.monotonic()
+    system, user = _build_messages(req)
+    model = resolve_model_alias("copilot")
+
+    # Same question _call_llm asks, so the flag the UI reads and the branch
+    # actually taken cannot disagree — the gateway authenticates with
+    # LITELLM_MASTER_KEY, which OPENAI_API_KEY alone does not see.
+    fallback = not resolve_api_key(model)
+    try:
+        content, tokens = await _call_llm(system, user, model)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "contextual.action.llm_error",
+            page=req.page,
+            action=req.action,
+            entity_id=req.entity_id,
+            error=str(exc),
+        )
+        content = _fallback_response(system, user)
+        tokens = 0
+        fallback = True
+
+    elapsed_ms = int((time.monotonic() - started) * 1000)
+    title = _TITLES.get((req.page, req.action), f"{req.page} · {req.action}")
+    suggestions = _FOLLOW_UPS.get((req.page, req.action), [])
+
+    response = ContextualActionResponse(
+        id=str(uuid.uuid4()),
+        page=req.page,
+        action=req.action,
+        entity_id=req.entity_id,
+        title=title,
+        content=content,
+        confidence=0.0 if fallback else 0.7,
+        suggestions=suggestions,
+        citations=[],
+        model=model,
+        elapsed_ms=elapsed_ms,
+        fallback=fallback,
+        created_at=datetime.now(UTC).isoformat(),
+    )
+
+    # Structured log so contextual usage is queryable in observability tooling
+    # without requiring the full investigation_runs/events ledger schema.
+    logger.info(
+        "contextual.action.done",
+        page=req.page,
+        action=req.action,
+        entity_id=req.entity_id,
+        case_id=req.case_id,
+        elapsed_ms=elapsed_ms,
+        tokens=tokens,
+        fallback=fallback,
+    )
+    return response
+
+
+@router.post(
+    "/action/stream",
+    summary="Streaming variant — emits NDJSON lines: {delta} until {done:true}",
+)
+async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
+    system, user = _build_messages(req)
+    model = resolve_model_alias("copilot")
+    title = _TITLES.get((req.page, req.action), f"{req.page} · {req.action}")
+    suggestions = _FOLLOW_UPS.get((req.page, req.action), [])
+    # Same question _call_llm asks, so the flag the UI reads and the branch
+    # actually taken cannot disagree — the gateway authenticates with
+    # LITELLM_MASTER_KEY, which OPENAI_API_KEY alone does not see.
+    fallback = not resolve_api_key(model)
+
+    async def gen() -> AsyncIterator[bytes]:
+        # Header frame so the UI can render the title before tokens arrive.
+        yield (
+            json.dumps(
+                {
+                    "title": title,
+                    "page": req.page,
+                    "action": req.action,
+                    "entity_id": req.entity_id,
+                    "model": model,
+                    "fallback": fallback,
+                }
+            )
+            + "\n"
+        ).encode()
+
+        try:
+            async for chunk in _stream_llm(system, user, model):
+                yield (json.dumps({"delta": chunk}) + "\n").encode()
+        except Exception:  # noqa: BLE001
+            logger.exception("contextual.stream.error")
+            # "Please try again" was the answer to every failure, including
+            # the most common one: this deployment has no model, so there is
+            # nothing a retry can reach. Advising a retry for a permanent
+            # condition is how a misconfiguration gets mistaken for
+            # flakiness — the reader clicks again instead of going and
+            # configuring a provider.
+            #
+            # `fallback` is the same question `_call_llm` asks, resolved
+            # before the stream opened, so the branch and the flag the
+            # header already published cannot disagree.
+            if fallback:
+                yield (
+                    json.dumps(
+                        {
+                            "error": (
+                                f"No language model is configured for this deployment, so {title} could not be "
+                                "generated. Set a provider key and bring up the `full` profile so the LiteLLM "
+                                "gateway runs. Retrying will not help until then."
+                            ),
+                            "retryable": False,
+                        }
+                    )
+                    + "\n"
+                ).encode()
+            else:
+                # Deliberately no exception text. `logger.exception` above
+                # has the stack, and this frame is rendered to whoever is
+                # looking at the console — an exception string from a model
+                # client carries gateway hostnames, request ids and
+                # sometimes the URL a key was presented to.
+                # (`py/stack-trace-exposure`, which an earlier draft of this
+                # branch tripped by interpolating `str(exc)` here.)
+                yield (
+                    json.dumps(
+                        {
+                            "error": (
+                                "The model stopped partway through this answer. Retrying may work; the agents service log has the reason."
+                            ),
+                            "retryable": True,
+                        }
+                    )
+                    + "\n"
+                ).encode()
+
+        # Footer frame with metadata + suggested follow-ups.
+        yield (
+            json.dumps(
+                {
+                    "done": True,
+                    "suggestions": [s.model_dump() for s in suggestions],
+                    "confidence": 0.0 if fallback else 0.7,
+                }
+            )
+            + "\n"
+        ).encode()
+
+    return StreamingResponse(gen(), media_type="application/x-ndjson")

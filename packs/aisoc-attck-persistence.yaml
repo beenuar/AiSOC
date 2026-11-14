@@ -1,0 +1,136 @@
+id: aisoc-attck-persistence
+name: AiSOC ATT&CK — Persistence Detection
+version: 1.0.0
+platforms: [linux, darwin]
+description: |
+  Detects persistence mechanisms including cron jobs, systemd unit files,
+  launchd plists, and other startup/scheduled task modifications.
+  Aligns with MITRE ATT&CK T1547 (Boot or Logon Autostart Execution) and
+  T1543 (Create or Modify System Process).
+
+queries:
+  cron_jobs:
+    sql: >
+      SELECT command, path, minute, hour, day_of_month, month, day_of_week
+      FROM crontab
+    interval: 300
+    severity: medium
+    description: Enumerate all cron jobs across system and user crontabs
+    mitre: [T1053.003]
+    references:
+      - https://attack.mitre.org/techniques/T1053/003/
+
+  cron_file_events:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE target_path LIKE '/etc/cron%'
+        OR target_path LIKE '/var/spool/cron/%'
+        OR target_path LIKE '/etc/at%'
+    interval: 60
+    severity: high
+    description: Detect file system changes to cron directories
+    mitre: [T1053.003]
+    references:
+      - https://attack.mitre.org/techniques/T1053/003/
+
+  systemd_units:
+    sql: >
+      SELECT id, description, load_state, active_state, sub_state,
+             fragment_path, user, group
+      FROM systemd_units
+      WHERE active_state = 'active'
+        AND (id LIKE '%.service' OR id LIKE '%.timer' OR id LIKE '%.socket')
+    interval: 300
+    severity: low
+    description: Enumerate active systemd units (services, timers, sockets)
+    mitre: [T1543.002]
+    references:
+      - https://attack.mitre.org/techniques/T1543/002/
+
+  systemd_unit_file_events:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE target_path LIKE '/etc/systemd/system/%'
+        OR target_path LIKE '/lib/systemd/system/%'
+        OR target_path LIKE '/usr/lib/systemd/system/%'
+        OR target_path LIKE '/home/%/.config/systemd/user/%'
+    interval: 60
+    severity: high
+    description: Detect modifications to systemd unit files
+    mitre: [T1543.002]
+    references:
+      - https://attack.mitre.org/techniques/T1543/002/
+
+  launchd_agents:
+    sql: >
+      SELECT path, name, program, program_arguments, run_at_load, on_demand,
+             keep_alive, start_interval, watch_paths
+      FROM launchd
+      WHERE run_at_load = 1
+    interval: 300
+    severity: medium
+    description: Enumerate LaunchAgents and LaunchDaemons set to run at load (macOS)
+    mitre: [T1543.004]
+    references:
+      - https://attack.mitre.org/techniques/T1543/004/
+
+  launchd_file_events:
+    sql: >
+      SELECT target_path, action, transaction_id, time, inode, uid, gid,
+             md5, sha256
+      FROM file_events
+      WHERE target_path LIKE '/Library/LaunchAgents/%'
+        OR target_path LIKE '/Library/LaunchDaemons/%'
+        OR target_path LIKE '/System/Library/LaunchAgents/%'
+        OR target_path LIKE '/System/Library/LaunchDaemons/%'
+        OR target_path LIKE '/Users/%/Library/LaunchAgents/%'
+    interval: 60
+    severity: high
+    description: Detect file changes in LaunchAgent/Daemon directories (macOS)
+    mitre: [T1543.004]
+    references:
+      - https://attack.mitre.org/techniques/T1543/004/
+
+  startup_items:
+    sql: >
+      SELECT path, args, type, enabled
+      FROM startup_items
+    interval: 300
+    severity: medium
+    description: Enumerate startup items
+    mitre: [T1547]
+    references:
+      - https://attack.mitre.org/techniques/T1547/
+
+  login_items:
+    sql: >
+      SELECT name, path, args, source, status, hidden, username
+      FROM loginwindow_items
+    interval: 300
+    severity: medium
+    description: Enumerate macOS login window items
+    mitre: [T1547.015]
+    references:
+      - https://attack.mitre.org/techniques/T1547/015/
+
+file_paths:
+  cron_dirs:
+    - /etc/cron.d/%%
+    - /etc/cron.daily/%%
+    - /etc/cron.hourly/%%
+    - /etc/cron.monthly/%%
+    - /etc/cron.weekly/%%
+    - /var/spool/cron/%%
+  systemd_dirs:
+    - /etc/systemd/system/%%
+    - /lib/systemd/system/%%
+    - /usr/lib/systemd/system/%%
+  launchd_dirs:
+    - /Library/LaunchAgents/%%
+    - /Library/LaunchDaemons/%%
+    - /System/Library/LaunchAgents/%%
+    - /System/Library/LaunchDaemons/%%

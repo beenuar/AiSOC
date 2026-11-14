@@ -1,0 +1,40 @@
+id: chronicle-detection-rules-ryuk-encryption-and-evasion-techniques
+name: ryuk_encryption_and_evasion_techniques
+description: ryuk_encryption_and_evasion_techniques
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ryuk_encryption_and_evasion_techniques {\n meta:\n    author\
+    \ = \"Osman Demir\"\n    description = \"Detects Ryuk Ransomware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/9lnBk5qhd9IV\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1486, Impact, T1137, Persistence\"\n\n  events:\n\
+    (($selection.metadata.product_event_type = \"1\" and (re.regex($selection.target.process.command_line,\
+    \ `icacls \\\"C:.*\\\" /grant Everyone:F /T /C /Q`) or $selection.target.process.command_line\
+    \ = \"\\\"C:\\\\Windows\\\\System32\\\\net.exe\\\" stop \\\"audioendpointbuilder\\\
+    \" /y\" or $selection.target.process.command_line = \"\\\"C:\\\\Windows\\\\System32\\\
+    \\net.exe\\\" stop \\\"samss\\\" /y\")) or ($selection.metadata.product_event_type\
+    \ = \"11\" and (re.regex($selection.target.file.full_path, `C:\\\\Users.*\\\\\
+    Pictures.*\\.RYK`) or $selection.target.file.full_path = \"C:\\\\Users\\\\admin\\\
+    \\AppData\\\\Roaming\\\\Microsoft\\\\Word\\\\STARTUP\\\\RyukReadMe.html\")))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: ryuk_encryption_and_evasion_techniques
+provenance:
+  source: chronicle/detection-rules
+  source_id: ryuk_encryption_and_evasion_techniques
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/ryuk_encryption_and_evasion_techniques.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

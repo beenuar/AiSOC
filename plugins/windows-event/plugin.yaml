@@ -1,0 +1,22 @@
+id: windows-event
+name: Windows Event / Sysmon Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull Windows Security + Sysmon events from a Windows Event Forwarding (WEF)
+  collector's JSON spool endpoint. Severity is derived from channel + Event ID:
+  log clears, service installs and process-injection surfaces are floored
+  appropriately rather than defaulting to noise.
+author: AiSOC Core Team
+tags: [edr, windows, sysmon, wef, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/windows_event.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [collector_url, api_token]
+  properties:
+    collector_url: {type: string, description: WEF collector JSON spool URL.}
+    api_token: {type: string, secret: true, description: Spool bearer token.}
+    verify_tls: {type: boolean, default: true}

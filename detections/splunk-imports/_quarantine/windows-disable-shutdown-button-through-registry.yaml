@@ -1,0 +1,45 @@
+id: splunk-security-content-55fb2958-9ecd-11ec-a06a-acde48001122
+name: Windows Disable Shutdown Button Through Registry
+description: The following analytic detects suspicious registry modifications that
+  disable the shutdown button on a user's logon screen. It leverages data from the
+  Endpoint.Registry data model, specifically monitoring changes to registry paths
+  associated with shutdown policies. This activity is significant because it is a
+  tactic used by malware, particularly ransomware like KillDisk, to hinder system
+  usability and prevent the removal of malicious changes. If confirmed malicious,
+  this could impede system recovery efforts, making it difficult to restart the machine
+  and remove other harmful modifications.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/vinfo/us/threat-encyclopedia/malware/ransom.msil.screenlocker.a/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE ((Registry.registry_path=
+    "*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\shutdownwithoutlogon"
+    Registry.registry_value_data = "0x00000000") OR (Registry.registry_path="*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\NoClose"
+    Registry.registry_value_data = "0x00000001")) by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data) | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_disable_shutdown_button_through_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 55fb2958-9ecd-11ec-a06a-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_shutdown_button_through_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

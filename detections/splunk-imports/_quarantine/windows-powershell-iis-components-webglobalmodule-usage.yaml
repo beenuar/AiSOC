@@ -1,0 +1,46 @@
+id: splunk-security-content-33fc9f6f-0ce7-4696-924e-a69ec61a3d57
+name: Windows PowerShell IIS Components WebGlobalModule Usage
+description: The following analytic detects the usage of PowerShell Cmdlets - New-WebGlobalModule,
+  Enable-WebGlobalModule, and Set-WebGlobalModule, which are used to create, enable,
+  or modify IIS Modules. This detection leverages PowerShell Script Block Logging,
+  specifically monitoring EventCode 4104 for these cmdlets. This activity is significant
+  as adversaries may use these lesser-known cmdlets to manipulate IIS configurations,
+  similar to AppCmd.exe, potentially bypassing traditional defenses. If confirmed
+  malicious, this could allow attackers to persist in the environment, manipulate
+  web server behavior, or escalate privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.004
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/webadministration/new-webglobalmodule?view=windowsserver2022-ps
+- https://www.microsoft.com/en-us/security/blog/2022/12/12/iis-modules-the-evolution-of-web-shells-and-how-to-detect-them/
+- https://www.crowdstrike.com/wp-content/uploads/2022/05/crowdstrike-iceapple-a-novel-internet-information-services-post-exploitation-framework-1.pdf
+- https://unit42.paloaltonetworks.com/unit42-oilrig-uses-rgdoor-iis-backdoor-targets-middle-east/
+- https://www.secureworks.com/research/bronze-union
+- https://github.com/redcanaryco/atomic-red-team/tree/master/atomics/T1505.004
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN(\"*New-WebGlobalModule*\"\
+    ,\"*Enable-WebGlobalModule*\",\"*Set-WebGlobalModule*\")\n  | fillnull\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_powershell_iis_components_webglobalmodule_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 33fc9f6f-0ce7-4696-924e-a69ec61a3d57
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_iis_components_webglobalmodule_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

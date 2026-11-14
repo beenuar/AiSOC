@@ -1,0 +1,38 @@
+id: snowflake-events
+name: Snowflake Events Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Polls Snowflake account/login/query history from the SNOWFLAKE.ACCOUNT_USAGE
+  schema. Useful for spotting anomalous queries, exfiltration patterns, and
+  access from unexpected regions or service accounts.
+author: AiSOC Core Team
+tags: [data, snowflake, warehouse, events, connector, exfil]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/snowflake-events
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [account, user, password, warehouse]
+  properties:
+    account:
+      type: string
+      description: "Snowflake account identifier (e.g. xy12345.us-east-1)"
+    user:
+      type: string
+      description: "Snowflake user with access to ACCOUNT_USAGE"
+    password:
+      type: string
+      description: "Snowflake password or programmatic access token"
+      secret: true
+    warehouse:
+      type: string
+      description: "Warehouse used to run audit queries"
+    role:
+      type: string
+      default: ACCOUNTADMIN
+      description: "Role with access to SNOWFLAKE.ACCOUNT_USAGE"
+    poll_interval_seconds:
+      type: integer
+      default: 300
+      minimum: 60

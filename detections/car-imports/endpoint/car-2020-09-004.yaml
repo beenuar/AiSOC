@@ -1,0 +1,59 @@
+id: mitre-car-car-2020-09-004
+name: Credentials in Files & Registry
+description: Adversaries may search the Windows Registry on compromised systems for
+  insecurely stored credentials for credential access. This can be accomplished using
+  the query functionality of the reg.exe system utility, by looking for keys and values
+  that contain strings such as "password". In addition, adversaries may use toolkits
+  such as [PowerSploit](https://powersploit.readthedocs.io/en/latest/) in order to
+  dump credentials from various applications such as IIS.Accordingly, this analytic
+  looks for invocations of reg.exe in this capacity as well as that of several powersploit
+  modules with similar functionality.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process,Registry
+detection:
+  implementations:
+  - name: Pseudocode - reg.exe password search & powersploit modules
+    type: Pseudocode
+    code: "processes = search Process:Create\n  cred_processes = filter processes\
+      \ where (\n  command_line = \"*reg* query HKLM /f password /t REG_SZ /s*\" OR\n\
+      \  command_line = \"reg* query HKCU /f password /t REG_SZ /s\" OR\n  command_line\
+      \ = \"*Get-UnattendedInstallFile*\" OR\n  command_line = \"*Get-Webconfig*\"\
+      \ OR\n  command_line = \"*Get-ApplicationHost*\" OR\n  command_line = \"*Get-SiteListPassword*\"\
+      \ OR\n  command_line = \"*Get-CachedGPPPassword*\" OR\n  command_line = \"*Get-RegistryAutoLogon*\"\
+      )\noutput cred_processes\n"
+  - name: Splunk Search - reg.exe password search & powersploit modules
+    type: Splunk
+    code: '((index=__your_sysmon_index__ EventCode=1) OR (index=__your_win_syslog_index__
+      EventCode=4688)) (CommandLine="*reg* query HKLM /f password /t REG_SZ /s*" OR
+      CommandLine="reg* query HKCU /f password /t REG_SZ /s" OR CommandLine="*Get-UnattendedInstallFile*"
+      OR CommandLine="*Get-Webconfig*" OR CommandLine="*Get-ApplicationHost*" OR CommandLine="*Get-SiteListPassword*"
+      OR CommandLine="*Get-CachedGPPPassword*" OR CommandLine="*Get-RegistryAutoLogon*")
+
+      '
+  - name: LogPoint search - reg.exe password search & powersploit modules
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 command IN ["*reg* query HKLM /f password
+      /t REG_SZ /s*", "reg* query HKCU /f password /t REG_SZ /s", "*Get-UnattendedInstallFile*",
+      "*Get-Webconfig*", "*Get-ApplicationHost*", "*Get-SiteListPassword*", "*Get-CachedGPPPassword*",
+      "*Get-RegistryAutoLogon*"]
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-09-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-09-004.yaml
+notes:
+  car_status: needs_implementation

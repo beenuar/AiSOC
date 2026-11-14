@@ -1,0 +1,218 @@
+---
+sidebar_position: 2
+---
+
+# Kubernetes Deployment
+
+The supported way to run AiSOC on Kubernetes is the Helm chart shipped at [`infra/helm/aisoc/`](https://github.com/beenuar/AiSOC/tree/main/infra/helm/aisoc) in the repo. It deploys every service (api, agents, realtime, mcp, ingest, enrichment, web) plus optional bundled Postgres, Redis, NATS, and OpenSearch via subcharts.
+
+## Helm chart (in-repo)
+
+```bash
+git clone https://github.com/beenuar/AiSOC.git
+cd AiSOC
+
+# The chart depends on the Bitnami postgresql and redis charts. A clean
+# machine has no repository definitions, so `helm dependency update` fails
+# with "no repository definition for https://charts.bitnami.com/bitnami"
+# before it starts. This line was missing, which meant the documented
+# Kubernetes path failed at its first command.
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo update
+
+helm dependency update infra/helm/aisoc
+
+helm install aisoc infra/helm/aisoc \
+  --namespace aisoc --create-namespace \
+  --set secrets.openai.apiKey=sk-... \
+  --set postgresql.auth.password=changeme
+```
+
+The image tags come from the chart's `appVersion`, so there is nothing to
+override for a working install. To pin a different release, note that every
+service lives under `services.<name>` — `--set api.image.tag=...` addresses a
+path no template reads and silently changes nothing:
+
+```bash
+  --set services.api.image.tag=v12.0.0 \
+  --set services.web.image.tag=v12.0.0
+```
+
+Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
+
+## Schema migrations and upgrades
+
+A chart install sets `global.environment` to production, and the API only
+applies migrations at boot when the environment is dev-class. So **`helm
+upgrade` on its own does not migrate**: it rolls new code onto the previous
+release's schema, every probe passes, and the first symptom is a request
+failing on a column that does not exist.
+
+Ask for the migration explicitly:
+
+```bash
+helm upgrade aisoc infra/helm/aisoc --set runMigrations=true
+```
+
+That renders
+[`templates/migrations-job.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/templates/migrations-job.yaml),
+a `pre-install,pre-upgrade` hook at weight `-10` — ahead of anything else a
+hook might do, because nothing should touch the new schema before it exists.
+Four properties worth knowing:
+
+- **Off by default.** `runMigrations: false`. A schema change is the one
+  operation with no undo, so the flag is your consent — the same role
+  `make upgrade` plays on the Compose side. Take a database backup first; the
+  hook cannot roll a migration back.
+- **Strict.** The Job sets `AISOC_MIGRATIONS_STRICT=1`. Without it the runner
+  logs each failure and returns normally, so the Job exits 0, the hook passes,
+  and the upgrade proceeds onto a partially-applied schema. It is set in the
+  template rather than left to you, because the one thing this must never do is
+  report success over a broken schema.
+- **A hook, not an init container.** An init container runs once per pod: with
+  `replicaCount: 2` that is two concurrent migration runs racing on every
+  rollout, restart and reschedule — and it would migrate on a node drain. The
+  hook runs once, before the Deployment is patched, and its failure aborts the
+  upgrade with the old pods still serving the schema they match.
+- **One source of connection detail.** The Job reads the same Secret and
+  ConfigMap the API Deployment does, so it cannot end up migrating a different
+  database from the one the application talks to.
+
+The previous run's Job is deleted as the next one is created, so a failed
+upgrade leaves its Job and its logs in the namespace:
+
+```bash
+kubectl -n aisoc logs job/aisoc-migrations
+```
+
+To migrate on your own schedule instead of at upgrade time, run the chain by
+hand as the **owner** role:
+
+```bash
+kubectl -n aisoc exec deploy/aisoc-api -- python -m app.scripts.run_migrations
+```
+
+Either way, migrate before or during the rollout, never after. The full
+procedure, the per-major breaking-change table and what upgrade testing does
+and does not cover are in [Upgrades](../operations/upgrades.md); the
+replica-level detail is in [HA deployment](../operations/ha-deployment.md).
+
+## Container images
+
+All images are published to GHCR and Cosign-signed:
+
+```
+ghcr.io/beenuar/aisoc-core-api:v12.0.0
+ghcr.io/beenuar/aisoc-agents:v12.0.0
+ghcr.io/beenuar/aisoc-realtime:v12.0.0
+ghcr.io/beenuar/aisoc-ingest:v12.0.0
+ghcr.io/beenuar/aisoc-enrichment:v12.0.0
+ghcr.io/beenuar/aisoc-web:v12.0.0
+```
+
+The tags above are an example pinned to a release. The current one is whatever
+the chart's `appVersion` says, and a default install needs no tag at all.
+
+The chart itself is published to an OCI registry from v11.3.0 onward:
+
+```bash
+helm show chart oci://ghcr.io/beenuar/charts/aisoc
+```
+
+This page previously named `oci://ghcr.io/beenuar/aisoc`, where no chart has
+ever been pushed: the command answered `not found`. A published command is a
+claim like any other, so `release.yml` now packages, lints and pushes the
+chart on every tag, and re-checks that its `appVersion` names images that
+exist. Until the first release carrying that job, install from a checkout as
+shown below.
+
+### The chart's version, and one coordinate that meant two things
+
+`Chart.yaml` carries two versions. `appVersion` is the application, and is
+what every unpinned `tag:` in `values.yaml` falls back to. `version` is the
+chart's own, and it is what `--version` selects.
+
+**If you pinned `--version 5.9.2`, pull it again and check what you have.**
+v12.3.2 published chart 5.9.2 with `appVersion: v12.3.2`; v13.0.0 bumped
+`appVersion` and left the chart version alone, and `helm push` overwrote the
+existing version rather than refusing it. `charts/aisoc:5.9.2` therefore names
+`v13.0.0` today and named `v12.3.2` before 29 September 2026. The replaced
+bytes are gone and cannot be restored — the coordinate is honest from 6.0.0
+onward, and 5.9.2 stays ambiguous forever.
+
+`scripts/check_chart_version.py` is what stops the next one. It refuses a
+release whose `appVersion` moved while the chart version did not, refuses a
+chart edit with no version bump, and asks GHCR whether the version about to be
+pushed already exists holding different content — comparing the unpacked
+files, because `helm package` output is not byte-reproducible. What it does
+not decide is whether a bump is a major, a minor or a patch: nothing in a diff
+knows whether a renamed `values.yaml` key breaks your values file, so that
+judgement stays with a human.
+
+`scripts/check_published_images.py` resolves every one of these against GHCR
+daily, so a name or tag that stops existing fails a build rather than a
+`helm install`. It asks whether the tag exists and whether the image behind it
+holds the version its tag names — not whether the page names the newest
+release, which is why this list can lag one and still pass. This list read `v5.2.0` until v11.1.0 — a tag no image has
+ever carried — and two of the names, `aisoc-api` and `aisoc-mcp`, have never
+been published at all. The API image is `aisoc-core-api`; the MCP server ships
+inside it rather than as its own image.
+
+Verify a signature before deploying:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/beenuar/AiSOC' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/beenuar/aisoc-core-api:v12.0.0
+```
+
+## Scaling
+
+The chart deploys `api`, `ingest`, `enrichment`, `alert-fusion`, `agents`,
+`web` and `realtime`; `ueba`, `honeytokens` and `purpleTeam` are off by
+default. There is no `mcp` deployment — the MCP server runs inside the API.
+
+```bash
+kubectl scale deployment aisoc-agents --replicas=3 -n aisoc
+kubectl scale deployment aisoc-api --replicas=2 -n aisoc
+```
+
+Horizontal Pod Autoscaler manifests are included in the chart — enable them
+with `--set services.api.autoscaling.enabled=true` (and similarly for
+`agents`, `realtime`). As above, the `services.` prefix is load-bearing.
+
+## Ingress
+
+The chart ships an Ingress template. Configure your hostnames via values:
+
+```yaml
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: aisoc.example.com         # web (Next.js, port 3000)
+      paths: [ "/" ]
+    - host: api.aisoc.example.com     # api (FastAPI, port 8000)
+      # /livez and /readyz, not /healthz — the API serves /health, /livez and
+      # /readyz. /healthz belongs to realtime, mcp and osquery-tls, and 404s
+      # here. Probe /readyz for readiness and /livez for liveness.
+      paths: [ "/api", "/livez", "/readyz" ]
+    - host: ws.aisoc.example.com      # realtime (WebSocket + push, port 8002)
+      paths: [ "/ws" ]
+    - host: mcp.aisoc.example.com     # MCP server (port 8003) — optional
+      paths: [ "/mcp" ]
+  tls:
+    - secretName: aisoc-tls
+      hosts:
+        - aisoc.example.com
+        - api.aisoc.example.com
+        - ws.aisoc.example.com
+        - mcp.aisoc.example.com
+```
+
+## Network policies
+
+The chart includes opinionated `NetworkPolicy` resources that restrict each service to only the dependencies it needs (for example, `agents` can reach Postgres, NATS, and OpenSearch but not the public internet). Enable them with `--set networkPolicies.enabled=true`. They are off by default to keep first-time installs frictionless, and on for any environment that holds real telemetry.

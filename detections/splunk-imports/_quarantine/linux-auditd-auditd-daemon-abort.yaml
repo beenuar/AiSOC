@@ -1,0 +1,40 @@
+id: splunk-security-content-76d6573f-c4ab-4fa1-8390-c036416d4add
+name: Linux Auditd Auditd Daemon Abort
+description: The following analytic detects the abnormal termination of the Linux
+  audit daemon (auditd) by identifying DAEMON_ABORT events in audit logs. These terminations
+  suggest a serious failure of the auditing subsystem, potentially due to resource
+  exhaustion, corruption, or malicious interference. Unlike a clean shutdown, DAEMON_ABORT
+  implies that audit logging may have been disabled without system administrator intent.
+  Alerts should be generated on detection and correlated with DAEMON_START, DAEMON_END,
+  and system logs to determine root cause. If no DAEMON_START follows soon after,
+  or this pattern repeats, it indicates a high-severity issue that impacts log integrity
+  and should be immediately investigated.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.012
+  categories:
+  - endpoint
+references:
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sec-audit_record_types
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=DAEMON_ABORT\n  | rename host as dest\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY type op res\n \
+    \      uid dest pid\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_auditd_daemon_abort_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 76d6573f-c4ab-4fa1-8390-c036416d4add
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_auditd_daemon_abort.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

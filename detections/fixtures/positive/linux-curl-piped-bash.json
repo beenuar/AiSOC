@@ -1,0 +1,4 @@
+{
+  "argv": "prefix-curl | bash-suffix",
+  "syscall": "execve"
+}

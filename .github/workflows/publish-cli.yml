@@ -1,0 +1,104 @@
+name: aisoc-cli · publish to npm
+
+# Publishes the `aisoc` wedge CLI to npm with build provenance
+# (https://docs.npmjs.com/generating-provenance-statements). Triggered by a
+# `cli-v*` tag so the CLI can release independently of the service images (which
+# ship on `v*` via release.yml).
+#
+# Requires the `NPM_TOKEN` repository secret (an npm automation token for the
+# `aisoc` package). Until that is configured the job no-ops with a clear notice
+# rather than failing — we never fake a publish.
+
+on:
+  push:
+    tags:
+      - 'cli-v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Pack only, do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance
+
+concurrency:
+  group: publish-cli-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: build + publish (provenance)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package.json version
+        if: startsWith(github.ref, 'refs/tags/cli-v')
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME#cli-v}"
+          pkg=$(node -p "require('./packages/aisoc-lite/package.json').version")
+          echo "tag=$tag pkg=$pkg"
+          test "$tag" = "$pkg" || (echo "::error::tag cli-v$tag != package.json $pkg"; exit 1)
+
+      - name: Build + test
+        run: |
+          pnpm --filter @aisoc/report-card build
+          pnpm --filter aisoc test
+          pnpm --filter aisoc build
+
+      - name: Pack (always) for artifact inspection
+        working-directory: packages/aisoc-lite
+        run: npm pack
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: aisoc-npm-tarball
+          path: packages/aisoc-lite/*.tgz
+
+      # Trusted publishing (OIDC) needs npm 11.5.1 or newer; Node 22 ships
+      # npm 10, which falls back to token auth and then fails with ENEEDAUTH.
+      - name: Upgrade npm for trusted publishing
+        if: vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      # npm validates a trusted publisher against the *workflow filename*, so
+      # this file is registered separately from release.yml on npmjs.com even
+      # though both publish the same package. The names are in
+      # docs/operations/publishing.md; changing either filename breaks
+      # publishing with ENEEDAUTH and nothing else.
+      - name: Publish to npm
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/cli-v') }}
+        working-directory: packages/aisoc-lite
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          TRUSTED: ${{ vars.AISOC_NPM_TRUSTED_PUBLISHING }}
+        run: |
+          set -euo pipefail
+          if [ "${TRUSTED:-}" = "true" ]; then
+            # Provenance is generated automatically on the OIDC path.
+            npm publish --access public
+            exit 0
+          fi
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::notice::Neither trusted publishing nor NPM_TOKEN is configured, so the tarball was uploaded as an artifact and nothing was published. See docs/operations/publishing.md."
+            exit 0
+          fi
+          npm publish --provenance --access public

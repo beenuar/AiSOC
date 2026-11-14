@@ -1,0 +1,5 @@
+{
+  "attribute": "userData",
+  "event_name": "ModifyInstanceAttribute",
+  "instance_state": "running"
+}

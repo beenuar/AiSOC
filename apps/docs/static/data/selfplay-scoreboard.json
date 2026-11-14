@@ -1,0 +1,17 @@
+{
+  "_comment": "Weekly self-play purple-team scoreboard. Each row is one campaign. The `synthetic` flag distinguishes the canned demo campaign (offline, deterministic) from a nightly live run against the seeded range. Never present a synthetic row as measured live performance.",
+  "updated": "2026-07-17",
+  "rows": [
+    {
+      "date": "2026-07-17",
+      "version": "unreleased",
+      "campaign": "nightly-self-play (canned)",
+      "techniques_attempted": 5,
+      "techniques_detected": 3,
+      "detection_rate": 0.6,
+      "mean_time_to_verdict_s": 12.0,
+      "new_detections_filed": 2,
+      "synthetic": true
+    }
+  ]
+}

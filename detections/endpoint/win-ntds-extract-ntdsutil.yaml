@@ -1,0 +1,25 @@
+id: det-endpoint-094
+name: ntdsutil.exe Used To Extract NTDS
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'ntdsutil.exe Used
+  To Extract NTDS'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1003.003
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "ntdsutil.exe"
+    AND process_command_line CONTAINS_ANY ["ifm", "create full", "activate instance ntds"]
+false_positives:
+- AD recovery procedure
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

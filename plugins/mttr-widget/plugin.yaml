@@ -1,0 +1,28 @@
+id: mttr-widget
+name: MTTR Dashboard Widget
+version: "1.0.0"
+plugin_type: widget
+description: >
+  Computes Mean Time to Respond (MTTR) and Mean Time to Detect (MTTD) metrics
+  from closed AiSOC cases, broken down by severity and playbook. Returns
+  structured data ready for the AiSOC dashboard widget renderer.
+author: AiSOC Core Team
+tags: [metrics, mttr, mttd, dashboard, widget]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/mttr-widget
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  properties:
+    lookback_days:
+      type: integer
+      default: 30
+      description: "Number of days of closed cases to include in the computation."
+    percentiles:
+      type: array
+      items:
+        type: integer
+        minimum: 1
+        maximum: 99
+      default: [50, 75, 95]
+      description: "Percentile breakpoints to include alongside the mean."

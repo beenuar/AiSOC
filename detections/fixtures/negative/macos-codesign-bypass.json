@@ -1,0 +1,5 @@
+{
+  "command_line": "xattr -l /tmp/file.zip",
+  "host": "mac-01",
+  "image_basename": "xattr"
+}

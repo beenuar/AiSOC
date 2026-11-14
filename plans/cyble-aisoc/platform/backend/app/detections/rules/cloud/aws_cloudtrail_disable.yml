@@ -1,0 +1,23 @@
+title: AWS CloudTrail Logging Disabled or Deleted
+id: aisoc-id-cl-0002-cloudtrail-disable
+status: stable
+description: An attacker disabling CloudTrail is a textbook defense-evasion step.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1562.008
+  - attack.defense_evasion
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'cloudtrail.amazonaws.com'
+    event.action|contains:
+      - 'StopLogging'
+      - 'DeleteTrail'
+      - 'UpdateTrail'
+      - 'PutEventSelectors'
+  condition: selection

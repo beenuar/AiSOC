@@ -1,0 +1,63 @@
+name: Version source
+
+# One file says what version this build is.
+#
+# The root `VERSION` file is the single source of truth, and several surfaces
+# restated it instead of deriving from it. A restated number is correct until
+# the next release and then silently is not, because "agrees with a constant"
+# is not a property anyone checks. `settings.VERSION` is the sharpest case: it
+# is the `version=` handed to the FastAPI application, so it is also the
+# version in the published OpenAPI document and the one the root route serves
+# — and it read `0.1.0` on a tree that was several majors past that.
+#
+# That defect is fixed (#1732 made `APP_VERSION` derive from
+# `app/core/version.py`), so this gate is green on arrival and its job is to
+# keep it that way. Green-on-arrival is the normal state for a prevention
+# gate, not a sign it is measuring nothing: `--self-test` runs first, and
+# reverting the one line it guards makes it exit 1.
+#
+# Deliberately not path-filtered. The defect this catches is a literal going
+# stale while nothing edits it, so a trigger that fires only when one of the
+# surfaces changes would be switched off at exactly the moment it is needed:
+# the version moves in `VERSION`, no surface file is touched, and the gate
+# that would have noticed never runs. It is a sub-second static read.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  single-version-source:
+    name: One source of truth for the version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # The gate before the tree. A gate that has stopped detecting what it
+      # claims to is worse than no gate, and this ordering means CI says so
+      # rather than reporting a clean tree measured by a broken instrument.
+      - name: The gate still detects what it claims to
+        run: python3 scripts/check_single_version_source.py --self-test
+
+      - name: Every version-reporting surface derives from VERSION
+        run: python3 scripts/check_single_version_source.py --list

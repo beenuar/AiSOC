@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-strike-network-inventory-explorer-unquoted-service-path
+name: strike_network_inventory_explorer__unquoted_service_path
+description: strike_network_inventory_explorer__unquoted_service_path
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule strike_network_inventory_explorer__unquoted_service_path\
+    \ {\n meta:\n    author = \"Osman Demir\"\n    description = \"Detects 10-Strike\
+    \ Network Inventory Explorer for Windows Unquoted Search Path explotation  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/IHxTBuFZaCor\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"persistence, privilege_escalation, T1034\"\n\n \
+    \ events:\n(($selection1.metadata.product_event_type = \"1\" and ($selection1.target.process.file.full_path\
+    \ = \"C:\\\\InventoryWebServer.exe\" or $selection1.target.process.file.full_path\
+    \ = \"C:\\\\Program Files\\\\InventoryWebServer.exe\")) or ($selection1.metadata.product_event_type\
+    \ = \"11\" and ($selection1.target.file.full_path = \"C:\\\\InventoryWebServer.exe\"\
+    \ or $selection1.target.file.full_path = \"C:\\\\Program Files\\\\InventoryWebServer.exe\"\
+    )))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: strike_network_inventory_explorer__unquoted_service_path
+provenance:
+  source: chronicle/detection-rules
+  source_id: strike_network_inventory_explorer__unquoted_service_path
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/10_strike_network_inventory_explorer___unquoted_service_path.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

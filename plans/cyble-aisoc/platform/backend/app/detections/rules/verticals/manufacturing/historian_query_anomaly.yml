@@ -1,0 +1,29 @@
+title: Process Historian Bulk Tag Query from Non-Engineering Identity
+id: aisoc-vt-mfg-0003-historian-bulk-query
+status: experimental
+description: |
+  An identity not tagged as process engineering ran a bulk tag query
+  against the process historian (OSIsoft PI, Aveva, GE Proficy)
+  pulling thousands of distinct tags. Common reconnaissance pattern
+  for IP theft (process recipes) and pre-positioning for sabotage.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: ot
+  service: historian
+tags:
+  - attack.t0888
+  - attack.collection
+  - aisoc.vertical.manufacturing
+  - aisoc.ip_theft
+detection:
+  selection:
+    event.module: ot.historian
+    event.action: 'tag.query'
+  filter:
+    actor.role|contains:
+      - 'process_engineer'
+      - 'control_engineer'
+  threshold:
+    distinct_tags_per_query|gte: 500
+  condition: selection and threshold and not filter

@@ -1,0 +1,329 @@
+"""
+Scoped API key management endpoints.
+
+POST   /api-keys          – create a new API key (returns raw key ONCE)
+GET    /api-keys          – list API keys for the current tenant (no raw keys)
+GET    /api-keys/{key_id} – get a single key's metadata
+DELETE /api-keys/{key_id} – revoke (deactivate) a key
+PATCH  /api-keys/{key_id} – update name / scopes / expiry
+
+VALID SCOPES
+  alerts:read  alerts:write  alerts:delete
+  cases:read   cases:write   cases:delete   approvals:write
+  playbooks:read playbooks:write playbooks:execute
+  connectors:read connectors:write connectors:delete
+  plugins:read plugins:execute plugins:admin
+  rules:read   rules:write
+  users:read
+  threat_intel:read threat_intel:write
+  reports:read reports:write
+  *            (all permissions — admin only)
+
+MIT License — AiSOC (open-source AI Security Operations Center)
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+
+from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.role_grants import RoleGrantDenied, authorize_permission_grant
+from app.core.security import generate_api_key
+from app.models.tenant import ApiKey
+
+router = APIRouter(prefix="/api-keys", tags=["api-keys"])
+
+# ── Valid scopes ──────────────────────────────────────────────────────────────
+
+VALID_SCOPES: frozenset[str] = frozenset(
+    [
+        "alerts:read",
+        "alerts:write",
+        "alerts:delete",
+        "cases:read",
+        "cases:write",
+        "cases:delete",
+        "approvals:write",
+        "playbooks:read",
+        "playbooks:write",
+        "playbooks:execute",
+        "connectors:read",
+        "connectors:write",
+        "connectors:delete",
+        "plugins:read",
+        "plugins:execute",
+        "plugins:admin",
+        "rules:read",
+        "rules:write",
+        # The agent-tool surface. These three are permissions four roles
+        # already hold, but none was mintable into a key, so a tenant
+        # automating a read-only vendor verb, a lake query or a hunt had no
+        # option but a wildcard key.
+        "actions:read",
+        "lake:query",
+        "hunts:read",
+        # The other two permissions the agent-tool surface enforces. The MCP
+        # server authenticates with a key, so without these aisoc_lake_schema
+        # (GET /lake/schema) and aisoc_preview_action (the dry-run, which
+        # `actions:execute` gates; live containment still needs an approver)
+        # were reachable only with "*".
+        "lake:read_schema",
+        "actions:execute",
+        # Depth 8.2. Mintable so a tenant can automate its own access
+        # governance — an on-call rotation approving elevations from a
+        # script, a change-management job adding a condition for a
+        # maintenance window. A permission absent from this set is one only
+        # a wildcard key can exercise, which is how `hunts:read` ended up
+        # reachable solely by the credential nobody should be using.
+        #
+        # `authorize_permission_grant` still refuses any of these to a
+        # minter who does not hold them, so being listed here widens
+        # nothing by itself.
+        "elevation:read",
+        "elevation:request",
+        "elevation:approve",
+        # Identity posture. Mintable because an access-review or
+        # joiner-mover-leaver job resolving effective permissions on a
+        # schedule is exactly the kind of automation a key is for, and a
+        # permission absent from this set is one only a wildcard key can
+        # exercise — which is how `hunts:read` came to be reachable solely by
+        # the credential nobody should be using.
+        "identity:read",
+        # Depth 6.1. Mintable so a tenant can pull its own AI-estate
+        # inventory into a CMDB or a governance report without a wildcard
+        # key. Listed here widens nothing by itself: the grant check below
+        # still refuses a scope the minter does not hold.
+        "ai_estate:read",
+        "ai_estate:write",
+        "access_conditions:read",
+        "access_conditions:write",
+        "workload_identities:read",
+        "workload_identities:write",
+        "users:read",
+        "threat_intel:read",
+        "threat_intel:write",
+        "reports:read",
+        "reports:write",
+        "*",
+    ]
+)
+
+
+def _validate_scopes(scopes: list[str]) -> None:
+    invalid = [s for s in scopes if s not in VALID_SCOPES]
+    if invalid:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Invalid scope(s): {', '.join(invalid)}. Valid scopes: {sorted(VALID_SCOPES)}",
+        )
+
+
+def _authorize_scopes(scopes: list[str], current_user: AuthUser) -> None:
+    """Refuse scopes the minter does not hold.
+
+    A key is a bearer credential, so its scopes are authority conferred on
+    whoever holds it. The check this replaced named two roles in a tuple —
+    ``("platform_admin", "tenant_admin")`` — and covered only ``"*"``, which
+    got both halves wrong. ``tenant_admin`` is a scoped role by design and
+    could mint a wildcard key, which is the same total escalation as
+    GHSA-pm3f-h6gc-rvgp by a door that creates no user at all; and every
+    non-wildcard scope was unguarded, so the same caller could mint a
+    ``plugins:admin`` key — plugin import runs code — while being refused
+    ``POST /api/v1/plugins/discover`` itself.
+    """
+    try:
+        authorize_permission_grant(
+            granter_role=current_user.role,
+            granter_scopes=current_user.scopes,
+            granter_permissions=current_user.resolved_permissions,
+            requested=scopes,
+            subject="API key scope(s)",
+        )
+    except RoleGrantDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
+
+
+# ── Request / response schemas ────────────────────────────────────────────────
+
+
+class CreateApiKeyRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255, description="Human-readable name")
+    scopes: list[str] = Field(default_factory=list, description="Permission scopes granted to this key")
+    expires_in_days: int | None = Field(None, ge=1, le=3650, description="TTL in days; None = never expires")
+
+
+class CreateApiKeyResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    key: str = Field(..., description="Raw API key — shown ONCE, store securely")
+    prefix: str
+    scopes: list[str]
+    expires_at: datetime | None
+    created_at: datetime
+
+
+class ApiKeyOut(BaseModel):
+    id: uuid.UUID
+    name: str
+    prefix: str
+    scopes: list[str]
+    is_active: bool
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class UpdateApiKeyRequest(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=255)
+    scopes: list[str] | None = None
+    expires_in_days: int | None = Field(None, ge=1, le=3650, description="Reset TTL from now; 0 = never")
+
+
+# ── Helper ────────────────────────────────────────────────────────────────────
+
+
+def _api_key_to_out(ak: ApiKey) -> ApiKeyOut:
+    return ApiKeyOut(
+        id=ak.id,
+        name=ak.name,
+        prefix=ak.key_prefix,
+        scopes=ak.scopes or [],
+        is_active=ak.is_active,
+        expires_at=ak.expires_at,
+        last_used_at=ak.last_used_at,
+        created_at=ak.created_at,
+    )
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+
+@router.post("", response_model=CreateApiKeyResponse, status_code=status.HTTP_201_CREATED)
+async def create_api_key(
+    body: CreateApiKeyRequest,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
+) -> CreateApiKeyResponse:
+    """
+    Create a new scoped API key for the current tenant.
+
+    The raw key value is returned **only once** in this response.
+    """
+    _validate_scopes(body.scopes)
+    _authorize_scopes(body.scopes, current_user)
+
+    raw_key, prefix, hashed_key = generate_api_key()
+
+    expires_at = None
+    if body.expires_in_days is not None:
+        from datetime import timedelta
+
+        expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
+
+    api_key = ApiKey(
+        tenant_id=current_user.tenant_id,
+        user_id=current_user.user_id,
+        name=body.name,
+        key_prefix=prefix,
+        hashed_key=hashed_key,
+        scopes=body.scopes,
+        is_active=True,
+        expires_at=expires_at,
+    )
+    db.add(api_key)
+    await db.commit()
+    await db.refresh(api_key)
+
+    return CreateApiKeyResponse(
+        id=api_key.id,
+        name=api_key.name,
+        key=raw_key,
+        prefix=prefix,
+        scopes=api_key.scopes,
+        expires_at=api_key.expires_at,
+        created_at=api_key.created_at,
+    )
+
+
+@router.get("", response_model=list[ApiKeyOut])
+async def list_api_keys(
+    db: DBSession,
+    current_user: AuthUser,
+) -> list[ApiKeyOut]:
+    """List all API keys for the current tenant (raw keys are never returned)."""
+    result = await db.execute(select(ApiKey).where(ApiKey.tenant_id == current_user.tenant_id).order_by(ApiKey.created_at.desc()))
+    return [_api_key_to_out(ak) for ak in result.scalars().all()]
+
+
+@router.get("/{key_id}", response_model=ApiKeyOut)
+async def get_api_key(
+    key_id: uuid.UUID,
+    db: DBSession,
+    current_user: AuthUser,
+) -> ApiKeyOut:
+    """Get metadata for a specific API key."""
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
+    ak = result.scalar_one_or_none()
+    if ak is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+    return _api_key_to_out(ak)
+
+
+@router.patch("/{key_id}", response_model=ApiKeyOut)
+async def update_api_key(
+    key_id: uuid.UUID,
+    body: UpdateApiKeyRequest,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
+) -> ApiKeyOut:
+    """Update an API key's name, scopes, or expiry."""
+    # Authorized before the row is loaded, so a refused scope change leaves
+    # the name and expiry in the same request unwritten as well. `get_db`
+    # would roll back anyway; not depending on that is the point.
+    if body.scopes is not None:
+        _validate_scopes(body.scopes)
+        _authorize_scopes(body.scopes, current_user)
+
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
+    ak = result.scalar_one_or_none()
+    if ak is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    if body.name is not None:
+        ak.name = body.name
+
+    if body.scopes is not None:
+        ak.scopes = body.scopes
+
+    if body.expires_in_days is not None:
+        from datetime import timedelta
+
+        ak.expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days)
+
+    await db.commit()
+    await db.refresh(ak)
+    return _api_key_to_out(ak)
+
+
+@router.delete("/{key_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
+async def revoke_api_key(
+    key_id: uuid.UUID,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
+) -> None:
+    """Revoke (deactivate) an API key. The key can no longer be used for authentication."""
+    result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
+    ak = result.scalar_one_or_none()
+    if ak is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API key not found")
+
+    ak.is_active = False
+    await db.commit()

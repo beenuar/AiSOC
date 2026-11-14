@@ -1,0 +1,59 @@
+{
+  "measured_at": "2026-11-01T10:07:58Z",
+  "hardware": {
+    "cpu": "Apple M5 Max",
+    "arch": "arm64",
+    "platform": "macOS-26.5.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.3"
+  },
+  "clickhouse_version": "24.8.14.39",
+  "indicator_type": "ip",
+  "lookback_days": 30,
+  "sweeps_per_step": 40,
+  "steps": [
+    {
+      "lake_rows": 100000,
+      "load_seconds": 0.19,
+      "sweep_ms_median": 6.97,
+      "sweep_ms_p95": 7.64,
+      "read_rows_median": 100000,
+      "read_bytes_median": 9239516,
+      "memory_bytes_p95": 4307692,
+      "projected_hours_for_indicators_EXTRAPOLATED": 1.94,
+      "projected_read_bytes_EXTRAPOLATED": 9239516000000
+    },
+    {
+      "lake_rows": 1000000,
+      "load_seconds": 1.64,
+      "sweep_ms_median": 11.59,
+      "sweep_ms_p95": 13.54,
+      "read_rows_median": 1000000,
+      "read_bytes_median": 93657038,
+      "memory_bytes_p95": 8472400,
+      "projected_hours_for_indicators_EXTRAPOLATED": 3.22,
+      "projected_read_bytes_EXTRAPOLATED": 93657038000000
+    },
+    {
+      "lake_rows": 5000000,
+      "load_seconds": 7.79,
+      "sweep_ms_median": 38.74,
+      "sweep_ms_p95": 46.27,
+      "read_rows_median": 5000000,
+      "read_bytes_median": 469171662,
+      "memory_bytes_p95": 4306964,
+      "projected_hours_for_indicators_EXTRAPOLATED": 10.76,
+      "projected_read_bytes_EXTRAPOLATED": 469171662000000
+    },
+    {
+      "lake_rows": 20000000,
+      "load_seconds": 28.94,
+      "sweep_ms_median": 148.97,
+      "sweep_ms_p95": 175.49,
+      "read_rows_median": 20000000,
+      "read_bytes_median": 1875119903,
+      "memory_bytes_p95": 4559772,
+      "projected_hours_for_indicators_EXTRAPOLATED": 41.38,
+      "projected_read_bytes_EXTRAPOLATED": 1875119903000000
+    }
+  ]
+}

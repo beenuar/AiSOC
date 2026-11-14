@@ -1,0 +1,45 @@
+id: splunk-security-content-739ed682-27e9-4ba0-80e5-a91b97698213
+name: ASL AWS ECR Container Upload Outside Business Hours
+description: The following analytic detects the upload of new containers to AWS Elastic
+  Container Service (ECR) outside of standard business hours through AWS CloudTrail
+  events. It identifies this behavior by monitoring for `PutImage` events occurring
+  before 8 AM or after 8 PM, as well as any uploads on weekends. This activity is
+  significant for a SOC to investigate as it may indicate unauthorized access or malicious
+  deployments, potentially leading to compromised services or data breaches. Identifying
+  and addressing such uploads promptly can mitigate the risk of security incidents
+  and their associated impacts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1204/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=PutImage\n  | eval hour=strftime(time/pow(10,3),\
+    \ \"%H\"), weekday=strftime(time/pow(10,3), \"%A\")\n  | where hour >= 20 OR hour\
+    \ < 8 OR weekday=Saturday OR weekday=Sunday\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY actor.user.uid api.operation api.service.name\n\
+    \       http_request.user_agent src_endpoint.ip actor.user.account.uid\n     \
+    \  cloud.provider cloud.region api.request.data\n       bucketName\n  | rename\
+    \ actor.user.uid as user api.operation as action api.service.name as dest http_request.user_agent\
+    \ as user_agent src_endpoint.ip as src actor.user.account.uid as vendor_account\
+    \ cloud.provider as vendor_product cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `asl_aws_ecr_container_upload_outside_business_hours_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 739ed682-27e9-4ba0-80e5-a91b97698213
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_ecr_container_upload_outside_business_hours.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: splunk-security-content-f48a5557-be06-4b96-b8e8-be563e387620
+name: Windows ESX Admins Group Creation via PowerShell
+description: This analytic detects attempts to create an "ESX Admins" group using
+  PowerShell commands. This activity may indicate an attempt to exploit the VMware
+  ESXi Active Directory Integration Authentication Bypass vulnerability (CVE-2024-37085).
+  Attackers can use this method to gain unauthorized access to ESXi hosts by recreating
+  the 'ESX Admins' group after its deletion from Active Directory.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.002
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://support.broadcom.com/web/ecx/support-content-notification/-/external/content/SecurityAdvisories/0/24505
+- https://www.microsoft.com/en-us/security/blog/2024/07/29/ransomware-operators-exploit-esxi-hypervisor-vulnerability-for-mass-encryption/
+- https://www.securityweek.com/microsoft-says-ransomware-gangs-exploiting-just-patched-vmware-esxi-flaw/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText=\"*New-ADGroup*\" OR ScriptBlockText=\"\
+    *New-LocalGroup*\") ScriptBlockText=\"*ESX Admins*\"\n  | fillnull\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_esx_admins_group_creation_via_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f48a5557-be06-4b96-b8e8-be563e387620
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_esx_admins_group_creation_via_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

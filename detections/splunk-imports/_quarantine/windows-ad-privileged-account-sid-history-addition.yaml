@@ -1,0 +1,54 @@
+id: splunk-security-content-6b521149-b91c-43aa-ba97-c2cac59ec830
+name: Windows AD Privileged Account SID History Addition
+description: The following analytic identifies when the SID of a privileged user is
+  added to the SID History attribute of another user. It leverages Windows Security
+  Event Codes 4742 and 4738, combined with identity lookups, to detect this activity.
+  This behavior is significant as it may indicate an attempt to abuse SID history
+  for unauthorized access across multiple domains. If confirmed malicious, this activity
+  could allow an attacker to escalate privileges or maintain persistent access within
+  the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.005
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=1772
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security`
+
+    EventCode IN (4742, 4738)
+
+    NOT SidHistory IN ("%%1793", -)
+
+    | rex field=SidHistory "(^%{|^)(?P<SidHistory>.*?)(}$|$)"
+
+    | eval category="privileged"
+
+    | lookup identity_lookup_expanded category, identity as SidHistory OUTPUT identity_tag
+    as match
+
+    | where isnotnull(match)
+
+    | rename TargetSid as userSid
+
+    | table _time action status host user userSid SidHistory Logon_ID src_user dest
+
+    | `windows_ad_privileged_account_sid_history_addition_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6b521149-b91c-43aa-ba97-c2cac59ec830
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_privileged_account_sid_history_addition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

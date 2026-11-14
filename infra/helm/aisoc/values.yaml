@@ -1,0 +1,819 @@
+# AiSOC Helm Chart Values
+# Default values for production HA deployment
+
+nameOverride: ""
+fullnameOverride: ""
+
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+  environment: production
+  logLevel: info
+  otelEndpoint: ""
+  extraConfig: {}
+
+# ─── Service Account ──────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+  automountToken: false
+
+# ─── Services map (drives deployment.yaml, hpa.yaml, pdb.yaml, service.yaml) ─
+services:
+  api:
+    image:
+      repository: ghcr.io/beenuar/aisoc-core-api
+      tag: ""  # defaults to Chart.AppVersion
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8000
+    metricsPort: 9090
+    healthCheckPath: /health
+    readinessPath: /readyz
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 10
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+    # Installed plugins (AISOC_PLUGINS_DIR, default /opt/aisoc/plugins) and
+    # the Ed25519 public keys that make signed third-party plugins loadable
+    # (PLUGIN_TRUSTED_KEYS_DIR, default /opt/aisoc/plugin-keys).
+    #
+    # Nothing in this chart mounted either path, and the pod runs with
+    # `readOnlyRootFilesystem: true` — so on Kubernetes installing a plugin
+    # did not merely fail to survive a rollout, it could not write at all.
+    #
+    # Off by default. A PVC needs a storage class and most clusters that
+    # install this never install a plugin, and a chart that cannot install
+    # without a working default StorageClass is worse than one that asks.
+    # Turning it on also makes the API Deployment `Recreate` rather than
+    # `RollingUpdate` when the access mode is ReadWriteOnce, because two
+    # replicas cannot share such a volume across nodes.
+    plugins:
+      persistence:
+        enabled: false
+        size: 5Gi
+        # Empty means the cluster default.
+        storageClass: ""
+        # ReadWriteMany if your storage supports it: with ReadWriteOnce the
+        # API is pinned to one node and rollouts serialise.
+        accessMode: ReadWriteOnce
+
+  ingest:
+    image:
+      repository: ghcr.io/beenuar/aisoc-ingest
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 3
+    containerPort: 8001
+    healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 3
+      maxReplicas: 20
+      cpuTargetUtilization: 60
+      memTargetUtilization: 75
+    pdb:
+      enabled: true
+      minAvailable: 2
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  enrichment:
+    image:
+      repository: ghcr.io/beenuar/aisoc-enrichment
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8002
+    healthCheckPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+      limits:
+        cpu: 800m
+        memory: 1Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  alert-fusion:
+    image:
+      repository: ghcr.io/beenuar/aisoc-fusion
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8003
+    healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 2Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 65
+      memTargetUtilization: 75
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  agents:
+    image:
+      repository: ghcr.io/beenuar/aisoc-agents
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8004
+    healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 4Gi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 60
+      memTargetUtilization: 70
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  web:
+    image:
+      repository: ghcr.io/beenuar/aisoc-web
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 3000
+    healthCheckPath: /api/health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 8
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  realtime:
+    image:
+      repository: ghcr.io/beenuar/aisoc-realtime
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 4000
+    healthCheckPath: /health
+    readinessPath: /readyz
+    waitForKafka: true
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 6
+      cpuTargetUtilization: 70
+      memTargetUtilization: 80
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+# ─── Ingress ──────────────────────────────────────────────────────────────────
+  # Depth plan 4.5 / parity 6.8. These three were absent from the chart
+  # while being CORE services in docker-compose.yml, so `helm install`
+  # brought up a deployment that was missing response execution, every
+  # connector poll and the threat-intel store — and said nothing, because
+  # nothing compared the two.
+  #
+  # Container ports are the *container's* ports from docker-compose.yml,
+  # not the published host ports: 8002:8085 means actions listens on 8085
+  # and compose maps it to 8002 on the host. Taking the left-hand number
+  # is how a chart renders cleanly and every probe fails.
+  actions:
+    image:
+      repository: ghcr.io/beenuar/aisoc-actions
+      tag: ""  # defaults to Chart.AppVersion
+      pullPolicy: IfNotPresent
+    replicaCount: 2
+    containerPort: 8085
+    healthCheckPath: /health
+    readinessPath: /readyz
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: false
+    pdb:
+      enabled: true
+      minAvailable: 1
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  connectors:
+    image:
+      repository: ghcr.io/beenuar/aisoc-connectors
+      tag: ""
+      pullPolicy: IfNotPresent
+    # One replica by default, and that is a correctness constraint rather
+    # than a sizing choice until the scheduler's leader election is
+    # enabled: two replicas each run every connector's poll job, so every
+    # vendor is polled twice and the duplicate events are deduplicated
+    # downstream at best. See AISOC_SCHEDULER_LEADER_ELECTION.
+    replicaCount: 1
+    containerPort: 8003
+    healthCheckPath: /health
+    readinessPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 768Mi
+    hpa:
+      enabled: false
+    pdb:
+      enabled: false
+    env:
+      AISOC_SCHEDULER_LEADER_ELECTION: "true"
+    extraVolumes: []
+    extraVolumeMounts: []
+
+  threatintel:
+    image:
+      repository: ghcr.io/beenuar/aisoc-threatintel
+      tag: ""
+      pullPolicy: IfNotPresent
+    replicaCount: 1
+    containerPort: 8005
+    healthCheckPath: /health
+    readinessPath: /health
+    service:
+      type: ClusterIP
+      port: 80
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    hpa:
+      enabled: false
+    pdb:
+      enabled: false
+    env: {}
+    extraVolumes: []
+    extraVolumeMounts: []
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "64m"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+  hosts:
+    - host: aisoc.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+          port: 80
+        - path: /ws
+          pathType: Prefix
+          service: realtime
+          port: 80
+        - path: /
+          pathType: Prefix
+          service: web
+          port: 80
+  tls:
+    - secretName: aisoc-tls
+      hosts:
+        - aisoc.example.com
+
+# ─── Standalone service deployments ───────────────────────────────────────────
+# ueba-deployment.yaml, honeytokens-deployment.yaml and purple-team-deployment.yaml
+# have shipped referencing .Values.ueba / .Values.honeytokens / .Values.purpleTeam,
+# none of which existed here. `helm lint` failed and `helm template` errored on
+# a nil pointer, so the chart could not be rendered at all, let alone installed —
+# which is also why nobody noticed the missing keys.
+ueba:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/beenuar/aisoc-ueba
+    tag: ""              # defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPU: 70
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+honeytokens:
+  enabled: false
+  replicaCount: 1
+  tokenTtlDays: 90
+  otelEndpoint: ""
+  image:
+    repository: ghcr.io/beenuar/aisoc-honeytokens
+    tag: ""              # defaults to Chart.AppVersion; first release tag was v11.1.0
+    pullPolicy: IfNotPresent
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# Depth 9.1 (parity 6.6): AiSOC's own MCP server over streamable HTTP.
+#
+# Off by default, and `image.repository` is deliberately empty rather than
+# carrying a plausible-looking default. No `ghcr.io/beenuar/aisoc-mcp` package
+# has been published, and a chart that names an image which has never existed
+# is how `helm install` produced ImagePullBackOff on every pod of an earlier
+# release. The template `required`s it, so enabling the component without
+# supplying a repository fails at render time with that sentence rather than
+# at pull time with a backoff.
+mcp:
+  enabled: false
+  replicaCount: 1
+  # Defaults to this release's own core-api Service when left empty.
+  aisocUrl: ""
+  timeoutMs: 20000
+  image:
+    repository: ""
+    tag: ""              # defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+purpleTeam:
+  enabled: false
+  replicaCount: 1
+  calderaUrl: ""
+  artAtomicsPath: /opt/atomics
+  otelEndpoint: ""
+  image:
+    repository: ghcr.io/beenuar/aisoc-purple-team
+    tag: ""              # defaults to Chart.AppVersion; first release tag was v11.1.0
+    pullPolicy: IfNotPresent
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+
+# ─── Kafka ────────────────────────────────────────────────────────────────────
+#
+# `bootstrapServers` is the address of a broker the chart does NOT run. It is
+# the production shape: a managed broker (MSK, Confluent Cloud, Redpanda
+# Cloud) outlives any one release and is not something a SOC should be
+# operating by accident.
+#
+# `deploy` runs brokers inside the release instead. It is off by default
+# because a default install that silently starts a stateful quorum is the
+# wrong surprise, and because a single-replica broker with no persistence is
+# worse than none. Turn it on with values-ha.yaml, which sets three replicas,
+# replication factor 3 and min.insync.replicas 2, the settings that make
+# losing a broker survivable.
+kafka:
+  bootstrapServers: "kafka:9092"
+  deploy:
+    enabled: false
+    replicaCount: 3
+    # Pinned rather than floating: a broker is the one component in this
+    # chart where the version is the on-disk format.
+    image:
+      repository: apache/kafka
+      tag: "3.9.1"
+      pullPolicy: IfNotPresent
+    # KRaft requires a cluster id at format time. Fixed here so a re-install
+    # against existing volumes rejoins its own cluster rather than refusing to
+    # start against log directories formatted for a different one.
+    clusterId: "aisoc-kraft-cluster-0"
+    replicationFactor: 3
+    minInsyncReplicas: 2
+    numPartitions: 3
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: ""
+    resources:
+      requests:
+        cpu: 250m
+        memory: 1Gi
+      limits:
+        cpu: 2000m
+        memory: 3Gi
+    extraEnv: {}
+    # A post-install hook that creates the spine's topics before anything
+    # publishes. Auto-creation alone loses the first batch after an install:
+    # the produce that triggers creation is the one that fails. It also pins
+    # partitions and replication factor instead of inheriting whatever the
+    # broker defaults were at boot.
+    createTopics:
+      enabled: true
+      names:
+        - aisoc.raw_events
+        - aisoc.alerts.fused
+        - aisoc.alerts.raw
+        - ueba.anomalies
+  # An init container on every service that declares `waitForKafka: true`,
+  # holding it back until a broker answers. A consumer whose bootstrap fails
+  # does not retry: the worker task ends, the pod keeps answering /health with
+  # 200, and the spine is silently unconsumed. Ordering is cheaper than
+  # detecting that afterwards.
+  waitForBroker:
+    enabled: true
+    attempts: 60
+    intervalSeconds: 5
+    image:
+      repository: apache/kafka
+      tag: "3.9.1"
+      pullPolicy: IfNotPresent
+
+otel:
+  endpoint: ""
+
+# ─── Scheduled backups ────────────────────────────────────────────────────────
+# scripts/backup.sh has been correct and unscheduled: every deployment guide
+# said "run it on a cron" and none shipped one, so the realistic state of a
+# self-hosted install was no backups. This is the same script the DR gate
+# exercises in CI, so what runs here is what has been proven to restore.
+#
+# Disabled by default because it needs a bucket, credentials and an encryption
+# key that only the operator can supply — and a CronJob that fails every night
+# is worse than an absent one.
+backup:
+  enabled: false
+  # 02:30 daily. The RPO this implies is the schedule interval: anything
+  # ingested since the last successful run is lost in a full-restore scenario.
+  schedule: "30 2 * * *"
+  timeZone: "UTC"
+  component: all          # postgres|clickhouse|plugins|neo4j|qdrant|redis|all
+  retentionDays: 30
+
+  image:
+    repository: ghcr.io/beenuar/aisoc-core-api
+    tag: ""               # defaults to Chart.AppVersion
+    pullPolicy: IfNotPresent
+
+  s3:
+    bucket: ""            # s3://your-bucket (required)
+    prefix: "aisoc-backups"
+    region: "us-east-1"
+    endpointUrl: ""       # set for R2 / MinIO / any S3-compatible store
+
+  encryption:
+    mode: "on"            # "off" only if the bucket provides equivalent protection
+    existingSecret: ""    # holds the 64-hex AES-256-GCM key
+    secretKey: "backup-encryption-key"
+
+  # Credentials and store URLs, by secret reference. Values are never inlined
+  # here: a backup job reads every database in the deployment, so its env is
+  # the highest-value secret set in the chart.
+  #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / POSTGRES_URL /
+  #   CLICKHOUSE_PASSWORD / NEO4J_PASSWORD / REDIS_URL
+  secretEnv: {}
+  #   AWS_ACCESS_KEY_ID:
+  #     secretName: aisoc-backup-secret
+  #     secretKey: aws-access-key-id
+
+  # Non-secret endpoints (NEO4J_URI, NEO4J_HTTP_URL, QDRANT_URL, CLICKHOUSE_HOST…).
+  extraEnv: {}
+
+  # A stuck job blocks every later run because concurrencyPolicy is Forbid.
+  activeDeadlineSeconds: 7200
+  startingDeadlineSeconds: 3600
+  backoffLimit: 2
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 7
+  scratchSize: 20Gi
+
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+# ─── Bundled Infrastructure (disable in production; use managed services) ─────
+#
+# TWO DATABASE ROLES, AND THE CHART CANNOT CREATE THE SECOND ONE FOR YOU
+# ----------------------------------------------------------------------
+# `auth.username` below is the OWNER: it owns the schema and applies the
+# migration chain. No service should connect as it. A superuser — which is
+# what the bundled chart and most managed services make the master user —
+# ignores every row-level-security policy in this schema, even under
+# FORCE ROW LEVEL SECURITY, so running the services as the owner leaves all 92
+# policies filtering nothing.
+#
+# Services connect as `aisoc_app`, a DML-only role that
+# `services/api/migrations/061_runtime_app_role.sql` creates and constrains to
+# NOSUPERUSER NOBYPASSRLS. The migration deliberately sets no password, so the
+# deployment supplies one. This chart ships no Secret template — it reads an
+# existing `<release>-secrets` — which means **this is an operator step**:
+#
+#   1. Apply the migration chain as the owner, with AISOC_APP_DB_PASSWORD set
+#      in the job's environment. That run gives `aisoc_app` its login.
+#   2. Put the runtime DSN in `<release>-secrets` under `database-url`
+#      (and `honeytoken-database-url` / `purple-team-database-url`), pointing
+#      at `aisoc_app`.
+#   3. Put the owner DSN under `database-migration-url`, used by the migration
+#      job and by nothing else.
+#
+# Verify with `python scripts/check_runtime_db_role.py --dsn "$DATABASE_URL"`:
+# rolsuper and rolbypassrls must both read false and the role must own nothing.
+# Skip step 1 and the services cannot authenticate — a loud failure. Skip step 2
+# and they authenticate as the owner, which is the silent one.
+# Depth plan 4.5 / parity 6.8 — the three CORE services that are not ours.
+#
+# Separate from `.Values.services` on purpose: everything in that map
+# defaults its image tag to `.Chart.AppVersion`, and tagging a
+# third-party image with AiSOC's version produces a chart that renders
+# perfectly and pulls a tag that does not exist. Two of them also need
+# storage, which the stateless Deployment template has nowhere to put.
+llmGateway:
+  enabled: true
+  image:
+    # Pinned, not floating. This read `main-stable` — a moving tag, and a
+    # gateway that changes under a running deployment changes which models
+    # resolve — until upstream deleted that tag outright and every fresh
+    # install failed with `manifest unknown`. v1.102.1 is the version
+    # `main-stable` served when this stack was measured against it. Keep in
+    # lockstep with the root docker-compose.yml litellm pin.
+    repository: ghcr.io/berriai/litellm
+    tag: v1.102.1
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  env:
+    # Every value the gateway reads must be an environment variable, not
+    # a literal in the config: a bare literal cannot be changed without
+    # rebuilding, which is how a request timeout came to be unraisable.
+    LITELLM_REQUEST_TIMEOUT: "600"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Rendered into a ConfigMap. Kept minimal here; a deployment with its
+  # own model routing replaces this wholesale.
+  config: |
+    model_list:
+      - model_name: aisoc-triage
+        litellm_params:
+          model: ollama/llama3.2:3b-instruct-q4_K_M
+          api_base: os.environ/OLLAMA_BASE_URL
+    router_settings:
+      # An int, not a string. LiteLLM passes router_settings through
+      # with no coercion and evaluates `num_retries > 0`, which raises
+      # TypeError against a string at exactly the moment a retry is
+      # needed.
+      num_retries: 2
+    general_settings:
+      request_timeout: os.environ/LITELLM_REQUEST_TIMEOUT
+
+ollama:
+  # On by default because CORE ships a local model so a first run can
+  # triage with zero credentials. A deployment pointing at a hosted
+  # provider turns this off and keeps the gateway.
+  enabled: true
+  image:
+    repository: ollama/ollama
+    tag: 0.6.7
+    pullPolicy: IfNotPresent
+  model: llama3.2:3b-instruct-q4_K_M
+  env: {}
+  # The first start pulls gigabytes. 90 x 10s is fifteen minutes, which
+  # is a slow registry rather than a broken pod; a probe tuned for a
+  # stateless service kills it mid-pull, forever.
+  startupFailureThreshold: 90
+  persistence:
+    size: 20Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 500m
+      memory: 4Gi
+    limits:
+      cpu: 4000m
+      memory: 8Gi
+
+qdrant:
+  enabled: true
+  image:
+    repository: qdrant/qdrant
+    tag: v1.7.0
+    pullPolicy: IfNotPresent
+  persistence:
+    size: 10Gi
+    storageClass: ""
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+postgresql:
+  enabled: false
+  auth:
+    # The owner / migration role. See the note above before pointing a
+    # service's DATABASE_URL at this.
+    database: aisoc
+    username: aisoc
+    existingSecret: aisoc-postgres-secret
+  primary:
+    persistence:
+      size: 100Gi
+
+redis:
+  enabled: false
+  auth:
+    existingSecret: aisoc-redis-secret
+  master:
+    persistence:
+      size: 20Gi
+
+# ─── Legacy top-level keys (kept for backward compat with core-api-deployment.yaml) ─
+coreApi:
+  enabled: false  # Replaced by services.api above
+
+# ─── Schema migrations ────────────────────────────────────────────────────────
+#
+# `helm upgrade --set runMigrations=true` applies the SQL migration chain in a
+# pre-upgrade hook Job before the new code serves traffic.
+#
+# This flag was documented in apps/docs/docs/operations/upgrades.md and existed
+# nowhere else in the repository: no value here, no Job template. `--set` on a
+# value nothing reads is accepted silently, so an operator following the
+# documentation got an upgrade that reported success having applied nothing,
+# then rolled new code onto the previous release's schema.
+#
+# Off by default, deliberately. A schema change is the one operation with no
+# undo, and AiSOC never updates itself: the flag is the operator's consent, the
+# same role `make upgrade` plays on the Compose side.
+#
+# The Job sets AISOC_MIGRATIONS_STRICT=1, so a failed migration fails the hook
+# and aborts the upgrade with the old pods still serving the schema they match.
+# Take a database backup first; the hook cannot roll a migration back.
+runMigrations: false
+
+# ─── Network Policies ─────────────────────────────────────────────────────────
+#
+# Egress default-deny. This is the network half of "runs entirely on your
+# infrastructure": the redaction half is gated by test_privacy_redactor, and
+# until v9.0 nothing stopped a pod opening a socket to anywhere.
+#
+# Off by default on purpose. A cluster whose CNI does not enforce
+# NetworkPolicy ignores this object silently, and a control that is silently
+# ignored is worse than one an operator consciously switched on — it reads as
+# protection while providing none. Check your CNI, then set this.
+networkPolicy:
+  enabled: false
+  # Destinations reachable outside the release: vendor APIs, an LLM endpoint,
+  # a SIEM. 169.254.169.254 is excluded from each of these automatically.
+  allowedEgressCIDRs: []
+
+# ─── Pod Security ─────────────────────────────────────────────────────────────
+podSecurityPolicy:
+  enabled: false

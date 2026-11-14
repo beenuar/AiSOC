@@ -1,0 +1,47 @@
+id: splunk-security-content-c4824cc6-d644-458e-a39a-67cd67da75e3
+name: Cisco Duo Admin Login Unusual Os
+description: The following analytic identifies Duo admin login attempts from operating
+  systems that are unusual for your environment, excluding commonly used OS such as
+  Mac OS X. Please adjust to your environment. It works by analyzing Duo activity
+  logs for admin login actions and filtering out logins from expected operating systems.
+  The analytic then aggregates events by browser, version, source IP, location, and
+  OS details to highlight anomalies. Detecting admin logins from unexpected operating
+  systems is critical for a SOC, as it may indicate credential compromise, unauthorized
+  access, or attacker activity using unfamiliar devices. Such behavior can precede
+  privilege escalation, policy changes, or other malicious actions within the Duo
+  environment. Early detection enables rapid investigation and response, reducing
+  the risk of account takeover and minimizing potential damage to organizational security
+  controls.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_activity` \"action.name\"=admin_login NOT access_device.os\
+    \ IN (\"Mac OS X\")\n  | rename actor.name as user access_device.ip.address as\
+    \ src_ip\n  | stats count min(_time) as firstTime max(_time) as lastTime\n   \
+    \ BY access_device.browser access_device.browser_version src_ip\n       access_device.location.city\
+    \ access_device.location.country access_device.location.state\n       access_device.os\
+    \ access_device.os_version actor.details\n       actor.type outcome.result user\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_admin_login_unusual_os_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c4824cc6-d644-458e-a39a-67cd67da75e3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_admin_login_unusual_os.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

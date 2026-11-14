@@ -1,0 +1,5 @@
+{
+  "event_type": "ImageLoad",
+  "host": "wks-001",
+  "image_loaded_path": "C:\\Windows\\System32\\kernel32.dll"
+}

@@ -1,0 +1,29 @@
+id: sublime_security
+name: Sublime Security Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Sublime Security inbound-email detections connector. Polls
+  /v1/messages for malicious + suspicious verdicts produced by Sublime's
+  rule marketplace and normalises them to the AiSOC alert shape with
+  severity derived from verdict (and escalated when triggered rules
+  carry BEC / credential / phishing / impersonation substrings).
+author: AiSOC Core Team
+tags: [email-security, saas, sublime, phishing]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sublime_security.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_key]
+  properties:
+    base_url:
+      type: string
+      description: >
+        API base URL. Defaults to https://api.platform.sublimesecurity.com.
+        Override only for self-hosted / regional Sublime tenants.
+    api_key:
+      type: string
+      description: API key generated under Sublime → Settings → API → Create token.
+      secret: true

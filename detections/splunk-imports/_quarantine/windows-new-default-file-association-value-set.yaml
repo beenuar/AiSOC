@@ -1,0 +1,41 @@
+id: splunk-security-content-7d1f031f-f1c9-43be-8b0b-c4e3e8a8928a
+name: Windows New Default File Association Value Set
+description: The following analytic detects registry changes to the default file association
+  value. It leverages data from the Endpoint data model, specifically monitoring registry
+  paths under "HKCR\\*\\shell\\open\\command\\*". This activity can be significant
+  because, attackers might alter the default file associations in order to execute
+  arbitrary scripts or payloads when a user opens a file, leading to potential code
+  execution. If confirmed malicious, this technique can enable attackers to persist
+  on the compromised host and execute further malicious commands, posing a severe
+  threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.001
+  categories:
+  - endpoint
+references:
+- https://dmcxblue.gitbook.io/red-team-notes-2-0/red-team-techniques/privilege-escalation/untitled-3/accessibility-features
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count  min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path="*\\shell\\open\\command\\*"
+    Registry.registry_path IN ("*HKCR\\*", "*HKEY_CLASSES_ROOT\\*") by Registry.dest  Registry.user
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_name
+    Registry.registry_value_data | `security_content_ctime(lastTime)` | `security_content_ctime(firstTime)`
+    | `drop_dm_object_name(Registry)` | `windows_new_default_file_association_value_set_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 7d1f031f-f1c9-43be-8b0b-c4e3e8a8928a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_new_default_file_association_value_set.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,28 @@
+title: Warehouse Inventory Adjustment Exceeds Baseline Without Cycle Count
+id: aisoc-vt-ret-0005-warehouse-inventory-shrinkage
+status: experimental
+description: |
+  Negative inventory adjustment ("shrink") issued in the WMS without a
+  matching cycle-count or receiving discrepancy ticket. Detects both
+  employee theft and collusion between warehouse staff and third-party
+  carriers in retail supply chains.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: wms
+  service: adjustment
+tags:
+  - attack.t1078
+  - attack.impact
+  - aisoc.vertical.retail
+  - aisoc.fraud
+detection:
+  selection:
+    event.module: wms.inventory
+    event.action: 'quantity.adjusted'
+    adjustment.direction: 'negative'
+  filter:
+    adjustment.has_supporting_ticket: true
+  anomaly:
+    user.adjustment_value.sigma|gte: 3.0
+  condition: selection and anomaly and not filter

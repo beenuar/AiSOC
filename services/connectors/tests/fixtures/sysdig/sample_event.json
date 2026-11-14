@@ -1,0 +1,49 @@
+[
+  {
+    "id": "ev-001",
+    "timestamp": "2026-05-13T18:30:00.000Z",
+    "ruleName": "Terminal shell in container",
+    "severity": 4,
+    "description": "A shell was used as the entrypoint of a container",
+    "labels": {
+      "host.hostname": "ip-10-0-1-7.ec2.internal",
+      "kubernetes.namespace.name": "prod",
+      "kubernetes.pod.name": "checkout-7df8d-abc",
+      "kubernetes.container.name": "checkout",
+      "user.name": "root"
+    }
+  },
+  {
+    "id": "ev-002",
+    "timestamp": "2026-05-13T18:30:05.000Z",
+    "ruleName": "Drift Detection: New executable created in container",
+    "severity": 5,
+    "description": "An executable that wasn't present in the image was created at runtime",
+    "labels": {
+      "host.hostname": "ip-10-0-1-7.ec2.internal",
+      "kubernetes.namespace.name": "prod",
+      "kubernetes.pod.name": "checkout-7df8d-abc",
+      "kubernetes.container.name": "checkout",
+      "user.name": "appuser"
+    }
+  },
+  {
+    "id": "ev-003",
+    "timestamp": "2026-05-13T18:30:10.000Z",
+    "ruleName": "Read sensitive file untrusted",
+    "severity": "warning",
+    "labels": {
+      "kubernetes.namespace.name": "staging",
+      "kubernetes.pod.name": "redis-0"
+    }
+  },
+  {
+    "id": "ev-004",
+    "timestamp": "2026-05-13T18:30:15.000Z",
+    "ruleName": "Routine container started",
+    "severity": "info",
+    "labels": {
+      "kubernetes.namespace.name": "infra"
+    }
+  }
+]

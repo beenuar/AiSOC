@@ -1,0 +1,182 @@
+"""Invoking-identity authorization for the actions service (Wave 4).
+
+Three guarantees layered on top of the blast-radius gate:
+
+* **W4.2 least-privilege** — an action only runs if its invoking principal
+  holds the permission its blast radius demands (``actions:execute:{low,medium,
+  high}``, with higher tiers granting lower and ``actions:*`` granting all).
+* **W4.3 authenticated routes** — the mutating routes require a service bearer
+  token; a missing token fails closed in production.
+* **W4.4 bound approval** — an approver must hold the action's permission AND
+  must not be the requester (separation of duties).
+"""
+
+from __future__ import annotations
+
+import hmac
+from typing import Any
+
+from fastapi import Header, HTTPException, status
+
+from app.core.config import get_settings
+from app.models.action import (
+    ACTION_REQUIRED_PERMISSION,
+    ActionPrincipal,
+    ActionRequest,
+    ActionType,
+)
+
+# Ordered execution tiers — a higher tier grants every lower one.
+_TIER_RANK: dict[str, int] = {
+    "actions:execute:low": 1,
+    "actions:execute:medium": 2,
+    "actions:execute:high": 3,
+}
+
+
+class ActionAuthzError(Exception):
+    """Raised when a principal is not authorized for an action / approval."""
+
+
+def has_action_permission(permissions: list[str], required: str) -> bool:
+    """True if ``permissions`` satisfies ``required`` (exact, wildcard, or a
+    higher execution tier)."""
+    if not permissions:
+        return False
+    perms = set(permissions)
+    if "*" in perms or "actions:*" in perms or "actions:execute:*" in perms:
+        return True
+    if required in perms:
+        return True
+    req_rank = _TIER_RANK.get(required, 0)
+    if req_rank:
+        return any(_TIER_RANK.get(p, 0) >= req_rank for p in perms)
+    return False
+
+
+def _required_permission(action_type: ActionType) -> str:
+    # Unknown/newly-added action types default to the strictest tier.
+    return ACTION_REQUIRED_PERMISSION.get(action_type, "actions:execute:high")
+
+
+def authorize_action(request: ActionRequest, *, require_principal: bool | None = None) -> None:
+    """Enforce least-privilege for an action's invoking principal (W4.2).
+
+    Raises :class:`ActionAuthzError` on denial. A principal-less request is
+    allowed only when principals aren't required (legacy / system path)."""
+    if require_principal is None:
+        require_principal = get_settings().AISOC_ACTIONS_REQUIRE_PRINCIPAL
+
+    principal = request.principal
+    if principal is None:
+        if require_principal:
+            raise ActionAuthzError("no authenticated principal on action request")
+        return
+
+    if principal.tenant_id is not None and principal.tenant_id != request.tenant_id:
+        raise ActionAuthzError("principal tenant does not match the action's tenant")
+
+    required = _required_permission(request.action_type)
+    if not has_action_permission(principal.permissions, required):
+        raise ActionAuthzError(f"principal {principal.user_id} lacks '{required}' required for {request.action_type.value}")
+
+
+#: Recorded on the action when separation of duties had nothing to compare.
+#:
+#: ``if separation_of_duties and requester and ...`` passed silently whenever
+#: the submission carried no principal, which is possible while
+#: ``AISOC_ACTIONS_REQUIRE_PRINCIPAL`` is false. The control reported itself
+#: satisfied on exactly the requests it could not evaluate, and the record
+#: afterwards was indistinguishable from one where it had been checked and
+#: passed. Refusing instead would brick every legacy system-initiated action
+#: during an incident, which is why this is a recorded fact rather than a
+#: denial — but it has to *be* a fact, in the row, not an omission.
+SOD_UNEVALUATED = "unevaluated"
+SOD_ENFORCED = "enforced"
+
+
+def authorize_approver(
+    record: dict[str, Any],
+    approver: ActionPrincipal,
+    *,
+    separation_of_duties: bool = True,
+) -> str:
+    """Enforce that an approver may approve this action (W4.4).
+
+    Three conditions, and the tenant one was missing. An approver had to hold
+    the action's permission tier and not be its requester, but nothing compared
+    their tenant to the action's — so a principal holding
+    ``actions:execute:high`` in *any* tenant could approve any other tenant's
+    containment, against a store where an id was the only other control.
+    :func:`authorize_action` had carried the same comparison since it was
+    written; only the approve side went without.
+
+    Returns which separation-of-duties state applied, for the caller to record.
+    """
+    action_type = ActionType(record["action_type"])
+    required = _required_permission(action_type)
+    if not has_action_permission(approver.permissions, required):
+        raise ActionAuthzError(f"approver {approver.user_id} lacks '{required}' to approve {action_type.value}")
+
+    record_tenant = str(record.get("tenant_id") or "").strip()
+    if record_tenant:
+        if approver.tenant_id is None:
+            # GHSA-fm3f-p5jv-6hcg, F06. `approver.tenant_id is not None` used
+            # to guard this whole comparison, so an approver carrying no
+            # tenant skipped it -- and `_tenant_of` returns None for the same
+            # principal, which also leaves the record *read* unscoped. The two
+            # together let one identity approve any tenant's containment.
+            #
+            # It was not hypothetical configuration: the Teams entry in
+            # `chatops_identity`'s own documented example omits `tenant_id`,
+            # and `_coerce_principal` reads it with `raw.get(...)`. Measured
+            # against the real service, that approver took another tenant's
+            # `isolate_host` to `completed` while the record read
+            # `separation_of_duties: enforced`.
+            #
+            # An approver with no tenant is not "all tenants", it is an
+            # identity nobody scoped. The refusal names the config to fix,
+            # because the alternative is an operator seeing a 403 with no
+            # idea which of several controls produced it.
+            raise ActionAuthzError(
+                f"approver {approver.user_id} carries no tenant and this action belongs to tenant "
+                f"{record_tenant}; add `tenant_id` to their entry in AISOC_CHATOPS_APPROVERS"
+            )
+        if str(approver.tenant_id) != record_tenant:
+            raise ActionAuthzError("approver tenant does not match the action's tenant")
+
+    requester = record.get("requested_by_user_id")
+    if not separation_of_duties:
+        return SOD_UNEVALUATED
+    if not requester:
+        return SOD_UNEVALUATED
+    if str(requester) == str(approver.user_id):
+        raise ActionAuthzError("approver cannot be the requester (separation of duties)")
+    return SOD_ENFORCED
+
+
+async def require_service_auth(authorization: str | None = Header(default=None)) -> None:
+    """FastAPI dependency: verify the service bearer token on mutating routes
+    (W4.3). Fails closed in production when no token is configured."""
+    settings = get_settings()
+    token = settings.AISOC_ACTIONS_SERVICE_TOKEN.strip()
+    if not token:
+        # No dev-mode exemption. This branch used to return early when
+        # AISOC_DEV_MODE was set, and AISOC_DEV_MODE defaults to 1 in the
+        # shipped compose file while nothing generated the token — so the
+        # exemption was not a developer convenience, it was the state every
+        # stock install ran in, leaving isolate_host, disable_user, block_ip
+        # and run_script dispatchable by anything that could reach the port.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "actions service auth is not configured: set AISOC_ACTIONS_SERVICE_TOKEN (run `make env`, which generates it, and restart)"
+            ),
+        )
+    expected = f"Bearer {token}"
+    if not authorization or not hmac.compare_digest(authorization, expected):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid or missing service token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )

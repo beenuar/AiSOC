@@ -1,0 +1,140 @@
+name: Link check
+
+# The front door is load-bearing for adoption and it rotted silently: SUPPORT.md
+# advertised a docs site at a URL that returned 404, and the README linked a
+# "live demo replay" and a "browser tools" page that both 404'd. Nothing in CI
+# noticed, because no job had ever resolved a link.
+#
+# Two tiers, matching the ratchet convention already used in security.yml:
+#
+#   front-door  HARD gate. The handful of files a new visitor actually reads.
+#               These are verified green, so a regression here is a real break.
+#   docs-tree   OBSERVE. The full documentation tree has pre-existing rot that
+#               should be burned down deliberately rather than by blocking
+#               every unrelated PR. Promote to hard once the backlog is clear.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.github/workflows/link-check.yml'
+      - '.lycheeignore'
+      - 'scripts/check_repo_self_links.py'
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - '**/*.mdx'
+      - '.github/workflows/link-check.yml'
+      - '.lycheeignore'
+      - 'scripts/check_repo_self_links.py'
+  # External links rot without anyone touching this repo, which is how the
+  # docs URL went stale in the first place.
+  schedule:
+    - cron: '30 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: link-check-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  front-door:
+    name: Front door · links must resolve
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check README, SUPPORT, CONTRIBUTING, SECURITY, GOVERNANCE
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          # 5xx is accepted; 404 is not, and that distinction is the whole
+          # point of this list.
+          #
+          # A 404 says the link is wrong, which is this repository's
+          # problem and must fail. A 502/503/504 says the *host* is
+          # broken, which it is not — github.com itself returned 504 for
+          # two contributor profile URLs for several minutes and reddened
+          # a pull request that touched neither. No retry window outlasts
+          # a third-party outage, and a gate that reds on somebody else's
+          # availability trains people to ignore it.
+          #
+          # A 5xx cannot mask a wrong link, because a missing page
+          # answers 404. That is what makes this different from the
+          # 403/429 entries, which *can* mask one: a rate-limited GitHub
+          # URL once looked healthy here while eight wrong-org 404s
+          # survived behind it. The accepted cost is that a permanently
+          # dead host passes this gate; the weekly full-portal sweep is
+          # where that gets caught.
+          args: >-
+            --no-progress
+            --max-retries 3
+            --retry-wait-time 5
+            --timeout 25
+            --accept 200,206,301,302,307,308,403,429,500,502,503,504
+            README.md SUPPORT.md CONTRIBUTING.md SECURITY.md GOVERNANCE.md
+          fail: true
+
+  # Observe tier. Note `fail: false` on the lychee step rather than
+  # `continue-on-error` on the job: job-level continue-on-error still reports
+  # the check run as a failure, which is indistinguishable from a real break
+  # at a glance and is exactly the trap the gitleaks observe gate fell into.
+  # The step has to succeed for the signal to read honestly.
+  docs-tree:
+    name: Docs tree · links (observe)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check docs/ and apps/docs/docs/
+        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
+        with:
+          args: >-
+            --no-progress
+            --max-retries 2
+            --retry-wait-time 5
+            --timeout 25
+            --accept 200,206,301,302,307,308,403,429
+            'docs/**/*.md' 'apps/docs/docs/**/*.md' 'apps/docs/docs/**/*.mdx'
+          fail: false
+
+  # Hard gate, and deliberately offline. The observe tier above cannot catch
+  # self-links into our own tree: it accepts 403/429, so GitHub rate-limiting
+  # a request is indistinguishable from the page existing. A QA pass found
+  # seven links to three orgs that do not exist plus one to a path that moved,
+  # all 404s, none reported. Resolving against the checkout instead of the
+  # network makes this deterministic and unrateable, so it can fail closed.
+  self-links:
+    name: Self-links · repo paths must exist
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: '3.11'
+
+      - name: Every github.com/beenuar/AiSOC link resolves to a real path
+        run: python3 scripts/check_repo_self_links.py
+
+      # The same failure shape, one layer down. Both published Go SDKs
+      # declared `github.com/beenuar/aisoc/<name>` — wrong case, missing the
+      # `packages/` prefix — so `go get` resolved neither. Nothing caught it
+      # because every in-repo consumer used a replace directive: the tree
+      # built perfectly and the published artifact did not exist.
+      - name: Every published Go module path resolves
+        run: python3 scripts/check_go_module_paths.py

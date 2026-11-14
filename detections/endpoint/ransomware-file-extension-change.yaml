@@ -1,0 +1,27 @@
+id: det-endpoint-003
+name: Mass File Extension Rename Indicative of Ransomware
+description: Detects bulk file rename operations where file extensions are changed to novel patterns within
+  a short time window. This is a high-fidelity indicator of ransomware encryption activity.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1486
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: file-rename
+detection:
+  condition: |
+    rename_count_per_process > 200
+    AND extension_change_pattern == "to-novel-extension"
+    AND time_window_minutes < 5
+false_positives:
+- Bulk archive operations (must be in allowlisted backup tools)
+playbook: tpl-ransomware
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ransomware-file-extension-change; this stateless
+  form named a counter no source emits
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

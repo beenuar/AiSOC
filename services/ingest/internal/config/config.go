@@ -1,0 +1,356 @@
+// Package config handles service configuration loading
+package config
+
+import (
+	"fmt"
+	"os"
+	"strconv"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/envmode"
+)
+
+// Config holds all ingest service configuration
+type Config struct {
+	HTTPPort        int
+	KafkaBrokers    string
+	KafkaTopic      string
+	RedisAddr       string
+	DatabaseDSN     string
+	AttckDataPath   string
+	NormalizerMode  string // "strict" | "lenient"
+	MaxBatchSize    int
+	WorkerCount     int
+	TenantHeaderKey string
+	JWTSecret       string
+	MetricsPort     int
+
+	// /v1/ingest authentication.
+	//
+	// ServiceToken is the shared secret a trusted AiSOC service presents
+	// when it pushes on behalf of many tenants (services/connectors polls
+	// every tenant's connectors from one process). It identifies a
+	// service, not a tenant, so a caller using it must also declare the
+	// tenant it is acting for; see internal/ingestauth. Empty means the
+	// service-token path is unavailable and only minted per-tenant push
+	// tokens are accepted — there is no configuration that accepts an
+	// unauthenticated push.
+	ServiceToken string
+	// IngestMaxBodyBytes caps a single /v1/ingest body. MaxBatchSize only
+	// bounds the event count *after* the payload is decoded, so this is
+	// what bounds the decode itself.
+	IngestMaxBodyBytes int64
+
+	// Shodan enrichment
+	ShodanAPIKey          string
+	ShodanEnrichEnabled   bool
+	ShodanCacheExpirySecs int
+
+	// Geography, ASN and reputation on the activity projection's location
+	// block, read from services/enrichment rather than from a vendor
+	// directly: that service already merges the feeds and owns the keys,
+	// and a second merge here would drift from the one triage reads.
+	//
+	// Unset means off, which is why there is no separate enable flag. Only
+	// public addresses are ever sent (see activity.IsPublicIP).
+	EnrichmentServiceURL     string
+	EnrichmentCacheTTLSecs   int
+	EnrichmentTimeoutSeconds int
+
+	// CVE / vulnerability correlation.
+	//
+	// Off by default. Nothing in the platform consumes VulnKafkaTopic —
+	// fusion gets its vulnerability context by calling the enrichment service
+	// at fuse time, not from this stream — so with it on, every deployment
+	// downloaded the CISA KEV catalogue at boot and published matches into a
+	// topic with no reader. It remains available as an opt-in export for an
+	// external consumer; the messages carry an `event_type:
+	// VULNERABILITY_MATCH` header for exactly that.
+	VulnCorrelEnabled bool
+	VulnKafkaTopic    string // topic for VULNERABILITY_MATCH events
+	NvdAPIKey         string // optional NVD API key for higher rate limits
+
+	// Depth plan 4.2 — the syslog listener.
+	//
+	// Off by default: binding a port that nothing sends to is harmless but
+	// misleading, and 514 in particular needs either a capability or a
+	// published container port, which an operator has to decide.
+	//
+	// SyslogToken is a minted ingest token, and it is the *only* place the
+	// tenant can come from. Syslog carries no authenticated principal and
+	// no header, so anything read off the wire is sender-controlled — a
+	// tenant taken from a syslog field would be a cross-tenant write with
+	// no attacker effort at all. One listener therefore serves one tenant.
+	SyslogEnabled        bool
+	SyslogUDPAddr        string
+	SyslogTCPAddr        string
+	SyslogToken          string
+	SyslogBatchSize      int
+	SyslogFlushMs        int
+	SyslogMaxConnections int
+
+	// Depth plan 4.2 — the OTLP logs receiver and the customer Kafka input.
+	//
+	// Both off by default, and both take the tenant from a minted ingest
+	// token for the same reason syslog does: neither OTLP nor a Kafka
+	// record carries an authenticated principal, so a tenant read out of
+	// a resource attribute or a record header would be a cross-tenant
+	// write any instrumented process could perform.
+	//
+	// OTLPEnabled adds POST /v1/logs. There is no address of its own: the
+	// receiver shares the service's HTTP port, which is what an
+	// OpenTelemetry exporter expects to find behind one endpoint URL.
+	OTLPEnabled bool
+	// KafkaInputSources is a JSON array of source objects. An array rather
+	// than numbered variables because a deployment reading three tenants'
+	// topics needs three of everything, and numbered variables are how a
+	// fourth source silently gets the third one's token.
+	KafkaInputSources string
+
+	// Workstream 6 — universal capture push paths.
+	// InboxEnabled toggles the /v1/inbox/* routes. Off by default in
+	// development if no DATABASE_DSN is set, since the inbox store needs
+	// Postgres to resolve tokens.
+	InboxEnabled      bool
+	InboxTemplatesDir string // path to vendor template YAMLs
+	// InboxMaxBodyBytes caps a single inbox webhook body. Anything
+	// bigger gets a 413; vendors that page through alerts should batch
+	// at the source rather than push 50MB at once.
+	InboxMaxBodyBytes int64
+	// Per-tenant rate limits on the inbox. /v1/inbox/* is the one route
+	// deliberately open to the internet, authenticated only by a bearer
+	// token that lives in a vendor's webhook config, and it previously had
+	// no ceiling at all — one noisy or compromised integration could fill
+	// Kafka and the lake for every tenant sharing the spine.
+	//
+	// Two dimensions: requests bound parse and connection cost, events
+	// bound what actually reaches Kafka (one request can carry thousands).
+	// Zero disables that dimension. Limits are per replica, so the
+	// effective ceiling is rate x replicas; set accordingly or terminate
+	// at the edge if an exact global cap is required.
+	InboxRateRequestsPerSecond float64
+	InboxRateRequestBurst      float64
+	InboxRateEventsPerSecond   float64
+	InboxRateEventBurst        float64
+
+	// Kubernetes audit webhook (Track D, v7.1.0).
+	//
+	// K8sAuditSharedSecret is the value the apiserver must present in the
+	// X-AiSOC-K8s-Token header on every POST /v1/ingest/k8s-audit/{tenant}
+	// request. The route returns 503 when this is empty and 401 when the
+	// header is missing or doesn't match. Empty by default so a fresh
+	// install doesn't accidentally accept anonymous K8s audit pushes.
+	K8sAuditSharedSecret string
+	// K8sAuditMaxBodyBytes caps a single apiserver audit batch. Mirrors
+	// InboxMaxBodyBytes but tracked separately so K8s tuning doesn't drag
+	// the broader inbox limit around. The apiserver's default audit batch
+	// max is ~10 MiB, so 16 MiB gives a little headroom without
+	// leaving the door open for a runaway producer.
+	K8sAuditMaxBodyBytes int64
+
+	// Graph writer (T1.1 — v8.0).
+	//
+	// GraphEnabled toggles the ingest-side graph writer. The writer runs in
+	// a fan-out goroutine — failures NEVER block fusion ingest. When this
+	// is off the writer is never constructed and the pipeline behaves as
+	// it did pre-T1.1.
+	GraphEnabled bool
+	// Neo4jURI / Neo4jUser / Neo4jPassword are the bolt creds. Only Password
+	// is actually sensitive; URI + user are non-secret and end up in the
+	// ingest service's startup log for debuggability. Empty password is
+	// rejected at construction time when GraphEnabled is true.
+	Neo4jURI      string
+	Neo4jUser     string
+	Neo4jPassword string
+	Neo4jDatabase string
+	// GraphBatchSize / GraphFlushIntervalMs / GraphQueueSize control the
+	// batched UNWIND flusher. Defaults are tuned for v8.0 sandbox load
+	// (~1k events/sec); production deployments override via env.
+	GraphBatchSize       int
+	GraphFlushIntervalMs int
+	GraphQueueSize       int
+	// GraphUpdatesTopic is the Kafka topic consumed by the realtime service
+	// (T1.4) for live graph-update streaming. Empty means "don't publish".
+	GraphUpdatesTopic string
+
+	// GraphWSEnabled toggles the in-process T1.4 graph-update
+	// WebSocket broadcaster. When on, the ingest binary spins up a
+	// Kafka consumer against GraphUpdatesTopic and exposes
+	// /v1/graph_ws/stream for tenant-scoped fan-out. The Python API
+	// proxy at services/api/app/api/v1/endpoints/graph_ws.py is the
+	// public-facing entry point and is what end users connect to —
+	// the ingest endpoint is internal.
+	GraphWSEnabled bool
+	// GraphWSGroupID overrides the Kafka consumer group used by the
+	// broadcaster. Defaults to "graph-ws-<hostname>" so every pod
+	// sees every envelope (live-tail semantics, no partitioning).
+	GraphWSGroupID string
+	// GraphWSSubscriberBuffer is the per-client buffer size in
+	// envelopes. Healthy clients see every event; a slow client
+	// drops on full buffer.
+	GraphWSSubscriberBuffer int
+
+	// Config snapshots (T1.2 — v8.0).
+	//
+	// SnapshotEnabled toggles the per-event resource config snapshotter.
+	// When on, every event referencing a resource triggers a (cached)
+	// get_resource_config call on the relevant connector and the
+	// result lands as a versioned :Configuration node connected via
+	// :CONFIGURED_AS {ts}. Off by default — the writer still runs,
+	// it just skips the snapshot lookup until the operator opts in.
+	SnapshotEnabled bool
+	// SnapshotCacheTTLSecs is the TTL for the Redis-backed config cache.
+	// Hot resources (the same EC2 instance referenced by 200 events in a
+	// minute) only do one round-trip to the connector per TTL window.
+	SnapshotCacheTTLSecs int
+	// SnapshotProviderURL is the HTTP base URL of the connectors service
+	// that serves GET /v1/connectors/{id}/resource-config. The
+	// snapshotter calls this in lieu of importing the connector code
+	// directly (the connectors live in Python; the writer is Go).
+	// Empty disables remote lookups — the snapshotter then only emits
+	// cache-hit configurations or whatever the in-process provider
+	// (used in tests) returns.
+	SnapshotProviderURL string
+	// SnapshotProviderTimeoutMs caps each connector round-trip. Tight by
+	// design: the snapshotter is on the graph-flush path, not the
+	// fusion-publish path, so a slow connector must NEVER block ingest.
+	SnapshotProviderTimeoutMs int
+}
+
+// Load reads configuration from environment variables
+func Load() (*Config, error) {
+	cfg := &Config{
+		HTTPPort: mustGetEnvInt("HTTP_PORT", 8080),
+		// Canonical env var is KAFKA_BOOTSTRAP_SERVERS (matches
+		// .env.example and docker-compose). KAFKA_BROKERS is honored
+		// as a back-compat alias for older deployments.
+		KafkaBrokers:    getEnvFallback("KAFKA_BOOTSTRAP_SERVERS", "KAFKA_BROKERS", "localhost:9092"),
+		KafkaTopic:      getEnv("KAFKA_TOPIC", "aisoc.raw_events"),
+		RedisAddr:       getEnv("REDIS_ADDR", "localhost:6379"),
+		DatabaseDSN:     getEnv("DATABASE_DSN", ""),
+		AttckDataPath:   getEnv("ATTCK_DATA_PATH", "/data/enterprise-attack.json"),
+		NormalizerMode:  getEnv("NORMALIZER_MODE", "lenient"),
+		MaxBatchSize:    mustGetEnvInt("MAX_BATCH_SIZE", 1000),
+		WorkerCount:     mustGetEnvInt("WORKER_COUNT", 8),
+		TenantHeaderKey: getEnv("TENANT_HEADER_KEY", "X-Tenant-ID"),
+		JWTSecret:       getEnv("JWT_SECRET", ""),
+		MetricsPort:     mustGetEnvInt("METRICS_PORT", 9090),
+
+		// Per-service override wins over the shared platform token, the
+		// same precedence app.security.tenant_scope.resolve_service_token
+		// applies on the Python side.
+		ServiceToken:       getEnvFallback("AISOC_INGEST_SERVICE_TOKEN", "AISOC_SERVICE_TOKEN", ""),
+		IngestMaxBodyBytes: int64(mustGetEnvInt("INGEST_MAX_BODY_BYTES", 10*1024*1024)),
+
+		// Shodan
+		ShodanAPIKey:          getEnv("SHODAN_API_KEY", ""),
+		ShodanEnrichEnabled:   getEnv("SHODAN_ENRICH_ENABLED", "false") == "true",
+		ShodanCacheExpirySecs: mustGetEnvInt("SHODAN_CACHE_EXPIRY_SECS", 3600),
+
+		// IOC enrichment for the activity projection's location block.
+		EnrichmentServiceURL:     getEnv("ENRICHMENT_SERVICE_URL", ""),
+		EnrichmentCacheTTLSecs:   mustGetEnvInt("ENRICHMENT_CACHE_TTL_SECS", 3600),
+		EnrichmentTimeoutSeconds: mustGetEnvInt("ENRICHMENT_TIMEOUT_SECS", 2),
+
+		// CVE correlation
+		VulnCorrelEnabled: getEnv("VULN_CORREL_ENABLED", "false") == "true",
+		VulnKafkaTopic:    getEnv("VULN_KAFKA_TOPIC", "aisoc.vulnerability_matches"),
+		NvdAPIKey:         getEnv("NVD_API_KEY", ""),
+
+		// Universal capture (Workstream 6).
+		SyslogEnabled:        getEnv("AISOC_SYSLOG_ENABLED", "false") == "true",
+		SyslogUDPAddr:        getEnv("AISOC_SYSLOG_UDP_ADDR", "0.0.0.0:5514"),
+		SyslogTCPAddr:        getEnv("AISOC_SYSLOG_TCP_ADDR", "0.0.0.0:5514"),
+		SyslogToken:          getEnv("AISOC_SYSLOG_TOKEN", ""),
+		SyslogBatchSize:      mustGetEnvInt("AISOC_SYSLOG_BATCH_SIZE", 500),
+		SyslogFlushMs:        mustGetEnvInt("AISOC_SYSLOG_FLUSH_MS", 2000),
+		SyslogMaxConnections: mustGetEnvInt("AISOC_SYSLOG_MAX_CONNECTIONS", 256),
+
+		OTLPEnabled:       getEnv("AISOC_OTLP_LOGS_ENABLED", "false") == "true",
+		KafkaInputSources: getEnv("AISOC_KAFKA_INPUT_SOURCES", ""),
+		InboxEnabled:      getEnv("INBOX_ENABLED", "true") == "true",
+		InboxTemplatesDir: getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
+		InboxMaxBodyBytes: int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),
+		// Defaults sized to be invisible to a well-behaved vendor and
+		// firmly bounding to a runaway one: 50 req/s sustained with a
+		// 200 burst, and 5k events/s with a 20k burst (one large batch
+		// passes; a sustained flood does not).
+		InboxRateRequestsPerSecond: float64(mustGetEnvInt("INBOX_RATE_REQUESTS_PER_SECOND", 50)),
+		InboxRateRequestBurst:      float64(mustGetEnvInt("INBOX_RATE_REQUEST_BURST", 200)),
+		InboxRateEventsPerSecond:   float64(mustGetEnvInt("INBOX_RATE_EVENTS_PER_SECOND", 5000)),
+		InboxRateEventBurst:        float64(mustGetEnvInt("INBOX_RATE_EVENT_BURST", 20000)),
+
+		// Kubernetes audit webhook (Track D, v7.1.0).
+		K8sAuditSharedSecret: getEnv("K8S_AUDIT_SHARED_SECRET", ""),
+		K8sAuditMaxBodyBytes: int64(mustGetEnvInt("K8S_AUDIT_MAX_BODY_BYTES", 16*1024*1024)),
+
+		// Graph writer (T1.1, v8.0).
+		GraphEnabled:         getEnv("AISOC_GRAPH_ENABLED", "false") == "true",
+		Neo4jURI:             getEnv("AISOC_NEO4J_URI", "bolt://localhost:7687"),
+		Neo4jUser:            getEnv("AISOC_NEO4J_USER", "neo4j"),
+		Neo4jPassword:        getEnv("AISOC_NEO4J_PASSWORD", "neo4j"),
+		Neo4jDatabase:        getEnv("AISOC_NEO4J_DATABASE", "neo4j"),
+		GraphBatchSize:       mustGetEnvInt("AISOC_GRAPH_BATCH_SIZE", 100),
+		GraphFlushIntervalMs: mustGetEnvInt("AISOC_GRAPH_FLUSH_INTERVAL_MS", 100),
+		GraphQueueSize:       mustGetEnvInt("AISOC_GRAPH_QUEUE_SIZE", 2048),
+		GraphUpdatesTopic:    getEnv("AISOC_GRAPH_UPDATES_TOPIC", "security.graph_updates"),
+
+		// Graph-update WebSocket fan-out (T1.4, v8.0). Disabled by
+		// default — operators flip AISOC_GRAPH_WS_ENABLED=true once
+		// the consumer side (Python API proxy + web hook) is
+		// rolled out.
+		GraphWSEnabled:          getEnv("AISOC_GRAPH_WS_ENABLED", "false") == "true",
+		GraphWSGroupID:          getEnv("AISOC_GRAPH_WS_GROUP_ID", ""),
+		GraphWSSubscriberBuffer: mustGetEnvInt("AISOC_GRAPH_WS_BUFFER", 256),
+
+		// Config snapshots (T1.2, v8.0). Disabled by default — operators
+		// flip AISOC_SNAPSHOT_ENABLED=true once the connectors service
+		// exposes the resource-config endpoint.
+		SnapshotEnabled:           getEnv("AISOC_SNAPSHOT_ENABLED", "false") == "true",
+		SnapshotCacheTTLSecs:      mustGetEnvInt("AISOC_SNAPSHOT_CACHE_TTL_SECS", 600),
+		SnapshotProviderURL:       getEnv("AISOC_SNAPSHOT_PROVIDER_URL", ""),
+		SnapshotProviderTimeoutMs: mustGetEnvInt("AISOC_SNAPSHOT_PROVIDER_TIMEOUT_MS", 1500),
+	}
+
+	// JWT_SECRET is required outside development-class environments. The
+	// previous check exact-matched ENV == "development" only, so an
+	// operator who set ENVIRONMENT=development (the alias the Python
+	// API treats as equivalent) without also setting ENV would crash
+	// here even though every other service treated their stack as dev.
+	// envmode.IsDevRuntime closes that gap.
+	if cfg.JWTSecret == "" && !envmode.IsDevRuntime() {
+		return nil, fmt.Errorf("JWT_SECRET must be set in non-development environments")
+	}
+
+	return cfg, nil
+}
+
+func getEnv(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// getEnvFallback returns the first non-empty env var from primary, then
+// alternate, otherwise the fallback. Used for backward-compatible env aliases.
+func getEnvFallback(primary, alternate, fallback string) string {
+	if v := os.Getenv(primary); v != "" {
+		return v
+	}
+	if v := os.Getenv(alternate); v != "" {
+		return v
+	}
+	return fallback
+}
+
+func mustGetEnvInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return fallback
+	}
+	return n
+}

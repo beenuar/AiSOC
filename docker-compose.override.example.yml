@@ -1,0 +1,6 @@
+# Copy to docker-compose.override.yml and fill values from your .env.
+# NEVER commit the real override file - it is git-ignored by convention here.
+services:
+  agents:
+    environment:
+      AISOC_AGENTS_API_KEY: ${AISOC_AGENTS_API_KEY:-}

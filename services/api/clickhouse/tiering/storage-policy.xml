@@ -1,0 +1,47 @@
+<?xml version="1.0"?>
+<!--
+  Phase D2 — hot/warm/cold storage tiering for the AiSOC event lake.
+
+  OPT-IN: this file is deliberately NOT under `/docker-entrypoint-initdb.d`
+  (it lives in a `tiering/` subdir, not the init path) because `TTL ... TO
+  VOLUME 'cold'` requires the multi-disk policy below to exist first — applying
+  it against a single-disk ClickHouse would fail container init. To enable
+  tiering, mount this fragment into `/etc/clickhouse-server/config.d/` and point
+  the `cold` disk at your object store (S3/GCS), then apply `002_tiering.sql`.
+
+  Model (see docs/decisions/0005-storage-consolidation.md + storage_cost_model.py):
+    * hot  — local NVMe MergeTree, 0-30 days, query-latency tier
+    * cold — S3/GCS-backed disk, 30-90 days (moved by TTL), cheap archive
+    * delete at 90 days (existing raw_events TTL)
+-->
+<clickhouse>
+  <storage_configuration>
+    <disks>
+      <!-- Hot uses the built-in `default` disk (local NVMe); we only declare
+           the cold disk. Replace the cold <type>local</type> + path with
+           <type>s3</type> + endpoint/access_key/secret_access_key for real
+           object offload. The local path here keeps the policy valid out of
+           the box for on-prem NAS-backed cold tiers. -->
+      <cold>
+        <type>local</type>
+        <path>/var/lib/clickhouse/cold/</path>
+      </cold>
+    </disks>
+    <policies>
+      <tiered>
+        <volumes>
+          <!-- The first volume keeps the name `default` so an existing table on
+               the built-in `default` policy can be rebound to `tiered` (CH
+               requires the new policy to contain the old policy's volume). -->
+          <default>
+            <disk>default</disk>
+          </default>
+          <cold>
+            <disk>cold</disk>
+          </cold>
+        </volumes>
+        <move_factor>0.1</move_factor>
+      </tiered>
+    </policies>
+  </storage_configuration>
+</clickhouse>

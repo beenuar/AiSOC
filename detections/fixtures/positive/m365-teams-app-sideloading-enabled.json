@@ -1,0 +1,6 @@
+{
+  "operation": "TeamsAdminAction",
+  "parameters": {
+    "AllowSideloading": "True"
+  }
+}

@@ -1,0 +1,44 @@
+id: splunk-security-content-783f0798-f679-4c17-b3b3-187febf0b9b8
+name: Windows Impair Defense Change Win Defender Quick Scan Interval
+description: The following analytic detects modifications to the Windows registry
+  that change the Windows Defender Quick Scan Interval. It leverages data from the
+  Endpoint.Registry data model, focusing on changes to the "QuickScanInterval" registry
+  path. This activity is significant because altering the scan interval can impair
+  Windows Defender's ability to detect malware promptly, potentially allowing threats
+  to persist undetected. If confirmed malicious, this modification could enable attackers
+  to bypass security measures, maintain persistence, and execute further malicious
+  activities without being detected by quick scans.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://x.com/malmoeb/status/1742604217989415386?s=20
+- https://github.com/undergroundwires/privacy.sexy
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=
+    "*\\Windows Defender\\Scan\\QuickScanInterval" by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_impair_defense_change_win_defender_quick_scan_interval_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 783f0798-f679-4c17-b3b3-187febf0b9b8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_change_win_defender_quick_scan_interval.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,22 @@
+title: New Service Created via sc.exe
+id: aisoc-id-ep-0009-sc-create-service
+status: stable
+description: sc.exe used to create a new service with binPath pointing to a suspicious binary.
+author: Cyble AiSOC
+level: medium
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1543.003
+  - attack.persistence
+  - aisoc.endpoint
+detection:
+  selection_img:
+    process.executable|endswith: '\sc.exe'
+  selection_args:
+    process.command_line|contains: ' create '
+  selection_path:
+    process.command_line|contains:
+      - 'binPath='
+  condition: selection_img and selection_args and selection_path

@@ -1,0 +1,65 @@
+id: mitre-car-car-2019-07-002
+name: Lsass Process Dump via Procdump
+description: '[ProcDump](https://docs.microsoft.com/en-us/sysinternals/downloads/procdump)
+  is a sysinternal command-line utility whose primary purpose is monitoring an application
+  for CPU spikes and generating crash dumps during a spike that an administrator or
+  developer can use to determine the cause of the spike.
+
+
+  ProcDump may be used to dump the memory space of lsass.exe to disk for processing
+  with a credential access tool such as Mimikatz. This is performed by launching procdump.exe
+  as a privileged user with command line options indicating that lsass.exe should
+  be dumped to a file with an arbitrary name.
+
+
+  Note - the CAR data model currently does not support process access actions, so
+  the pseudocode implementation is based around process creates.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Procdump - Process Create
+    type: Pseudocode
+    code: "processes = search Process:Create\nprocdump_lsass = filter processes where\
+      \ (\n  exe = \"procdump*.exe\"  and\n  command_line = \"*lsass*\")\noutput procdump_lsass\n"
+  - name: Procdump - Process Create
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=1 Image="*\\procdump*.exe" CommandLine="*lsass*"
+
+      '
+  - name: Procdump - Process Create
+    type: EQL
+    code: ''
+  - name: Procdump - Process Access
+    type: Splunk
+    code: 'index=__your_sysmon_index__ EventCode=10 TargetImage="C:\\WINDOWS\\system32\\lsass.exe"
+      GrantedAccess="0x1FFFFF" ("procdump")
+
+      '
+  - name: Procdump - Process Access
+    type: Sigma
+    code: ''
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image="*\procdump*.exe" command="*lsass*"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-07-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-07-002.yaml
+notes:
+  car_status: needs_implementation

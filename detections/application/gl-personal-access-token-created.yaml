@@ -1,0 +1,23 @@
+id: det-application-152
+name: GitLab Personal Access Token Created
+description: A token is a credential outside the session model.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "added_personal_access_token"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

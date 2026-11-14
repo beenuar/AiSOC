@@ -1,0 +1,24 @@
+id: det-identity-110
+name: Okta Login Marked Suspicious-Activity Behaviour
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta Login Marked
+  Suspicious-Activity Behaviour'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: auth
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND behaviors CONTAINS_ANY ["new_device", "new_geolocation", "velocity"]
+false_positives:
+- Mobile user travel
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

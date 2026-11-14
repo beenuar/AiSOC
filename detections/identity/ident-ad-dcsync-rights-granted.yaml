@@ -1,0 +1,24 @@
+id: det-identity-081
+name: DCSync Rights Granted Outside Domain Controllers
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'DCSync Rights Granted
+  Outside Domain Controllers'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1003.006
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: audit
+detection:
+  condition: |
+    event_id == 5136
+    AND rights_added CONTAINS_ANY ["DS-Replication-Get-Changes", "DS-Replication-Get-Changes-All"]
+false_positives:
+- Approved Azure AD Connect / sync engine
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

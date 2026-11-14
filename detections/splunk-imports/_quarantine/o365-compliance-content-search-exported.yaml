@@ -1,0 +1,43 @@
+id: splunk-security-content-2ce9f31d-ab4f-4179-b2b7-c77a9652e1d8
+name: O365 Compliance Content Search Exported
+description: The following analytic identifies when the results of a content search
+  within the Office 365 Security and Compliance Center are exported. It uses the SearchExported
+  operation from the SecurityComplianceCenter workload in the o365_management_activity
+  data source. This activity is significant because exporting search results can involve
+  sensitive or critical organizational data, potentially leading to data exfiltration.
+  If confirmed malicious, an attacker could gain access to and exfiltrate sensitive
+  information, posing a severe risk to the organization's data security and compliance
+  posture.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/002/
+- https://learn.microsoft.com/en-us/purview/ediscovery-content-search-overview
+- https://learn.microsoft.com/en-us/purview/ediscovery-keyword-queries-and-search-conditions
+- https://learn.microsoft.com/en-us/purview/ediscovery-search-for-activities-in-the-audit-log
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Operation=\"\
+    SearchExported\"\n  | rename user_id as user\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY signature dest user\n       src\
+    \ vendor_account vendor_product\n       ExchangeLocations Query\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_compliance_content_search_exported_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2ce9f31d-ab4f-4179-b2b7-c77a9652e1d8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_compliance_content_search_exported.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,4 @@
+{
+  "event_type": "user.lifecycle.deactivate",
+  "events_per_minute": 125.0
+}

@@ -1,0 +1,87 @@
+{
+  "Records": [
+    {
+      "eventVersion": "1.09",
+      "userIdentity": {
+        "type": "IAMUser",
+        "principalId": "AIDAEXAMPLE000000001",
+        "arn": "arn:aws:iam::123456789012:user/ci-deploy",
+        "accountId": "123456789012",
+        "userName": "ci-deploy"
+      },
+      "eventTime": "2026-10-08T11:00:04Z",
+      "eventSource": "cloudtrail.amazonaws.com",
+      "eventName": "StopLogging",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "198.51.100.24",
+      "userAgent": "aws-cli/2.17.0 Python/3.11.9",
+      "requestParameters": {
+        "name": "arn:aws:cloudtrail:us-east-1:123456789012:trail/org-trail"
+      },
+      "responseElements": null,
+      "requestID": "0c1d2e3f-0000-4000-8000-000000000101",
+      "eventID": "11111111-1111-4111-8111-111111111111",
+      "readOnly": false,
+      "eventType": "AwsApiCall",
+      "managementEvent": true,
+      "recipientAccountId": "123456789012",
+      "eventCategory": "Management"
+    },
+    {
+      "eventVersion": "1.09",
+      "userIdentity": {
+        "type": "AssumedRole",
+        "principalId": "AROAEXAMPLE000000002:session-name",
+        "arn": "arn:aws:sts::123456789012:assumed-role/app-role/session-name",
+        "accountId": "123456789012"
+      },
+      "eventTime": "2026-10-08T11:00:19Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "GetObject",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "cloudtrail.amazonaws.com",
+      "userAgent": "[aws-sdk-java/2.25.0]",
+      "errorCode": "AccessDenied",
+      "errorMessage": "Access Denied",
+      "requestParameters": {
+        "bucketName": "example-customer-pii",
+        "key": "exports/2026-10/customers.csv"
+      },
+      "resources": [
+        {
+          "type": "AWS::S3::Object",
+          "ARN": "arn:aws:s3:::example-customer-pii/exports/2026-10/customers.csv"
+        }
+      ],
+      "eventID": "22222222-2222-4222-8222-222222222222",
+      "readOnly": true,
+      "eventType": "AwsApiCall",
+      "managementEvent": false,
+      "recipientAccountId": "123456789012",
+      "eventCategory": "Data"
+    },
+    {
+      "eventVersion": "1.09",
+      "userIdentity": {
+        "type": "AssumedRole",
+        "principalId": "AROAEXAMPLE000000002:session-name",
+        "accountId": "123456789012"
+      },
+      "eventTime": "2026-10-08T11:00:31Z",
+      "eventSource": "s3.amazonaws.com",
+      "eventName": "GetObject",
+      "awsRegion": "us-east-1",
+      "sourceIPAddress": "203.0.113.77",
+      "requestParameters": {
+        "bucketName": "example-public-assets",
+        "key": "logo.png"
+      },
+      "eventID": "33333333-3333-4333-8333-333333333333",
+      "readOnly": true,
+      "eventType": "AwsApiCall",
+      "managementEvent": false,
+      "recipientAccountId": "123456789012",
+      "eventCategory": "Data"
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+id: splunk-security-content-47dc0426-cbe4-4253-8b86-1a983c3f9951
+name: Windows Unusual FileZilla XML Config Access
+description: The following analytic identifies processes accessing FileZilla XML config
+  files such as recentservers.xml and sitemanager.xml. It leverages Windows Security
+  Event logs, specifically monitoring EventCode 4663, which tracks object access events.
+  This activity is significant because it can indicate unauthorized access or manipulation
+  of sensitive configuration files used by FileZilla, a popular FTP client. If confirmed
+  malicious, this could lead to data exfiltration, credential theft, or further compromise
+  of the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.001
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_us/research/18/k/trickbot-shows-off-new-trick-password-grabber-module.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4663  NOT (ProcessName IN("C:\\Program
+    Files\\FileZilla FTP Client\\filezilla.exe", "C:\Program Files (x86)\\FileZilla
+    FTP Client\\filezilla.exe", "C:\\Program Files\\Microsoft OneDrive\\OneDrive.exe",
+    "C:\\Program Files (x86)\\Microsoft OneDrive\\OneDrive.exe")) file_path IN ("*FileZilla\\recentservers.xml*",
+    "*FileZilla\\sitemanager.xml*") | stats count min(_time) as firstTime max(_time)
+    as lastTime by  ObjectName ObjectType ProcessName AccessMask process_id EventCode
+    Computer Caller_User_Name | rename Computer as dest Caller_User_Name as user ProcessName
+    as process_name |  `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_unusual_filezilla_xml_config_access_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 47dc0426-cbe4-4253-8b86-1a983c3f9951
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unusual_filezilla_xml_config_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

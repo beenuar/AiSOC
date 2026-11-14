@@ -1,0 +1,47 @@
+id: splunk-security-content-fa6142a7-c364-4d11-9954-895dd9efb2d4
+name: Windows DISM Install PowerShell Web Access
+description: The following analytic detects the installation of PowerShell Web Access
+  using the Deployment Image Servicing and Management (DISM) tool. It leverages Sysmon
+  EventID 1 to identify the execution of `dism.exe` with specific parameters related
+  to enabling the WindowsPowerShellWebAccess feature. This activity is significant
+  because enabling PowerShell Web Access can facilitate remote execution of PowerShell
+  commands, potentially allowing an attacker to gain unauthorized access to systems
+  and networks. If confirmed malicious, this action could lead to further exploitation
+  and compromise of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-241a
+- https://gist.github.com/MHaggis/7e67b659af9148fa593cf2402edebb41
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=dism.exe\
+    \ (Processes.process=\"*WindowsPowerShellWebAccess*\"\n    AND\n    Processes.process=\"\
+    */online*\"\n    AND\n    Processes.process=\"*/enable-feature*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_dism_install_powershell_web_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fa6142a7-c364-4d11-9954-895dd9efb2d4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_dism_install_powershell_web_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

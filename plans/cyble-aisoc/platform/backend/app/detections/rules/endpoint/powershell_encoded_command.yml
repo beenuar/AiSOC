@@ -1,0 +1,30 @@
+title: PowerShell EncodedCommand Execution
+id: aisoc-id-ep-0026-ps-encoded
+status: stable
+description: |
+  PowerShell launched with -EncodedCommand / -enc to execute a
+  base64-encoded payload. Heavily abused by attackers to evade
+  command-line logging and obfuscate intent.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: process_creation
+tags:
+  - attack.t1059.001
+  - attack.execution
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    process.name|endswith:
+      - '\powershell.exe'
+      - '\pwsh.exe'
+  encoded:
+    process.command_line|contains:
+      - ' -enc '
+      - ' -EncodedCommand'
+      - ' -encodedcommand'
+      - ' -e '
+      - ' -ec '
+  condition: selection and encoded

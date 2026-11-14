@@ -1,0 +1,24 @@
+id: det-endpoint-063
+name: Microsoft Defender Path Exclusion Added
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Microsoft Defender
+  Path Exclusion Added'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: defender
+detection:
+  condition: |
+    event_name == "AddPreference"
+    AND exclusion_path CONTAINS_ANY ["\users\", "\temp\", "\appdata\"]
+false_positives:
+- Approved third-party tool exclusion
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

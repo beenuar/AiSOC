@@ -1,0 +1,7 @@
+{
+  "event_type": "drive.acl.change",
+  "share_target_domain": "approved-partner.com",
+  "share_target_domain_in_allowlist": true,
+  "share_target_external": true,
+  "user": "user@corp.com"
+}

@@ -1,0 +1,23 @@
+id: det-application-195
+name: Salesforce Permission Set Group Created
+description: A group bundles permission sets, so one assignment grants several.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.PermSetGroupCreate"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

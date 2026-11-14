@@ -1,0 +1,5 @@
+{
+  "event_type": "user.role.add",
+  "role_name": "viewer",
+  "target_user": "user@corp.com"
+}

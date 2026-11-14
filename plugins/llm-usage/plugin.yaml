@@ -1,0 +1,21 @@
+id: llm-usage
+name: AI / LLM Usage Audit Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull organization audit logs from OpenAI or Anthropic — API key creation,
+  role grants, logging/MFA changes, project deletes. The governance surface for
+  AI adoption; pairs with the llm-* detection rules that fire on the emitted
+  event_type. Auth is an admin/audit-scoped API key.
+author: AiSOC Core Team
+tags: [saas, ai, llm, openai, anthropic, audit, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/llm_usage.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [provider, api_key]
+  properties:
+    provider: {type: string, enum: [openai, anthropic], description: Which provider's audit log to pull.}
+    api_key: {type: string, secret: true, description: Admin/audit-scoped API key.}

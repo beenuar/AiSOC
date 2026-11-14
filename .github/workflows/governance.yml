@@ -1,0 +1,85 @@
+name: Governance + SLOs
+
+# Phase 12 (world-class program) — two cheap completeness gates:
+#   slos       — every service under services/ has an SLO or exempt entry in
+#                docs/operations/slos.yaml (a new service can't ship without
+#                declaring its reliability posture).
+#   governance — the governance surface (GOVERNANCE.md, MAINTAINERS.md,
+#                SECURITY.md, CODE_OF_CONDUCT.md, TRADEMARK.md, the DCO section
+#                in CONTRIBUTING.md, SLOs, observability doc) exists and is
+#                non-trivial, so it can't silently rot.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/**"
+      - "docs/operations/slos.yaml"
+      - "docs/operations/observability.md"
+      - "GOVERNANCE.md"
+      - "MAINTAINERS.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
+      - "CODE_OF_CONDUCT.md"
+      - "TRADEMARK.md"
+      - "scripts/check_slos.py"
+      - "scripts/check_governance.py"
+      - "scripts/check_release_policy.py"
+      - "CHANGELOG.md"
+      - "VERSION"
+      # The console footer renders this file's version, and the release gate
+      # now holds the two in lockstep. Without it here, bumping only the
+      # package would not trigger the gate that exists to catch exactly that.
+      - "apps/web/package.json"
+      - "apps/docs/docs/operations/release-policy.md"
+      - ".github/workflows/governance.yml"
+  pull_request:
+    paths:
+      - "services/**"
+      - "docs/operations/slos.yaml"
+      - "docs/operations/observability.md"
+      - "GOVERNANCE.md"
+      - "MAINTAINERS.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
+      - "CODE_OF_CONDUCT.md"
+      - "TRADEMARK.md"
+      - "scripts/check_slos.py"
+      - "scripts/check_governance.py"
+      - "scripts/check_release_policy.py"
+      - "CHANGELOG.md"
+      - "VERSION"
+      # The console footer renders this file's version, and the release gate
+      # now holds the two in lockstep. Without it here, bumping only the
+      # package would not trigger the gate that exists to catch exactly that.
+      - "apps/web/package.json"
+      - "apps/docs/docs/operations/release-policy.md"
+      - ".github/workflows/governance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  governance:
+    name: SLO coverage + governance completeness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install deps
+        run: pip install --quiet pyyaml
+      - name: SLO coverage gate
+        run: python3 scripts/check_slos.py --print
+      - name: Governance completeness gate
+        run: python3 scripts/check_governance.py
+
+      # Two directions, and the self-test runs first because a gate nobody has
+      # proven can fail is indistinguishable from one that cannot.
+      - name: Self-test the release-policy gate
+        run: python3 scripts/check_release_policy.py --self-test
+      - name: A major declares what it breaks, and nothing else declares a break
+        run: python3 scripts/check_release_policy.py

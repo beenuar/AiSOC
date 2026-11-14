@@ -1,0 +1,5 @@
+{
+  "child_process": "head-cmd.exe",
+  "event_id": 1,
+  "process_name": "head-sdclt.exe"
+}

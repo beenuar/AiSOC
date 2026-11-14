@@ -1,0 +1,41 @@
+id: splunk-security-content-dbfca1dd-b8e5-4ba4-be0e-e565e5d62002
+name: Amazon EKS Kubernetes Pod scan detection
+description: The following analytic detects unauthenticated requests made against
+  the Kubernetes Pods API, indicating potential unauthorized access attempts. It leverages
+  the `aws_cloudwatchlogs_eks` data source, filtering for events where `user.username`
+  is "system:anonymous", `verb` is "list", and `objectRef.resource` is "pods", with
+  `requestURI` set to "/api/v1/pods". This activity is significant as it may signal
+  attempts to access sensitive resources or execute unauthorized commands within the
+  Kubernetes environment. If confirmed malicious, such access could lead to data compromise,
+  unauthorized command execution, or lateral movement within the cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1526
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`aws_cloudwatchlogs_eks` \"user.username\"=\"system:anonymous\" verb=list\
+    \ objectRef.resource=pods requestURI=\"/api/v1/pods\"\n  | rename source as cluster_name\
+    \ sourceIPs{} as src_ip\n  | stats count min(_time) as firstTime max(_time) as\
+    \ lastTime values(responseStatus.reason) values(responseStatus.code) values(userAgent)\
+    \ values(verb) values(requestURI)\n    BY src_ip cluster_name user.username\n\
+    \       user.groups{}\n  | `security_content_ctime(lastTime)`\n  | `security_content_ctime(firstTime)`\n\
+    \  | `amazon_eks_kubernetes_pod_scan_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dbfca1dd-b8e5-4ba4-be0e-e565e5d62002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/amazon_eks_kubernetes_pod_scan_detection.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

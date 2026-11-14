@@ -1,0 +1,30 @@
+id: torq
+name: Torq (Workflow Executions + Audit)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Torq automation platform connector. Streams workflow execution outcomes
+  (success / warning / failed / killed) and tenant audit events (workflow
+  edits, credential changes, role assignments) via the Torq Public API.
+  Requires an API key pair (key_id + secret) issued under Settings → API Keys.
+author: AiSOC Core Team
+tags: [saas, soar, automation, audit, torq]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/torq.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [key_id, key_secret]
+  properties:
+    key_id:
+      type: string
+      description: "API Key ID"
+    key_secret:
+      type: string
+      description: "API Key Secret (paired with key_id)"
+      secret: true
+    base_url:
+      type: string
+      description: "Optional API base URL override for regional / self-hosted Torq"
+      default: "https://api.torq.io/public/v1"

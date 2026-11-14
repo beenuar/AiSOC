@@ -1,0 +1,25 @@
+title: AWS GuardDuty Detector Disabled or Deleted
+id: aisoc-id-cl-0009-guardduty-disable
+status: stable
+description: |
+  Disabling GuardDuty removes the primary threat-detection control on
+  the account — almost always malicious or a misguided cost-cut.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1562.001
+  - attack.defense_evasion
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'guardduty.amazonaws.com'
+    event.action|contains:
+      - 'DeleteDetector'
+      - 'UpdateDetector'
+      - 'DisassociateFromMasterAccount'
+      - 'StopMonitoringMembers'
+  condition: selection

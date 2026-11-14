@@ -1,0 +1,6 @@
+{
+  "operation": "New-ComplianceSearch",
+  "parameters": {
+    "ExchangeLocation": "user@corp.com"
+  }
+}

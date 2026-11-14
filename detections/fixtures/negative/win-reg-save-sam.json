@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "process_command_line": "save hklm\\sam",
+  "process_name": "head-reg.exe"
+}

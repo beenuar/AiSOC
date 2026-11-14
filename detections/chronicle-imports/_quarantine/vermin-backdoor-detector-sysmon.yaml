@@ -1,0 +1,78 @@
+id: chronicle-detection-rules-vermin-backdoor-detector-sysmon
+name: vermin_backdoor_detector_sysmon
+description: vermin_backdoor_detector_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule vermin_backdoor_detector_sysmon {\n meta:\n    author = \"\
+    Alexandr Yampolskyi, SOC Prime\"\n    description = \"Vermin is a full-featured\
+    \ backdoor capable of stealing credentials, keylogging and recording audio.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/guNXc94t3Z1z\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/06/01\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and ($selection.target.file.md5 = \"028EBDBEBAC7239B41A1F4CE8D2CC61B1E09983B\"\
+    \ or $selection.target.file.md5 = \"07E1AF6D3F7B42D2E26DF12A217DEBACEDB8B1B9\"\
+    \ or $selection.target.file.md5 = \"09457ACB28C754AA419AB6A7E8B1940201EF3FFE\"\
+    \ or $selection.target.file.md5 = \"0EEE92EC2723ED9623F84082DAD962778F4CF776\"\
+    \ or $selection.target.file.md5 = \"10128AB8770FBDECD81B8894208A760A3C266D78\"\
+    \ or $selection.target.file.md5 = \"131F99A2E18A358B60F09FD61EE312E74B02C07C\"\
+    \ or $selection.target.file.md5 = \"14F69C7BFAF1DF16E755CCF754017089238B0E7B\"\
+    \ or $selection.target.file.md5 = \"1509F85DE302BE83A47D5AFAD9BEE2542BA317FC\"\
+    \ or $selection.target.file.md5 = \"170CEE6523B6620124F52201D943D7D9CA7B95E5\"\
+    \ or $selection.target.file.md5 = \"191159F855A0E580290871C945245E3597A5F25C\"\
+    \ or $selection.target.file.md5 = \"1F12C32A41D82E978DE333CD4E93FDAA1396BE94\"\
+    \ or $selection.target.file.md5 = \"22B17966B597568DB46B94B253CD37CBCF561321\"\
+    \ or $selection.target.file.md5 = \"2C7332D8247376842BD1B1BD5298844307649C99\"\
+    \ or $selection.target.file.md5 = \"2E08BA5DF30C0718C1733A7836B5F4D98D84905E\"\
+    \ or $selection.target.file.md5 = \"2EDF808F8252A4CBCB92F47A0AEDC1AAAE79A777\"\
+    \ or $selection.target.file.md5 = \"360F54B33AC960EE29CA0557A28F6BB8417EF409\"\
+    \ or $selection.target.file.md5 = \"431FCE6A47D0A48A57F699AA084C9FF175A9D15F\"\
+    \ or $selection.target.file.md5 = \"45438834FDC5C690DA3BC1F60722BE86B871280D\"\
+    \ or $selection.target.file.md5 = \"4A8A8188E3A7A137651B24780DF37CB6F610CC19\"\
+    \ or $selection.target.file.md5 = \"4C1E4E136B7922F9E28D1B38E9760E28929E4F0B\"\
+    \ or $selection.target.file.md5 = \"5B6EA57FFC09593C3B65D903368EA5F7FAA2EB68\"\
+    \ or $selection.target.file.md5 = \"61D366939FE36861B2FECB38A4DFF6D86C925A00\"\
+    \ or $selection.target.file.md5 = \"6A72366D8AE09F72F0466FB59E8ED372F8B460D7\"\
+    \ or $selection.target.file.md5 = \"6FECA622B0FB282064F7DE42BA472A8EC908D0D6\"\
+    \ or $selection.target.file.md5 = \"70A772485C5ED330C6876FA901BA722CD44CA05E\"\
+    \ or $selection.target.file.md5 = \"70D97367A3DBD5D45482B6AF8C78C58B64D3F3B3\"\
+    \ or $selection.target.file.md5 = \"7803FD9753930522705F2B6B4E73622887892C28\"\
+    \ or $selection.target.file.md5 = \"7B11A84B18DC4B5F1F2826E7925F0B2DC1B936AE\"\
+    \ or $selection.target.file.md5 = \"889FD0BEB3197DDD6C88F5C40D6B8E4D74A892CE\"\
+    \ or $selection.target.file.md5 = \"9B6FBABFA2A77FA633F7A2EB352979D5C68CEBC6\"\
+    \ or $selection.target.file.md5 = \"A451291F17489E3A59F440A1B693D691B053C531\"\
+    \ or $selection.target.file.md5 = \"A53D77E55A06CF131D670339BACEC5AC0F0C6D66\"\
+    \ or $selection.target.file.md5 = \"A925D0AFB5D4F5FAC65543C993BE4172F1DBF329\"\
+    \ or $selection.target.file.md5 = \"B5F81C804E47B76C74C38DF03A5CBE8A4FE69A9A\"\
+    \ or $selection.target.file.md5 = \"B99DE55043099E9506B304660B8E1374787AB195\"\
+    \ or $selection.target.file.md5 = \"C00C104FC3E9F5977D11C67EF0C8C671D4DFC412\"\
+    \ or $selection.target.file.md5 = \"CA0296FA9F48E83EA3F26988401B3F4C4E655F7A\"\
+    \ or $selection.target.file.md5 = \"D4C6540E789BD3839D65E7EDA5CCA8832493649E\"\
+    \ or $selection.target.file.md5 = \"D5EDE1BBB9A12757E24BE283AFC8D746ADC4A0D4\"\
+    \ or $selection.target.file.md5 = \"DEFBFD98C74BEFF839EEB189F0F6C385AD6BA19B\"\
+    \ or $selection.target.file.md5 = \"ECF152EB6417A069573F2C7D9A35B9CC31EC8F56\"\
+    \ or $selection.target.file.md5 = \"EE2D40825C77C8DFEF67999F0C521919E6672A10\"\
+    \ or $selection.target.file.md5 = \"EF09AC6BA08A116F2C4080CBEE8CEF9523E21265\"\
+    \ or $selection.target.file.md5 = \"F414C49CF502D1B6CC46E08F3AC97D7846B30732\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: vermin_backdoor_detector_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: vermin_backdoor_detector_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/vermin_backdoor_detector__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

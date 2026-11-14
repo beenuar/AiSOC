@@ -1,0 +1,48 @@
+id: chronicle-detection-rules-sap-sensitive-tables-direct-access-by-rfc-logon-static-list
+name: sap_sensitive_tables_direct_access_by_rfc_logon_static_list
+description: sap_sensitive_tables_direct_access_by_rfc_logon_static_list
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_sensitive_tables_direct_access_by_rfc_logon_static_list {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Detects direct access\
+    \ to highly sensitive SAP tables (USR02, PAYR, P0002) via RFC logon. This specifically\
+    \ monitors for potential theft of user hashes (USR02), payroll data (PAYR), or\
+    \ personal employee information (P0002).\"\n    severity = \"High\"\n    tactic\
+    \ = \"TA0009\"\n    technique = \"T1005\"\n    log_source = \"SAP_SECURITY_AUDIT\"\
+    \n\n  events:\n    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n    $e.additional.fields[\"\
+    msg_1\"] = \"CUZ\"\n\n    $sid = $e.target.application\n    $table = $e.additional.fields[\"\
+    param1_1\"]\n\n    $table = /USR02|PAYR|P0002/\n\n  match:\n    $table over 1h\n\
+    \n  outcome:\n    $user_list = array_distinct($e.principal.user.userid)\n    $source_ips\
+    \ = array_distinct($e.principal.ip)\n    $system_ids = array_distinct($sid)\n\
+    \    $event_count = count($e.metadata.id)\n    $terminal_names = array_distinct($e.principal.hostname)\n\
+    \    $client_ids = array_distinct($e.target.resource.attribute.labels[\"slgmand_1\"\
+    ])\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_sensitive_tables_direct_access_by_rfc_logon_static_list
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_sensitive_tables_direct_access_by_rfc_logon_static_list
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_sensitive_tables_direct_access_by_rfc_logon_static_list.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,31 @@
+title: LSASS Process Memory Dump Attempt
+id: aisoc-id-ep-0030-lsass-dump
+status: stable
+description: |
+  Process accesses lsass.exe to dump credentials in memory, or
+  invokes known credential-dumping tools and signatures
+  (procdump, comsvcs MiniDump, rundll32 minidumpwritedump).
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: windows
+  service: process_creation
+tags:
+  - attack.t1003.001
+  - attack.credential_access
+  - aisoc.endpoint
+detection:
+  procdump_lsass:
+    process.name|endswith:
+      - '\procdump.exe'
+      - '\procdump64.exe'
+    process.command_line|contains: 'lsass'
+  comsvcs_minidump:
+    process.command_line|contains:
+      - 'comsvcs.dll'
+      - 'MiniDump'
+      - 'minidumpwritedump'
+  taskmgr_dump:
+    process.parent.name|endswith: '\taskmgr.exe'
+    process.command_line|contains: 'lsass'
+  condition: 1 of procdump_lsass or 1 of comsvcs_minidump or 1 of taskmgr_dump

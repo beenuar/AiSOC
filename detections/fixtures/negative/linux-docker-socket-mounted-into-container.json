@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "host_path": "/var/run/docker.sock"
+}

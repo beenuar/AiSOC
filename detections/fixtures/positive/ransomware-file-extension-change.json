@@ -1,0 +1,7 @@
+{
+  "extension_change_pattern": "to-novel-extension",
+  "host": "wks-001",
+  "process": "encrypt.exe",
+  "rename_count_per_process": 1500,
+  "time_window_minutes": 2
+}

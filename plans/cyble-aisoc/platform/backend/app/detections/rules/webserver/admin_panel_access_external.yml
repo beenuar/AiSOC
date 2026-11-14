@@ -1,0 +1,32 @@
+title: Admin Panel Accessed From External IP
+id: aisoc-id-ws-0007-admin-external
+status: stable
+description: |
+  Sensitive admin / management URI (e.g. /wp-admin, /administrator,
+  /manager/html, /phpmyadmin, /admin/login) accessed from an
+  IP outside the corporate network.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1190
+  - attack.initial_access
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  admin:
+    url.path|contains:
+      - '/wp-admin'
+      - '/administrator'
+      - '/manager/html'
+      - '/phpmyadmin'
+      - '/admin/login'
+      - '/jenkins/script'
+      - '/console/login'
+      - '/cpanel'
+  external:
+    enrich.flow.src_external: true
+  condition: selection and admin and external

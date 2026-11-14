@@ -1,0 +1,43 @@
+id: splunk-security-content-dc4dc3a8-ff54-11eb-8bf7-acde48001122
+name: Gsuite Outbound Email With Attachment To External Domain
+description: The following analytic detects outbound emails with attachments sent
+  from an internal email domain to an external domain. It leverages Gsuite Gmail logs,
+  parsing the source and destination email domains, and flags emails with fewer than
+  20 outbound instances. This activity is significant as it may indicate potential
+  data exfiltration or insider threats. If confirmed malicious, an attacker could
+  use this method to exfiltrate sensitive information, leading to data breaches and
+  compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - cloud
+references:
+- https://www.redhat.com/en/topics/devops/what-is-devsecops
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_gmail` num_message_attachments > 0\n  | rex field=source.from_header_address\
+    \ \"[^@]+@(?<source_domain>[^@]+)\"\n  | rex field=destination{}.address \"[^@]+@(?<dest_domain>[^@]+)\"\
+    \n  | where source_domain=\"internal_test_email.com\" and not dest_domain=\"internal_test_email.com\"\
+    \n  | eval phase=\"plan\"\n  | eval severity=\"low\"\n  | stats values(subject)\
+    \ as subject, values(source.from_header_address) as src_domain_list, count as\
+    \ numEvents, dc(source.from_header_address) as numSrcAddresses, min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY dest_domain phase severity\n  | where\
+    \ numSrcAddresses < 20\n  | sort - numSrcAddresses\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `gsuite_outbound_email_with_attachment_to_external_domain_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dc4dc3a8-ff54-11eb-8bf7-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gsuite_outbound_email_with_attachment_to_external_domain.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

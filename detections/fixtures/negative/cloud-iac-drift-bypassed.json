@@ -1,0 +1,5 @@
+{
+  "action": "protected_branch.policy_override",
+  "approver": "self",
+  "out_of_hours": true
+}

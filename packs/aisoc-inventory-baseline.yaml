@@ -1,0 +1,154 @@
+id: aisoc-inventory-baseline
+name: AiSOC Inventory Baseline
+version: 1.0.0
+platforms: [linux, darwin, windows]
+description: |
+  Collects a comprehensive baseline inventory of the endpoint including installed
+  software, running services, listening ports, users, groups, and hardware info.
+  Used for asset management, drift detection, and initial triage context.
+  No specific MITRE tactic — enables detection of unexpected software installation
+  (T1072) or new user accounts (T1136).
+
+queries:
+  os_version:
+    sql: >
+      SELECT name, version, major, minor, patch, build, platform,
+             platform_like, codename, arch, install_date
+      FROM os_version
+    interval: 3600
+    severity: info
+    description: Collect OS version and platform details
+
+  system_info:
+    sql: >
+      SELECT hostname, uuid, cpu_brand, cpu_physical_cores, cpu_logical_cores,
+             physical_memory, hardware_vendor, hardware_model, hardware_serial
+      FROM system_info
+    interval: 3600
+    severity: info
+    description: Collect hardware and system identity information
+
+  installed_packages_deb:
+    sql: >
+      SELECT name, version, arch, status, source
+      FROM deb_packages
+      ORDER BY name
+    interval: 3600
+    severity: low
+    description: Enumerate installed Debian/Ubuntu packages
+
+  installed_packages_rpm:
+    sql: >
+      SELECT name, version, release, arch, epoch, vendor, description
+      FROM rpm_packages
+      ORDER BY name
+    interval: 3600
+    severity: low
+    description: Enumerate installed RPM packages (RHEL, CentOS, Fedora)
+
+  installed_packages_brew:
+    sql: >
+      SELECT name, version, prefix, path, linked_keg
+      FROM homebrew_packages
+      ORDER BY name
+    interval: 3600
+    severity: low
+    description: Enumerate Homebrew packages (macOS)
+
+  installed_packages_windows:
+    sql: >
+      SELECT name, version, publisher, install_location, install_source
+      FROM programs
+      ORDER BY name
+    interval: 3600
+    severity: low
+    description: >
+      Enumerate installed Windows programs. Absent from this pack until
+      wave 2 Phase 5.4, which meant a Windows estate produced no package
+      rows at all - indistinguishable, on the inventory page, from a
+      Windows estate with nothing installed on it.
+    platform: windows
+
+  running_processes:
+    sql: >
+      SELECT p.pid, p.parent, p.name, p.path, p.cmdline, p.uid, p.gid,
+             p.start_time, p.resident_size, u.username
+      FROM processes p
+      LEFT JOIN users u ON p.uid = u.uid
+      ORDER BY p.start_time ASC
+    interval: 300
+    severity: low
+    description: Snapshot of all running processes with user context
+
+  listening_ports:
+    sql: >
+      SELECT p.name, p.pid, l.address, l.port, l.protocol, l.family,
+             p.path, p.cmdline
+      FROM listening_ports l
+      JOIN processes p ON l.pid = p.pid
+      WHERE l.address NOT IN ('127.0.0.1', '::1', '::')
+      ORDER BY l.port
+    interval: 300
+    severity: low
+    description: Enumerate non-loopback listening ports with associated process
+
+  user_accounts:
+    sql: >
+      SELECT uid, gid, username, description, directory, shell
+      FROM users
+      WHERE shell NOT IN ('/sbin/nologin', '/bin/false', '/usr/sbin/nologin')
+      ORDER BY uid
+    interval: 3600
+    severity: low
+    description: Enumerate interactive user accounts
+    mitre: [T1136]
+    references:
+      - https://attack.mitre.org/techniques/T1136/
+
+  sudo_groups:
+    sql: >
+      SELECT g.gid, g.groupname, gu.uid, u.username
+      FROM groups g
+      JOIN group_users gu ON g.gid = gu.gid
+      JOIN users u ON gu.uid = u.uid
+      WHERE g.groupname IN ('sudo', 'wheel', 'admin', 'sudoers')
+      ORDER BY g.groupname, u.username
+    interval: 3600
+    severity: medium
+    description: Enumerate members of privileged groups
+    mitre: [T1098]
+    references:
+      - https://attack.mitre.org/techniques/T1098/
+
+  certs:
+    sql: >
+      SELECT subject, issuer, not_valid_after, not_valid_before,
+             sha1, path, serial_number
+      FROM certificates
+      WHERE path NOT LIKE '/System/%'
+        AND path NOT LIKE '/usr/share/ca-certificates/%'
+    interval: 3600
+    severity: low
+    description: Enumerate non-system TLS certificates (detect rogue CA installs)
+    mitre: [T1553.004]
+    references:
+      - https://attack.mitre.org/techniques/T1553/004/
+
+  interface_addresses:
+    sql: >
+      SELECT i.name, i.mac, a.address, a.mask, a.broadcast, a.type
+      FROM interface_details i
+      JOIN interface_addresses a ON i.name = a.interface
+      WHERE a.type = 0
+      ORDER BY i.name
+    interval: 300
+    severity: info
+    description: Enumerate network interface addresses
+
+  resolvers:
+    sql: >
+      SELECT id, type, address, netmask, options
+      FROM dns_resolvers
+    interval: 600
+    severity: info
+    description: Enumerate DNS resolver configuration

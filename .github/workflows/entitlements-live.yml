@@ -1,0 +1,203 @@
+# Opt-in limit enforcement — against real Postgres.
+#
+# Why live and not offline
+# ------------------------
+# Every decision reads rows: the opt-in table, the per-tenant
+# `tenants.limits` override, and a usage count over real rows. A double
+# answers whatever the test wrote into it.
+#
+# The counts are the specific risk. `measure_usage` binds the tenant as a
+# typed `UUID`; it used to bind `str(uuid)`, which only Postgres coerces,
+# so every quota count returned zero on any other driver — and a quota
+# reading zero is the direction nobody investigates.
+#
+# `ENVIRONMENT=test`, never `development`, which is in
+# `AUTH_BYPASS_ENVIRONMENTS`. The connection is the DML-only `aisoc_app`
+# role, so the RLS policy on the opt-in table is actually in force.
+#
+# Both negative controls matter, and the second is the one that is usually
+# missing. Removing the guard must fail the suite; **so must leaving it
+# stuck closed**, because a control that refuses everything passes every
+# "the limit is enforced" assertion perfectly, and that is precisely how a
+# fail-closed control shipped here withholding every grant on every
+# deployment while its negative tests stayed green.
+#
+# No `paths:` filter. A quota that silently stops refusing is indis-
+# tinguishable from one nobody configured, and a filtered gate is absent
+# exactly when something unexpected moved.
+name: Entitlement enforcement (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: entitlements-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  entitlements-live:
+    name: An enforced limit refuses, and an unenforced one does not
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      ENT_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # No migration may write an opt-in row. Enforcement arriving switched
+      # on would turn every ceiling an operator had written for *reporting*
+      # into a refusal on upgrade, and that is a one-line regression a
+      # future migration could introduce without anyone noticing.
+      - name: A fresh database enforces nothing
+        run: |
+          set -euo pipefail
+          rows=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM aisoc_tenant_entitlement_enforcement;")
+          if [ "$rows" != "0" ]; then
+            echo "::error::a migration wrote $rows enforcement row(s); enforcement must be opt-in"
+            exit 1
+          fi
+          echo "OK: a fresh database enforces no limit for any tenant."
+
+      - name: Opt-in enforcement, both directions
+        working-directory: services/api
+        env:
+          ISOLATION_ENTITLEMENTS_DSN: ${{ env.ENT_DSN }}
+          DATABASE_URL: ${{ env.ENT_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_entitlement_enforcement_live.py \
+            -v --tb=short --junitxml=/tmp/entitlements.xml
+
+      - name: Nothing skipped, and something ran
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+
+          root = ET.parse("/tmp/entitlements.xml").getroot()
+          tests = skipped = errors = 0
+          for s in root.iter("testsuite"):
+              tests += int(s.get("tests", 0))
+              skipped += int(s.get("skipped", 0))
+              errors += int(s.get("errors", 0))
+          print(f"tests={tests} skipped={skipped} errors={errors}")
+          if tests == 0:
+              print("::error::the live suite collected nothing; a job that ran no case is not evidence")
+              sys.exit(1)
+          if skipped:
+              print("::error::the live suite skipped a case; in a job that provides the DSN a skip "
+                    "means the environment is not what this workflow claims it is")
+              sys.exit(1)
+          if errors:
+              print("::error::the live suite errored outside an assertion")
+              sys.exit(1)
+          PY
+
+      - name: The suite fails when the guard never refuses
+        working-directory: services/api
+        env:
+          ISOLATION_ENTITLEMENTS_DSN: ${{ env.ENT_DSN }}
+          DATABASE_URL: ${{ env.ENT_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/services/entitlements.py /tmp/entitlements.bak
+          python - <<'PY'
+          import pathlib, sys
+
+          p = pathlib.Path("app/services/entitlements.py")
+          s = p.read_text()
+          needle = "    if key not in await enforced_keys(db, tenant_id):\n        return\n"
+          if needle not in s:
+              print("negative control could not find the opt-in check to remove; "
+                    "assert_within_limit has been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    return\n", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_entitlement_enforcement_live.py -q >/dev/null 2>&1; then
+            cp /tmp/entitlements.bak app/services/entitlements.py
+            echo "::error::the suite passed with a guard that never refuses"
+            exit 1
+          fi
+          cp /tmp/entitlements.bak app/services/entitlements.py
+          echo "OK: a guard that never refuses makes the suite fail, as it must."
+
+      # The control that is usually missing. A guard stuck closed refuses
+      # everything and satisfies every "the limit is enforced" assertion,
+      # which is how a fail-closed control shipped here withholding every
+      # grant on every deployment with its negative tests green.
+      - name: The suite fails when the guard refuses everything
+        working-directory: services/api
+        env:
+          ISOLATION_ENTITLEMENTS_DSN: ${{ env.ENT_DSN }}
+          DATABASE_URL: ${{ env.ENT_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/services/entitlements.py /tmp/entitlements.bak
+          python - <<'PY'
+          import pathlib, sys
+
+          p = pathlib.Path("app/services/entitlements.py")
+          s = p.read_text()
+          opt_in = "    if key not in await enforced_keys(db, tenant_id):\n        return\n"
+          no_ceiling = "    limit = limit_for(tenant_limits, key)\n    if limit is None:\n        return\n"
+          if opt_in not in s or no_ceiling not in s:
+              print("negative control could not find both early returns to remove; "
+                    "assert_within_limit has been reshaped and this control proves nothing")
+              sys.exit(1)
+          s = s.replace(opt_in, "", 1)
+          s = s.replace(no_ceiling, "    limit = limit_for(tenant_limits, key) or 0\n", 1)
+          p.write_text(s)
+          PY
+          if python -m pytest ../../tests/isolation/test_entitlement_enforcement_live.py -q >/dev/null 2>&1; then
+            cp /tmp/entitlements.bak app/services/entitlements.py
+            echo "::error::the suite passed with a guard stuck closed"
+            exit 1
+          fi
+          cp /tmp/entitlements.bak app/services/entitlements.py
+          echo "OK: a guard stuck closed makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_entitlement_enforcement_live.py -q

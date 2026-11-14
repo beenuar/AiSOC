@@ -1,0 +1,4 @@
+{
+  "event_type": "helm_install",
+  "repo_url_endswith_in_allow_list": false
+}

@@ -1,0 +1,5 @@
+{
+  "argv": "--force --deep",
+  "event_type": "http_request",
+  "process_path": "head-/codesign"
+}

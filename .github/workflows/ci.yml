@@ -1,0 +1,2691 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # ──────────────────────────────────────────────
+  # Lint & type-check the Next.js web app
+  # ──────────────────────────────────────────────
+  web-lint:
+    name: Web — Lint & Type-check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run type-check
+
+  # ──────────────────────────────────────────────
+  # Vitest smoke tests for the Next.js web app
+  #   The web app used to have *zero* tests gated in CI — lint + typecheck
+  #   were the only signal. These smoke tests render the components a
+  #   reviewer cares about (Hero, ComparisonTable, Sidebar, TopBar,
+  #   MarketplaceView, CaseWorkspace) and assert on the wording we agreed
+  #   to keep honest (no "every commit", alert reduction tagged as a
+  #   measurement, etc.). They run with jsdom; no browser required.
+  # ──────────────────────────────────────────────
+  web-test:
+    name: Web — Vitest smoke tests + coverage gate
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Phase 2.2 — coverage gate. Floors are declared in
+      # `vitest.config.ts`'s `test.coverage.thresholds`; vitest exits
+      # non-zero when any floor is breached. The baseline at the time
+      # of introduction was statements 58 / branches 52 / functions
+      # 51 / lines 60; floors sit at baseline - 3pp to absorb
+      # measurement variance. Raise as the suite grows.
+      - run: pnpm test:cov
+      # Upload the coverage report so the marketing site's eval-page
+      # widget (Phase 4.3) can grab a fresh value on every main push.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: web-vitest-coverage
+          path: apps/web/coverage/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # Build the Next.js web app
+  # ──────────────────────────────────────────────
+  web-build:
+    name: Web — Build
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  # ──────────────────────────────────────────────
+  # T3.8 — Storybook design-system gate.
+  # Builds the static Storybook bundle (proves the design-system
+  # primitives compile under the Vite-based Storybook 10 toolchain
+  # AND that the shims work) and uploads it as an artifact so the
+  # marketing team can grab screenshots from a PR build.
+  # Visual-regression DOM snapshots run as part of `pnpm test`
+  # above; this job adds the additional contract that Storybook
+  # itself stays buildable.
+  # ──────────────────────────────────────────────
+  storybook-build:
+    name: Web — Storybook build (design system v2)
+    runs-on: ubuntu-latest
+    needs: web-lint
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build-storybook
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: storybook-static
+          path: apps/web/storybook-static
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # @aisoc/mcp — MCP server for Claude/Cursor/Cody
+  #   Typechecks, runs the vitest contract tests (config + tools registry +
+  #   installer file-write behaviour), and builds the dist bundle so the
+  #   `bin/aisoc-mcp` shebang is exercised on the same Node version we
+  #   publish under. Lives in the pnpm workspace; we reuse the root
+  #   lockfile to keep installs fast and reproducible.
+  # ──────────────────────────────────────────────
+  mcp-test:
+    name: MCP — Type-check, Test & Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm --filter @aisoc/mcp typecheck
+      - name: Test
+        run: pnpm --filter @aisoc/mcp test
+      - name: Build
+        run: pnpm --filter @aisoc/mcp build
+
+  # Nothing outside release.yml built or packed the publishable npm packages,
+  # so every packaging defect in them has been discoverable only on a tag —
+  # three in a row now: an unresolvable workspace dependency for `aisoc` and
+  # `@aisoc/mcp`, and a `tar | head` under pipefail that failed the job on a
+  # diagnostic line. This runs the release steps verbatim, on pull requests,
+  # against the same runner OS.
+  npm-pack:
+    name: npm — Build & pack publishable packages (${{ matrix.pkg }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: aisoc
+            dir: packages/aisoc-lite
+          - pkg: '@aisoc/mcp'
+            dir: services/mcp
+          - pkg: '@aisoc/sdk'
+            dir: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile --ignore-scripts
+      - name: Build ${{ matrix.pkg }}
+        run: pnpm --filter '${{ matrix.pkg }}...' build
+      - name: Pack tarball
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          TARBALL=$(ls -t "$RUNNER_TEMP"/*.tgz | head -1)
+          LISTING="$RUNNER_TEMP/tarball-listing.txt"
+          tar -tzf "$TARBALL" > "$LISTING"
+          echo "$(wc -l < "$LISTING") entries; first 20:"
+          head -20 "$LISTING"
+      - name: The bin entrypoint must exist in the tarball
+        if: matrix.pkg == '@aisoc/mcp'
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          TARBALL=$(ls -t "$RUNNER_TEMP"/*.tgz | head -1)
+          # `bin` points at a build artifact, so a tarball missing it installs
+          # cleanly and fails on first `aisoc-mcp` invocation.
+          tar -tzf "$TARBALL" > "$RUNNER_TEMP/bin-check.txt"
+          grep -qx 'package/dist/index.js' "$RUNNER_TEMP/bin-check.txt"
+
+  # ──────────────────────────────────────────────
+  # Python API & services
+  # ──────────────────────────────────────────────
+  python-lint:
+    name: Python — Lint & Type-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install Ruff & Mypy
+        # Pin to versions compatible with the constraints declared in each
+        # service's ``pyproject.toml`` (``ruff = ">=0.16.8,<0.17"``, ``mypy = ">=2.3.1,<3"``).
+        # The CI gate previously left these unpinned, so every new ruff release
+        # (e.g. 0.15.x adding ``UP037`` enforcement) silently broke main without
+        # any dependency-file change. `scripts/check_dependency_pins.py` holds
+        # this line equal to the fourteen other places ruff is declared.
+        run: pip install 'ruff>=0.16.8,<0.17' 'mypy>=2.3.1,<3'
+      # Formatting is checked over the whole repository. It has no semantic
+      # content, so there is no reason for any Python file this repository may
+      # edit to sit outside it, and `.` means a tree added anywhere is covered
+      # with no edit here. `ruff.toml` excludes `plans/`, the archived
+      # prototype subtree nobody may change.
+      - name: Ruff format check (whole tree)
+        run: ruff format --check .
+      # Linting is scoped to the trees the repo-root `ruff.toml` governs and
+      # nothing else lints. It used to read `services/` alone, which left
+      # `scripts/` — every CI gate in this repository, the code the rest of
+      # its claims are verified by — checked by nothing at all. That is the
+      # same gap `check_mypy_baseline.py` closed with its unmanaged scope, and
+      # it is closed here for the same reason.
+      #
+      # `packages/` and `plugins/` are deliberately still outside: two of the
+      # five packages are linted by their own workflows under their own
+      # configs, and bringing the three published SDKs under this gate means
+      # behaviour-touching fixes (`subprocess.run` check semantics, blind
+      # `except Exception` handling) that belong in a change somebody reviews
+      # as such rather than in a formatter migration. Measured, so the gap is
+      # a number rather than a shrug: 91 findings in `packages/` and 2 in
+      # `plugins/` under ruff 0.16.9.
+      - name: Ruff lint (services, scripts, tests, tools)
+        run: ruff check services/ scripts/ tests/ tools/
+      # This job has been called "Lint & Type-check" since it was written, and
+      # for most of that time it installed mypy and never ran it. #818 ran it
+      # over the six manifests that declared a `[tool.mypy]` table — which
+      # left fourteen Python trees checked by nothing while the job reported
+      # green, and a tool that appears to cover the repository while covering
+      # a third of it is indistinguishable from no tool at all, only more
+      # reassuring. All twenty trees now declare one, matching the two
+      # strictness shapes that already existed rather than inventing a third.
+      #
+      # The findings are recorded in `scripts/mypy_baseline.json` exactly as
+      # mypy reports them and the gate fails when any grows — no
+      # `ignore_errors`, no widened config, no tree excluded. Nothing installs
+      # the services' dependencies here, but that is no longer what makes the
+      # baseline reproducible, because "reproducible only on a runner" is not
+      # reproducible: a contributor with a service virtualenv active got 59
+      # mismatches in both directions and nothing telling them the cause was
+      # their environment. The gate now passes `--no-site-packages` and
+      # `--no-incremental`, which removes both variables it could remove —
+      # installed packages (measured on `services/connectors`: 73 findings
+      # bare, 140 with eight dependencies installed, 73 either way with the
+      # flag) and a `.mypy_cache` left behind by a run under different
+      # conditions (990 cold against 988 warm). It records the mypy version
+      # in the baseline and refuses to compare across majors, so the one
+      # remaining variable names itself instead of appearing as two hundred
+      # file-level diffs. Re-record with
+      # `python scripts/check_mypy_baseline.py --update`; it no longer matters
+      # much where from, which was the point.
+      #
+      # The same gate now also fails when a Python tree declares no
+      # `[tool.mypy]`, and when a configured or recorded tree is no longer on
+      # disk. Both directions, because the dominant failure shape here is a
+      # check that compares A against B and never B against A.
+      #
+      # "Every tree is configured" still could not ask whether every *file* is
+      # in a tree, and 153 were not — `scripts/`, `tests/`, `tools/` and
+      # `plugins/`, which is to say the CI gates themselves were the only
+      # Python here nothing type-checked. They are covered by a scoped
+      # invocation under `mypy-unmanaged.toml` rather than by a repo-root
+      # manifest, which would make `poetry check` invalid from every directory
+      # without one of its own; that file records the measurements. The scope
+      # is computed as `git ls-files` minus the manifest trees, so a script
+      # added anywhere is checked with no edit, and mypy's own
+      # `--linecount-report` has to account for every module before the run is
+      # allowed to report clean.
+      - name: The type-check this job is named after
+        run: |
+          python scripts/check_mypy_baseline.py --self-test
+          python scripts/check_mypy_baseline.py
+      # `logging.Logger.warning` accepts four keywords; structlog's bound
+      # logger accepts any. Both are used in this tree, so
+      # `logger.warning("x", reason=...)` is correct in one module and a
+      # TypeError in the next, and the call sites are identical to read. #818
+      # found five, all inside `except` blocks — where the raised TypeError
+      # replaces the exception being handled and no sibling handler can catch
+      # it, so the one path whose job was to degrade gracefully was the only
+      # path that raised. A type checker only sees this in a tree it checks;
+      # this scan covers every Python file in the repository and reports how
+      # many receivers it could not classify rather than counting them as
+      # clean. It reached the files in no manifest tree before a type checker
+      # did, which is how that gap was found.
+      - name: No stdlib logger is called with a structlog keyword
+        run: |
+          python scripts/check_logger_kwargs.py --self-test
+          python scripts/check_logger_kwargs.py
+      # The aisoc-api Docker image is built with `services/api` as its build
+      # context, so anything under `services/agents` is *not* shipped in the
+      # container. The natural-language query translator is consumed by both
+      # the agents runtime and the API's `/nl-query/*` endpoints, so we keep
+      # an in-tree vendored mirror at `services/api/app/_vendor/nl_query/`.
+      # This guard fails the build the moment the two trees drift — re-run
+      # `python scripts/sync_vendored_nl_query.py` locally to fix.
+      - name: Verify vendored nl_query is in sync
+        run: python scripts/sync_vendored_nl_query.py --check
+      # Same reasoning as nl_query above. The LLM input contract's rules are
+      # authored in services/agents and vendored into the API, which is the
+      # only way both services can run the *same* classifier — two heuristics
+      # disagreeing about what counts as a raw log is worse than one. The API
+      # had no contract at all until this was wired, so a drifted or
+      # non-importable copy is how the gap silently returns.
+      - name: Verify vendored llm_contract_rules is in sync
+        run: python scripts/sync_vendored_llm_contract.py --check
+      # Same reasoning again, for the replay scorer. The API orchestrates
+      # replay evaluation and grades the result, and `packages/aisoc-benchmark`
+      # is not on the image's build context. A drifted mirror would mean two
+      # definitions of "hallucination rate" in the tree, both calling
+      # themselves the same published number.
+      - name: Verify vendored aisoc_benchmark is in sync
+        run: python scripts/sync_vendored_benchmark.py --check
+      # The gates in this repository certify functions, not call paths, so a
+      # claim row can pass on a unit test of a module nothing imports. That
+      # is not hypothetical: the hunting agent, the pseudonymizer, the
+      # closure guardrails and a working ReAct loop were each complete,
+      # tested, and reachable from nothing.
+      - name: Module reachability — self-test
+        run: python scripts/check_module_reachability.py --self-test
+      - name: Verify every service module has a production importer
+        run: python scripts/check_module_reachability.py
+      # A connector's poll window is contiguous: it runs from `now -
+      # since_seconds` to `now`, the scheduler passes the poll interval, and
+      # nothing re-reads an earlier window. So a page a connector does not
+      # read is a page nothing reads later — the vendor's cap becomes silent
+      # data loss rather than lag. Five connectors shipped that shape inside
+      # two days (Duo, Entra, Defender, Sentinel and the three Google ones),
+      # and most order newest-first, so what went missing was the *start* of
+      # whatever burst overflowed the window.
+      - name: Connector paging — self-test
+        run: python scripts/check_connector_paging.py --self-test
+      - name: Verify every connector reads its poll window to the end
+        run: python scripts/check_connector_paging.py
+      # The sibling defect to the one above, and it has now shipped three
+      # times: a connector polls a URL the vendor does not serve, and the
+      # 404 is handled in the same branch as a 403, so "our path is wrong"
+      # is reported as "the customer has not bought this" and nobody
+      # debugs it. Cloudflare WAF (#1686), the decommissioned CrowdStrike
+      # Detects API, and GitLab vulnerability findings (#1754) each ran
+      # that way for their whole life. A pairing is allowed only when the
+      # vendor publishes 404 in that endpoint's own response list.
+      - name: 404 is not 403 — self-test
+        run: python scripts/check_connector_404_conflation.py --self-test
+      - name: Verify no connector files a 404 as a permissions problem
+        run: python scripts/check_connector_404_conflation.py
+      # Two permission models shipped side by side: 275 route dependencies
+      # read the hardcoded ROLE_PERMISSIONS map while 27 read the
+      # user_roles / role_permissions tables the console's RBAC screen
+      # writes to. An operator could grant a permission, watch it appear in
+      # the UI, and have 275 of 302 routes ignore it. There is one model
+      # now; this keeps it one.
+      - name: One permission model — self-test
+        run: python scripts/check_one_permission_model.py --self-test
+      - name: Verify the database is authoritative for permissions
+        run: python scripts/check_one_permission_model.py
+      # `alerts.status` reaches 'resolved' from one statement, and for a while
+      # two callers reached it while only one asked permission: the
+      # outcome-memory suppression branch closed alerts having consulted no
+      # policy, no grant and no kill switch. The wiring test that was supposed
+      # to cover this asserted one substring against one function, so it could
+      # not see the path nobody remembered. This holds the property the
+      # chokepoint rests on — one closure statement, in one module, gated.
+      - name: Closure authorization chokepoint — self-test
+        run: python scripts/check_closure_authorization.py --self-test
+      - name: Verify every automatic closure passes the authorization chokepoint
+        run: python scripts/check_closure_authorization.py
+      # Thirteen Kafka clients across Python, Go and TypeScript, and not one
+      # passed a security protocol — so every one took the library default,
+      # which is PLAINTEXT in all three. The spine carries raw event bodies,
+      # usernames, hostnames and command lines, and the commercial MSK
+      # deployment ran TLS_PLAINTEXT with the TLS listener unused.
+      #
+      # Checked in two directions: every construction site passes the
+      # resolver, and the resolver actually refuses. The first alone would
+      # pass a tree where every site dutifully calls a resolver that always
+      # answers PLAINTEXT.
+      - name: Kafka transport gate — self-test
+        run: python scripts/check_kafka_transport.py --self-test
+      - name: Verify every Kafka client resolves a transport
+        run: python scripts/check_kafka_transport.py
+      - name: Verify the vendored Kafka transport copies match
+        run: python scripts/sync_vendored_kafka_security.py --check
+      # An API key owned by a user resolved to that user's email, so an
+      # audit entry read the same whether the person acted at the console or
+      # a key they minted acted from a script — and revoking a key and
+      # disabling a person are different responses to the same line. The
+      # gate also holds the ratchet on how many endpoint modules audit at
+      # all, which is 7 of 86 and set at the measured value rather than an
+      # aspiration: a threshold the tree cannot meet gets disabled, and a
+      # disabled gate is worth less than an honest one.
+      - name: Audit coverage gate — self-test
+        run: python scripts/check_audit_coverage.py --self-test
+      - name: Verify the audit log attributes the credential that acted
+        run: python scripts/check_audit_coverage.py
+      # Fabricated security data must never render as a tenant's real state.
+      # Around three dozen console components served a `MOCK_*` / `DEMO_*`
+      # array of plausible alerts, connectors and coverage numbers whenever the
+      # API call failed, none of it gated on demo mode — and because SWR v2
+      # disables `revalidateOnMount` when `fallbackData` is set, several never
+      # fetched at all. This gate fails the build if that shape reappears.
+      #
+      # Self-test first, as always. This one earns it twice over: the gate
+      # reported everything gated over a tree holding nine live bypasses, and
+      # several of its rules overlap by construction — a parenthesised
+      # `?? (flag ? DEMO_X : [])` satisfies both the nullish rule and the
+      # ternary rule — so each case names the rule that must account for it
+      # rather than asserting that something fired.
+      - name: Sample-data gate — self-test
+        run: python scripts/check_mock_data_gated.py --self-test
+      - name: Verify sample data is gated behind demo mode
+        run: python scripts/check_mock_data_gated.py
+      # The console half of that gate scans `apps/web/src` and nothing else,
+      # so the same two defects on the Python side had no gate at all: a
+      # module-level container a handler writes to (one object per process,
+      # no tenant, lost on restart) and fabricated records served with no
+      # demo gate. Both shipped — cross-tenant copilot conversations and
+      # saved searches, three invented shifts with named analysts, and
+      # invented STIX indicators.
+      #
+      # A sibling rather than an extension: that file is 1,181 lines of
+      # rules written against TypeScript shapes Python does not have, and
+      # Python has one the console does not. Recorded as a deviation.
+      - name: Python route-state gate — self-test
+        run: python3 scripts/check_python_route_state.py --self-test
+      - name: Verify no route module keeps state in a module global
+        run: python3 scripts/check_python_route_state.py
+      # Sixty-one console calls reached an API with no Authorization header,
+      # and every one of them worked: an uncredentialed request resolved to a
+      # demo administrator in a development-class environment, which is how
+      # the quick start ran. Closing that turns each into a 401, so the
+      # console side needs a gate of its own — nothing here looked at a
+      # request header before, only at server-side route decorators.
+      #
+      # Self-test first. Three blind spots in its own first draft are pinned
+      # as cases: a generic type argument hid both real SWR sites, a
+      # multi-line arrow fetcher was truncated at the first newline, and an
+      # inline fetcher whose URL is the SWR key has no API path at the call
+      # site to match on at all.
+      - name: Console credential gate — self-test
+        run: python3 scripts/check_console_auth_headers.py --self-test
+      - name: Verify every console API call carries a credential
+        run: python3 scripts/check_console_auth_headers.py
+      # The console half proves a credential is sent and the route gates prove
+      # the server requires one. Neither asks the question that actually bit:
+      # what posture does a documented `make up` produce? ENVIRONMENT
+      # defaulted to `development` in the compose file and in `.env.example`,
+      # and in a development-class environment the API served an
+      # uncredentialed request as an administrator. So the default value of a
+      # string decided whether a host was anonymous, and no test read it.
+      #
+      # Static, with no Docker, so it runs in the jobs that matter. It also
+      # checks the opposite direction: the developer overlay must still turn
+      # the conveniences on, because four of its five rules are satisfied by
+      # deleting the developer path rather than making it explicit.
+      - name: Deployment posture gate — self-test
+        run: python3 scripts/check_deployment_auth_posture.py --self-test
+      - name: Verify every documented path is production-class
+        run: python3 scripts/check_deployment_auth_posture.py
+
+      # Wave 10. A pack referencing a rule id nobody ships is the exact
+      # failure the format exists to prevent: an operator adopts it,
+      # nothing fires, and no error appears anywhere. Checked against
+      # the compiled ruleset the engine loads, not the YAML on disk,
+      # which carries thousands of rules the engine never compiles.
+      - name: Content packs resolve against the shipped corpus
+        run: python3 scripts/check_content_packs.py
+
+      # Wave 15. backup.sh backed up five stores and restore.sh
+      # restored two, which is a backup nobody had proven they could
+      # use. Runs in the direction that drifts — a store gains a
+      # backup long before it gains a restore.
+      - name: Every backed-up store has a restore path
+        run: python3 scripts/check_backup_restore_parity.py
+      # Sending a customer file to a third party is a disclosure, and for the
+      # first commercial provider wired here it is a disclosure to the public
+      # internet: a stored report carries `visibility: "public"` and
+      # `tlp: "clear"`. Every property that keeps that deliberate is invisible
+      # in a diff that breaks it: a dataclass default flipping to True, a
+      # reordered branch that consults consent before the hash lookup, an
+      # exception handler that turns a provider outage into an empty report.
+      # Self-test first: the gate is driven over an injected violation of each
+      # rule and over a tree with no content, because a gate that cannot fail
+      # is indistinguishable from no gate.
+      - name: Sandbox upload policy self-test
+        run: python scripts/check_sandbox_upload_policy.py --self-test
+      - name: Verify file uploads stay off by default and failures stay failures
+        run: python scripts/check_sandbox_upload_policy.py
+      # The check above recognises the *shapes* that carried fabricated data:
+      # a bare mock in `fallbackData`, a mock through a state setter, a mock
+      # behind `??`. Each was added after a specific escape, so each knows only
+      # the syntax that got past it last time. `SLADashboard.tsx` wrote the
+      # same defect as a ternary one line below a correctly-gated
+      # `demoFallback(...)` and nothing matched, so 847 alerts and a 42.5m MTTR
+      # rendered on first paint and on error, on every deployment. This gate
+      # asks the two questions that do not depend on guessing the next syntax:
+      # is the fabricated value reachable with no gate in scope, and does a
+      # component decide for itself that it is a demo?
+      - name: Verify no fabricated data is reachable without the demo gate
+        run: python scripts/check_demo_state_gated.py
+      # Same story for the correlation-narrative builder. It lives canonically
+      # in `services/fusion/app/services/narrative.py` (called at fusion time
+      # to populate `FusedAlert.narrative`) and is mirrored into
+      # `services/api/app/_vendor/narrative.py` so the API can lazily compute
+      # the narrative on first read of an alert whose `narrative` column is
+      # still NULL — without depending on `services/fusion` being inside the
+      # Docker build context. Re-run `python scripts/sync_vendored_narrative.py`
+      # locally if this check fails.
+      - name: Verify vendored narrative builder is in sync
+        run: python scripts/sync_vendored_narrative.py --check
+      # `app.services.alert_status` owns which statuses mean an alert is
+      # finished. Fusion's alert sink needs that list to decide whether a
+      # repeat should reopen a closed alert (GHSA-qp9f-459j-w89c), and it
+      # cannot import across the service boundary — its Docker build context
+      # is `services/fusion`. The vendored copy is rendered rather than
+      # byte-copied, because the canonical module pulls in SQLAlchemy for two
+      # query helpers fusion has no use for. If this fails, the console and
+      # fusion disagree about what "closed" means, which either misses a
+      # recurrence or churns an alert an analyst is working. Re-run
+      # `python scripts/sync_vendored_alert_status.py` locally to fix.
+      - name: Verify vendored alert-status vocabulary is in sync
+        run: python scripts/sync_vendored_alert_status.py --check
+      # The guarded telemetry module ueba/honeytokens/purple-team share
+      # (issue #1848): three copies that can drift silently are worse than
+      # one copy plus a gate. Re-run
+      # `python scripts/sync_vendored_telemetry.py` locally to fix.
+      - name: Verify vendored telemetry guard is in sync
+        run: python scripts/sync_vendored_telemetry.py --check
+      # The fifth vendored mirror, and the only one that had no gate. The
+      # redactor strips internal IPs, emails, paths and secret-shaped strings
+      # before untrusted text reaches a prompt; a copy that silently drifts
+      # from the canonical source redacts a different set on one side of the
+      # wire than the other, which is indistinguishable from working until
+      # something leaks. The script existed and passed; nothing ran it.
+      - name: Verify vendored redactor is in sync
+        run: python scripts/sync_vendored_redactor.py --check
+      # The SSRF guard, vendored so the API can test a tenant's LLM credential
+      # without depending on `services/agents` being in its build context.
+      # Drift here is a security failure in a specific direction: the API's own
+      # `destinations.py::_guard_url` refuses every private address, which
+      # would break the `local-*` providers this endpoint exists to serve, so
+      # the copy that permits private *while still blocking link-local* has to
+      # stay the one that is actually used.
+      - name: Verify vendored SSRF guard is in sync
+        run: python scripts/sync_vendored_ssrf_guard.py --check
+      # The AI SDK's secret-shape classifier, vendored so the AI-chat
+      # compliance collector labels a chat message the same way the SDK
+      # labels a prompt. Two surfaces answering "does this contain an AWS
+      # key" differently about the same text is the drift this prevents.
+      - name: Verify vendored AI redaction patterns are in sync
+        run: python scripts/sync_vendored_ai_redaction.py --check
+      # The prompt-injection patterns, generated from the agents guard's own
+      # rule table rather than hand-copied. The repository scanner (wave-2
+      # 7.2) flags an agent-instruction file or a skill whose text tries to
+      # steer an agent; a hand-picked subset would silently miss whatever
+      # pattern was added to the guard after the next incident. Needs the
+      # agents service importable, so it runs after that install step.
+      - name: GPU preflight — self-test
+        run: python3 scripts/check_gpu_runtime.py --self-test
+      # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
+      # safety failure rather than an inconsistency. These rules decide what a
+      # tenant's track record has to show before the agent may act unattended:
+      # `services/actions` reads them at dispatch and `services/api` reads them
+      # when a promotion is decided. Two copies that disagree means the control
+      # is off in whichever one is more generous, and nobody finds out until
+      # something executes that the other half would have refused.
+      - name: Verify vendored autonomy evidence rules are in sync
+        run: python scripts/sync_vendored_autonomy_evidence.py --check
+      # Issue #1243. The seventh mirror, and the one with a worked example of
+      # the failure attached. The console's autonomy page has to say whether a
+      # response verb runs unattended; it used to answer from a confidence
+      # threshold no dispatch path reads, and announced "Autopilot — 7
+      # high-blast actions auto-execute" on a stock install whose dispatcher
+      # queues every one of them. It now calls the same `evaluate_contract`
+      # the dispatcher calls. These three modules are what that function
+      # needs, and a settings page is the worse half to be wrong in: nothing
+      # executes there, so nothing contradicts it.
+      - name: Verify vendored action contracts are in sync
+        run: python scripts/sync_vendored_action_contracts.py --check
+      # Phase 1.1 — the registry at
+      # `services/connectors/app/connectors/__init__.py` is the single source
+      # of truth for the "N connectors" claim. The check verifies that:
+      #   1. apps/web/src/data/connector-count.json matches the registry
+      #   2. apps/web/src/data/connectorCount.ts matches the JSON
+      #   3. README, ROADMAP, docs/architecture and apps/docs all carry the
+      #      same number as the registry
+      #   4. no component under apps/web/src renders the figure as a literal
+      # If this fails, run `python scripts/generate_connector_count.py` and
+      # commit the result.
+      #
+      # (4) exists because (3) only ever looked at markdown: the landing hero
+      # and the onboarding hero both rendered a hardcoded 26 against a
+      # registry of 91, the latter 35 lines below a correct dynamic use in
+      # the same file, and this gate reported OK throughout.
+      - name: Connector-count gate self-test (the defect, and two near misses)
+        run: python scripts/generate_connector_count.py --self-test
+
+      - name: Verify connector count is in sync (Phase 1.1)
+        run: python scripts/generate_connector_count.py --check
+      # Same shape again, for the self-hosted webfonts. `apps/web` used to
+      # load five faces through `next/font/google`, which resolves them by
+      # fetching from Google *during `next build`* — so every build surface,
+      # including the published image and a contributor's laptop, depended on
+      # a third party being reachable and on its response not changing. Both
+      # failed: an unreachable fonts.gstatic.com fails the build with
+      # `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`,
+      # and when Google began serving one shared variable file for the two
+      # Source Code Pro weights this app asks for, Turbopack could not
+      # resolve that either and `main` went red with no commit having touched
+      # the web app.
+      #
+      # The faces are vendored under apps/web/public/fonts now. This check is
+      # offline on purpose — it compares the generated stylesheet and preload
+      # lists against the manifest, and every vendored file against its own
+      # content hash, so a hand-edited fonts.css or a swapped binary fails
+      # here. Refreshing from Google is a deliberate act
+      # (`scripts/fetch_web_fonts.py`), never a build-time accident.
+      #
+      # The self-test runs first and hand-breaks each comparison in turn — a
+      # drifted unicode-range, a manifest face naming a missing file, a woff2
+      # whose bytes no longer match its filename hash, an orphan file — so a
+      # green check below means the comparison still happens rather than that
+      # it found nothing.
+      - name: Webfont gate — self-test
+        run: python3 scripts/generate_web_font_css.py --self-test
+      - name: Verify self-hosted webfonts are in sync
+        run: python3 scripts/generate_web_font_css.py --check
+      # Same shape, for the detection / marketplace figures. The landing page
+      # carried three different wrong answers to "how many detections" — 6,998
+      # in four places, 7,117 for the marketplace, 218 on the contributor
+      # leaderboard — with no gate on any of them. It also quoted the imported
+      # corpus as the detection capability, while ~85% of it sits under
+      # `_quarantine/` and is never loaded.
+      #
+      # The self-test hand-edits the generated artefact and requires the drift
+      # to be caught, so a green check means the comparison still happens.
+      - name: Corpus stats — self-test
+        run: python3 scripts/generate_corpus_stats.py --self-test
+      - name: Verify detection / marketplace counts are in sync
+        run: python3 scripts/generate_corpus_stats.py --check
+      # `aisoc-sandbox` is a zero-dependency wheel installed from PyPI with
+      # no checkout, so it cannot read the artefact above at runtime. Its
+      # copy of the figure is generated at commit time instead, and this is
+      # the half that stops it going stale — which it had, by a factor of
+      # three, while the ledger printed `rule_count: "800+"`.
+      - name: Sandbox ruleset figure — self-test
+        run: python3 scripts/sync_sandbox_corpus_figures.py --self-test
+      - name: Sandbox ruleset figure matches the corpus artefact
+        run: python3 scripts/sync_sandbox_corpus_figures.py --check
+      # The offline sandbox may not assert a finding it did not compute.
+      # Reported by a community reviewer who fed it a harmless login —
+      # same user, same address, same city, eight hours apart — and got
+      # "physically impossible" travel at 83/100, then relabelled genuine
+      # impossible travel `info` and got "L4 — fully autonomous closure".
+      # All three decision functions were keyed on strings the input file
+      # declared and none could see the events.
+      #
+      # The package's own suite pins the behaviour, but it runs in a job
+      # filtered on `packages/aisoc-sandbox/**`; this job has no path
+      # filter. The gate also refuses the *shape* statically — a table
+      # mapping a technique or a severity to a sentence or a score — which
+      # catches a reintroduction in a new module before anything calls it.
+      - name: Sandbox honesty — self-test
+        run: python3 scripts/check_sandbox_honesty.py --self-test
+      - name: Sandbox asserts nothing it did not compute
+        run: python3 scripts/check_sandbox_honesty.py
+      # Prose cannot be generated the way a count can, so the retraction of
+      # the 75.3% alert-reduction figure is gated instead. `benchmark.md`
+      # withdrew the claim; `BenchmarkResults.tsx` went on rendering a "Real
+      # measurement" badge on it and `benchmarks/alert-reduction.md` went on
+      # calling the harness a faithful re-implementation of production
+      # grouping. A correction that reaches one surface of three is not a
+      # correction.
+      - name: Alert-reduction claims — self-test
+        run: python3 scripts/check_alert_reduction_claims.py --self-test
+      - name: Verify the retracted alert-reduction figure stays retracted
+        run: python3 scripts/check_alert_reduction_claims.py --check
+      # Wave-2 plan 4.6. The three outcomes a buyer asks for first can only be
+      # measured by replaying somebody's real closed alerts, no design partner
+      # has offered a window, and all three are recorded as *not measured*.
+      # This gate is what stops that record becoming a number — including the
+      # worse version, a `0`, which reads as "measured and reduced nothing".
+      # It reads the state off the replay page rather than carrying its own
+      # copy, so publishing a real measurement retires the prohibition without
+      # anyone editing the gate.
+      - name: Customer-outcome claims — self-test
+        run: python3 scripts/check_outcome_claims.py --self-test
+      - name: No customer-outcome figure nobody measured
+        run: python3 scripts/check_outcome_claims.py
+      # Wave 2, Phase 9.5 prerequisite. A caveat saying a console page is
+      # "not built" reads as modesty and works as an exemption: a surface
+      # recorded as absent needs no claim row and no gate. Three shipped
+      # pages were sitting behind one such sentence, and one of them —
+      # /settings/users — had no test at all. `check_claim_gate_matrix`
+      # cannot see this: it counts rows and statuses and does not read a
+      # caveat's prose.
+      - name: 'Unbuilt-surface claims — self-test'
+        run: python3 scripts/check_unbuilt_claims.py --self-test
+      - name: Every 'not built' claim about a console page is still true
+        run: python3 scripts/check_unbuilt_claims.py
+      # Wave 2, Phase 5.5. The published retro-hunt ceiling is derived from
+      # MAX_BYTES_PER_SWEEP, so moving the product's budget must move the
+      # page or red the build: a published limit that quietly describes a
+      # budget the product no longer has is worse than no limit at all.
+      - name: Retro-hunt scale claims — self-test
+        run: python3 scripts/check_retro_hunt_scale_claims.py --self-test
+      - name: The published retro-hunt scale figures are the measured ones
+        run: python3 scripts/check_retro_hunt_scale_claims.py
+      # Wave-2 plan 4.3. A business-context rule is authored and validated in
+      # `services/api` and evaluated on the triage hot path in
+      # `services/agents`. The two ship as separate images, cannot import each
+      # other, and so declare the operator grammar twice. Drift is silent in
+      # the direction that matters: the console accepts the rule, the worker
+      # has no branch for the operator and falls through to False, and the
+      # tenant gets a saved rule that never fires and no diagnostic.
+      - name: Business-context grammar — self-test
+        run: python3 scripts/check_business_context_grammar.py --self-test
+      - name: Both business-context engines agree on the operator grammar
+        run: python3 scripts/check_business_context_grammar.py --check
+      # A translation catalogue rots in two directions and only one is
+      # visible. A key the base has and a locale lacks falls back to English
+      # — correct, and invisible, so the gap reaches a customer. A key a
+      # locale has and the base does not renders nowhere at all, so no
+      # amount of using the console finds it; that is the direction nobody
+      # checks, and it is fatal here. Untranslated keys are ratcheted
+      # instead, because a gate that reds the build on a partial locale gets
+      # the locale deleted rather than finished.
+      - name: 'i18n catalogue keys — self-test'
+        run: python3 scripts/check_i18n_keys.py --self-test
+      - name: Every locale is checked against the base catalogue, both ways
+        run: python3 scripts/check_i18n_keys.py
+      # And the mirror: a caveat saying a console surface is "not built"
+      # reads as modesty and works as an exemption, since an absent surface
+      # needs no claim row and no gate. Three of the six the matrix called
+      # unbuilt had shipped.
+      - name: Unbuilt-surface claims — self-test
+        run: python3 scripts/check_unbuilt_claims.py --self-test
+      - name: Verify every 'not built' claim is still true
+        run: python3 scripts/check_unbuilt_claims.py
+      # Wave-2 plan 4.3. A business-context rule is authored and validated in
+      # `services/api` and evaluated on the triage hot path in
+      # `services/agents`. The two ship as separate images, cannot import each
+      # other, and so declare the operator grammar twice. Drift is silent in
+      # the direction that matters: the console accepts the rule, the worker
+      # has no branch for the operator and falls through to False, and the
+      # tenant gets a saved rule that never fires and no diagnostic.
+      # `llms.txt` is the machine-first summary crawlers and LLM-backed tools
+      # read instead of the rendered docs nav, so a stale figure there is
+      # consumed with no human in the loop to sanity-check it. It is generated
+      # from the same artefacts that own each number — the connector registry
+      # and the detection truth table — and this fails when the committed file
+      # no longer matches them.
+      - name: llms.txt generator — self-test
+        run: python3 scripts/generate_llms_txt.py --self-test
+      - name: Verify llms.txt matches its source artefacts
+        run: python3 scripts/generate_llms_txt.py --check
+      # The count comes from the registry; so, now, does the console's
+      # `ConnectorType` union. It used to be written by hand, which is how ten
+      # members came to name nothing the platform ingests — `ibm_qradar`
+      # reached no profile and no connector, so strict mode rejected those
+      # events and lenient mode minted a vendor named after the spelling, a
+      # second alert source for a QRadar deployment `qradar` already fed.
+      #
+      # The self-test runs first and on the same tree: it hand-edits the
+      # generated file, deletes it, puts the union back in connector.ts and
+      # flattens a canonical fold, and requires each to be caught.
+      - name: Connector type union — self-test
+        run: python3 scripts/generate_connector_types.py --self-test
+      - name: Verify the ConnectorType union matches the registry
+        run: python3 scripts/generate_connector_types.py --check
+      # The properties that make generation safe to rely on, asserted rather
+      # than assumed: regeneration is idempotent, reversing the registry
+      # changes no byte (nothing is positional, so no lock file is needed),
+      # and identity is read off the class — `jira_connector.py` declares
+      # `jira` and `tenable.py` declares `tenable_io`, so a filename slug
+      # would misname both, which is how `generate_connector_docs.py` came to
+      # emit duplicate pages while reporting 100% coverage.
+      - name: Connector type union — generation properties
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_connector_types_generated.py -q
+      # The registry is also what the API image's *fallback* catalog is a copy
+      # of, and that copy had 26 entries against a registry of 84. It was
+      # served on every request — the proxy sent no credential, so the
+      # connectors service (default-deny) answered 401 and the fallback was
+      # never a fallback — and because `connector_type` is validated against
+      # it, the 58 connectors it had never heard of were rejected as "unknown".
+      #
+      # The copy is now generated rather than hand-refreshed, and this gate
+      # compares three independent readings of connector identity in both
+      # directions: what the source declares, what reaches the runtime
+      # registry, and what each `schema()` advertises. The third is the one
+      # nothing looked at — `list_connector_schemas()` walks the registry but
+      # takes each entry's id from the schema, so a class registered as
+      # `tenable_io` whose schema said `tenable` would be offered under a name
+      # `get_connector_class()` cannot resolve.
+      #
+      # Self-test first, on the same tree: it drops a connector, renames one,
+      # deletes the artefact, unhooks the consumer and empties every input,
+      # and requires each to be caught.
+      - name: Connector catalog fallback — self-test
+        # Same import closure as the connector docs gate below: the catalog is
+        # each connector's real schema(), read at runtime, so the gate needs
+        # what those modules import at module scope.
+        run: |
+          python -m pip install --quiet httpx pydantic structlog "cryptography>=46,<51"
+          python3 scripts/generate_connector_catalog_fallback.py --self-test
+      - name: Verify the bundled connector catalog matches the registry
+        run: python3 scripts/generate_connector_catalog_fallback.py --check
+      # The count says how many connectors exist; this says whether the name
+      # each one is registered under still reaches a normalization profile.
+      # The connectors service declares `crowdstrike` and `okta` while the
+      # ingest profiles were keyed `crowdstrike_falcon` and `okta_system_log`,
+      # so events arriving under the advertised names — including the README's
+      # own push example — missed the lookup and fell to the generic fallback.
+      #
+      # The self-test runs first and on the same tree: it injects drift in each
+      # direction and requires the gate to catch each one, so a refactor that
+      # quietly stops checking a direction fails here rather than printing OK.
+      - name: Connector profile drift gate — self-test
+        run: python3 scripts/check_connector_profiles.py --self-test
+      - name: Connector profile drift gate
+        run: python3 scripts/check_connector_profiles.py
+      # The lake's TTL is written into the table and ClickHouse enforces it
+      # during merges, with no reference to any per-tenant setting — so a
+      # tenant who chose 400 days lost every event at day 90, with nothing
+      # erroring and the console still showing 400. This holds the table
+      # TTL, the tiering DELETE and the per-tenant ceiling to one number,
+      # requires an existing deployment to be migrated onto it (001_init.sql
+      # runs only on a fresh volume), and requires the purge worker to read
+      # the holds in force and report what they withheld. Self-test first:
+      # one injected violation per rule, on the same tree.
+      - name: Retention window gate — self-test
+        run: python3 scripts/check_retention_window.py --self-test
+      - name: Retention window gate
+        run: python3 scripts/check_retention_window.py
+      # The syslog listener is the one input path an appliance can reach on
+      # its own: every other push route needs something in front of it that
+      # already speaks HTTP. This asserts it parses all four wire formats,
+      # is started by the service rather than merely compiled, is named by
+      # /readyz, takes its tenant from a minted token and from nothing a
+      # sender controls, and projects through templates that ship and can
+      # be minted. Self-test first, on the same tree: it injects one
+      # violation per rule — including each of the three Go syntaxes a
+      # tenant could leak through, because the first version of this gate
+      # knew only one of them and a runtime negative control walked past it.
+      - name: Syslog listener gate — self-test
+        run: python3 scripts/check_syslog_listener.py --self-test
+      - name: Syslog listener gate
+        run: python3 scripts/check_syslog_listener.py
+      # Asking a person whether they recognise their own activity is a
+      # workflow, not a message, and every property that makes it one can be
+      # removed without a test failing — the prompt would still arrive and
+      # the run would quietly stop branching. This asserts the answer is
+      # signed and bound to its stage, that an unanswered prompt escalates
+      # to a manager and then ends with a `timed_out` outcome, that a
+      # confirmed true positive is never asked and that the refusal is
+      # checked before the opt-in, and that the opt-in table has a writer —
+      # a control that fails closed with no way to switch it on is a feature
+      # that reads as broken. Self-test first, on the same tree: eleven
+      # injected violations, one per rule.
+      - name: Stateful verification gate — self-test
+        run: python3 scripts/check_stateful_verification.py --self-test
+      - name: Stateful verification gate
+        run: python3 scripts/check_stateful_verification.py
+      # Every connector above reads an API that answers a time window, so the
+      # window bounds what a poll can return. The three cloud-native
+      # collection paths do not: an SQS queue after an outage, a Pub/Sub
+      # subscription with seven days of retention and a capture container
+      # each hold as much as the estate produced in that time. This asserts
+      # all three exist, resume from a cursor, declare a bounded per-poll
+      # budget that says where the remainder goes, and ship vendor-shaped
+      # fixtures, a setup guide and a marketplace manifest. Parsed with ast,
+      # so it needs no service venv. Self-test first, on the same tree: it
+      # injects one violation per rule and requires each to be caught.
+      - name: Cloud-native collection gate — self-test
+        run: python3 scripts/check_cloud_native_collection.py --self-test
+      - name: Cloud-native collection gate
+        run: python3 scripts/check_cloud_native_collection.py
+      # Depth 9.1. Moving the MCP server off stdio and onto HTTP changes who
+      # is allowed to decide what: the credential arrives per request and
+      # several tenants share one process. This asserts the properties that
+      # makes safe — a transport exists, it never falls back to the
+      # process-wide API key, every call is authorized by the API before
+      # dispatch and reported after, a non-read-only tool cannot run on a
+      # bearer token alone, the API's tool catalogue matches the TypeScript
+      # registry name for name and flag for flag, and something deploys it.
+      # Self-test first, on the same tree: one injected violation per rule.
+      - name: MCP over HTTP gate — self-test
+        run: python3 scripts/check_mcp_over_http.py --self-test
+      - name: MCP over HTTP gate
+        run: python3 scripts/check_mcp_over_http.py
+      # Depth 9.6. Voice input transcribes on the device and sends text, and
+      # "no audio leaves the device" is a claim a comment cannot carry. This
+      # refuses any capture API or binary request body under
+      # apps/mobile/src. Also wired into mobile.yml, which only runs when
+      # that app changes — here it is unconditional, because a claim this
+      # strong should not be graded by a path filter.
+      - name: No audio egress gate — self-test
+        run: python3 scripts/check_no_audio_egress.py --self-test
+      - name: No audio egress gate
+        run: python3 scripts/check_no_audio_egress.py
+      # Depth 9.2. The probe set behind the recall measurement has to stay
+      # usable: every probe must name an item that is in the corpus, the
+      # probes must stay low-overlap with their answers (a probe written in
+      # the document's own words hands the lexical baseline a score it could
+      # not earn on a real question), and the baseline must still be a real
+      # retriever rather than a stub. The scorer itself runs too: with no
+      # embedding backend on a runner it prints "not measured" and exits 0,
+      # which is the honest row and also proves the refusal path works.
+      - name: Memory recall scorer — self-test
+        run: python3 scripts/score_memory_recall.py --self-test
+      - name: Memory recall scorer
+        run: python3 scripts/score_memory_recall.py
+
+      # Depth 6.1. The AI estate is a stored value a console page reads, and
+      # the failure that costs most here is not an absent feature but a
+      # present one nothing writes: the page renders "no AI estate" to a
+      # tenant that has one, which is the single most dangerous false
+      # statement it could make. The WRITER rule is therefore the
+      # load-bearing one — it requires the fusion consumer to call the
+      # recorder on the raw-events branch *and* the service to construct it
+      # at startup, because an unconstructed recorder is a None that every
+      # call site skips in silence.
+      - name: AI asset inventory gate — self-test
+        run: python3 scripts/check_ai_asset_inventory.py --self-test
+      - name: AI asset inventory gate
+        run: python3 scripts/check_ai_asset_inventory.py
+      # Depth 6.2. The endpoint half, and the rule that carries it is
+      # NAMESPACE: the four endpoint connectors put their process fields in
+      # the connector payload under `raw_data`, and the canonical OCSF
+      # profile maps none of them — so a classifier reading `process.name`
+      # finds None on every real source while its unit tests pass against
+      # events built in the shape it expects.
+      - name: AI endpoint discovery gate — self-test
+        run: python3 scripts/check_ai_endpoint_discovery.py --self-test
+      - name: AI endpoint discovery gate
+        run: python3 scripts/check_ai_endpoint_discovery.py
+      # The three standard inputs the syslog gate does not cover: OTLP
+      # logs, a customer Kafka topic and a TAXII 2.1 server. All three are
+      # things a third party points at, and all three fail the same three
+      # ways — unwired, tenant taken from the payload, and (for the Kafka
+      # consumer) a loop that cannot tell a permanent fault from a
+      # transient one. Self-test first, on the same tree: it injects
+      # nineteen violations, one per rule. Writing it found two real
+      # defects — the OTLP template was not in ALLOWED_TEMPLATE_IDS, so no
+      # operator could mint a token the receiver would accept, and the
+      # media-type rule matched the error message that names JSON rather
+      # than the case arm that accepts it.
+      - name: Standard inputs gate — self-test
+        run: python3 scripts/check_standard_inputs.py --self-test
+      - name: Standard inputs gate
+        run: python3 scripts/check_standard_inputs.py
+      # Three descriptions of one platform that can drift apart
+      # silently: the Helm chart against CORE in docker-compose.yml,
+      # restore.sh against backup.sh, and the connector scheduler
+      # against its own lease. Each was wrong in a way nothing could
+      # see — `helm install` brought up a deployment missing response
+      # execution and every connector poll and reported success, and
+      # two scheduler replicas each polled every vendor. Self-test
+      # first, on the same tree: nine injected violations, one per rule.
+      - name: Deployment completeness gate — self-test
+        # The gate parses the chart and the compose file, so it is the first
+        # step in this job that needs a YAML parser; the runner's Python does
+        # not ship one, and the install two steps down arrived too late for
+        # this gate — which only surfaced once the step before it stopped
+        # failing first.
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check_deployment_completeness.py --self-test
+      - name: Deployment completeness gate
+        run: python3 scripts/check_deployment_completeness.py
+      # Depth 9.2. The probe set behind the recall measurement has to stay
+      # usable: every probe must name an item that is in the corpus, the
+      # probes must stay low-overlap with their answers (a probe written in
+      # the document's own words hands the lexical baseline a score it could
+      # not earn on a real question), and the baseline must still be a real
+      # retriever rather than a stub. The scorer itself runs too: with no
+      # embedding backend on a runner it prints "not measured" and exits 0,
+      # which is the honest row and also proves the refusal path works.
+      - name: Memory recall scorer — self-test
+        run: python3 scripts/score_memory_recall.py --self-test
+      - name: Memory recall scorer
+        run: python3 scripts/score_memory_recall.py
+      # One layer in from the name: the profile gate asks whether a connector
+      # reaches a normalization path, this asks which OCSF class it reaches
+      # when it gets there. The class uid divided by a thousand is the
+      # category, and fusion promotes category 2 unconditionally — so 78 of
+      # the 84 connectors landing on the 2001 default meant every permitted
+      # DNS lookup and every routine Windows event became an alert.
+      - name: OCSF class coverage gate — self-test
+        run: python3 scripts/check_ocsf_class_coverage.py --self-test
+      - name: OCSF class coverage gate
+        run: python3 scripts/check_ocsf_class_coverage.py --check
+      # One layer in again: a connector's events reach a profile, and the
+      # catalogue says what each of its event types *means*. Grown from the
+      # fixtures, so adding a fixture that carries a new event type fails
+      # here until somebody decides what it is — a catalogue that only grows
+      # when someone remembers is a catalogue that stops growing. It also
+      # refuses a source whose fixtures yield nothing, because a gate over an
+      # empty corpus passes for the wrong reason.
+      - name: Event catalogue gate — self-test
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check_event_catalog.py --self-test
+      - name: Event catalogue gate
+        run: python3 scripts/check_event_catalog.py
+      # The activity projection lives in five hand-written lists: the Go, the
+      # lake's CREATE TABLE, the lake's migration, the fusion writer's column
+      # tuple and the graph schema. Three of the disagreements between them
+      # are silent, and the one nothing checked is the pair of lake files —
+      # 001_init.sql runs only in the container entrypoint on a fresh volume,
+      # so a column added there alone exists on new installs and on no
+      # upgrade.
+      - name: Activity projection drift gate — self-test
+        run: python3 scripts/check_activity_projection.py --self-test
+      - name: Activity projection drift gate
+        run: python3 scripts/check_activity_projection.py
+      # ADR-0010 accepted writing sessions to Postgres *and* to the graph on
+      # the stated condition that one producer derives the key and the other
+      # three only read it. A second deriver would agree today and disagree
+      # after the next vendor-schema change, and the symptom is a session
+      # count that drifts rather than anything failing.
+      - name: Session projection gate — self-test
+        run: python3 scripts/check_session_projection.py --self-test
+      - name: Session projection gate
+        run: python3 scripts/check_session_projection.py
+      # The same shape one layer over: an inbox template that ships has to be
+      # mintable, and a mintable id has to have a template to apply. Both
+      # directions, because only one of them was ever checked informally and
+      # three templates — ai-runtime, ai-finding and k8s-audit — shipped,
+      # were named in the AI SDK's own setup instructions and in the
+      # Kubernetes connector docs, and could not be minted at all.
+      - name: Inbox template drift gate — self-test
+        run: python3 scripts/check_inbox_templates.py --self-test
+      - name: Inbox template drift gate
+        run: python3 scripts/check_inbox_templates.py
+      # Same question one layer up: a connector name has to reach a profile,
+      # and a model name has to reach a gateway that defines it. AI triage
+      # could not reach a model in the default deployment because
+      # docker-compose.yml set LLM_GATEWAY_URL and both resolvers ignored it,
+      # and because .env.example shipped a model no gateway config here has
+      # ever defined. Neither is visible in a diff, and both are structural.
+      #
+      # The self-test runs first and on the same tree: it injects drift in
+      # each direction and feeds the parsers prose shaped like the thing they
+      # look for — a commented-out alias in the config's Ollama example, a
+      # commented-out pin in .env.example's escape-hatch block, a compose
+      # comment naming a variable two lines above the key it describes.
+      - name: LLM model routing gate — self-test
+        run: python3 scripts/check_llm_model_routing.py --self-test
+      - name: LLM model routing gate
+        run: python3 scripts/check_llm_model_routing.py
+      # The routing gate above says a model name can reach a model. This says
+      # that what the call cost arrives with the thing that says how it is
+      # known. The tracker priced the `aisoc-<role>` *alias* against a hosted
+      # list table it does not appear in, so every call took a default rate:
+      # a 903-token completion on an operator's own hardware reported
+      # $0.000999, and that figure reached the cost dashboard, the funnel, the
+      # ledger and the budget circuit breaker. Self-test first, as always —
+      # its corpora contain text shaped exactly like what it looks for,
+      # including this module's own docstring table of the five decoy cost
+      # headers it exists to refuse.
+      - name: Cost provenance gate — self-test
+        run: python3 scripts/check_cost_provenance.py --self-test
+      - name: Cost provenance gate
+        run: python3 scripts/check_cost_provenance.py
+      # Replay evaluation spans three trees that cannot import one another:
+      # the reader in services/actions, the runner in services/agents and the
+      # grader in packages/aisoc-benchmark. The contract between them is three
+      # declarations agreeing by convention, and this compares them in both
+      # directions so a field added on one side cannot be dropped silently at
+      # the boundary.
+      - name: Replay contract parity gate — self-test
+        run: python3 scripts/check_replay_contract_parity.py --self-test
+      - name: Replay contract parity gate
+        run: python3 scripts/check_replay_contract_parity.py
+      # Alert-text keyword matching (#1607). Two arms: the severity
+      # vocabulary is declared once and imported by every scorer, and no
+      # keyword in any corpus fires on a real cloud identifier. "c2" as a
+      # substring matched every AWS private hostname, scored the alert
+      # critical at 0.9, and 0.9 clears the model cascade's escalation
+      # floor — so the alert was never sent to a model at all.
+      - name: Keyword matching gate — self-test
+        run: python3 scripts/check_keyword_matching.py --self-test
+      - name: Keyword matching gate
+        run: python3 scripts/check_keyword_matching.py
+      # The finding-count comparison itself lives in the three scanner jobs in
+      # security.yml, where the reports are. This runs the half that needs no
+      # scanner — the allow-list's own schema, its expiry dates, and whether
+      # the set of ceilings still matches the set of scanners the workflow
+      # runs — in a job that is a required check, so a ceiling left behind by
+      # a deleted scanner cannot hide in a job nobody waits for.
+      - name: Scanner ratchet gate — self-test
+        run: python3 scripts/check_scanner_ratchet.py --self-test
+      - name: Scanner ratchet gate
+        run: python3 scripts/check_scanner_ratchet.py
+      # The three sdk-* jobs below compile and test each SDK in isolation, and
+      # none of them compares a client to the API it claims to speak to.
+      # packages/sdk-go passed all three over a file of type declarations with
+      # no functions and no net/http, under a first line calling itself a
+      # client; packages/sdk-ts declared a codegen script writing an
+      # src/openapi.d.ts that did not exist, cited by two comments as the
+      # reason to trust the hand-written types. Writing this found four
+      # operations both clients called that the API does not serve — two of
+      # them pinned by tests that mock the transport, which answers whatever
+      # the client asks.
+      - name: SDK surface gate — self-test
+        run: python3 scripts/check_sdk_surface.py --self-test
+      - name: SDK surface gate
+        run: python3 scripts/check_sdk_surface.py
+      # "Runs entirely on your infrastructure" was gated in three places that
+      # each covered a corner — the CLI's telemetry, the Helm egress policy,
+      # the agents' redactor — and nowhere platform-wide. This reads every
+      # service's declared settings defaults and fails on a public host that
+      # no air-gap guard covers. `services/purple-team` declared an ATT&CK CDN
+      # URL that nothing in the service ever read: dead config still publishes
+      # an external default, so it was deleted rather than exempted.
+      #
+      # The host classification is lifted out of the service's own
+      # `airgap.py` rather than reimplemented, so the gate cannot drift from
+      # the enforcement it reports on, and each exemption names the guard that
+      # justifies it — delete the guard and the exemption stops applying.
+      # The dynamic half is `tests/test_no_default_egress.py`.
+      - name: Default egress gate — self-test
+        run: python3 scripts/check_default_egress.py --self-test
+      - name: Default egress gate
+        run: python3 scripts/check_default_egress.py
+      # A different replay, and the one the claim matrix mislabelled. The gate
+      # named for "Investigation Ledger stores every step" tests the hash
+      # chain over `audit_log`, which the API middleware writes; the ledger is
+      # `investigation_events`, written by services/agents over raw asyncpg
+      # and read back by three routes no test touched. This holds the three
+      # trees that have to agree for a step to survive from the agent that
+      # took it to the analyst reading it back — the response model against
+      # the console's type, the client's requests against the router's
+      # decorators, and the writer's columns against the migration chain —
+      # each in both directions, plus the sequencing that makes "every step"
+      # mean an ordered, unduplicated one.
+      - name: Ledger replay contract gate — self-test
+        run: python3 scripts/check_ledger_replay_contract.py --self-test
+      - name: Ledger replay contract gate
+        run: python3 scripts/check_ledger_replay_contract.py
+      # The count claim above says how many connectors exist; this says
+      # whether a reader can find out how to use them. 35 of 84 had no page
+      # at all and the sidebar listed 34 of 96, so most connector
+      # documentation either did not exist or could not be navigated to.
+      #
+      # Pages are generated from the schema rather than written by hand: a
+      # hand-written field list is correct on the day it is written and says
+      # nothing when a field is added or made secret. Pages that predate the
+      # generator keep their prose and receive a generated field reference,
+      # so the human half stays human and the mechanical half cannot drift.
+      - name: Verify connector docs cover every connector
+        # The gate imports every connector class to read its schema(), so it
+        # needs what those modules import at module scope. Failing closed on
+        # a missing dep is right — a gate that skips when it cannot import is
+        # a gate that silently stops checking.
+        run: |
+          # Verified as the complete set in a clean venv: the import closure
+          # is app.connectors.* plus app.federated.*, and nothing in it
+          # reaches for a database driver or a web framework.
+          python -m pip install --quiet httpx pydantic structlog "cryptography>=46,<51"
+          python scripts/generate_connector_docs.py --check
+      # Eight fields shipped across v7.7 and v8.0 without reaching the funnel
+      # docs, and they are the eight that say whether the automation is
+      # working honestly — suppression, abstention, groundedness. A number
+      # nobody documents is a number nobody checks, and
+      # repeat_alerts_suppressed reported a flat zero for a whole release
+      # without anyone noticing.
+      - name: Verify the funnel response contract is documented
+        run: python scripts/check_funnel_contract.py
+      # Phase 2.1 shipped this gate and left it unwired, with "wire this into
+      # CI itself once the matrix has stabilised" in its own docstring. It
+      # stayed unwired, so the audit it automates — a service that ships tests
+      # no job collects — went back to being something a human had to notice.
+      # Seven services were in that state before Phase 2.1, 971 tests between
+      # them. The matrix has stabilised: all 13 tested services are gated.
+      - name: Every tested Python service is gated by a CI job
+        run: python3 scripts/list_python_services_with_tests.py --check
+      # A support bundle is the most concentrated pile of configuration a
+      # deployment produces, and its whole purpose is to leave the building.
+      # Redaction is allow-list rather than deny-list, so a setting added
+      # tomorrow is redacted by default rather than exposed until someone
+      # remembers — and these tests are what keep it that way.
+      # A panel for a metric nothing exports reads "No data" forever,
+      # which teaches people that empty panels are normal — and then a
+      # genuinely dead service looks like an uninstrumented one. Also
+      # checks datasource uids resolve: Grafana does not warn about a
+      # dangling reference, the link just silently does nothing.
+      # The SLO file declared availability and latency targets for all 17
+      # services and no alert referenced any of them; the alerts used
+      # thresholds no objective justified. Generating one from the other
+      # makes the threshold traceable — an alert fires because an
+      # objective is being missed, and changing the objective changes the
+      # alert.
+      # Two of four fidelity datasets shipped a downloader and two did
+      # not, so two loaders could parse a full corpus nobody could
+      # obtain — and the only numbers for them came from a ten-line
+      # micro fixture. The asymmetry was invisible because each half
+      # looked complete on its own and nothing compared the two sets.
+      - name: Every fidelity dataset is obtainable
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/check_fidelity_datasets.py
+      # Every other labelled set in services/agents/tests/eval_data/ is
+      # malicious by construction, so an agent answering "true positive" to
+      # everything without reading anything would score perfectly on them.
+      # The verdict corpus is the one the scorer accepts, and the property
+      # that makes it worth anything — no class above 60%, so no constant
+      # answer scores above 60% — is not visible in the file. Six malicious
+      # items added because malicious items are the interesting ones to write
+      # would take it past the line with nothing looking wrong.
+      - name: The verdict corpus stays balanced, paired and licensed
+        run: |
+          python3 scripts/check_verdict_corpus.py --self-test
+          python3 scripts/check_verdict_corpus.py
+      - name: SLO alerts match the declared objectives
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/generate_slo_alerts.py --check
+      - name: Grafana dashboards query metrics that exist
+        run: python scripts/check_grafana_dashboards.py
+      # Five documents publish how many services each compose profile starts
+      # and nothing compared any of them to docker-compose.yml. ADR-0006 hit
+      # this while editing the table for another reason: the published `full`
+      # count was 30, which is every profile at once rather than what
+      # `make up-full` starts. ADR-0007 moved two services into CORE, so the
+      # figure now has a reason to move again.
+      - name: Published profile service counts match the compose file
+        run: |
+          python3 scripts/check_profile_service_counts.py --self-test
+          python3 scripts/check_profile_service_counts.py
+      # `make up` exited 2 after 62 seconds with 10 of the 16 CORE services
+      # still in `Created`, because litellm waited on the model-pull one-shot
+      # with `service_completed_successfully` and the download failed. Compose
+      # aborts the whole `up` on that and collects every service it has not
+      # started yet — api, web, fusion, ingest, agents, none of which has any
+      # relationship to a model. The local model is a convenience; nothing
+      # about it may stop the product starting.
+      - name: A failed model download cannot stop the stack
+        run: |
+          python3 scripts/check_llm_optional_at_boot.py --self-test
+          python3 scripts/check_llm_optional_at_boot.py
+      # The Project maturity table published a status for fifteen
+      # capabilities and nothing checked any of them: no definition of
+      # Stable existed anywhere, no gate parsed the table, and the labels
+      # appeared in no other file. Promoting a capability was a one-line
+      # edit, which is the claim shape Phase 1.1 retracted twelve of.
+      #
+      # Every Stable row must now name its evidence and that evidence must
+      # hold the four properties in docs/audit/MATURITY_DEFINITION.md. The
+      # gate runs in both directions, so an entry for a row that is no
+      # longer Stable fails too.
+      # `playbooks/packs/v1/` holds 62 production playbooks and the agents
+      # image shipped **none** of them: the Dockerfile's build context is
+      # `services/agents`, a context cannot reach outside itself, and the
+      # loader's pack branch is guarded by `exists()` — so an absent pack
+      # was silently the same as an empty one and a deployment's library
+      # was 62 entries short with no error anywhere.
+      #
+      # They are now vendored inside the package, where `COPY app/ ./app/`
+      # picks them up, the same arrangement fusion uses for its compiled
+      # ruleset. Two copies drift, so this compares them in both
+      # directions.
+      - name: The agents image ships the playbook pack
+        run: |
+          python3 scripts/sync_vendored_playbook_packs.py --self-test
+          python3 scripts/sync_vendored_playbook_packs.py --check
+      # The same defect, one service over. The fusion engine loads 2,614
+      # detection rules from four artefacts and the console's rule-management
+      # surface could see none of them (#1273), because the API image is built
+      # from `services/api` and `services/fusion/app/data/` is outside that
+      # context. Packaged copies live inside it; this holds them identical to
+      # what the engine runs, in both directions, so the catalogue can never
+      # list a rule the engine does not load.
+      - name: The API image ships the compiled detection corpus
+        run: |
+          python3 scripts/sync_packaged_detection_rulesets.py --self-test
+          python3 scripts/sync_packaged_detection_rulesets.py --check
+      # And the third instance of it. `hunts/` is at the repository root while
+      # the agents image is built from `services/agents`, so the 68-hunt
+      # library the README calls Stable reached no container: `ls /app/hunts`
+      # answered "No such file or directory" and the scheduler logged
+      # `corpus_loaded count=0`. Nothing caught it because the loader fell
+      # back to "the conventional host layout" — a source checkout, which is
+      # what every test runs in.
+      - name: The agents image ships the hunt library
+        run: |
+          python3 scripts/sync_packaged_hunt_corpus.py --self-test
+          python3 scripts/sync_packaged_hunt_corpus.py --check
+      - name: Every Stable capability has earned the label
+        run: |
+          python3 scripts/check_maturity_table.py --self-test
+          python3 scripts/check_maturity_table.py
+      # `docker-compose.prod.yml` states that nothing starts on a default
+      # credential and implements it with `${VAR:?…}`. Compose's `:?` rejects
+      # an unset or empty variable and cannot look at a value, so the guard
+      # whose message reads "the development default is a published literal"
+      # accepted `aisoc_dev_secret` — the literal `.env.example` shipped. The
+      # value check runs as a preflight service; this asserts every guard
+      # reaches it and that nothing starts ahead of it.
+      - name: No production guard can be satisfied by a published credential
+        run: |
+          python3 scripts/check_published_secrets.py --self-test
+          python3 scripts/check_published_secrets.py --check
+      # The IOC lookup's `catch` had nowhere to put "this did not work" except
+      # the flag that means "we checked, and it is clean", so a transport
+      # error, a 5xx and a route that did not exist all rendered a green CLEAN
+      # badge over the indicator an analyst had just typed in. It was not a
+      # latent branch: the route did not exist, so every lookup took it. That
+      # is a shape rather than a bug in one file, and this is the shape.
+      - name: A backend failure never renders as a safety verdict
+        run: |
+          python3 scripts/check_failure_is_not_a_verdict.py --self-test
+          python3 scripts/check_failure_is_not_a_verdict.py
+      # `AISOC_AGENTS_SERVICE_TOKEN` was read by eight modules in
+      # services/agents and one in services/api, verified by a function that
+      # reads it and nothing else, and produced by nothing — not the
+      # generator, not `.env.example`, not one compose manifest. Organisation
+      # memory, tenant skills, dispositions, identity context, runbooks, the
+      # MCP toolset, the action bridge and SIEM writeback were all off on
+      # every default install, each logging its own warning and returning an
+      # empty result that reads like "this tenant has none".
+      - name: Service credentials production code reads are produced by first run
+        run: |
+          python3 scripts/check_service_token_wiring.py --self-test
+          python3 scripts/check_service_token_wiring.py
+      # A read executor is named for the product and a connector for the
+      # integration a tenant configures. Three of the seven executor ids
+      # matched no connector type at all, so the lookup returned None on
+      # every tenant and the tool was never offered to an investigation.
+      - name: Every read executor's vendor id resolves to a saveable connector
+        run: |
+          python3 scripts/check_vendor_catalog_ids.py --self-test
+          python3 scripts/check_vendor_catalog_ids.py
+      # The hunting agent never writes a query: the model proposes a plan
+      # over a recorded field list and the API compiles it. This gate reads
+      # both sides and fails when they drift, and until now no workflow ran
+      # it -- five modules named it in a docstring, which is not the same
+      # thing as calling it.
+      - name: The hunting agent's plan boundary holds on both sides
+        run: python3 scripts/check_hunt_agent_boundary.py
+      # The marketplace index has to exist in three build contexts, none of
+      # which can see the other two. The API's copy was missing, so its image
+      # shipped no catalogue and the marketplace answered 503 on every
+      # containerised deployment — reported in discussion #374, and invisible
+      # here because the suite runs from a checkout where every path resolves.
+      - name: Marketplace index ships wherever it is read
+        run: |
+          python3 scripts/check_marketplace_index_parity.py --self-test
+          python3 scripts/check_marketplace_index_parity.py
+      # The one door in this product a model can open by emitting a sentence.
+      # Three things have to stay true and nothing at runtime fails loudly if
+      # they stop: every agent-reachable verb is graded READ_ONLY, every one
+      # has an executor, and the two indicator vocabularies agree across two
+      # services that cannot import each other.
+      - name: The agent's vendor-read door stays read-only
+        run: |
+          python3 scripts/check_agent_read_tools.py --self-test
+          python3 scripts/check_agent_read_tools.py
+      # A hunt's negative scenario has to fail for the reason the hunt is
+      # about. A negative drawn from an unrelated log source never fires on
+      # anything, so a corpus of those scores a perfect false-positive rate
+      # while grading nothing. `run_evals.py --suite hunt_corpus` cannot see
+      # that, because it only asks whether the negative fired; this reads both
+      # scenarios and compares them field by field.
+      - name: Hunt negatives invert the clause their hunt is about
+        run: |
+          python3 -m pip install --quiet pyyaml pydantic
+          python3 scripts/check_hunt_scenarios.py --self-test
+          python3 scripts/check_hunt_scenarios.py
+          python3 scripts/run_hunt_evals.py --self-test
+      # A retro-hunt sweeps a column or it sweeps nothing, and the failure is
+      # a confident zero rather than an error. This reads the lake writer, the
+      # ClickHouse DDL and the three threat-intel clients and fails when the
+      # sweep's mapping disagrees with any of them.
+      - name: Retro-hunt sweeps columns the lake writer fills
+        run: |
+          python3 scripts/check_ioc_lake_mapping.py --self-test
+          python3 scripts/check_ioc_lake_mapping.py
+      - name: Support bundle must not leak
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_support_bundle.py -q
+      # A clean install has to end with an account somebody can sign into.
+      # It did not: `make up` and `make smoke` both passed and login was
+      # impossible, because the seeded address was a reserved domain the
+      # login route rejects with a 422, its password hash matched nothing
+      # documented, and the published console image was a demo build. Every
+      # one of those lived between two files that never mention each other.
+      - name: First-run credentials and image tags
+        run: |
+          python3 -m pip install --quiet pytest pyyaml email-validator
+          python3 -m pytest tests/test_first_run_gate.py -q
+      # Phase 8 — a production prompt cannot change without a version bump +
+      # lock regeneration (the signal that must trigger an eval re-grade).
+      - name: Verify prompt lock is current (Phase 8)
+        run: python scripts/check_prompt_lock.py
+      # Phase 2.3 — every `job_name` in `infra/docker/prometheus.yml` must
+      # point at a hostname:port pair where the service actually exposes
+      # `/metrics`. Before this gate landed, four of five scrape jobs were
+      # silently broken (wrong hostname, wrong port, or a service that has
+      # no `/metrics` route at all). Any future PR that adds a target
+      # without instrumenting the service — or instruments a service but
+      # forgets to register it for scraping — fails CI here.
+      - name: Verify Prometheus scrape config matches reality (Phase 2.3)
+        run: python scripts/audit_prometheus_targets.py --check
+      # Phase 2.5 — every `runbook_url` embedded in an alert rule must
+      # resolve to a real markdown file under `docs/runbooks/`. The
+      # on-call should never get a 404 when they click a page
+      # notification at 3am. Any future PR that adds an alert without
+      # the runbook (or removes a runbook that an alert links to)
+      # fails here.
+      - name: Verify alert rule runbook URLs resolve (Phase 2.5)
+        run: python scripts/audit_runbook_links.py --check
+
+      # Phase 2.6 — every FastAPI service must install the shared
+      # /livez + /readyz probes from `app._health`. The audit script
+      # walks `services/*/app/main.py` and fails if any service is
+      # missing the helper or its wiring. Catches the "added a new
+      # service, forgot the probes" silent regression that
+      # orchestrators would otherwise hide until the first failed
+      # rollout.
+      - name: Verify FastAPI services install /livez + /readyz probes (Phase 2.6)
+        run: python scripts/audit_health_probes.py --check
+
+      # A column a model declares and no migration creates is not a latent
+      # problem: SQLAlchemy names every mapped column in its SELECT, so the
+      # first query against that table fails. `ueba_entity_baselines`
+      # declared `peer_group_id`, migration 0001 never created it, and UEBA
+      # could not write a baseline or an anomaly on any deployment while its
+      # container reported healthy throughout. Gated for the four services
+      # that own their schema through alembic and therefore have no
+      # `create_all` fallback; `--all` reports the rest as advisory.
+      #
+      # The self-test runs first, and deliberately: it injects one of each
+      # kind of drift into a scratch tree, so a parser that has quietly
+      # stopped matching cannot report the repository clean.
+      - name: Verify ORM columns exist in migrations (both directions)
+        run: |
+          python3 scripts/check_orm_migration_parity.py --self-test
+          python3 scripts/check_orm_migration_parity.py --check
+
+      # The same rule for the raw `text()` SQL the gate above cannot see —
+      # 107 statements naming 44 tables, 35 of which have no ORM model at
+      # all, so raw SQL is the only thing that writes them.
+      # `detection_rule_proposals` had no `source` column and three inserts
+      # named it, so the auto-tuner, the scheduled-hunt bridge and the
+      # false-positive loop could not write a proposal on any deployment.
+      # Nothing caught it: no job runs `services/api/tests/` against a real
+      # database, and the one test covering the insert asserted only that the
+      # table name appeared somewhere in the SQL string — which the wrong
+      # name `aisoc_detection_rule_proposals` also satisfies.
+      #
+      # The self-test runs first, and deliberately: it injects a wrong table,
+      # a wrong column and a runtime-assembled statement into scratch trees,
+      # so a parser that has quietly stopped matching cannot report the
+      # repository clean.
+      - name: Verify raw SQL names only tables and columns migrations create
+        run: |
+          python3 scripts/check_raw_sql_columns.py --self-test
+          python3 scripts/check_raw_sql_columns.py
+
+      # The anonymizer and hosting dataset has two readers in two languages:
+      # Go classifies live events at ingest, Python classifies committed
+      # fixtures during detection replay. If they disagree, a rule matching
+      # `ip_class` passes its fixtures and never fires on real traffic --
+      # the trap depth plan wave 2 item 1.6 names explicitly. The gate runs
+      # both over a sample of the dataset and requires identical answers, and
+      # also holds the downloader and the committed manifest to the same
+      # source list so the snapshot stays refreshable and auditable.
+      - name: Verify the IP classification dataset is intact and refreshable
+        # `--skip-go` here and not in go-build: this job has no Go toolchain,
+        # and a gate that reports "not checked" over a missing tool is the
+        # silent-skip shape this repository keeps finding. The Go/Python
+        # parity half runs in `Go — Build & Vet` below, where Go exists, and
+        # the gate refuses to run its probe silently: without `--skip-go` and
+        # without Go it fails rather than passing.
+        run: |
+          python3 scripts/check_ip_class_dataset.py --self-test
+          python3 scripts/check_ip_class_dataset.py --skip-go
+          python3 scripts/sync_vendored_ip_class.py --check
+
+      # The four alembic chains have to be invoked by something. They were
+      # not: every container command was a plain `uvicorn`, so the
+      # documented quickstart booted two services with no tables and no RLS
+      # policies while reporting success at every step.
+      - name: Verify the alembic services run their chain on the way up
+        run: |
+          python3 scripts/check_service_migration_bootstrap.py --self-test
+          python3 scripts/check_service_migration_bootstrap.py --check
+
+      # Phase 4.2 — every managed-mode tenant manifest under
+      # `infra/fly/managed/tenants/*.yaml` must parse, carry the
+      # required fields (slug, display_name, base_domain, contact_email,
+      # plan), match the filename↔slug invariant, and stay within the
+      # plan / vm-size / postgres-plan whitelists. The auto-provision
+      # workflow on `main` reads these manifests verbatim and feeds them
+      # into `flyctl apps create / postgres create / redis create`, so a
+      # malformed manifest reaching `main` would mean a half-provisioned
+      # Fly stack and a 3am page. This gate catches it on the PR.
+      - name: Verify managed tenant manifests are well-formed (Phase 4.2)
+        run: |
+          python -m pip install --quiet pyyaml
+          python scripts/audit_managed_tenants.py
+
+  python-test:
+    name: Python — Tests
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      # This was a hand-written copy of two services' dependency lists, and it
+      # had drifted from both. It omitted `pysigma`, so `rule_engine._run_sigma`
+      # took its `except ImportError` branch and every Sigma test in this job
+      # graded a reduced built-in evaluator while the image — which installs
+      # from poetry.lock — graded the real backend. The one CI never ran was
+      # the broken one. It also omitted `yara-python`, whose runner returns
+      # `([], "yara-python not installed")` from the same file, and it named
+      # `passlib`, `celery` and `aiofiles`, which nothing in either service
+      # imports.
+      #
+      # So the list is derived now. But deriving it from the *manifests* only
+      # narrowed the gap: a range re-resolves at install time, so CI could
+      # still land on a different patch release than the image ships, and
+      # that is precisely how the last defect hid — `services/api` declared
+      # `opentelemetry-instrumentation-fastapi = "^0.45b0"` and locked 0.45b0
+      # while this job installed it unbounded, resolved 0.66b0, and passed.
+      # Both were "inside the declared range"; only one of them was the image.
+      #
+      # So each service's suite now runs against its own `poetry.lock` — the
+      # same file `services/<name>/Dockerfile` installs from — expanded to its
+      # complete resolved closure and installed with `--no-deps`, so pip
+      # performs no resolution at all. Measured against the published
+      # `ghcr.io/beenuar/aisoc-core-api:latest`: 97 main-group entries, 0
+      # version mismatches.
+      #
+      # One virtualenv per service, because two locks cannot share an
+      # interpreter: `api` and `agents` disagree about 28 distributions. They
+      # are separate images, so that is not a defect in either lock.
+      # `scripts/check_ci_install_parity.py` holds it that way.
+      - name: Install services/api and services/agents from their committed locks
+        run: |
+          set -euo pipefail
+          SYSTEM="$(python3 scripts/service_requirements.py api agents --system)"
+          if [ -n "${SYSTEM}" ]; then
+            sudo apt-get update -qq
+            # WeasyPrint reaches Pango and Cairo through ctypes, so a wheel is
+            # not enough and its guard catches OSError as well as ImportError.
+            # Same packages services/api/Dockerfile installs.
+            sudo apt-get install -y --no-install-recommends ${SYSTEM}
+          fi
+          # Written out per service rather than as a shell loop: the service
+          # name has to survive being read by something that is not bash.
+          # `scripts/check_ci_install_parity.py` resolves these lines to the
+          # locks they name, and a `for svc in ...` loop hands it `"${svc}"`,
+          # which resolves to no service at all — the gate would then report
+          # the job installing nothing and pass, which is the failure shape
+          # this whole change exists to remove.
+          python3 -m venv $RUNNER_TEMP/.venv-api
+          python3 scripts/service_requirements.py api --locked > /tmp/api.lock.txt
+          $RUNNER_TEMP/.venv-api/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/api.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-agents
+          python3 scripts/service_requirements.py agents --locked > /tmp/agents.lock.txt
+          $RUNNER_TEMP/.venv-agents/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/agents.lock.txt
+
+          echo "api:    $(wc -l < /tmp/api.lock.txt) pinned distribution(s) from services/api/poetry.lock"
+          echo "agents: $(wc -l < /tmp/agents.lock.txt) pinned distribution(s) from services/agents/poetry.lock"
+
+          # A requirement line whose marker is false is skipped by pip without
+          # a warning and with exit 0, so an environment can come out of a
+          # successful install with nothing in it. That is not hypothetical:
+          # poetry writes an extras-gated dependency as `extra == "dev"`,
+          # which is false in a plain requirements file, and it silently took
+          # the test runner out of three virtualenvs. Name it here, where the
+          # install is, rather than three steps later as an import error.
+          $RUNNER_TEMP/.venv-api/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-agents/bin/python -c "import pytest"
+      # The repository's own gate suites (`tests/`, `scripts/tests/`) and the
+      # forty `scripts/` gates this job runs are not a service: they have no
+      # manifest and no lock of their own, so there is no locked set to
+      # install for them. They keep the derived-range install, on the
+      # interpreter the service suites no longer use. Stated rather than
+      # implied — it is the one install path in this job that can still
+      # re-resolve, and it grades no service's code.
+      - name: Install what the repository's own gate suites need
+        run: |
+          set -euo pipefail
+          python3 scripts/service_requirements.py api agents | xargs pip install --quiet
+
+      # The sibling of `check_raw_sql_columns.py`, in the other direction:
+      # that one asks whether raw SQL names columns the migrations create,
+      # this one asks whether the ORM agrees with them about NULL.
+      #
+      # `tenants.mssp_role` was NOT NULL DEFAULT 'standalone' in the schema
+      # and `nullable=True` with no default in the model. Those read as
+      # compatible and are not: a column the ORM thinks is nullable is named
+      # in the INSERT with an explicit NULL, and a named column does not
+      # receive the column DEFAULT. So every insert that omitted the field
+      # failed, which is `pnpm aisoc:demo` dying at its seed step on a brand
+      # new database (#1693) -- the first environment to insert a tenant,
+      # not a seed bug.
+      #
+      # It lives in *this* job and not in Lint & Type-check for the same
+      # reason the injection-pattern check above does: reading the mapper
+      # imports `app.models`, which pulls SQLAlchemy in. The first attempt
+      # put it in the lint job and it died on `No module named 'sqlalchemy'`.
+      #
+      # The self-test runs first, and this parser has already been wrong
+      # twice in ways only a check caught -- it read a re-add of an existing
+      # column as a redefinition, and it saw only the first clause of a
+      # multi-column ALTER TABLE, which is exactly how `mssp_role` is
+      # declared. The gate missed the column it was written for until its
+      # negative control was run.
+      - name: Verify the ORM and the migrations agree about NULL
+        run: |
+          python3 scripts/check_orm_nullability.py --self-test
+          python3 scripts/check_orm_nullability.py
+      # Boot-test: verify the FastAPI app can actually import without
+      # NameError / ImportError before spending time on the full pytest
+      # suite.  PR #152 fixed two import-time NameErrors (model_validator,
+      # rule_tuning) that CI never caught because pytest mocks imports and
+      # never loads the real entrypoint.  This step prevents that class of
+      # regression from reaching main again.
+      # The prompt-injection patterns, generated from the agents guard's own
+      # rule table rather than hand-copied: a hand-picked subset would
+      # silently miss whatever pattern was added to the guard after the
+      # next incident, and the repository scanner (wave-2 7.2) would stop
+      # flagging it with nothing saying so.
+      #
+      # It lives in *this* job and not in Lint & Type-check because reading
+      # the table imports `app.prompting.envelope`, which pulls the agents
+      # runtime in transitively. The first attempt put it in the lint job
+      # with a comment claiming it ran "after that install step" — there is
+      # no such step there, and the gate failed with `No module named
+      # structlog`. This job installs the agents requirements a few lines
+      # above, so the import genuinely resolves here.
+      - name: Verify vendored AI instruction rules are in sync
+        run: PYTHONPATH="${PWD}/services/agents" python3 scripts/sync_vendored_ai_instruction_rules.py --check
+      - name: Boot-test API service (catch import-time errors)
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: |
+          $RUNNER_TEMP/.venv-api/bin/python -c "from app.main import app; print('api boot-test ok')"
+      - name: Run API tests (unit + GraphQL schema)
+        working-directory: services/api
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+        run: |
+          $RUNNER_TEMP/.venv-api/bin/python -m pytest tests/ -v --tb=short
+      # This used to be a hand-maintained list of 26 file paths, which is the
+      # same "a matrix is a list somebody has to remember to add to" shape
+      # called out for the Go modules further down, and it had the same
+      # consequence: 56 of the 82 test files under services/agents/tests were
+      # named by no workflow at all. `test_playbook_engine_correctness.py` was
+      # one of them, and it carried a test that spent fourteen seconds doing
+      # the precise thing its name said must not happen while reporting green,
+      # because nothing ever ran it to notice.
+      #
+      # It is the directory now. Adding a test file to a directory CI already
+      # runs is free; adding one beside a list is silently free of signal.
+      # `scripts/check_test_discovery.py` holds it that way in both
+      # directions.
+      - name: Run agents unit tests (whole suite — discovered, not listed)
+        # The install this step used to carry is gone: the step above installs
+        # what both manifests declare, so `langchain-core`, `markdown`, `mcp`
+        # and the rest arrive at the ranges `services/agents/pyproject.toml`
+        # states rather than at a second set of ranges written here. That
+        # second set had drifted — it pinned `langgraph>=1,<2` against a
+        # manifest saying `>=1.0.10,<2.0.0`, and it never named `openai` or
+        # `qdrant-client`, both of which `app/tools/mitre_full.py` imports inside
+        # a `try` that returns `[]` when they are missing. The ATT&CK semantic
+        # search this suite grades was the empty list, every run.
+        run: |
+          cd services/agents
+          $RUNNER_TEMP/.venv-agents/bin/python -m pytest tests/ -v --tb=short -rs
+
+      # The repository's own gate suites — `tests/` and `scripts/tests/`.
+      # `tests/` was reached only as nineteen single-file invocations spread
+      # across eleven workflows, which is the agents defect again with the
+      # list kept somewhere else: five files were named by nothing, and
+      # `scripts/tests/` by nothing at all. Three tests in
+      # `scripts/tests/test_run_evals_cli.py` had been failing for as long as
+      # they existed, pinning a `--suite` contract the runner had stopped
+      # honouring.
+      #
+      # `tests/isolation/` is excluded because isolation.yml owns it: it needs
+      # qdrant-client and live stores this job does not have. That is an
+      # exclusion of a directory another workflow runs, not a list of files —
+      # and check_test_discovery.py fails the build if isolation.yml ever
+      # stops reaching it, so the exclusion cannot quietly become a hole.
+      - name: Run the repository's own gate suites (tests/ + scripts/tests/)
+        run: python3 -m pytest tests/ scripts/tests/ --ignore=tests/isolation -v --tb=short -rs
+
+      - name: Toolchain versions must agree
+        # Six go.mod files declared five different Go versions while the Go
+        # matrix installed a sixth, so one module could not be built by the
+        # toolchain CI provides. Nothing compared the two.
+        run: python3 scripts/check_toolchain_versions.py
+
+      - name: Benchmark harness (Pillar 4)
+        # The harness must stay runnable against an agent that is not ours,
+        # and must keep refusing the ways a scoring harness quietly hands out
+        # credit: abstaining to raise accuracy, citing unverifiable
+        # indicators, self-reporting a flattering latency, and publishing a
+        # figure without saying the corpus was synthetic.
+        run: |
+          python3 -m pip install --quiet httpx
+          cd packages/aisoc-benchmark
+          PYTHONPATH=. python3 -m pytest tests/ -q
+
+      - name: Corpus must match its generator
+        # Two hand-edited copies of 200 incidents drift within a release, and
+        # the published figure then describes a corpus nobody has.
+        run: |
+          python3 packages/aisoc-benchmark/build_corpus.py
+          git diff --exit-code packages/aisoc-benchmark/corpus/ || {
+            echo "::error::the benchmark corpus is out of date; run build_corpus.py and commit"
+            exit 1
+          }
+
+      - name: Gate the action contract (Pillar 3)
+        # Four properties of every response action were previously inferred
+        # rather than declared: risk (from the capability name in one place
+        # and a policy table in another, which can disagree), reversibility
+        # (a hardcoded list of four actions), verification (absent, so an
+        # action reported success on an HTTP 200), and whether any tier may
+        # ever auto-execute it. This asserts each executor declares a
+        # coherent contract, that the approval matrix can only ever raise a
+        # requirement, and that the capability mirror matches the connectors
+        # enum — a check capabilities.py has documented for months against a
+        # test file that does not exist.
+        run: python3 scripts/check_action_contract.py
+
+      - name: Executor arm count holds its floor
+        # The figure wave-2 6.1 is graded against, and it had already been
+        # quoted three ways: a loose grep over the executors also matches
+        # `reverse_capability=` and reports 111, where the declared rule —
+        # class-level `capability = "..."` — reports 89. The gate counts
+        # twice, by AST and by registry, and requires the two to agree, so
+        # the published number cannot drift from what registers.
+        run: python3 scripts/check_executor_arm_count.py
+
+      - name: Gate investigation depth (Pillar 2)
+        # run_with_tools shipped working, guarded and instrumented with zero
+        # production callers, so the platform's deepest capability was
+        # reachable only from tests. This asserts it still has one, that every
+        # strategy names real tools, that every tool the model is offered has
+        # a strategy telling it when to reach for one, and that selection
+        # discriminates rather than always returning the fallback. Structure,
+        # not prose: an investigation that summarises the alert reads exactly
+        # like one that pivoted five times.
+        run: python3 scripts/check_investigation_depth.py
+
+      - name: No tracked file carries an unresolved conflict marker
+        # Three documents reached `main` carrying `<<<<<<< HEAD`. Two were
+        # prose nobody parses; the third is compiled as MDX and the docs site
+        # stopped building. Nothing caught it because every gate that reads
+        # those files is looking for something else: the claim-matrix ratchet
+        # parses table rows, the README figure check looks for a number and
+        # found the first of the two duplicated lines, the link checker
+        # resolves links. A marker is invisible to all of them.
+        run: python3 scripts/check_merge_markers.py
+
+      - name: Gate the MCP client's defaults (Phase 5)
+        # An MCP server is third-party code, reached over the network,
+        # returning text into the prompt that decides what the agent does
+        # next. Everything that makes that safe is a default rather than a
+        # feature, and a default is what a refactor moves without anybody
+        # noticing: an allowlist check drifting one line below the connection,
+        # a Tool built with a raw callable so the dispatch re-check and the
+        # ledger write are both skipped, a description passed through because
+        # sanitising it broke a formatting test. This asserts the policy
+        # module can reach no socket at all, that the allowlist is the first
+        # decision taken, that the SSRF guard runs ahead of the transport,
+        # that stdio stays off behind two separate switches, and that a
+        # destructive tool is still refused when the policy is asked directly.
+        run: python3 scripts/check_mcp_client_policy.py
+
+      - name: Gate the tenant-skill contract (Phase 6)
+        # A skill is authored in services/api, validated against a tool
+        # vocabulary that lives in services/agents, and activated under a rule
+        # written in SQL, in Python and in prose. None of those trees can
+        # import the others, so the contract between them is a set of
+        # declarations that agree by convention. This asserts the pivot
+        # vocabulary matches in both directions, that the
+        # backtest-before-activation rule survives in all three places, and
+        # that both the triage state and the investigation result still record
+        # which skill version guided them.
+        run: python3 scripts/check_tenant_skill_contract.py
+
+      - name: Gate the triage context freeze (Phase 6)
+        # A verdict may depend on durable state only through
+        # TriageContextReader, because that protocol is the seam the replay
+        # freeze acts on. A context source read any other way is live during a
+        # replay no matter what the snapshot says, and the report then
+        # measures a world the split point does not describe while looking
+        # exactly like one that worked. This asserts both readers implement
+        # every source the protocol declares, and that every store the
+        # snapshot holds is filtered against the split and published in the
+        # method note, including the one that deliberately bypasses the
+        # filter, because an unfiltered store nobody is told about is
+        # indistinguishable from a leak.
+        run: python3 scripts/check_triage_context_freeze.py
+
+      - name: Every lettered deferral has its scope in the committed tracker
+        # Six sub-phases were "tracked in docs/audit/PROGRESS.md", which is
+        # gitignored and was never committed, so six named commitments had
+        # their scope recorded only by a filename pointing at nothing.
+        # docs/audit/DEFERRED_SUBPHASES.md replaced it — and the audit that
+        # wrote it read ROADMAP.md and stopped there, so two more deferrals
+        # named elsewhere stayed invisible: 6b in an ADR and 8b in a module
+        # docstring, both still pointing at the file that does not exist.
+        #
+        # The set of deferrals can therefore not live in a reader's memory.
+        # This derives it from the whole tracked tree, in both directions — a
+        # deferral named anywhere with no section, and a section for one
+        # nothing references — and fails any tracked file still sending a
+        # reader to the tracker that was never committed.
+        #
+        # Self-test first, and deliberately: it injects the ADR shape, the
+        # docstring shape and a bare phase reference into scratch trees, so a
+        # matcher that has quietly stopped matching cannot report the
+        # repository clean.
+        run: |
+          python3 scripts/check_deferral_tracker.py --self-test
+          python3 scripts/check_deferral_tracker.py
+
+      - name: Every check in the tree is reachable from a workflow
+        # The gate on the gates. A conformance script with no workflow cannot
+        # fail, which is indistinguishable from no gate at all — while its
+        # presence in scripts/ advertises coverage to anyone reading. Three
+        # shipped that way and were found only by tracing the call graph by
+        # hand. This resolves the graph mechanically instead: workflows, make
+        # recipes they invoke, test suites they collect, and scripts those
+        # reach. The inverse direction too — a workflow step naming a
+        # scripts/ path that no longer exists cannot do what it says.
+        #
+        # Which scripts it resolves is decided structurally — a declared
+        # verdict flag, an exit status derived from findings the script
+        # accumulates, or a workflow job whose output another job branches on.
+        # It used to be decided by filename, which hid nineteen gates, fifteen
+        # of them run by a workflow with `--check`.
+        #
+        # Self-test first, on the same tree, so a resolver that quietly starts
+        # returning "reached" for everything fails here rather than printing OK.
+        run: |
+          python -m pip install --quiet pyyaml pytest
+          python3 scripts/check_gate_coverage.py --self-test
+          python3 scripts/check_gate_coverage.py --list
+          python3 -m pytest tests/test_gate_coverage_classifier.py -q
+
+      - name: Every test file is reached by its own tree's invocation
+        # The gate on the suites. A test file no workflow collects reports
+        # nothing and reads exactly like one that passed — 63 were in that
+        # state, 56 of them under services/agents, because the invocation was
+        # a hand-maintained list of file paths rather than a directory.
+        #
+        # Structural, and in both directions: the corpus is `git ls-files`, so
+        # a service added tomorrow is scanned with no edit here, and an
+        # invocation naming a path that no longer exists fails too. It models
+        # what pytest actually collects — directory arguments, `--ignore`,
+        # `conftest` collect_ignore, and `-m` marker deselection, because a
+        # file whose every test is deselected runs nothing however plainly it
+        # is named.
+        #
+        # Self-test first, on the same tree, so a resolver that quietly starts
+        # returning "reached" for everything fails here rather than printing OK.
+        run: |
+          python -m pip install --quiet pyyaml pytest
+          python3 scripts/check_test_discovery.py --self-test
+          python3 scripts/check_test_discovery.py --list
+          python3 -m pytest tests/test_test_discovery_gate.py -q
+
+      - name: No check may report OK over a repository with no content
+        # The gate on the gates, the other axis. Reachability says a check can
+        # fail; this says it does, when there is nothing there to be clean.
+        # Copying scripts/ into an empty git repository and running every
+        # wired check found five reporting OK over a tree with no content —
+        # the detection validator certifying zero rules valid, a dashboard
+        # check that failed on an empty directory and passed on a missing one,
+        # `OK: 0 published Go module path(s)`, every self-link healthy over
+        # zero files, and a health-probe audit printing a table header. Found
+        # nothing and scanned nothing print the same word.
+        #
+        # That probe was a one-off, so the next gate written could reintroduce
+        # the defect freely. This is the same probe, permanent: each check is
+        # run the way a workflow runs it, inside a repository holding only
+        # scripts/, and must not exit 0. Exceptions are recorded with the
+        # disposition they are excused for and checked in both directions, so
+        # an entry that stops being needed fails the build.
+        #
+        # It also holds the two properties that produced those five: a root
+        # resolved through git rather than from __file__ (two levels above the
+        # script is whatever happens to be there), and a --self-test a
+        # contributor can run before CI does.
+        #
+        # The inventory comes from check_gate_coverage.py above. A second
+        # scanner here would drift the first time either one learned something
+        # the other had not.
+        run: |
+          python3 scripts/check_gate_contract.py --self-test
+          python3 scripts/check_gate_contract.py --list
+          python3 -m pytest tests/test_gate_contract.py -q
+
+      - name: Gate store migration runners and their call sites
+        # Neo4j, ClickHouse and Qdrant hold schema that code depends on, and
+        # all three create-if-absent — so a schema change lands on a fresh
+        # deployment and silently does not land on an existing one. This
+        # asserts each store has a runner, that something on the startup path
+        # actually calls it, and that migration ids stay ordered and unique.
+        # The second half is the point: a runner nobody invokes is the same
+        # defect with better test coverage. The script shipped with the
+        # runners and no workflow ever ran it.
+        run: python3 scripts/check_store_migrations.py
+
+      # Both of these import each service's FastAPI app, so they belong in
+      # the job that installs the service dependencies rather than the lint
+      # job, which installs only ruff and mypy. Placed there first, they
+      # failed closed with "the source tree was not read", which was the
+      # right refusal in the wrong place.
+      - name: Console route contract — self-test
+        run: python scripts/check_console_route_contract.py --self-test
+      - name: Verify every console API path resolves to a route or a rewrite
+        run: python scripts/check_console_route_contract.py
+      # The other half of the same contract. The route check proves a console
+      # path reaches a route; it says nothing about what comes back, and that
+      # is the half that drifted. #1648: POST /api/v1/hunt/search sends
+      # `took_ms`, `raw`, `highlights`, `event_type`, `source`, `query` and
+      # `notice` while the hand-written client type declared `took`, `fields`,
+      # `highlight` and a `severity` no response has ever carried — and
+      # `request<T>` asserts T rather than validating it, so the type checker
+      # believed all of them right up to a TypeError in the browser.
+      #
+      # It had no spec coverage of any kind either: docs/openapi.yaml is
+      # exported from services/api alone and this route is served by
+      # services/agents, so every gate keyed on the published document
+      # covered nothing here.
+      #
+      # Both directions, and nothing is skipped: an unresolvable service,
+      # path, schema, $ref or interface is an error rather than a pass.
+      - name: Console wire contract — self-test
+        run: python scripts/check_console_wire_contract.py --self-test
+      - name: Verify every declared wire type matches its service's schema
+        run: python scripts/check_console_wire_contract.py --list
+      # Two call sites named a provider model directly, so on CORE they
+      # reached LiteLLM, which knows the `aisoc-*` aliases and not that id,
+      # and both degraded silently to a deterministic answer. Neither broke
+      # a test, because a model path that never runs looks exactly like one
+      # that runs and is cautious.
+      - name: Model alias routing — self-test
+        run: python scripts/check_model_alias_routing.py --self-test
+      - name: Verify every LLM call site resolves a gateway alias
+        run: python scripts/check_model_alias_routing.py
+      - name: Duplicate routes — self-test
+        run: python scripts/check_route_duplicates.py --self-test
+      - name: Verify no method and path pair is registered twice
+        run: python scripts/check_route_duplicates.py
+      - name: Gate the public benchmark scoreboard (Phase E1)
+        # Ties apps/docs/static/data/scoreboard.json to a real deterministic
+        # live-agent MITRE-accuracy run: the newest substrate row must match a
+        # fresh run within tolerance, the schema must validate, and substrate
+        # rows must be honestly labelled. Closes the last NO GATE.
+        run: |
+          cd services/agents
+          python3 ../../scripts/check_scoreboard.py --check
+
+  # ──────────────────────────────────────────────
+  # Python micro-services unit tests
+  #   `services/fusion`, `services/honeytokens`, and `services/purple-team`
+  #   used to ship with no Python tests gated in CI at all — only ruff +
+  #   format check. These suites cover the pure helpers in each service
+  #   (alert fingerprinting/correlation keys, honeytoken generators,
+  #   ATT&CK coverage matrix builder) plus the thin FastAPI router contracts
+  #   that don't need Postgres / Kafka / Redis to exercise (e.g. the
+  #   fusion service's ``POST /process`` endpoint added in Issue #190,
+  #   which uses an injected fake worker via ``set_worker(...)``). Real
+  #   signal, fast — no service boot required.
+  # ──────────────────────────────────────────────
+  python-services-test:
+    name: Python — Service unit tests (fusion, honeytokens, purple-team)
+    runs-on: ubuntu-latest
+    needs: python-lint
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      # This was a hand-written subset of three services' manifests, kept
+      # deliberately minimal so the job stayed fast. Minimal is a legitimate
+      # choice; drifting is not, and it had: `pytest-cov>=4,<7` against a
+      # manifest saying `^4.1.0`, `sqlalchemy>=2,<3` against `^2.0.25`, and
+      # `cryptography` named here and declared by nothing — which is how
+      # `services/fusion/app/memory/pack.py` came to import a library its own
+      # lock does not contain. The image installs `--only main` from that
+      # lock, so the module could not load there at all; only this line made
+      # the tests pass. The pysigma defect with the arrow reversed.
+      #
+      # Derived from the three manifests now — and then from the three
+      # *locks*, because a range still re-resolves and the version CI grades
+      # has to be the version the image ships. These three disagree about
+      # `asyncpg` (0.29.0 against 0.31.0), so they cannot share an
+      # interpreter and each gets its own virtualenv installed `--no-deps`
+      # from its own resolved closure.
+      - name: Install fusion, honeytokens and purple-team from their committed locks
+        run: |
+          set -euo pipefail
+          # Per service, not a loop: the gate has to be able to read which
+          # service each line installs, and `"${svc}"` resolves to none.
+          python3 -m venv $RUNNER_TEMP/.venv-fusion
+          python3 scripts/service_requirements.py fusion --locked > /tmp/fusion.lock.txt
+          $RUNNER_TEMP/.venv-fusion/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/fusion.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-honeytokens
+          python3 scripts/service_requirements.py honeytokens --locked > /tmp/honeytokens.lock.txt
+          $RUNNER_TEMP/.venv-honeytokens/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/honeytokens.lock.txt
+
+          python3 -m venv $RUNNER_TEMP/.venv-purple-team
+          python3 scripts/service_requirements.py purple-team --locked > /tmp/purple-team.lock.txt
+          $RUNNER_TEMP/.venv-purple-team/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/purple-team.lock.txt
+
+          # pip skips a requirement whose marker is false without warning and
+          # with exit 0. These three declare their test runner through a PEP
+          # 621 extra, which poetry locks as `extra == "dev"` — false in a
+          # plain requirements file — and all three came out of a successful
+          # install with no pytest in them.
+          $RUNNER_TEMP/.venv-fusion/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-honeytokens/bin/python -c "import pytest"
+          $RUNNER_TEMP/.venv-purple-team/bin/python -c "import pytest"
+      # Phase 2.2 — every wave-1 service now has a measured coverage
+      # floor encoded in its pyproject under `[tool.coverage.report]
+      # fail_under`. Pytest reads it via `--cov-config=pyproject.toml`
+      # and exits non-zero if the floor is breached. Floors are the
+      # branch-on baseline at the time of introduction minus ~2-3pp
+      # to absorb measurement variance; raise them as the suites
+      # grow.
+      - name: Run fusion unit tests + coverage gate
+        working-directory: services/fusion
+        run: |
+          $RUNNER_TEMP/.venv-fusion/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+      - name: Run honeytokens unit tests + coverage gate
+        working-directory: services/honeytokens
+        run: |
+          $RUNNER_TEMP/.venv-honeytokens/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+      - name: Run purple-team unit tests + coverage gate
+        working-directory: services/purple-team
+        run: |
+          $RUNNER_TEMP/.venv-purple-team/bin/python -m pytest tests/ --cov-config=pyproject.toml --cov=app --cov-report=term-missing -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # Phase 2.1 — Wider Python service test matrix.
+  #
+  # Pre-Phase-2 audit (`scripts/list_python_services_with_tests.py`)
+  # found seven services that ship test files but were never gated in
+  # CI:
+  #
+  #   actions       — 99 tests   (live-action dispatcher + executor
+  #                                contracts + chatops + fleetdm +
+  #                                AWS SG client + dry-run sims)
+  #   connectors    — 720 tests  (every shipped connector's normalize
+  #                                step + scheduler + audit-ledger)
+  #   osquery-tls   — 12 tests   (TLS enroll, config, distributed
+  #                                query, log API)
+  #   slack-bot     — 91 tests   (approval flow, audit, timeout,
+  #                                Block Kit, AiSOC API clients,
+  #                                signature verifier)
+  #   teams-bot     — 5 tests    (Adaptive Cards renderer)
+  #   threatintel   — 38 tests   (actor attribution, airgap mode,
+  #                                STIX/TAXII fetcher, auth, scoring)
+  #   ueba          — 6 tests    (config loader + risk scoring core)
+  #
+  # 971 previously-ungated tests now produce real CI signal. Every
+  # suite is offline-safe (respx / monkeypatch for HTTP, in-memory
+  # aiosqlite for SQLAlchemy, no real Kafka / Redis / Postgres).
+  #
+  # Strategy notes:
+  #   * Matrix-per-service so a regression in one suite doesn't mask
+  #     others, and individual jobs surface in the PR check list.
+  #   * One shared dependency install per job — the dep sets overlap
+  #     heavily and resolving them at the pyproject level (poetry
+  #     install) would balloon CI time without buying coverage.
+  #   * `prometheus-client` is required by `threatintel.actors.
+  #     attribution` at module-import time; without it the test
+  #     collector aborts before running a single test.
+  #   * `qdrant-client` is required by `threatintel.api.indicators`
+  #     for the same reason. The base package is enough — the
+  #     `fastembed` extra the service pins is imported lazily inside
+  #     `QdrantStore._embed`, and pulling it here would add onnxruntime
+  #     to every cell in the matrix.
+  #   * `apscheduler` is required by `connectors.scheduler` at
+  #     module-import time; same import-aborted-the-collector issue.
+  #   * `slack-bolt` pulls `aiohttp` transitively — both must be
+  #     pinned because slack-bolt's async adapter eagerly imports
+  #     `aiohttp.web` even when the test only touches the signature
+  #     verifier.
+  #   * `sqlalchemy[asyncio]` + `aiosqlite` cover the connectors
+  #     scheduler tests and the osquery-tls async session fixture
+  #     (`conftest.py` line 13 imports `async_sessionmaker`).
+  # ──────────────────────────────────────────────
+  python-services-wave-2-test:
+    name: Python — Service unit tests wave 2 (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    needs: python-lint
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - actions
+          - connectors
+          - escalations
+          - mesh
+          - osquery-tls
+          - slack-bot
+          - teams-bot
+          - threatintel
+          - ueba
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      # This installed one union set for eight services, under a comment
+      # asking for exactly that. The union cannot work, and did not: three
+      # packages have no version satisfying all eight. `httpx` is `^0.26.0`
+      # in connectors and threatintel (both lock 0.26.0) and `>=0.27,<0.29`
+      # in five others (which lock 0.28.1); `prometheus-client` is `^0.19.0`
+      # in threatintel against `>=0.20,<0.26` in osquery-tls, and the line
+      # here satisfied neither; `respx` is `^0.20.0` in connectors against
+      # `^0.21.1` in slack-bot and teams-bot. And `pytest>=7.4,<9` was
+      # disjoint from the `>=9.0.3,<10.0` all seven declare and all seven
+      # locks resolve, so this job graded those suites on a pytest none of
+      # them may ship.
+      #
+      # A matrix cell runs one service, so it installs one service's
+      # dependencies. That is cheaper than the union for most cells, it
+      # cannot be disjoint with anything, and pip still caches wheels across
+      # cells. `aioredis`, `jinja2` and `tenacity` are simply gone: no
+      # service here declares or imports any of them.
+      #
+      # And from that service's committed lock rather than from its ranges,
+      # so the versions this cell grades are the versions its image ships.
+      - name: Install services/${{ matrix.service }} from its committed lock
+        run: |
+          set -euo pipefail
+          SYSTEM="$(python3 scripts/service_requirements.py '${{ matrix.service }}' --system)"
+          if [ -n "${SYSTEM}" ]; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends ${SYSTEM}
+          fi
+          python3 -m venv $RUNNER_TEMP/.venv-${{ matrix.service }}
+          python3 scripts/service_requirements.py '${{ matrix.service }}' --locked > '/tmp/${{ matrix.service }}.lock.txt'
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/pip install --quiet --disable-pip-version-check \
+            --no-deps -r '/tmp/${{ matrix.service }}.lock.txt'
+          echo "${{ matrix.service }}: $(wc -l < '/tmp/${{ matrix.service }}.lock.txt') pinned distribution(s)"
+          # pip skips a requirement whose marker is false without warning and
+          # with exit 0, so a successful install can leave an empty
+          # environment. Say so here rather than at the pytest step.
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/python -c "import pytest"
+      # Phase 2.2 — coverage floor read from each service's pyproject.
+      # `--cov-config=pyproject.toml` makes coverage.py honour the
+      # `[tool.coverage.report] fail_under = N` line; pytest-cov then
+      # exits non-zero when the floor is breached. The N is the
+      # branch-on baseline at the time of introduction minus ~2-3pp.
+      - name: Run ${{ matrix.service }} tests + coverage gate
+        working-directory: services/${{ matrix.service }}
+        run: |
+          $RUNNER_TEMP/.venv-${{ matrix.service }}/bin/python -m pytest tests/ \
+            --cov-config=pyproject.toml \
+            --cov=app \
+            --cov-report=term-missing \
+            -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # SDK packages (Python)
+  #   The three Python SDKs ship as pip packages but never had a CI gate —
+  #   regressions could land silently. This job installs each in editable
+  #   mode and runs its bundled pytest suite. They're intentionally light
+  #   on dependencies (httpx, pydantic, click, pyyaml) so the job is fast.
+  # ──────────────────────────────────────────────
+  sdk-python-test:
+    name: SDK — Python (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install SDKs in editable mode (with dev extras)
+        # Each `[dev]` extra pins pytest + pytest-asyncio; pytest-httpx is
+        # only needed by `aisoc-sdk` (the typed client tests), so we add it
+        # explicitly rather than expanding the package extras.
+        run: |
+          pip install --quiet \
+            -e packages/plugin-sdk-py \
+            -e packages/sdk-py \
+            -e packages/aisoc-cli \
+            pytest pytest-asyncio pytest-httpx build
+      - name: Run aisoc-plugin-sdk tests
+        run: pytest packages/plugin-sdk-py/tests/ -v --tb=short
+      - name: Run aisoc-sdk tests
+        run: pytest packages/sdk-py/tests/ -v --tb=short
+      - name: Run aisoc-cli tests
+        run: pytest packages/aisoc-cli/tests/ -v --tb=short
+      - name: Run aisoc-migrate tests
+        # Wave 16. The inbound SPL/KQL/EQL translators, graded against
+        # the 2,005 real quarantined Splunk rules rather than a
+        # synthetic sample — so this needs pyyaml to read the corpus.
+        run: |
+          python -m pip install --quiet pyyaml
+          pytest packages/aisoc-migrate/tests/ -v --tb=short
+
+  # ──────────────────────────────────────────────
+  # SDK packages (TypeScript)
+  #   `@aisoc/sdk` is a typed openapi-fetch client with a self-contained
+  #   vitest suite (HTTP mocked, no real server). Same pnpm workspace
+  #   pattern as the MCP job — install once at the root, then filter.
+  # ──────────────────────────────────────────────
+  sdk-ts-test:
+    name: SDK — TypeScript (vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: Install workspace deps
+        run: pnpm install --frozen-lockfile
+      - name: Type-check
+        run: pnpm --filter @aisoc/sdk typecheck
+      - name: Test
+        run: pnpm --filter @aisoc/sdk test
+      - name: Build
+        run: pnpm --filter @aisoc/sdk build
+
+  # ──────────────────────────────────────────────
+  # services/realtime (WebSocket / SSE)
+  #   Published as a container image and, until now, built by nothing. No
+  #   build job, no type-check, no lint, no test run — so a break was found
+  #   by whoever deployed it. It is not a peripheral service: it is one of
+  #   the two ends of the Kafka spine, it carries the OpenTelemetry
+  #   instrumentation that keeps the distributed trace continuous across
+  #   that boundary, and `src/index.ts` holds the TypeScript CORS guard
+  #   enforcing the same wildcard-plus-credentials refusal as the vendored
+  #   Python `cors.py` copies.
+  #
+  #   `npm`, not `pnpm`: this service is deliberately outside the root pnpm
+  #   workspace (it is not in `pnpm-workspace.yaml`) and keeps its own
+  #   `package-lock.json`. `npm ci` — never `npm install` — so the job
+  #   installs the committed resolution rather than a fresh one, and so this
+  #   job fails if the lock and the manifest ever disagree.
+  #
+        #   Node 22 matches the Dockerfile's `FROM node:22-alpine`. The manifest
+  #   declared `@types/node: ^20` against that runtime: types only, so
+  #   nothing broke at runtime, but the compiler was checking this code
+  #   against a different standard library from the one it executes on.
+  # ──────────────────────────────────────────────
+  realtime:
+    name: Realtime — Build, type-check, lint & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/realtime
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: services/realtime/package-lock.json
+      - name: Install from the committed lock
+        run: npm ci
+      - name: Build
+        run: npm run build
+      # Wider than the build: `tsconfig.json` includes only `src/**/*`
+      # because `rootDir` decides the shape of `dist`, which left
+      # `test/auth.test.ts` — the file asserting this service's
+      # authentication contract — type-checked by nothing.
+      - name: Type-check (including tests)
+        run: npm run type-check
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+
+  # ──────────────────────────────────────────────
+  # gofmt
+  #   CI ran `go vet` and `go build` and never `gofmt`, and 28 files across
+  #   four modules had drifted out of canonical form. `go vet` does not look
+  #   at formatting, so nothing in the pipeline ever would have said so.
+  #
+  #   Deliberately repo-wide rather than one step per module. The Go jobs
+  #   below drive their modules from a matrix, and a matrix is a list
+  #   somebody has to remember to add to — that is how `services/sdk-go`
+  #   came to be compiled by nothing at all until #817. Walking every `.go`
+  #   file in the tree cannot miss a module, because it never enumerates
+  #   them.
+  #
+  #   `gofmt -l` prints the offenders and exits 0, so the file count has to
+  #   be turned into the exit status explicitly; a bare `gofmt -l` here
+  #   would be a step that can only ever pass.
+  # ──────────────────────────────────────────────
+  go-fmt:
+    name: Go — gofmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+      - name: gofmt -l (whole tree)
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -name '*.go' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/vendor/*' \
+            -not -path './plans/*' | sort)
+          echo "checking ${#files[@]} Go file(s)"
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "gofmt: found no Go files to check — the filter is wrong, not the tree"
+            exit 1
+          fi
+          unformatted=$(gofmt -l "${files[@]}")
+          if [ -n "$unformatted" ]; then
+            echo "::error::gofmt would rewrite these files. Run: gofmt -w <file>"
+            echo "$unformatted"
+            gofmt -d "${files[@]}"
+            exit 1
+          fi
+          echo "gofmt: OK — ${#files[@]} file(s) already in canonical form"
+
+  # ──────────────────────────────────────────────
+  # Go services (enrichment, ingest, demo-producer)
+  # ──────────────────────────────────────────────
+  go-build:
+    name: Go — Build & Vet
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [enrichment, ingest, demo-producer]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          # `demo-producer` is standard-library only and has no go.sum, so the
+          # glob resolves to the two legs that do have one instead of failing
+          # the third back to an uncached build with only a warning.
+          cache-dependency-path: services/${{ matrix.service }}/go.sum*
+      - name: Build
+        run: |
+          cd services/${{ matrix.service }}
+          go build ./...
+      - name: Vet
+        run: |
+          cd services/${{ matrix.service }}
+          go vet ./...
+      - name: Test
+        run: |
+          cd services/${{ matrix.service }}
+          go test ./... -count=1
+
+      # Two classifiers answer the same question in two languages: Go stamps
+      # live events at ingest, Python classifies committed fixtures during
+      # detection replay. If they disagree, a rule matching `ip_class` passes
+      # its fixtures and never fires on real traffic. This is the only job
+      # with both toolchains, so the parity probe runs here.
+      - name: IP classification -- Go and Python must answer identically
+        if: matrix.service == 'ingest'
+        run: python3 scripts/check_ip_class_dataset.py
+
+  # ──────────────────────────────────────────────
+  # Go SDKs (`packages/plugin-sdk-go`, `packages/sdk-go`)
+  #   Live outside `services/` so the matrix above doesn't pick them up.
+  #   `plugin-sdk-go` has `client_test.go`, `loader_test.go`,
+  #   `registry_test.go`; `sdk-go` had no job at all and so was never
+  #   compiled by CI — `scripts/check_toolchain_pins.py` now fails on a Go
+  #   module no workflow builds.
+  #
+  #   No `cache-dependency-path`: both modules are standard-library only and
+  #   have no `go.sum`. Pointing setup-go at a file that does not exist makes
+  #   it log `Restore cache failed: Some specified paths were not resolved` as
+  #   a *warning* and carry on, so the job kept passing with the cache
+  #   permanently off — a green tick over a step that never happened.
+  # ──────────────────────────────────────────────
+  sdk-go-test:
+    name: SDK — Go ${{ matrix.module }} (build, vet, test)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [plugin-sdk-go, sdk-go]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+      - name: Build
+        run: |
+          cd packages/${{ matrix.module }}
+          go build ./...
+      - name: Vet
+        run: |
+          cd packages/${{ matrix.module }}
+          go vet ./...
+      - name: Test
+        run: |
+          cd packages/${{ matrix.module }}
+          go test ./... -count=1
+
+  # ──────────────────────────────────────────────
+  # Pillar-1 Eval Gate: 4-suite eval harness (200-incident synthetic dataset)
+  #   - Alert reduction ratio          (≥70%)  — REAL measurement against a
+  #                                              fixed noisy alert stream
+  #   - MITRE ATT&CK tactic accuracy   (≥80%)  — substrate self-consistency
+  #                                              gate (extractor vs. dataset
+  #                                              that's written to feed it)
+  #   - Investigation completeness     (≥85%)  — substrate self-consistency
+  #                                              gate (templated report vs.
+  #                                              keywords from the same data)
+  #   - Response-plan quality          (≥80%)  — substrate self-consistency
+  #                                              gate (templated plan vs.
+  #                                              rubric using the same data)
+  # All suites run offline (no LLM, no DB) against the deterministic
+  # `services/agents/tests/eval_data/synthetic_incidents.json` dataset.
+  # This harness gates the substrate (extractors, fusion, templates, judges)
+  # — it does NOT call the live LLM agent, so three of the four metrics are
+  # self-consistency gates rather than agent accuracy scores. See
+  # `apps/docs/docs/benchmark.md` for what each suite actually measures.
+  # The job posts a markdown summary, uploads `eval_report.json`, and
+  # commits historical numbers to the `eval-results` branch as
+  # `eval/results/<commit_sha>.json` so the public eval harness page can
+  # query them over time.
+  # ──────────────────────────────────────────────
+  p1-eval:
+    name: P1 Eval — Pillar-1 Eval Harness Gate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Pull last published baseline from eval-results branch
+        # Wave 2 — w2-dac. We fetch `eval/results/latest.json` from the
+        # `eval-results` orphan branch (published by the publish step below
+        # on main). When present, the eval runner gates a ≥1pp MITRE
+        # regression vs. that baseline; missing baseline = no-op.
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p /tmp/eval-baseline
+          if git fetch origin eval-results:eval-results 2>/dev/null; then
+            git --no-pager show eval-results:eval/results/latest.json \
+              > /tmp/eval-baseline/latest.json 2>/dev/null \
+              || rm -f /tmp/eval-baseline/latest.json
+          fi
+          if [ -f /tmp/eval-baseline/latest.json ]; then
+            echo "Baseline found at /tmp/eval-baseline/latest.json"
+          else
+            echo "No baseline yet — first run will publish one."
+          fi
+      - name: Install eval dependencies
+        run: pip install --quiet pyyaml pytest pytest-asyncio structlog pydantic
+      - name: Run all eval suites
+        # On PRs we additionally gate against the published baseline so a
+        # detection-as-code merge that drops MITRE accuracy by ≥ 1pp blocks
+        # CI (exit code 2). On push to main, `--baseline` is omitted so the
+        # publish step below establishes a fresh baseline.
+        run: |
+          if [ -f /tmp/eval-baseline/latest.json ]; then
+            python3 scripts/run_evals.py \
+              --ci \
+              --baseline /tmp/eval-baseline/latest.json \
+              --max-regression-pp 1.0 \
+              --out eval_report.json
+          else
+            python3 scripts/run_evals.py --ci --out eval_report.json
+          fi
+      # Phase 3. The deterministic half of the prompt-injection suite: a
+      # floor on guard detection over the twinned incident corpus, a ceiling
+      # on benign controls flagged, and an exact ratchet over the payloads
+      # the guard is known to miss. `--benchmark-md` without
+      # `--write-benchmark` fails when the published page has drifted from
+      # the measurement, so a number copied into prose cannot go stale.
+      #
+      # This measures the guard, not a model. The live rates are the weekly
+      # wet eval's job and read "not measured" here rather than zero.
+      - name: Prompt-injection eval (deterministic guard floor)
+        run: |
+          python3 scripts/check_injection_eval.py \
+            --check \
+            --benchmark-md apps/docs/docs/benchmark.md \
+            --json-out injection_eval.json \
+            --markdown-out injection_eval.md
+          {
+            echo "## Prompt-injection resistance (deterministic)"
+            echo
+            cat injection_eval.md
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      # Depth 1.6. The published verdict-quality table is generated from the
+      # committed scorecard, so a number edited into the page by hand, or a
+      # scorecard refreshed without regenerating the page, reds this step.
+      #
+      # It also refuses a scorecard that could put a score-shaped cell where
+      # no measurement exists -- most importantly a row claiming a live
+      # measurement that placed zero model calls, which is exactly what a run
+      # against a dead endpoint produces once triage falls through to its
+      # deterministic scorer.
+      - name: Verdict quality (published table matches the committed scorecard)
+        run: python3 scripts/check_verdict_quality.py --check
+
+      - name: Post job summary
+        if: always()
+        run: |
+          python3 - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+          import json, pathlib
+          d = json.loads(pathlib.Path("eval_report.json").read_text())
+          print("## AiSOC Pillar-1 Eval Harness — 200-incident synthetic dataset\n")
+          print("Alert-reduction is a real measurement; the other three suites are substrate self-consistency gates.\n")
+          print(f"Dataset: {d['dataset']}  ")
+          print(f"Generated: {d['generated_at']}\n")
+          print("| Suite | Metric | Value | Target | Result |")
+          print("|---|---|---:|---:|:---:|")
+          for name, suite in d["suites"].items():
+              mark = "PASS" if suite["passed"] else "FAIL"
+              print(
+                  f"| `{name}` | {suite['metric']} | "
+                  f"{suite['value']:.3f} | ≥ {suite['target']:.2f} | {mark} |"
+              )
+          verdict = "ALL GATES PASSED" if d["all_passed"] else "REGRESSION DETECTED"
+          print(f"\n{verdict}\n")
+          PY
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: aisoc-eval-report
+          path: eval_report.json
+      - name: Publish historical numbers to eval-results branch
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -e
+          # Snapshot the report
+          cp eval_report.json /tmp/eval_report.json
+
+          git fetch origin eval-results:eval-results 2>/dev/null \
+            && git checkout eval-results \
+            || git checkout --orphan eval-results
+
+          # Clear any previous workspace state on the orphan branch
+          if [ ! -f .gitkeep ]; then
+            find . -mindepth 1 -maxdepth 1 \
+              ! -name '.git' ! -name 'eval' ! -name '.gitkeep' \
+              -exec rm -rf {} + 2>/dev/null || true
+          fi
+
+          mkdir -p eval/results
+          cp /tmp/eval_report.json "eval/results/${COMMIT_SHA}.json"
+
+          # Maintain a stable `latest.json` for the eval harness page badge
+          cp /tmp/eval_report.json eval/results/latest.json
+
+          # Identity policy: every commit on this repo must be authored by
+          # Beenu Arora <beenu@cyble.com>. The eval-results branch is no
+          # exception — even though it is machine-written by CI, attributing
+          # it to a separate "AiSOC CI" identity would re-pollute the
+          # contributors graph after the 2026-05-08 history rewrite.
+          git config user.email "beenu@cyble.com"
+          git config user.name "Beenu Arora"
+          git add eval/results
+          git commit -m "eval: ${COMMIT_SHA::7} (auto)" || echo "no changes"
+          git push origin eval-results || echo "push skipped"
+
+  # ──────────────────────────────────────────────
+  # Pillar-2: Playbook JSON Schema lint + schema/engine parity
+  #
+  # The lint validates every *.playbook.json in the tree against
+  # schemas/playbook.schema.json. It used to scan only the two files under
+  # services/agents/data/playbooks and report "2/2 passed" while the 62
+  # playbooks in playbooks/packs/v1 went unchecked — 32 of which did not match.
+  #
+  # The parity check asks the other question, which nothing asked before: does
+  # the published schema describe the engine that runs these files. It compares
+  # the schema, the StepType enum, the engine's handler table and the pack
+  # validator's trigger list in both directions, and carries a --self-test that
+  # injects drift each way so a passing run cannot mean "the comparison is
+  # broken".
+  # ──────────────────────────────────────────────
+  p2-playbook-schema-lint:
+    name: P2 — Playbook Schema Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        # pydantic + httpx let the parity check import the real engine rather
+        # than parse it; a parser can disagree with the handler table that is
+        # actually built at import time.
+        run: pip install jsonschema pydantic httpx pytest
+      - name: Lint playbook files
+        run: python3 scripts/lint_playbooks.py
+      - name: Schema/engine parity (both directions, with self-test)
+        run: python3 scripts/check_playbook_schema_parity.py --self-test
+      - name: A step promising approval is an approval step (with self-test)
+        # Three packs modelled their gate as a `condition`, which the engine
+        # evaluates once and walks past, so a live run reached `completed`
+        # with the password reset the gate exists to hold already done.
+        # Nothing compared the promise in a step's name against its type.
+        run: |
+          python3 scripts/check_playbook_approval_gates.py --self-test
+          python3 scripts/check_playbook_approval_gates.py
+      - name: Parity gate tests
+        run: python3 -m pytest tests/test_playbook_schema_parity_gate.py -q
+      - name: The documented upgrade command runs, and its output validates
+        # MIGRATION.md has told operators to run `scripts/upgrade_playbooks.py`
+        # since v4 and the script did not exist. The test asserts a v3 playbook
+        # fails the real schema before and passes it after, so the doc cannot
+        # go back to naming a command that is not there.
+        run: python3 -m pytest tests/test_upgrade_playbooks.py -q
+      - name: Shipped packs need no upgrade
+        run: python3 scripts/upgrade_playbooks.py --dir playbooks
+
+  # ──────────────────────────────────────────────
+  # Docker Compose smoke test
+  # ──────────────────────────────────────────────
+  docker-compose-check:
+    name: Docker Compose — Validate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Validate compose file
+        run: docker compose config --quiet

@@ -1,0 +1,53 @@
+id: mitre-car-car-2020-11-002
+name: Local Network Sniffing
+description: 'Adversaries may use a variety of tools to gain visibility on the current
+  status of things on the network: which processes are listening on which ports, which
+  services are running on other hosts, etc. This analytic looks for the names of the
+  most common network sniffing tools. While this may be noisy on networks where sysadmins
+  are using any of these tools on a regular basis, in most networks their use is noteworthy.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - commands containing known network sniffing application names
+    type: Pseudocode
+    code: "processes = search Process:Create\nsniffer_processes = filter processes\
+      \ where (\n  exe = \"tshark.exe\" OR\n  exe = \"windump.exe\" OR\n  (exe = \"\
+      logman.exe\" AND parent_exe exists AND parent_exe!=\"C:\\Program Files\\Windows\
+      \ Event Reporting\\Core\\EventReporting.AgentService.exe\") OR\n  exe = \"tcpdump.exe\"\
+      \ OR\n  exe = \"wprui.exe\" OR\n  exe = \"wpr.exe\" )\noutput sniffer_processes\n"
+  - name: Splunk Search - common network traffic sniffing apps being run
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (Image="*tshark.exe" OR Image="*windump.exe"
+      OR (Image="*logman.exe" AND ParentImage!="?" AND ParentImage!="C:\\Program Files\\Windows
+      Event Reporting\\Core\\EventReporting.AgentService.exe") OR Image="*tcpdump.exe"
+      OR Image="*wprui.exe" OR Image="*wpr.exe")
+
+      '
+  - name: LogPoint Search - common network traffic sniffing apps being run
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (image="*\tshark.exe" OR image="*\windump.exe"
+      OR (image="*\logman.exe" -parent_image="?" -parent_image="C:\Program Files\Windows
+      Event Reporting\Core\EventReporting.AgentService.exe") OR image="*\tcpdump.exe"
+      OR image="*\wprui.exe" OR image="*\wpr.exe")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-002.yaml
+notes:
+  car_status: needs_implementation

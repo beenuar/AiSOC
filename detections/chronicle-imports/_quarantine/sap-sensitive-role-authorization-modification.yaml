@@ -1,0 +1,53 @@
+id: chronicle-detection-rules-sap-sensitive-role-authorization-modification
+name: sap_sensitive_role_authorization_modification
+description: sap_sensitive_role_authorization_modification
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_sensitive_role_authorization_modification {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects changes to authorization\
+    \ objects within defined sensitive roles. Correlates with login audit logs for\
+    \ session context.\"\n    severity = \"High\"\n    tactic = \"TA0004\"\n    technique\
+    \ = \"T1098\"\n\n  events:\n    $change.metadata.log_type = \"SAP_CHANGE_DOCUMENT\"\
+    \n    $change.target.resource.name = \"PFCG\"\n    $change.target.resource.attribute.labels[\"\
+    TABNAME\"] = /1251/\n    $change.target.resource.attribute.labels[\"CHANGE_IND\"\
+    ] = \"U\"\n\n    $role_id = $change.target.resource.product_object_id\n    $role_id\
+    \ in %sap_sensitive_roles.role\n\n    //join\n    $user = $change.principal.user.userid\n\
+    \    $user = $audit.principal.user.userid\n\n    $audit.metadata.log_type = \"\
+    SAP_SECURITY_AUDIT\"\n    $audit.additional.fields[\"msg_1\"] = /^AU1$|^AU5$/\n\
+    \n    not $user in %sap_admin_users.user\n\n  match:\n    $user over 12h\n\n \
+    \ outcome:\n    $risk_score = 85\n    $changed_role = array_distinct($role_id)\n\
+    \    $auth_objects = array_distinct($change.target.resource.attribute.labels[\"\
+    TABKEY\"])\n    $terminal_ip = array_distinct($audit.principal.ip)\n    $terminal_host\
+    \ = array_distinct($audit.principal.hostname)\n    $transaction = array_distinct($change.target.application)\n\
+    \n    $time_diff_minutes = max(timestamp.get_minute($change.metadata.event_timestamp.seconds)\
+    \ - timestamp.get_minute($audit.metadata.event_timestamp.seconds))\n\n  condition:\n\
+    \    $change and $audit\n}"
+  chronicle_rule_name: sap_sensitive_role_authorization_modification
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_sensitive_role_authorization_modification
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_sensitive_role_authorization_modification.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

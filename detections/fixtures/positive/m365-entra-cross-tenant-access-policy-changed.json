@@ -1,0 +1,4 @@
+{
+  "operation_name": "Update a partner cross-tenant access setting",
+  "actor": "attacker@corp.com"
+}

@@ -1,0 +1,71 @@
+name: Deploy Docs to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/docs/**"
+      - ".github/workflows/deploy-docs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Docusaurus
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # No `version:` input — action-setup@v6 reads the root
+      # `packageManager: pnpm@8.15.1`. Pinning a different version (was
+      # `version: 9`) is a hard error under v6:
+      # "Multiple versions of pnpm specified ... ERR_PNPM_BAD_PM_VERSION".
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        # `--frozen-lockfile` like every other install of this workspace. A
+        # filtered install is still an install: without the flag the published
+        # docs site could be built from a dependency set no other job resolved.
+        run: pnpm --filter @aisoc/docs install --frozen-lockfile
+
+      # Set explicitly rather than leaning on the defaults in
+      # docusaurus.config.ts. These values decide the canonical <link>, the
+      # sitemap and every absolute asset URL, so a silent default drift would
+      # de-index the docs without failing a build.
+      - name: Build docs
+        env:
+          DOCS_URL: https://beenuar.github.io
+          DOCS_BASE_URL: /AiSOC/
+        run: pnpm --filter @aisoc/docs build
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
+        with:
+          path: apps/docs/build
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

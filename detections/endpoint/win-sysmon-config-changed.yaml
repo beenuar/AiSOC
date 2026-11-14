@@ -1,0 +1,24 @@
+id: det-endpoint-069
+name: Sysmon Configuration Changed
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Sysmon Configuration
+  Changed'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 16
+false_positives:
+- Confirmed test/tuning activity
+- Sanctioned automation/IaC pipeline
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

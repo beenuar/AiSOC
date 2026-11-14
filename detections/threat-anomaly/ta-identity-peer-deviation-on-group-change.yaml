@@ -1,0 +1,25 @@
+id: det-threat-anomaly-013
+name: Group Membership Changes Far Above the Principal's Peer Group
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'Group Membership
+  Changes Far Above the Principal's Peer Group'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: identity
+  service: directory
+detection:
+  condition: |
+    event_type CONTAINS "group.user_membership"
+    AND baseline_peer_deviation >= 3.0
+false_positives:
+- A reorganisation
+- Bulk onboarding at the start of a quarter
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

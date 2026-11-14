@@ -1,0 +1,22 @@
+title: SQL Injection Attempt in URL or POST Body
+id: aisoc-id-ws-0001-sqli
+status: stable
+description: |
+  Web request contains canonical SQL injection patterns
+  (UNION SELECT, OR 1=1, sleep(), benchmark()). Catches automated
+  scanners (sqlmap) and manual exploitation attempts.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1190
+  - attack.initial_access
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  payload:
+    url.query|re: '(?i)(union(\s|/\*.*?\*/)+select|or\s+1\s*=\s*1|\bsleep\s*\(\s*\d+\s*\)|\bbenchmark\s*\(\s*\d+\s*,)'
+  condition: selection and payload

@@ -1,0 +1,51 @@
+[
+  {
+    "_kind": "login",
+    "EVENT_ID": "ev-1",
+    "EVENT_TIMESTAMP": "2026-05-13 18:30:00.000",
+    "USER_NAME": "ALICE",
+    "CLIENT_IP": "203.0.113.10",
+    "REPORTED_CLIENT_TYPE": "JDBC_DRIVER",
+    "FIRST_AUTHENTICATION_FACTOR": "PASSWORD",
+    "IS_SUCCESS": "YES",
+    "ERROR_CODE": null,
+    "ERROR_MESSAGE": null
+  },
+  {
+    "_kind": "login",
+    "EVENT_ID": "ev-2",
+    "EVENT_TIMESTAMP": "2026-05-13 18:30:05.000",
+    "USER_NAME": "MALLORY",
+    "CLIENT_IP": "198.51.100.99",
+    "REPORTED_CLIENT_TYPE": "PYTHON_CONNECTOR",
+    "IS_SUCCESS": "NO",
+    "ERROR_CODE": "390195",
+    "ERROR_MESSAGE": "Network policy violation"
+  },
+  {
+    "_kind": "query",
+    "QUERY_ID": "q-1",
+    "START_TIME": "2026-05-13 18:30:10.000",
+    "USER_NAME": "BOB",
+    "ROLE_NAME": "ACCOUNTADMIN",
+    "WAREHOUSE_NAME": "ANALYTICS_WH",
+    "DATABASE_NAME": "PROD",
+    "SCHEMA_NAME": "PUBLIC",
+    "QUERY_TYPE": "GRANT",
+    "EXECUTION_STATUS": "SUCCESS",
+    "BYTES_SCANNED": 0
+  },
+  {
+    "_kind": "query",
+    "QUERY_ID": "q-2",
+    "START_TIME": "2026-05-13 18:30:15.000",
+    "USER_NAME": "CAROL",
+    "ROLE_NAME": "DATA_LOADER",
+    "WAREHOUSE_NAME": "LOAD_WH",
+    "DATABASE_NAME": "PROD",
+    "SCHEMA_NAME": "RAW",
+    "QUERY_TYPE": "COPY",
+    "EXECUTION_STATUS": "SUCCESS",
+    "BYTES_SCANNED": 1048576000
+  }
+]

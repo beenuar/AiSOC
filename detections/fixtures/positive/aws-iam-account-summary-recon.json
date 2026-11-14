@@ -1,0 +1,4 @@
+{
+  "event_name": "GetAccountSummary",
+  "events_per_minute": 105.0
+}

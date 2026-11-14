@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-lazarus-attack-variant
+name: lazarus_attack_variant
+description: lazarus_attack_variant
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule lazarus_attack_variant {\n meta:\n    author = \"Ariel Millahuel\"\
+    \n    description = \"Detects a Lazarus attack variant via move.exe and reg.exe\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/XK07zRt3m5OF\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, T1059\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and (($selection1.target.process.file.full_path\
+    \ = \"move.exe\" and ($selection1.target.process.command_line = \"move \\\"c:\\\
+    \\perflogs\\\\1.dat\\\" \\\"c:\\\\programdata\\\\microsoft\\\\sqcsvc\\\\sqcsvc6.ldx\\\
+    \"\" or $selection1.target.process.command_line = \"move \\\"c:\\\\perflogs\\\\\
+    1.dll\\\" \\\"c:\\\\windows\\\\system32\\\\sqcsvc.dll\\\"\" or $selection1.target.process.command_line\
+    \ = \"move \\\"c:\\\\perflogs\\\\1.dll.mui\\\" \\\"c:\\\\windows\\\\system32\\\
+    \\sqcsvc.dll.mui\\\"\")) or ($selection1.target.process.file.full_path = \"reg.exe\"\
+    \ and ($selection1.target.process.command_line = \"reg add \\\"HKLM\\\\SYSTEM\\\
+    \\ControlSet001\\\\Services\\\\sqcsvc\\\\Parameters\\\" /v ServiceDll /t REG_EXPAND_SZ\
+    \ /d \\\"%SystemRoot%\\\\System32\\\\sqcsvc.dll\\\"\" or $selection1.target.process.command_line\
+    \ = \"reg add \\\"HKLM\\\\Software\\\\Microsoft\\\\Windows NT\\\\CurrentVersion\\\
+    \\Svchost\\\" /v sqcsvc /t REG_ MULTI_SZ /d sqcsvc\"))))\n\n  condition:\n   \
+    \ $selection1\n}"
+  chronicle_rule_name: lazarus_attack_variant
+provenance:
+  source: chronicle/detection-rules
+  source_id: lazarus_attack_variant
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/process_creation/lazarus_attack_variant.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,49 @@
+id: splunk-security-content-43834687-cc48-4878-a2fa-f76e4271791f
+name: Windows Compatibility Telemetry Tampering Through Registry
+description: This detection identifies suspicious modifications to the Windows Compatibility
+  Telemetry registry settings, specifically within the "TelemetryController" registry
+  key and "Command" registry value. It leverages data from the Endpoint.Registry data
+  model, focusing on registry paths and values indicative of such changes. This activity
+  is significant because CompatTelRunner.exe and the "Microsoft Compatibility Appraiser"
+  task always run as System and can be used to elevate privileges or establish a highly
+  privileged persistence mechanism. If confirmed malicious, this could enable unauthorized
+  code execution, privilege escalation, or persistent access to the compromised system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1546/
+- https://scythe.io/threat-thursday/windows-telemetry-persistence
+- https://www.trustedsec.com/blog/abusing-windows-telemetry-for-persistence
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime,\
+    \ max(_time) as lastTime, count FROM datamodel=Endpoint.Registry\n  WHERE (\n\
+    \        Registry.registry_path = \"*\\\\SOFTWARE\\\\Microsoft\\\\Windows NT\\\
+    \\CurrentVersion\\\\AppCompatFlags\\\\TelemetryController*\"\n        AND\n  \
+    \      Registry.registry_value_name=\"Command\" NOT Registry.registry_value_data\
+    \ IN (\"(empty)\")\n    )\n  BY Registry.action Registry.dest Registry.process_guid\n\
+    \     Registry.process_id Registry.registry_hive Registry.registry_path\n    \
+    \ Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name\n\
+    \     Registry.registry_value_type Registry.status Registry.user\n     Registry.vendor_product\n\
+    | `drop_dm_object_name(Registry)`\n| eval process = registry_value_data\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_compatibility_telemetry_tampering_through_registry_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 43834687-cc48-4878-a2fa-f76e4271791f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_compatibility_telemetry_tampering_through_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

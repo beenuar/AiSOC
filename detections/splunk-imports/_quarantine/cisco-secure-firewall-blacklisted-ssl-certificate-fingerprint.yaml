@@ -1,0 +1,48 @@
+id: splunk-security-content-c43f7b49-2dab-4e76-892e-7f971c2f20f1
+name: Cisco Secure Firewall - Blacklisted SSL Certificate Fingerprint
+description: The following analytic detects the use of known suspicious SSL certificates
+  in any observed event where the SSL_CertFingerprint field is present. It leverages
+  Cisco Secure Firewall logs and compares the SSL certificate SHA1 fingerprint against
+  a blacklist of certificates associated with malware distribution, command and control
+  (C2) infrastructure, or phishing campaigns. This activity is significant as adversaries
+  often reuse or self-sign certificates across malicious infrastructure, allowing
+  defenders to track and detect encrypted sessions even when domains or IPs change.
+  If confirmed malicious, this may indicate beaconing, malware download, or data exfiltration
+  over TLS/SSL.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1587.002
+  - T1588.004
+  - T1071.001
+  - T1573.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=* SSL_CertFingerprint=*\n| lookup\
+    \ sslbl_ssl_certificate_blacklist SHA1 as SSL_CertFingerprint OUTPUT Listingdate,\
+    \ Listingreason\n| where isnotnull(Listingreason)\n| stats min(_time) as firstTime\
+    \ max(_time) as lastTime\n        values(dest) as dest\n        values(dest_port)\
+    \ as dest_port\n        values(rule) as rule\n        values(url) as url\n   \
+    \     values(Listingreason) as Reasons\n        values(Listingdate) as \"SSL Cert\
+    \ Listing Dates\"\n        count by SSL_CertFingerprint src transport action\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___blacklisted_ssl_certificate_fingerprint_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c43f7b49-2dab-4e76-892e-7f971c2f20f1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___blacklisted_ssl_certificate_fingerprint.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

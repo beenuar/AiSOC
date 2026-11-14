@@ -1,0 +1,33 @@
+id: huntress
+name: Huntress Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Huntress Managed EDR incident reports via the v1 REST API: footholds,
+  ransomware canaries, process, antivirus, identity and SIEM detections a
+  Huntress SOC analyst has confirmed and delivered. Each report is raised
+  once, when it is delivered, and its host is resolved from its agent. The
+  API host is fixed, so the credential is only ever sent to Huntress, and
+  Huntress's critical stays critical. Read-only; nothing here changes an
+  endpoint.
+author: AiSOC Core Team
+tags: [edr, endpoint, huntress, managed-edr, incident-reports]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/huntress.py
+license: MIT
+# The first release that contains this connector. v23.3.0 was cut before it
+# merged; the next release's PR confirms or corrects this value, the same way
+# the v23.3.0 release PR did for cisco_secure_endpoint.
+min_aisoc_version: "23.4.0"
+config_schema:
+  type: object
+  required: [api_key, api_secret]
+  properties:
+    api_key:
+      type: string
+      description: API key of a Huntress API credential, generated at <your subdomain>.huntress.io under API Credentials.
+      secret: true
+    api_secret:
+      type: string
+      description: API secret key generated with the API key. It is shown once, when the credential is generated.
+      secret: true

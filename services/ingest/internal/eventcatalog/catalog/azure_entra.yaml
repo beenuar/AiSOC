@@ -1,0 +1,18 @@
+# Microsoft Entra ID audit logs. Event types are the
+# `activityDisplayName` strings, which are prose rather than identifiers —
+# Microsoft's own vocabulary, kept verbatim so a lookup against a live
+# tenant's logs matches.
+source: azure_entra
+event_type_path: activityDisplayName
+fixture_files:
+  - services/connectors/tests/test_azure_connectors.py
+events:
+  Add member to role:
+    action: add.member.to.role
+    sensitivity: high
+    attack: [T1098.003]
+  Add user:
+    action: add.user
+    sensitivity: medium
+    attack: [T1136.003]
+unclassified: {}

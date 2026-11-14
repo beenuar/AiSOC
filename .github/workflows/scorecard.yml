@@ -1,0 +1,69 @@
+name: OpenSSF Scorecard
+
+on:
+  branch_protection_rule:
+  schedule:
+    - cron: "24 6 * * 1"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    # Healthy runs finish in ~40s. Guard against the scorecard binary
+    # occasionally hanging on an upstream API call: without this cap the
+    # job inherits GitHub's 6-hour default and a single stall shows up as
+    # a red/cancelled check on main for hours. Fail fast so it can just be
+    # re-run instead.
+    timeout-minutes: 15
+    permissions:
+      # Needed to publish results to the public Scorecard API (drives the
+      # README badge at https://api.securityscorecards.dev/projects/...).
+      id-token: write
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          # publish_results writes the score to the public Scorecard API so
+          # the README badge stays live. The score lives at
+          # https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC
+          # and is the single source of truth for our Scorecard signal.
+          publish_results: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: SARIF file
+          path: results.sarif
+          retention-days: 5
+
+      # NOTE: we deliberately do NOT upload the SARIF to GitHub's code-scanning
+      # dashboard.
+      #
+      # Why: Scorecard emits one finding per check (pinned-deps, vulnerabilities,
+      # fuzzing, code-review, etc.). These are score-tracking *metadata* — the
+      # score itself is the actionable signal, not the per-check rows. On a
+      # repo this size that's hundreds of alerts that drown out real CodeQL /
+      # secret-scanning findings. Maintainers should consume the Scorecard
+      # signal via:
+      #
+      #   * The README badge (always live, driven by publish_results above).
+      #   * The public Scorecard viewer linked from the badge.
+      #   * The uploaded SARIF artifact above for ad-hoc local inspection.
+      #
+      # If we ever want individual Scorecard rows in the code-scanning dashboard
+      # again, add back the github/codeql-action/upload-sarif step here AND add
+      # `security-events: write` to the permissions block above.

@@ -1,0 +1,70 @@
+id: chronicle-detection-rules-ms-graph-enumerate-applications
+name: ms_graph_enumerate_applications
+description: ms_graph_enumerate_applications
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ms_graph_enumerate_applications {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Identify the use GraphRunner's Invoke-DumpApps\
+    \ function to collect applications and external apps as well as users that consented\
+    \ to permissions in their apps.\"\n    rule_id = \"mr_3715d986-b1a9-4bb2-b625-acc54cd5322d\"\
+    \n    rule_name = \"Entra ID application enumeration observed in the Microsoft\
+    \ Graph API\"\n    assumption = \"While additional API endpoints are called in\
+    \ the function, this rule is stripped down to the applications and servicePrincipals\
+    \ endpoint recursively requesting the appRole assigned to.\"\n    reference =\
+    \ \"https://github.com/dafthack/GraphRunner/blob/main/GraphRunner.ps1\"\n    type\
+    \ = \"Alert\"\n    data_source = \"MS Graph Activity Logs\"\n    platform = \"\
+    Azure\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $app_api.metadata.event_type\
+    \ = \"NETWORK_HTTP\"\n    $app_api.metadata.product_event_type = \"Microsoft Graph\
+    \ Activity\"\n    $app_api.target.url = \"https://graph.microsoft.com/v1.0/applications\"\
+    \ nocase\n    $app_api.network.http.method = \"GET\"\n    $app_api.network.http.response_code\
+    \ = 200\n    //Can be tuned for specific User Agent strings being used - by default\
+    \ GraphRunner does not forge the UA for this action\n    //$app_api.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    $app_api.principal.ip = $ip\n    $app_api.network.session_id\
+    \ = $session\n\n    $app_api.metadata.event_timestamp.seconds < $role_api.metadata.event_timestamp.seconds\n\
+    \n    $role_api.metadata.event_type = \"NETWORK_HTTP\"\n    $role_api.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    re.regex($role_api.target.url, `^https:\\\
+    /\\/graph.microsoft.com\\/v1.0\\/servicePrincipals\\(appId='.*'\\)/appRoleAssignedTo$`)\
+    \ nocase\n    $role_api.network.http.method = \"GET\"\n    $role_api.network.http.response_code\
+    \ = 200\n    //Can be tuned for specific User Agent strings being used - by default\
+    \ GraphRunner does not forge the UA for this action\n    //$role_api.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    $role_api.principal.ip = $ip\n    $role_api.network.session_id\
+    \ = $session\n    re.capture($role_api.target.url, `^https:\\/\\/graph.microsoft.com\\\
+    /v1.0\\/servicePrincipals\\(appId='(.*)'\\)/appRoleAssignedTo$`) = $app_guid\n\
+    \n  match:\n    $ip, $session over 5m\n\n  outcome:\n    $risk_score = 35\n  \
+    \  $event_count = count_distinct($app_api.metadata.id) + count_distinct($role_api.metadata.id)\n\
+    \    $requesting_user_guid = array_distinct($app_api.principal.user.userid)\n\
+    \    $requesting_ip = array_distinct($app_api.principal.ip)\n    $user_agent =\
+    \ array_distinct($app_api.network.http.user_agent)\n    $location = array_distinct($app_api.principal.location.name)\n\
+    \    $target_application_id_guid = array_distinct($app_api.target.resource.product_object_id)\n\
+    \    $session_id = array_distinct($app_api.network.session_id)\n    $application_count\
+    \ = count_distinct($app_guid)\n    $application_list = array_distinct($app_guid)\
+    \ //limited to 25 applications\n\n  condition:\n    $app_api and $role_api\n}"
+  chronicle_rule_name: ms_graph_enumerate_applications
+provenance:
+  source: chronicle/detection-rules
+  source_id: ms_graph_enumerate_applications
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/ms_graph_enumerate_applications.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

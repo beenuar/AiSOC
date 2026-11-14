@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-sap-gateway-acl-bypass-attempt
+name: sap_gateway_acl_bypass_attempt
+description: sap_gateway_acl_bypass_attempt
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_gateway_acl_bypass_attempt {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects rejected connections by Gateway ACLs\
+    \ (secinfo/reginfo), indicating an attempt to bypass network-layer security.\"\
+    \n    severity = \"Low\"\n    tactic = \"TA0001\"\n    technique = \"T1190\"\n\
+    \n  events:\n    $e.metadata.product_name = \"SAP_GATEWAY\"\n\n    $e.additional.fields[\"\
+    event_action\"] = /secinfo|reginfo/ nocase\n\n    $e.security_result.action =\
+    \ \"BLOCK\"\n\n    $source_ip = $e.principal.ip\n\n  match:\n    $source_ip over\
+    \ 30m\n\n  outcome:\n    $risk_score = 5\n    $acl_type = array_distinct($e.additional.fields[\"\
+    event_action\"])\n    $attempted_programs = array_distinct($e.target.process.file.full_path)\n\
+    \    $error_details = array_distinct($e.security_result.description)\n    $user_context\
+    \ = array_distinct($e.principal.user.userid)\n    $total_denials = count($e.metadata.product_log_id)\n\
+    \n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_gateway_acl_bypass_attempt
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_gateway_acl_bypass_attempt
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_gateway_acl_bypass_attempt.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

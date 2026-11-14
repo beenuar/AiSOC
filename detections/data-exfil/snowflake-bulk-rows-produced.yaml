@@ -1,0 +1,25 @@
+id: det-data-exfil-046
+name: Snowflake Query Returned A Very Large Row Count
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake Query
+  Returned A Very Large Row Count'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    event_type == "snowflake.query.select"
+    AND rows_produced > 1000000
+false_positives:
+- Scheduled extract for a reporting warehouse
+- Sanctioned automation/IaC pipeline
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

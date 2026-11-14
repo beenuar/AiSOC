@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-apt28-zekapab-zebrocy-implant-sysmon-firewall-proxy
+name: apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy
+description: apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy {\n\
+    \  meta:\n    author = \"Roman Ranskyi\"\n    description = \"Part-1 of APT28\
+    \ detection pack. (Part-2 https://tdm.socprime.com/tdm/info/1393/)  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/WwFYdyoO3bFO\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/17\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, t1085, t1064, Defense Evasion,\
+    \ t1064, t1085, Persistence, t1060, Discovery, t1012, Command And Control, 1043,\
+    \ t1071\"\n\n  events:\n(((((((((((((((($selectionMD5_dttcodexgigas.metadata.product_event_type\
+    \ = \"1\" and ($selectionMD5_dttcodexgigas.target.file.md5 = \"1fe6af243760ca287f80eafbb98ba1b0\"\
+    \ or $selectionMD5_dttcodexgigas.target.file.md5 = \"7e67122d3a052e4755b02965e2e56a2e\"\
+    \ or $selectionMD5_dttcodexgigas.target.file.md5 = \"a13c864980159cd9bdc94074b2389dda\"\
+    \ or $selectionMD5_dttcodexgigas.target.file.md5 = \"f4cab3a393462a57639faa978a75d10a\"\
+    \ or $selectionMD5_dttcodexgigas.target.file.md5 = \"e57a401e8f0943b703d975692fcfc0e8\"\
+    )) or ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"3\" and $selectionMD5_dttcodexgigas.target.ip\
+    \ = \"185.217.92.119\")) or ($selectionMD5_dttcodexgigas.metadata.product_event_type\
+    \ = \"3\" and $selectionMD5_dttcodexgigas.target.ip = \"109.248.148.42\") or $selectionMD5_dttcodexgigas.target.ip\
+    \ = \"185.217.92.119\" or $selectionMD5_dttcodexgigas.target.ip = \"109.248.148.42\"\
+    \ or $selectionMD5_dttcodexgigas.target.url = \"http://185.217.92.119/db-module/version_1594/main.php?git=\"\
+    \ or $selectionMD5_dttcodexgigas.target.url = \"http://109.248.148.42/officeDocument/2006/relationships\"\
+    \ or $selectionMD5_dttcodexgigas.target.url = \"http://109.248.148.42/office/thememl/2012/main\"\
+    \ or $selectionMD5_dttcodexgigas.target.url = \"/agr-enum/progress-inform/cube.php?res=\"\
+    ) or ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"445c84d3f3b26b4c254114db56849157\")) or ($selectionMD5_dttcodexgigas.metadata.product_event_type\
+    \ = \"13\" and $selectionMD5_dttcodexgigas.target.registry.registry_key = \"Software\\\
+    \\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\AudioMgr\")) or ($selectionMD5_dttcodexgigas.metadata.product_event_type\
+    \ = \"13\" and $selectionMD5_dttcodexgigas.target.registry.registry_key = \"SOFTWARE\\\
+    \\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\GoogleIndexer\")) or ($selectionMD5_dttcodexgigas.metadata.product_event_type\
+    \ = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5 = \"604b3e7d9b11afbdf525336cefc97f88a85dd3a2f0801277d5c7619d6bceb605\"\
+    )) or ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"87bffb0370c9e14ed5d01d6cc0747cb30a544a71345ea68ef235320378f582ef\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"a6576282d17cca390e35306a423dcb5ac9276c28eaba63f74001757edc3688df\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"e7dd9678b0a1c4881e80230ac716b21a41757648d71c538417755521438576f6\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"05fd4393288a8217243baf9c1bed942b219620b18487bc81fc6ced1238304f93\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"a15a4e21fe3b06870d52f7383ef45e4ac0dde727b02b3d340f0ba6346b43add1\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"2b19497db8cb05cd3d22996efe5af8eac0f2ea51e80f606b7b8a79dfaa2f58e2\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"6d70a54702f4456699d1f1d6c1835619c75f8f340ae95a21743b67123e88677e\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"5223a45d8b08eb14e87a87edaa4b71593b4f9d2bdb6de1a5b6f3e77869eeca8a\")) or\
+    \ ($selectionMD5_dttcodexgigas.metadata.product_event_type = \"1\" and $selectionMD5_dttcodexgigas.target.file.md5\
+    \ = \"6fdf33cc14672908bd7f25d3620417ee\"))\n\n  condition:\n    $selectionMD5_dttcodexgigas\n\
+    }"
+  chronicle_rule_name: apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/apt28_zekapab_zebrocy_implant__sysmon_firewall_proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,65 @@
+name: aisoc-action · build, test, dist-freshness
+
+# Gates the GitHub Action at packages/aisoc-action. Because a JS action runs the
+# committed dist/index.js directly, this workflow also asserts the checked-in
+# bundle matches a fresh build (so a contributor can't forget to rebuild) and
+# that the vendored verdict engine is in sync with its source.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/aisoc-action/**'
+      - 'packages/aisoc-lite/src/verdict/**'
+      - 'packages/report-card/**'
+      - 'scripts/sync_vendored_verdict.py'
+      - '.github/workflows/aisoc-action.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/aisoc-action/**'
+      - '.github/workflows/aisoc-action.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: aisoc-action-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: pnpm install --frozen-lockfile
+
+      - name: Vendored verdict engine is in sync
+        run: python3 scripts/sync_vendored_verdict.py --check
+
+      - run: pnpm --filter @aisoc/report-card build
+      - run: pnpm --filter @aisoc/action typecheck
+      - run: pnpm --filter @aisoc/action test
+
+      - name: Committed dist matches a fresh build
+        run: |
+          pnpm --filter @aisoc/action build
+          git diff --exit-code packages/aisoc-action/dist/ \
+            || (echo "::error::packages/aisoc-action/dist is stale — run 'pnpm --filter @aisoc/action build' and commit"; exit 1)

@@ -1,0 +1,48 @@
+id: splunk-security-content-2d4b9e7f-5c3a-4d8e-9b1f-8a6c5e2d4f7a
+name: Cisco ASA - User Account Deleted From Local Database
+description: 'This analytic detects deletion of user accounts from Cisco ASA devices
+  via CLI or ASDM.
+
+  Adversaries may delete local accounts to cover their tracks, remove evidence of
+  their activities, disrupt incident response efforts, or deny legitimate administrator
+  access during an attack. Account deletion can also indicate an attempt to hide the
+  creation of temporary accounts used during compromise.
+
+  The detection monitors for ASA message ID 502102, which is generated whenever a
+  local user account is deleted from the device, capturing details including the deleted
+  username, privilege level, and the administrator who performed the deletion.
+
+  Investigate unexpected account deletions, especially those involving privileged
+  accounts (level 15), deletions performed outside business hours, deletions by non-administrative
+  users, or deletions that coincide with other suspicious activities.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1531
+  - T1070.008
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/asa-syslog/syslog-messages-500000-to-520025.html#con_4773969
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (502102)\n| fillnull\n| stats count earliest(_time)\
+    \ as firstTime\n        latest(_time) as lastTime\n        values(action) as action\n\
+    \        values(message_id) as message_id\n        values(result) as result\n\
+    \        values(privilege_level) as privilege_level\n  by host user\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_asa___user_account_deleted_from_local_database_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2d4b9e7f-5c3a-4d8e-9b1f-8a6c5e2d4f7a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___user_account_deleted_from_local_database.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

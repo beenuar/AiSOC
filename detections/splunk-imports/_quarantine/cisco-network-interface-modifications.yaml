@@ -1,0 +1,47 @@
+id: splunk-security-content-61ae09c2-079e-44b1-8be0-74e35c5a679e
+name: Cisco Network Interface Modifications
+description: This analytic detects the creation or modification of network interfaces
+  on Cisco devices, which could indicate an attacker establishing persistence or preparing
+  for lateral movement. After gaining initial access to network devices, threat actors
+  like Static Tundra often create new interfaces (particularly loopback interfaces)
+  to establish covert communication channels or maintain persistence. This detection
+  specifically looks for the configuration of new interfaces, interface state changes,
+  and the assignment of IP addresses to interfaces. These activities are particularly
+  concerning when they involve unusual interface names or descriptions containing
+  suspicious terms.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  - T1021
+  - T1133
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/static-tundra/
+- https://tools.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180328-smi2
+- https://www.cisco.com/c/en/us/td/docs/ios-xml/ios/interface/command/ir-cr-book/ir-i1.html#wp1389942834
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Changes.command)\
+    \ as command min(_time) as firstTime max(_time) as lastTime FROM datamodel=Change.All_Changes\n\
+    \  WHERE (\n        (All_Changes.command=\"*interface*\")\n        OR\n      \
+    \  (All_Changes.command=\"*LINEPROTO-5-UPDOWN*\")\n        OR\n        (All_Changes.command=\"\
+    *ip address*\")\n    )\n  BY All_Changes.dvc All_Changes.user\n| `drop_dm_object_name(\"\
+    All_Changes\")`\n| rename dvc as dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_network_interface_modifications_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 61ae09c2-079e-44b1-8be0-74e35c5a679e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_network_interface_modifications.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

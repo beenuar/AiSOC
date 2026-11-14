@@ -1,0 +1,24 @@
+title: ICMP Tunneling Suspected
+id: aisoc-id-nw-0011-icmp-tunnel
+status: experimental
+description: |
+  Abnormally high volume of ICMP echo traffic with large payloads
+  between a single internal host and external destination —
+  consistent with ICMP tunneling for covert C2 or exfiltration.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1095
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    network.protocol: 'icmp'
+    enrich.flow.dst_external: true
+  anomaly:
+    enrich.flow.icmp_payload_avg_bytes|gte: 256
+    enrich.flow.icmp_count_5m|gte: 100
+  condition: selection and anomaly

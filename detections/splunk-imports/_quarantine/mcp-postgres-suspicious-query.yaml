@@ -1,0 +1,51 @@
+id: splunk-security-content-6a168ce8-9a39-4492-9416-a67abdc56c53
+name: MCP Postgres Suspicious Query
+description: This detection identifies potentially malicious SQL queries executed
+  through MCP PostgreSQL server connections, monitoring for privilege escalation attempts,
+  credential theft, and schema reconnaissance. These patterns are commonly observed
+  in SQL injection attacks, compromised application credentials, and insider threat
+  scenarios targeting database assets.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1555
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/8377
+- https://www.nodejs-security.com/blog/the-tale-of-the-vulnerable-mcp-database-server
+- https://www.splunk.com/en_us/blog/security/securing-ai-agents-model-context-protocol.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`mcp_server` method=query direction=inbound\n| eval dest=host\n| eval\
+    \ query_lower=lower('params.query')\n| eval suspicious_query='params.query'\n\
+    | eval is_priv_escalation=if(like(query_lower, \"%update%users%role%admin%\")\
+    \ OR like(query_lower, \"%grant%admin%\") OR like(query_lower, \"%grant%superuser%\"\
+    ), 1, 0)\n| eval is_credential_theft=if(like(query_lower, \"%password%\") OR like(query_lower,\
+    \ \"%credential%\") OR like(query_lower, \"%api_key%\") OR like(query_lower, \"\
+    %secret%\"), 1, 0)\n| eval is_recon=if(like(query_lower, \"%information_schema%\"\
+    ) OR like(query_lower, \"%pg_catalog%\") OR like(query_lower, \"%pg_tables%\"\
+    ) OR like(query_lower, \"%pg_user%\"), 1, 0)\n| where is_priv_escalation=1 OR\
+    \ is_credential_theft=1 OR is_recon=1\n| eval attack_type=case(\n    is_priv_escalation=1,\
+    \ \"Privilege Escalation\",\n    is_credential_theft=1, \"Credential Theft\",\n\
+    \    is_recon=1, \"Schema Reconnaissance\",\n    1=1, \"Unknown\")\n| stats count\
+    \ min(_time) as firstTime max(_time) as lastTime values(suspicious_query) as suspicious_queries\
+    \ values(attack_type) as attack_types dc(attack_type) as attack_diversity by dest\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table dest firstTime lastTime count suspicious_queries attack_types attack_diversity\n\
+    | `mcp_postgres_suspicious_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6a168ce8-9a39-4492-9416-a67abdc56c53
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/mcp_postgres_suspicious_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

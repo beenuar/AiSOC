@@ -1,0 +1,54 @@
+name: AiSOC self-scan (dogfood)
+
+# Dogfoods packages/aisoc-action on the AiSOC repo itself: triage our own
+# Dependabot / CodeQL / secret-scanning alerts. On PRs it posts a triage
+# comment; weekly it refreshes a security-posture digest issue. This is both a
+# real check and living proof the Action works.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/aisoc-action/**'
+      - '.github/workflows/aisoc-selfscan.yml'
+  schedule:
+    - cron: '17 13 * * 1' # Mondays 13:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # `security-events` covers code scanning ONLY. Dependabot alerts need
+  # `vulnerability-alerts`, and because naming any permission sets every
+  # unnamed one to `none`, omitting it here was not a default — it was a
+  # denial. That is why every digest recorded "Dependabot: skipped (token
+  # lacks permission…)" and then graded the repository A/100 anyway.
+  security-events: read
+  vulnerability-alerts: read
+  pull-requests: write
+  issues: write
+
+# Secret scanning is deliberately absent above and cannot be added: GitHub
+# documents that its alerts "cannot be read with this permission and require a
+# GitHub App or a personal access token", so `GITHUB_TOKEN` has no route to
+# them at all. The digest reports itself incomplete rather than grading as
+# though it had looked, which is the honest state until someone supplies an
+# app or a PAT.
+
+concurrency:
+  group: aisoc-selfscan-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Triage security signals
+        uses: ./packages/aisoc-action
+        with:
+          mode: ${{ github.event_name == 'schedule' && 'digest' || 'pr-comment' }}
+          min-severity: low
+          # Non-blocking: this is informational triage, not a hard gate.
+          fail-on: none

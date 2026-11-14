@@ -1,0 +1,46 @@
+id: splunk-security-content-ae286126-f2ad-421c-b240-4ea83bd1c43a
+name: Azure AD FullAccessAsApp Permission Assigned
+description: The following analytic detects the assignment of the 'full_access_as_app'
+  permission to an application within Office 365 Exchange Online. This is identified
+  by the GUID 'dc890d15-9560-4a4c-9b7f-a736ec74ec40' and the ResourceAppId '00000002-0000-0ff1-ce00-000000000000'.
+  The detection leverages the azure_monitor_aad data source, focusing on AuditLogs
+  with the operation name 'Update application'. This activity is significant as it
+  grants broad control over Office 365 operations, including full access to all mailboxes
+  and the ability to send emails as any user. If malicious, this could lead to unauthorized
+  access and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.002
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://msrc.microsoft.com/blog/2024/01/microsoft-actions-following-attack-by-nation-state-actor-midnight-blizzard/
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+- https://attack.mitre.org/techniques/T1098/002/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` category=AuditLogs operationName="Update application"
+    | eval newvalue = mvindex(''properties.targetResources{}.modifiedProperties{}.newValue'',0)
+    | spath input=newvalue | search "{}.ResourceAppId"="00000002-0000-0ff1-ce00-000000000000"
+    "{}.RequiredAppPermissions{}.EntitlementId"="dc890d15-9560-4a4c-9b7f-a736ec74ec40"
+    | eval Permissions = ''{}.RequiredAppPermissions{}.EntitlementId'' | rename properties.userAgent
+    as user_agent | fillnull | stats count min(_time) as firstTime max(_time) as lastTime
+    by dest user src vendor_account vendor_product user_agent Permissions object signature
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `azure_ad_fullaccessasapp_permission_assigned_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ae286126-f2ad-421c-b240-4ea83bd1c43a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_fullaccessasapp_permission_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

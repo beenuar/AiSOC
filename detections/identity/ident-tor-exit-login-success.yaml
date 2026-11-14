@@ -1,0 +1,24 @@
+id: det-identity-046
+name: Successful Login From Tor Exit Node
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Successful Login
+  From Tor Exit Node'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1090.003
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND src_ip_tor_exit == true
+false_positives:
+- Privacy-conscious researcher (must be ticketed)
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

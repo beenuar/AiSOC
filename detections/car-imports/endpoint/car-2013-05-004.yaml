@@ -1,0 +1,56 @@
+id: mitre-car-car-2013-05-004
+name: Execution with AT
+description: 'In order to gain [persistence](https://attack.mitre.org/tactics/TA0003/),
+  [privilege escalation](https://attack.mitre.org/tactics/TA0004/), or [remote execution](https://attack.mitre.org/tactics/TA0002/),
+  an adversary may use the Windows built-in command AT (at.exe) to [schedule a command](https://attack.mitre.org/techniques/T1053/002)
+  to be run at a specified time, date, and even host. This method has been used by
+  adversaries and administrators alike. Its use may lead to detection of compromised
+  hosts and compromised users if it is used to move laterally.
+
+  The built-in Windows tool schtasks.exe ([CAR-2013-08-001](../CAR-2013-08-001)) offers
+  greater flexibility when creating, modifying, and enumerating tasks. For these reasons,
+  schtasks.exe is more commonly used by administrators, tools/scripts, and power users.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      at = filter process where (exe == "at.exe")
+
+      output at'
+  - name: ''
+    type: Splunk
+    code: index=__your_sysmon_index__ Image="C:\\Windows\\*\\at.exe"|stats values(CommandLine)
+      as "Command Lines" by ComputerName
+  - name: ''
+    type: EQL
+    code: process where subtype.create and process_name == "at.exe"
+  - name: ''
+    type: DNIF
+    code: _fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $App=at.exe
+      limit 100
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon event_id=1 image="*\at.exe"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-05-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-05-004.yaml
+notes:
+  car_status: needs_implementation

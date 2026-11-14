@@ -1,0 +1,63 @@
+id: splunk-security-content-4f546cf4-15aa-4368-80f7-940e92bc551e
+name: Windows Chromium Browser with Custom User Data Directory
+description: The following analytic detects instances where the Chromium-based browser
+  (e.g., Google Chrome, Microsoft Edge) is launched with the --user-data-dir command-line
+  argument. While this flag is legitimate and used for multi-profile support or automation,
+  it is frequently leveraged by malware and adversaries to run Chrome in an isolated
+  environment for stealth operations, credential harvesting, phishing delivery, or
+  evasion of user session artifacts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1497
+  categories:
+  - endpoint
+references:
+- https://chromium.googlesource.com/chromium/src/+/main/docs/user_data_dir.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)
+
+    as lastTime from datamodel=Endpoint.Processes where
+
+    Processes.process_name IN ("Chrome.exe","Brave.exe", "Opera.exe", "Vivaldi.exe",
+    "msedge.exe")
+
+    Processes.process = "*--user-data-dir*"
+
+    Processes.process IN ("*--disable-gpu*", "*--disable-3d-apis*")
+
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec
+
+    Processes.process_guid Processes.process_hash Processes.process_id Processes.process_integrity_level
+
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product
+
+    | `drop_dm_object_name(Processes)`
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `windows_chromium_browser_with_custom_user_data_directory_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4f546cf4-15aa-4368-80f7-940e92bc551e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_chromium_browser_with_custom_user_data_directory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

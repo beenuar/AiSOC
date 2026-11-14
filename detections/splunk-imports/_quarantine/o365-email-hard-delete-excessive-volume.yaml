@@ -1,0 +1,62 @@
+id: splunk-security-content-c7fe0949-348a-41ce-8f17-a09a7fe5fd7d
+name: O365 Email Hard Delete Excessive Volume
+description: The following analytic identifies when an O365 email account hard deletes
+  an excessive number of emails within a short period (within 1 hour). This behavior
+  may indicate a compromised account where the threat actor is attempting to permanently
+  purge a large amount of items from the mailbox. Threat actors may attempt to remove
+  evidence of their activity by purging items from the compromised mailbox. --- Some
+  account owner legitimate behaviors can trigger this alert, however these actions
+  may not be aligned with organizational expectations / best practice behaviors.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.008
+  - T1485
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/
+- https://www.hhs.gov/sites/default/files/help-desk-social-engineering-sector-alert-tlpclear.pdf
+- https://intelligence.abnormalsecurity.com/attack-library/threat-actor-convincingly-impersonates-employee-requesting-direct-deposit-update-in-likely-ai-generated-attack
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange (Operation IN ("HardDelete")
+    AND Folder.Path IN ("\\Sent Items","\\Recoverable Items\\Deletions"))
+
+    | eval user = lower(UserId), sender = lower(CASE(isnotnull(SendAsUserSmtp),SendAsUserSmtp,isnotnull(SendOnBehalfOfUserSmtp),SendOnBehalfOfUserSmtp,true(),MailboxOwnerUPN)),
+    subject = trim(CASE(Operation IN ("Send","SendAs","SendOnBehalf"),''Item.Subject'',Operation
+    IN ("SoftDelete","HardDelete"),''AffectedItems{}.Subject'')), -time = _time,file_name
+    = CASE(Operation IN ("Send","SendAs","SendOnBehalf"),split(''Item.Attachments'',";
+    "),Operation IN ("SoftDelete","HardDelete"),split(''AffectedItems{}.Attachments'',";
+    ")), file_size = CASE(Operation IN ("Send","SendAs","SendOnBehalf"),round(tonumber(''Item.SizeInBytes'')/1024/1024,2),true(),round(tonumber(replace(file_name,
+    "(.+)\s\((\d+)(b\)$)", "\2"))/1024/1024,2))
+
+    | bin _time span=1hr
+
+    | stats values(sender) as sender, values(ClientIPAddress) as src, values(ClientInfoString)
+    as http_user_agent, values(Operation) as signature, latest(file_name) as file_name,
+    sum(file_size) as file_size, values(Folder.Path) as file_path, min(-time) as firstTime,
+    max(-time) as lastTime, dc(subject) as count by _time,user
+
+    | where count > 50 OR file_size > 10
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_email_hard_delete_excessive_volume_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c7fe0949-348a-41ce-8f17-a09a7fe5fd7d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_hard_delete_excessive_volume.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

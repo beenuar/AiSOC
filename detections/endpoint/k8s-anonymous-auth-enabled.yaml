@@ -1,0 +1,24 @@
+id: det-endpoint-251
+name: kube-apiserver Started With --anonymous-auth=true
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'kube-apiserver
+  Started With --anonymous-auth=true'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1078.004
+- tlp.white
+category: endpoint
+log_source:
+  product: kubernetes
+  service: apiserver
+detection:
+  condition: |
+    event_type == "apiserver_start"
+    AND flag_anonymous_auth == true
+false_positives:
+- Lab cluster
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

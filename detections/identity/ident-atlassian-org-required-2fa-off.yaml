@@ -1,0 +1,24 @@
+id: det-identity-158
+name: Atlassian Org 2FA Requirement Removed
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Atlassian Org 2FA
+  Requirement Removed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    action IN ["org_security_policy_modified"]
+    AND two_step_required == false
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

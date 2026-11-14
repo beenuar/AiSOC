@@ -1,0 +1,5 @@
+{
+  "argv": "+x /tmp/",
+  "exe": "head-/chmod",
+  "syscall": "execve"
+}

@@ -1,0 +1,38 @@
+id: splunk-security-content-e6fc13b0-1609-11ec-b533-acde48001122
+name: Non Firefox Process Access Firefox Profile Dir
+description: The following analytic detects non-Firefox processes accessing the Firefox
+  profile directory, which contains sensitive user data such as login credentials,
+  browsing history, and cookies. It leverages Windows Security Event logs, specifically
+  event code 4663, to monitor access attempts. This activity is significant because
+  it may indicate attempts by malware, such as RATs or trojans, to harvest user information.
+  If confirmed malicious, this behavior could lead to data exfiltration, unauthorized
+  access to user accounts, and further compromise of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1555.003
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4663 NOT (ProcessName IN ("*\\firefox.exe",
+    "*\\explorer.exe", "*sql*")) ObjectName="*\\AppData\\Roaming\\Mozilla\\Firefox\\Profiles*"
+    | stats count min(_time) as firstTime max(_time) as lastTime by ObjectName ObjectType
+    ProcessName AccessMask EventCode dest | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `non_firefox_process_access_firefox_profile_dir_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e6fc13b0-1609-11ec-b533-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/non_firefox_process_access_firefox_profile_dir.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

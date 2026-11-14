@@ -1,0 +1,23 @@
+id: det-identity-113
+name: Okta Sign-On Policy Deactivated
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta Sign-On Policy
+  Deactivated'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "policy.lifecycle.deactivate"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

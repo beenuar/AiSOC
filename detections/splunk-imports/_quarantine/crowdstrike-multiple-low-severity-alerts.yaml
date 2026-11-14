@@ -1,0 +1,41 @@
+id: splunk-security-content-5c2c02d8-bee7-4f5c-9dea-e3e1012daddb
+name: Crowdstrike Multiple LOW Severity Alerts
+description: The following analytic detects multiple CrowdStrike LOW severity alerts,
+  indicating a series of minor suspicious activities or policy violations. These alerts
+  are not immediately critical but should be reviewed to prevent potential threats.
+  They often highlight unusual behavior or low-level risks that, if left unchecked,
+  could escalate into more significant security issues. Regular monitoring and analysis
+  of these alerts are essential for maintaining robust security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/wp-content/uploads/2022/12/CrowdStrike-Falcon-Event-Streams-Add-on-Guide-v3.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`crowdstrike_stream` tag=alert event.SeverityName= LOW\n  | rename\
+    \ event.EndpointIp as src_ip, event.EndpointName as src_host, event.UserName as\
+    \ user, event.IncidentDescription as description, event.IncidentType as type,\
+    \ event.NumbersOfAlerts as count_alerts, event.SeverityName as severity\n  | stats\
+    \ dc(type) as type_count, values(user) as users, values(description) as descriptions,\
+    \ values(type) as types, values(severity) count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY src_ip src_host\n  | where type_count >= 3\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `crowdstrike_multiple_low_severity_alerts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5c2c02d8-bee7-4f5c-9dea-e3e1012daddb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/crowdstrike_multiple_low_severity_alerts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

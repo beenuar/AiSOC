@@ -1,0 +1,46 @@
+id: splunk-security-content-dcc89bde-5f24-11ec-87ca-acde48001122
+name: Linux Possible Cronjob Modification With Editor
+description: The following analytic detects potential unauthorized modifications to
+  Linux cronjobs using text editors like "nano," "vi," or "vim." It identifies this
+  activity by monitoring command-line executions that interact with cronjob configuration
+  paths. This behavior is significant for a SOC as it may indicate attempts at privilege
+  escalation or establishing persistent access. If confirmed malicious, the impact
+  could be severe, allowing attackers to execute damaging actions such as data theft,
+  system sabotage, or further network penetration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1053/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name IN(\"nano\",\"vim.basic\")\n        OR\n        Processes.process\
+    \ IN (\"*nano *\", \"*vi *\", \"*vim *\")\n    )\n    AND Processes.process IN(\"\
+    */etc/cron*\", \"*/var/spool/cron/*\", \"*/etc/anacrontab*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_possible_cronjob_modification_with_editor_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dcc89bde-5f24-11ec-87ca-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_possible_cronjob_modification_with_editor.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

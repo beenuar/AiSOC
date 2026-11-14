@@ -1,0 +1,40 @@
+id: splunk-security-content-d7fc865e-b8a1-4029-a960-cf4403b821b6
+name: Kubernetes Node Port Creation
+description: The following analytic detects the creation of a Kubernetes NodePort
+  service, which exposes a service to the external network. It identifies this activity
+  by monitoring Kubernetes Audit logs for the creation of NodePort services. This
+  behavior is significant for a SOC as it could allow an attacker to access internal
+  services, posing a threat to the Kubernetes infrastructure's integrity and security.
+  If confirmed malicious, this activity could lead to data breaches, service disruptions,
+  or unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` \"objectRef.resource\"=services verb=create requestObject.spec.type=NodePort\n\
+    \  | fillnull\n  | stats count values(user.groups{}) as user_groups\n    BY kind\
+    \ objectRef.name objectRef.namespace\n       objectRef.resource requestObject.kind\
+    \ requestObject.spec.type\n       responseStatus.code sourceIPs{} stage\n    \
+    \   user.username userAgent verb\n  | rename sourceIPs{} as src_ip, user.username\
+    \ as user\n  | `kubernetes_node_port_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d7fc865e-b8a1-4029-a960-cf4403b821b6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_node_port_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,39 @@
+id: splunk-security-content-4f9564dd-a204-4f22-b375-4dfca3a68731
+name: Windows Increase in Group or Object Modification Activity
+description: This analytic detects an increase in modifications to AD groups or objects.
+  Frequent changes to AD groups or objects can indicate potential security risks,
+  such as unauthorized access attempts, impairing defences or establishing persistence.
+  By monitoring AD logs for unusual modification patterns, this detection helps identify
+  suspicious behavior that could compromise the integrity and security of the AD environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  - T1562
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode IN (4670,4727,4731,4734,4735,4764)\n\
+    \  | bucket span=5m _time\n  | stats values(object) as object, dc(object) as objectCount,\
+    \ values(src_user_category) as src_user_category, values(dest) as dest, values(dest_category)\
+    \ as dest_category\n    BY _time, src_user, signature,\n       status\n  | eventstats\
+    \ avg(objectCount) as comp_avg, stdev(objectCount) as comp_std\n    BY src_user,\
+    \ signature\n  | eval upperBound=(comp_avg+comp_std)\n  | eval isOutlier=if(objectCount\
+    \ > 10 and (objectCount >= upperBound), 1, 0)\n  | search isOutlier=1\n  | `windows_increase_in_group_or_object_modification_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4f9564dd-a204-4f22-b375-4dfca3a68731
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_increase_in_group_or_object_modification_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

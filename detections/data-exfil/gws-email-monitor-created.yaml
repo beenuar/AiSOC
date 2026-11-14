@@ -1,0 +1,23 @@
+id: det-data-exfil-021
+name: Workspace Email Monitor Created On A Mailbox
+description: An email monitor copies a mailbox to another address. Created outside a recorded legal process
+  it is covert mail collection.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1114.002
+- tlp.white
+category: data-exfil
+log_source:
+  product: google-workspace
+  service: admin
+detection:
+  condition: |
+    event_type == "workspace.admin.create_email_monitor"
+false_positives:
+- Legal hold or investigation with a recorded authorisation
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

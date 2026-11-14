@@ -1,0 +1,88 @@
+---
+sidebar_position: 11
+title: GitLab Audit + Vulnerabilities
+description: Group audit events and security vulnerabilities from GitLab SaaS or self-managed into AiSOC.
+---
+
+# GitLab Audit + Vulnerabilities
+
+The GitLab connector pulls two streams from a single GitLab group:
+
+1. **Group audit events** — every group-level admin action: member adds, role changes, project create/delete, PAT issuance, protected-branch removal, two-factor toggles, Runner registration, security-dashboard toggles.
+2. **Security vulnerabilities** — Container Scanning, SAST, DAST, Secret Detection and Dependency Scanning results across every project in the group, read from the group security dashboard (Ultimate-tier feature).
+
+Events are normalized with `source: gitlab`, `category: vcs`.
+
+## Prerequisites
+
+- A **GitLab group** on either gitlab.com or a self-managed instance. Personal-account projects don't expose the group audit endpoint.
+- A **Personal Access Token** with the `api` scope. The authenticating user must be an **Owner** of the group to read audit events.
+- **Audit events availability**: on gitlab.com, available from Premium up. On self-managed installs, available from Premium up.
+- **Vulnerability availability**: Ultimate-tier only. Below Ultimate GitLab returns the group's `vulnerabilities` field as absent rather than as an error; the connector logs that at `info` and keeps polling audit events.
+
+## Setup walkthrough
+
+### 1. Create the PAT
+
+1. **GitLab → User Settings → Access Tokens**.
+2. Token name: `aisoc-connector` (or similar — choose something that makes the audit trail obvious).
+3. Expiration: 90 days max recommended; rotate via the AiSOC connector edit screen.
+4. Scopes: `api` (covers audit + security endpoints in one).
+5. Click **Create personal access token** and copy the value (`glpat-…`).
+
+If you'd rather not bind the token to a human user, use a **group access token** instead — same scopes, same flow, scoped to the group itself.
+
+### 2. Add the connector in AiSOC
+
+1. **Connectors → Add connector → GitLab**.
+2. `gitlab_url` — leave default (`https://gitlab.com`) for SaaS, or paste the URL operators use for your self-managed instance (no trailing slash, e.g. `https://gitlab.corp.test`).
+3. `group` — the group slug or numeric ID. For nested groups (`parent/child`) use the full path; the connector URL-encodes it automatically.
+4. `token` — the PAT from step 1.
+5. **Test connection**. A success response confirms the group is reachable and tells you whether audit events are available on your tier.
+6. **Save & enable**. The in-process scheduler polls every 5 minutes by default.
+
+## What you'll see in the case workspace
+
+- **High-severity audit events**: any of `User_add`, `User_remove`, `Personal_access_token_create`, `Group_access_token_create`, `Project_access_token_create`, `Ssh_key_add`, `Two_factor_authentication_disabled`, `Remove_protected_branch`, `Remove_protected_tag`, `Project_destroyed`, `Group_destroyed`, `Project_transfer`, `Security_dashboard_disabled`, `Container_scanning_disabled`, `Sast_disabled`, `Secret_detection_disabled`, `Ci_cd_settings_changed`, `Runner_registered`.
+- **Medium severity**: catch-all for actions whose name contains `destroy`, `delete`, or `remove` but isn't on the high-risk list.
+- **Vulnerabilities**: severity maps 1:1 from GitLab's native ladder (`CRITICAL/HIGH/MEDIUM/LOW/INFO/UNKNOWN`). The `critical` tier is preserved end-to-end so P1 SAST/DAST findings keep their priority. Only vulnerabilities *detected* inside the poll window are emitted; GitLab's connection carries no time filter, so the read sorts newest-first and stops at the window.
+
+## Limitations
+
+- **Project-scoped audit events** (`/projects/{id}/audit_events`) are not yet polled — only the group-level stream. Open an issue if you need this.
+- **Vulnerabilities come over GraphQL**, from the `vulnerabilities` connection on `Group`. The connector used to poll `GET /groups/{id}/security/vulnerability_findings`, which GitLab does not serve — it answers 404 — so that stream never returned a row ([#1754](https://github.com/beenuar/AiSOC/issues/1754)). The one documented REST route is project-scoped, and reaching it from a group-scoped connector would mean enumerating every project in the group on every poll. Audit events are still REST.
+- **OAuth flow** is advertised in the connector schema but is deferred to Workstream 2; today you paste a PAT.
+- **Self-managed instances** behind a corporate proxy or a non-standard CA bundle need the proxy + CA injected via the platform-level `httpx` configuration; the connector does not yet expose per-instance proxy settings.
+
+## Troubleshooting
+
+| Symptom                                                                                            | Likely cause                                          |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `HTTP 401: 401 Unauthorized` on Test connection                                                    | Token expired, revoked, or missing the `api` scope.   |
+| `HTTP 404: 404 Group Not Found`, or `gitlab.group_not_found` in the log                            | Group path is wrong, or the user can't see the group. |
+| Test connection success but `audit_events_available: false`                                        | Free-tier group, or the user isn't an Owner.          |
+| No vulnerabilities in case workspace, but Ultimate confirmed                                       | Nothing was *detected* inside the poll window — the stream emits new detections, not the standing backlog. Check the service log for `gitlab.vulnerabilities_unavailable` (plan) or `gitlab.vulnerabilities_query_rejected` (our defect, please report it). |
+
+## Code
+
+- Connector class: [`services/connectors/app/connectors/gitlab.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/gitlab.py)
+- Tests: [`services/connectors/tests/connectors/test_gitlab.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/tests/connectors/test_gitlab.py)
+
+<!-- BEGIN GENERATED FIELD REFERENCE -->
+
+## Configuration reference
+
+{/* Generated by scripts/generate_connector_docs.py from the connector's
+    schema(). Edit the schema, not this table. */}
+
+| Field | Label | Type | Required | Default | Notes |
+|-------|-------|------|----------|---------|-------|
+| `gitlab_url` | GitLab base URL | string | yes | — | Leave default for gitlab.com. For self-managed installations, paste the URL operators use to reach the web UI (no trailing slash). |
+| `group` | Group path or numeric ID | string | yes | — | — |
+| `token` | Personal Access Token (scope: api) | secret | yes | — | **encrypted at rest** · PAT with the 'api' scope. The authenticating user must be a group Owner to read audit events. Vulnerabilities additionally require Ultimate; on any lower plan the connector still polls audit events and says so in its logs. |
+
+:::note Credential handling
+`token` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).
+:::
+
+<!-- END GENERATED FIELD REFERENCE -->

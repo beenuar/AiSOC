@@ -1,0 +1,4 @@
+{
+  "operation": "rules.create",
+  "sharing_capability": "ExternalUserAndGuestSharing"
+}

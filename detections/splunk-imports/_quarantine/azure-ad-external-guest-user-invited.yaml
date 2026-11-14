@@ -1,0 +1,43 @@
+id: splunk-security-content-c1fb4edb-cab1-4359-9b40-925ffd797fb5
+name: Azure AD External Guest User Invited
+description: The following analytic detects the invitation of an external guest user
+  within Azure AD. It leverages Azure AD AuditLogs to identify events where an external
+  user is invited, using fields such as operationName and initiatedBy. Monitoring
+  these invitations is crucial as they can lead to unauthorized access if abused.
+  If confirmed malicious, this activity could allow attackers to gain access to internal
+  resources, potentially leading to data breaches or further exploitation of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://dirkjanm.io/assets/raw/US-22-Mollema-Backdooring-and-hijacking-Azure-AD-accounts_final.pdf
+- https://www.blackhat.com/us-22/briefings/schedule/#backdooring-and-hijacking-azure-ad-accounts-by-abusing-external-identities-26999
+- https://attack.mitre.org/techniques/T1136/003/
+- https://docs.microsoft.com/en-us/azure/active-directory/external-identities/b2b-quickstart-add-guest-users-portal
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Invite external user\"\n  | rename\
+    \ properties.* as *\n  | rename initiatedBy.user.userPrincipalName as initiatedBy\n\
+    \  | rename targetResources{}.type as type\n  | rename userAgent as user_agent\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product user_agent\n     \
+    \  initiatedBy type signature\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_external_guest_user_invited_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c1fb4edb-cab1-4359-9b40-925ffd797fb5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_external_guest_user_invited.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

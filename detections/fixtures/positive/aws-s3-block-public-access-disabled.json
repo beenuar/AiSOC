@@ -1,0 +1,4 @@
+{
+  "block_public_acls": false,
+  "event_name": "PutBucketPublicAccessBlock"
+}

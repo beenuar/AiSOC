@@ -1,0 +1,4 @@
+{
+  "enable_purge_protection": false,
+  "operation_name": "vaults/write-x"
+}

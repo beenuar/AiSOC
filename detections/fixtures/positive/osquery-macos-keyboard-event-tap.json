@@ -1,0 +1,4 @@
+{
+  "event_type": "osquery_query_row",
+  "query_name": "prefix-Keyboard_Event_Tap-suffix"
+}

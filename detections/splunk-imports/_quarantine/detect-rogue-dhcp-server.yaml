@@ -1,0 +1,39 @@
+id: splunk-security-content-6e1ada88-7a0d-4ac1-92c6-03d354686079
+name: Detect Rogue DHCP Server
+description: The following analytic identifies the presence of unauthorized DHCP servers
+  on the network. It leverages logs from Cisco network devices with DHCP Snooping
+  enabled, specifically looking for events where DHCP leases are issued from untrusted
+  ports. This activity is significant because rogue DHCP servers can facilitate Man-in-the-Middle
+  attacks, leading to potential data interception and network disruption. If confirmed
+  malicious, this could allow attackers to redirect network traffic, capture sensitive
+  information, and compromise the integrity of the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  - T1498
+  - T1557
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_networks` facility=\"DHCP_SNOOPING\" mnemonic=\"DHCP_SNOOPING_UNTRUSTED_PORT\"\
+    \n  | stats min(_time) AS firstTime max(_time) AS lastTime count values(message_type)\
+    \ AS message_type values(src_mac) AS src_mac\n    BY host\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `detect_rogue_dhcp_server_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6e1ada88-7a0d-4ac1-92c6-03d354686079
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_rogue_dhcp_server.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

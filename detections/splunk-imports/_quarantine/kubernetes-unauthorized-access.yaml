@@ -1,0 +1,39 @@
+id: splunk-security-content-9b5f1832-e8b9-453f-93df-07a3d6a72a45
+name: Kubernetes Unauthorized Access
+description: The following analytic detects unauthorized access attempts to Kubernetes
+  by analyzing Kubernetes audit logs. It identifies anomalies in access patterns by
+  examining the source of requests and their response statuses. This activity is significant
+  for a SOC as it may indicate an attacker attempting to infiltrate the Kubernetes
+  environment. If confirmed malicious, such access could lead to unauthorized control
+  over Kubernetes resources, potentially compromising sensitive systems or data within
+  the cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` verb=create responseStatus.reason=Forbidden\n  | fillnull\n\
+    \  | stats count\n    BY objectRef.namespace objectRef.resource requestReceivedTimestamp\n\
+    \       requestURI responseStatus.code responseStatus.message\n       sourceIPs{}\
+    \ stage user.groups{}\n       user.uid user.username userAgent\n       verb\n\
+    \  | rename sourceIPs{} as src_ip, user.username as user\n  | `kubernetes_unauthorized_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9b5f1832-e8b9-453f-93df-07a3d6a72a45
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_unauthorized_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

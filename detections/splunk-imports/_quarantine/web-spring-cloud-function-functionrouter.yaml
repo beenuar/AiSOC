@@ -1,0 +1,42 @@
+id: splunk-security-content-89dddbad-369a-4f8a-ace2-2439218735bc
+name: Web Spring Cloud Function FunctionRouter
+description: The following analytic identifies HTTP POST requests to the Spring Cloud
+  Function endpoint containing "functionRouter" in the URL. It leverages the Web data
+  model to detect these requests based on specific fields such as http_method, url,
+  and http_user_agent. This activity is significant because it targets CVE-2022-22963,
+  a known vulnerability in Spring Cloud Function, which has multiple proof-of-concept
+  exploits available. If confirmed malicious, this activity could allow attackers
+  to execute arbitrary code, potentially leading to unauthorized access, data exfiltration,
+  or further compromise of the affected system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://github.com/rapid7/metasploit-framework/pull/16395
+- https://github.com/hktalent/spring-spel-0day-poc
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count FROM datamodel=Web\n  WHERE Web.http_method IN (\"POST\"\
+    ) Web.url=\"*/functionRouter*\"\n  BY Web.http_user_agent Web.http_method, Web.url,Web.url_length\n\
+    \     Web.src, Web.dest Web.status\n     sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `web_spring_cloud_function_functionrouter_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 89dddbad-369a-4f8a-ace2-2439218735bc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/web_spring_cloud_function_functionrouter.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

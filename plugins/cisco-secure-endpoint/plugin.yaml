@@ -1,0 +1,33 @@
+id: cisco-secure-endpoint
+name: Cisco Secure Endpoint Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Cisco Secure Endpoint (formerly AMP for Endpoints) detections via the v1
+  events API: threats, quarantines, exploit prevention, behavioural
+  protection, indicators of compromise and threat hunting incidents. The
+  region is chosen from Cisco's three clouds, so the API key is only ever
+  sent to a Cisco host. Operational events Cisco leaves unrated — policy
+  updates, scans, installs — are not ingested, and Cisco's Critical stays
+  critical. Read-only; nothing here changes an endpoint.
+author: AiSOC Core Team
+tags: [edr, endpoint, cisco, secure-endpoint, amp, detections]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cisco_secure_endpoint.py
+license: MIT
+min_aisoc_version: "23.3.0"
+config_schema:
+  type: object
+  required: [region, client_id, api_key]
+  properties:
+    region:
+      type: string
+      enum: [nam, eu, apjc]
+      description: The Secure Endpoint cloud the console and the API credential live in.
+    client_id:
+      type: string
+      description: Client ID of a Secure Endpoint API credential.
+    api_key:
+      type: string
+      description: API key of the credential, created under Accounts → API Credentials. Read-only scope is enough.
+      secret: true

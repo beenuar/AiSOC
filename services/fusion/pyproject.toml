@@ -1,0 +1,108 @@
+[tool.poetry]
+name = "aisoc-fusion"
+version = "0.1.0"
+description = "AiSOC Alert Fusion Service - deduplication, correlation and incident grouping"
+authors = ["Beenu Arora <beenu@cyble.com>"]
+license = "MIT"
+# No `readme` key: these services are installed with `--no-root` and are not
+# published as packages. The key used to name a README.md that has never
+# existed in this tree, which made `poetry check` fail on a manifest error
+# and hid whether the lock was fresh.
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.163"
+# `>=0.29,<0.54`, the range services/api declares. It read `^0.27.0`,
+# which is disjoint from the `>=0.29.0` honeytokens and purple-team
+# declare — and all three are installed by one CI job, so no single
+# version could satisfy it. The job papered over that by installing no
+# uvicorn at all.
+uvicorn = {extras = ["standard"], version = ">=0.29,<0.54"}
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+aiokafka = "^0.10.0"
+aioredis = "^2.0.1"
+redis = {extras = ["hiredis"], version = "^5.0.1"}
+asyncpg = "^0.29.0"
+sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
+structlog = "^24.1.0"
+prometheus-client = "^0.19.0"
+# `>=0.27,<0.29`, matching api / actions / mesh / osquery-tls / slack-bot /
+# teams-bot, because the CI job that runs this service's tests also runs
+# honeytokens' and purple-team's and both of those declare `>=0.27.0`. While
+# this line read `^0.26.0` the three could not be satisfied at once, and the
+# job papered over it by installing httpx with no bound at all: fusion was
+# tested on 0.28.1, a version its own manifest forbade, and shipped 0.26.0.
+# Bounding the job made that unavoidable rather than creating it.
+httpx = ">=0.27,<0.29"
+python-dateutil = "^2.8.2"
+simhash = "^2.1.2"
+scikit-learn = "^1.4.0"
+lightgbm = "^4.3.0"
+numpy = "^1.26.0"
+clickhouse-driver = "^0.2.6"
+# `app/memory/pack.py` imports `cryptography.hazmat` at module scope to verify
+# the Ed25519 signature on a memory pack, and this manifest did not declare it.
+# The lock therefore resolved no `cryptography` at all, so the image — which
+# installs `--only main` from that lock — could not import the module. CI never
+# saw it because the shared install step named `cryptography` directly, which
+# is the pysigma defect with the arrow reversed: CI grading a path production
+# cannot reach. Same range as every other service that touches vault crypto.
+cryptography = ">=46,<51"
+
+[tool.poetry.group.dev.dependencies]
+# Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
+# pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
+# resolve together or not at all.
+pytest = ">=9.0.3,<10.0"
+pytest-asyncio = ">=1.0,<2.0"
+pytest-cov = "^4.1.0"
+black = ">=26.3.1,<27"
+# One range everywhere: `ruff format --check services/` is a hard gate and
+# ruff's formatter output changes between minors, so a contributor whose
+# manifest permits a newer ruff reformats the tree and reds their own PR.
+# Moving this range means reformatting the tree, which is its own change.
+ruff = ">=0.16.8,<0.17"
+mypy = ">=2.3.1,<3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Ruff config lives in the repo-root `ruff.toml` so the CI gate is consistent
+# across services. Don't add `[tool.ruff]` here — it would shadow the root.
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+
+# Phase 2.2 — coverage floor for CI gate.
+#
+# Measured baseline at the time of introduction: 51%. Floor is
+# set at 48% (current - 2pp) so flaky branch-execution variance
+# doesn't break main, while still catching any real regression. Raise
+# this number as the suite grows — never lower it without a written
+# justification. The pyproject is consulted by
+# `pytest --cov-config=pyproject.toml --cov=app` in CI.
+#
+# Why pyproject instead of pytest.ini: keeps the floor next to the
+# dep constraint that produced it, so a bump in either is reviewed
+# in the same diff.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 48
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

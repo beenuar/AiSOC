@@ -1,0 +1,24 @@
+id: det-endpoint-166
+name: Container Started With --pid=host
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Container Started
+  With --pid=host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1611
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: docker
+detection:
+  condition: |
+    event_type == "container_create"
+    AND pid_mode == "host"
+false_positives:
+- Performance-monitoring agent (allow-listed)
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,366 @@
+---
+sidebar_position: 2
+---
+
+# Playbooks
+
+Playbooks are reusable, declarative workflows that orchestrate investigation and
+response. They run inside the `services/agents` service via the
+[`PlaybookEngine`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/engine.py),
+emit realtime events, and can be authored as JSON or via the visual React Flow
+editor in the web app.
+
+## Anatomy of a playbook
+
+A playbook is a Pydantic model with metadata, a trigger, and an ordered list of
+steps. The wire format is JSON; the runtime model is in
+[`services/agents/app/playbook/models.py`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/models.py).
+
+```json
+{
+  "id": "ransomware-response-v1",
+  "name": "Ransomware Response",
+  "description": "Immediate containment and investigation for ransomware detections.",
+  "version": "1.0.0",
+  "tags": ["ransomware", "malware", "critical"],
+  "trigger": {
+    "on": "alert",
+    "severity": ["critical"],
+    "tags": ["ransomware"]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "steps": [
+    {
+      "id": "isolate",
+      "name": "Isolate affected host",
+      "type": "isolate_host",
+      "params": { "host_field": "alert.host" },
+      "on_failure": "abort",
+      "timeout_seconds": 30
+    }
+  ]
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Stable identifier. Generated if omitted. |
+| `name` | string | Human-readable name shown in the UI. |
+| `version` | semver | Bumped on every breaking change to the playbook. |
+| `tags` | string[] | Free-form labels for filtering and marketplace search. |
+| `trigger` | object | When the playbook fires. See [Trigger types](#trigger-types). |
+| `steps` | object[] | Ordered list of steps. See [Steps](#steps). |
+| `enabled` | bool | Disabled playbooks are skipped by the dispatcher. |
+
+## Trigger types
+
+A trigger declares when the playbook should run. The dispatcher evaluates
+triggers against incoming alerts, cases, and schedules.
+
+```json
+{
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["ransomware"],
+    "rule_ids": ["AIS-EDR-0001"]
+  }
+}
+```
+
+| `on` | Fires when | Common filters |
+|------|-----------|----------------|
+| `alert` | A new alert arrives in the fusion service | `severity`, `tags`, `rule_ids`, `source` |
+| `case` | A case is opened or transitions state | `severity`, `case_status` |
+| `manual` | An operator clicks **Run playbook** in the UI | n/a |
+| `schedule` | A cron expression matches | `cron` (e.g. `"0 */6 * * *"`) |
+| `webhook` | An external system POSTs to `/v1/playbooks/{id}/trigger` | optional `secret` |
+
+Severity values follow the four-tier ladder used everywhere in AiSOC:
+`info | low | medium | high`. Vendor-native ladders (Azure, SCC, GitHub) are
+collapsed into this set in each connector's `normalize()`.
+
+## Steps
+
+Each step has a `type`. The authoring contract is
+[`schemas/playbook.schema.json`](https://github.com/beenuar/AiSOC/tree/main/schemas/playbook.schema.json),
+and its `x-aisoc-execution` map records what
+[`engine.py`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app/playbook/engine.py)
+actually does with each one. `scripts/check_playbook_schema_parity.py` holds
+the two together in both directions, so the table below cannot quietly stop
+being true.
+
+**Executed** — a handler runs and has a real effect:
+
+| `type` | What it does |
+|--------|--------------|
+| `enrich` | Calls the enrichment service for IOC reputation, geo, ASN, GreyNoise, VT, OTX. |
+| `investigate` | Triggers the AI investigator agent with focus areas (`forensics`, `lateral_movement`, etc.). |
+| `http` | Calls one path on an integration this tenant has configured — see [Integration references](#integration-references). SSRF-guarded, and **off by default**. |
+| `close_case` | Marks the AiSOC case as closed via the API service. |
+| `condition` | Pure branching node. Evaluates `condition` and routes to `next_true` / `next_false`. |
+| `wait` | Hold for a timer or a callback — see [Control flow](#control-flow). |
+| `parallel` | Run the child steps concurrently, then join. |
+| `loop` | Run the child steps once per item in a list from the run context, bounded. |
+| `osquery_live_query` | Distributed osquery via osctrl / FleetDM / aisoc-direct, against an allow-listed template. |
+
+**Governed** — the step is dispatched to the action registry in the actions
+service, which grades it against the verb's own capability contract and the
+tenant's autonomy policy before anything reaches a vendor:
+
+`block_ip`, `block_ioc`, `isolate_host`, `kill_process`, `quarantine_file`,
+`run_av_scan`, `run_script`, `disable_user`, `reset_password`,
+`revoke_session`, `force_mfa`, `search_siem`, `create_notable_event`,
+`create_ticket`, `notify`, `osquery_live_query`.
+
+`notify` delivers to the tenant's configured Slack, Teams, email or PagerDuty
+destination; the channel comes from the destination, not from the step, so a
+credential and a transport cannot disagree. `osquery_live_query` runs an
+allow-listed template across an osctrl, FleetDM or aisoc-direct fleet — the
+caller passes a template id and parameters, never SQL.
+
+Each step is dispatched **individually**. Approving or running a playbook does
+not authorise whatever its steps happen to contain: the contract is applied
+per verb, per step, at the moment that step runs. See
+[Live actions](./live-actions.md) for what each verb declares about its impact,
+reversibility, approval requirement and verification probe.
+
+### Control flow
+
+A playbook could branch and it could not wait, fan out or repeat, so
+"contain, then re-check in five minutes" had to be hand-unrolled into a fixed
+chain of steps. `wait`, `parallel` and `loop` close that, and each carries a
+ceiling rather than trusting the author:
+
+| Step | Shape | Bound |
+|------|-------|-------|
+| `wait` | `{"until": "timer", "seconds": 300}` or `{"until": "callback"}` | Up to 60s runs in place; longer suspends the run to Postgres and a sweeper resumes it. A callback resumes through `POST /api/v1/playbook-waits/{token}/resume`. Maximum 7 days. |
+| `parallel` | `steps: [...]`, `{"join": "all"}` or `{"join": "any"}` | At most 20 branches. Each branch gets its own copy of the run context, so two branches cannot overwrite each other and leave whichever finished last to win. |
+| `loop` | `{"over": "sessions"}` with `steps: [...]` | At most 100 iterations, 25 by default. Each iteration binds `item` and `index`. |
+
+Three refusals worth knowing, because a control-flow step that quietly does
+less than it says is worse than one that is absent:
+
+- an empty `parallel` or `loop` **fails**, rather than reporting a success
+  for work it did not do;
+- a `loop` that hits its ceiling **says so**, rather than truncating —
+  stopping at 25 of 300 sessions leaves 275 live and a clean-looking record;
+- a `wait` whose pause cannot be written **fails**, because continuing past
+  it would run the steps the wait exists to delay.
+
+Every step execution carries an **idempotency key** derived from the run, the
+step and the position it was reached at, so the third loop iteration is
+distinguishable from the fourth and a resumed run reproduces the keys its
+first attempt used. It is a name, not a distributed deduplication store.
+### Integration references
+
+An `http` step addresses its target by **name**, never by host:
+
+```json
+{ "url": "${IDP_BASE_URL}/users/{{alert.user}}/sessions", "headers_env": "IDP_BEARER_HEADERS" }
+```
+
+`${NAME}` resolves against the tenant's playbook references — a base URL, a
+set of bearer headers, a Slack or Teams incoming webhook, a PagerDuty routing
+key or an SMTP relay. `{{dot.path}}` resolves against the run context.
+
+This is the security property rather than a formatting convention. A pack is
+shared content: a literal host in one is either somebody else's tenant or an
+invitation to point a playbook wherever its author likes. With a name, an
+author chooses which of *this* tenant's integrations to call and which path
+under it, and cannot choose the origin. The resolved URL still goes through
+the SSRF guard, because the stored value is tenant data and therefore as
+untrusted as the step that asked for it.
+
+Secrets live in the credential vault and the run record holds header *names*,
+never values. A reference is **disabled when created**, so importing a pack
+cannot start paging an on-call rota.
+
+What comes back is a report whose `executed` field is the single thing that
+means a vendor was actually touched:
+
+| `status` | `executed` | Meaning |
+|----------|-----------|---------|
+| `executed` | `true` | The vendor ran it. `verification` says whether a probe confirmed the effect, or `unverified` if no probe exists. |
+| `awaiting_completion` | `true` | The vendor accepted it and the outcome is not known yet. |
+| `dry_run` | `false` | Previewed. This is the default posture — see below. |
+| `pending_approval` | `false` | Held for an analyst by the contract or the tenant's tier. Nothing ran. |
+| `blocked` | `false` | Refused by tenant policy. |
+| `simulated` | `false` | The executor found no usable credentials and took its safe path. |
+| `no_integration` | `false` | The verb is supported and this tenant has no enabled connector that performs it. |
+| `unsupported` | `false` | No executor is registered for this verb in this deployment. |
+| `failed` | `false` | The vendor or the dispatch itself failed. |
+
+A step that did not execute is recorded `FAILED`, so the run halts under the
+default `on_failure: abort`. This is deliberate: the steps after a containment
+assume the containment happened.
+
+**Execution is off by default.** `AISOC_PLAYBOOK_ACTIONS_EXECUTE` is unset, so
+response steps preview and report `dry_run`. Set it to `1` to let a playbook
+touch a vendor — and note that governance can still refuse an execution this
+allows, and can never allow one it refuses. `AISOC_AGENTS_SERVICE_TOKEN` must
+also be set, or the agents service cannot reach the API's service path and the
+step fails closed saying so.
+
+**Every declared step type has a handler.** `approval` was once the exception
+— the engine had no pause and no resume, so the step failed closed and twelve
+shipped playbooks aborted on it. It is a durable pause now; see
+[Approvals and dry-runs](#approvals-and-dry-runs) below.
+
+Common step fields:
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `id` | auto | Used as the target for `next_true` / `next_false`. |
+| `name` | required | Human-readable label. |
+| `params` | `{}` | Step-specific parameters. Supports `{{field}}` substitution from run context. |
+| `condition` | `null` | Optional gate. If false, step is `SKIPPED`. |
+| `on_failure` | `abort` | One of `abort`, `continue`, `retry`. |
+| `retry_max` | `0` | Retry attempts before applying `on_failure`. Backoff is `min(2^attempt, 30)` seconds. |
+| `timeout_seconds` | `30` | Per-step timeout. |
+| `next_true` / `next_false` | `null` | Step IDs to jump to for branching. |
+
+## Conditions
+
+A `StepCondition` is evaluated against the run context (which starts as the
+trigger payload and accumulates each step's result):
+
+```json
+{
+  "condition": {
+    "field": "alert.severity",
+    "operator": "eq",
+    "value": "critical"
+  }
+}
+```
+
+Supported operators: `eq`, `ne`, `gt`, `lt`, `contains`, `exists`. The `field`
+uses dot-path resolution (`alert.host.name`) and `null` is returned for missing
+keys, so `exists` is the safe way to check optional data before branching on it.
+
+## Error handling
+
+The engine treats steps as discrete units of work with structured error
+handling.
+
+- `on_failure: "abort"` (default) — failed step stops the run, marks it
+  `FAILED`, and emits `run.done` with the error.
+- `on_failure: "continue"` — log the failure but proceed to the next step.
+  Useful for best-effort enrichment that shouldn't block containment. It
+  decides whether the run keeps going, not what the run is called: a run that
+  finishes with any failed step is `FAILED`, with an error naming how many and
+  which. A green tick over a containment that never happened is the same fake
+  success one level up.
+- `on_failure: "retry"` — combined with `retry_max`, retries with exponential
+  backoff before falling back to whatever you set as the next-failure mode.
+- Cycle detection — if the engine revisits the same `step.id`, it aborts with
+  `error: "cycle at step <id>"` rather than looping forever.
+- Step type with no handler — the step is recorded as `FAILED` with
+  `unimplemented: true` and an error naming the verb, so a step the engine
+  cannot run never reports success. It is not retried: a handler that is
+  missing now will still be missing on the next attempt.
+
+  This page previously said such a step was recorded as `SKIPPED` "so unknown
+  actions never silently succeed". The engine did put `skipped: true` in the
+  result, but left the step's *status* at `SUCCESS` and the run completed —
+  so the documented safety property was the opposite of the behaviour. It now
+  does what this section always claimed.
+
+Each step result includes `_elapsed_ms` so you can see per-step latency in the
+UI and in run history.
+
+## Approvals and dry-runs
+
+**`dry_run` flag** — pass `dry_run: true` when calling
+`PlaybookEngine.run(...)`. Handlers short-circuit with
+`{"dry_run": true, "executed": false, "step": <name>}` and emit the same
+realtime events, so you can preview an entire run without touching
+production. A governed step additionally reports `would_dispatch` and the
+`target` it resolved, so a preview of a containment playbook reads as one. A
+step whose type has no handler is reported as
+`unimplemented: true, would_fail: true`, so a preview tells you which steps a
+real run would stop on.
+
+**An `approval` step is a durable pause.** The run suspends to Postgres
+(`services/agents/app/playbook/pause.py`), survives a restart of the agents
+service, resumes from the step *after* the approval once it is decided, and
+expires with a recorded outcome rather than hanging. A `wait` step uses the
+same mechanism: a short timer sleeps in place, anything longer becomes a
+durable pause.
+
+You often do not need one. Every response step is graded against its own
+capability contract at dispatch and comes back `pending_approval` on its own
+when a human is required — `isolate_host`, for instance, declares
+`approval: analyst`, which no autonomy tier or confidence level lifts. An
+`approval` step in front of it gates a decision that is already gated. That is
+a reason to leave it out of a playbook, not a reason the engine refuses it.
+
+Where you want an action held for a *named* approver with the deciding
+principal recorded, submit it to the actions service (`POST /actions`), which
+holds it at `awaiting_approval`.
+
+Two things this section said before, both now wrong, kept because knowing
+which way a doc was wrong is worth more than a clean page. It said the step
+"is not implemented … the engine is a single pass with no pause or resume" —
+true when written, false since the pause landed. Before *that* it described
+modelling the gate as a `condition` step flipped by
+`POST /v1/playbook-runs/{id}/approve`; no such endpoint has ever existed, and
+an `approval` step used to report `SUCCESS` without doing anything, so a
+playbook that modelled a gate ran straight through it into whatever it was
+gating.
+
+## Realtime events
+
+Every run emits events to the realtime service so the UI can stream progress:
+
+| Event | When |
+|-------|------|
+| `run.started` | The engine begins executing. |
+| `step.started` | Before each non-condition step. |
+| `step.done` | After each step, with `status` and `result_keys`. |
+| `run.done` | Final state, including the full `PlaybookRun` object. |
+
+Channel format: `playbook:<run_id>`. Subscribe via WebSocket
+(`/realtime/ws?channel=playbook:<run_id>`) or the SDK
+(`AiSOC.subscribe("playbook", run_id)`).
+
+## Starter templates
+
+AiSOC ships with starter playbooks under
+[`services/agents/data/playbooks/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/data/playbooks):
+
+| Template | Trigger | Description |
+|----------|---------|-------------|
+| `ransomware-response` | `severity: critical, tags: ransomware` | Isolate, enrich IOCs, AI forensic investigation, P1 ticket, page on-call. |
+| `phishing-triage` | `severity: medium+, tags: phishing` | Sandbox attachments, enrich URLs, quarantine, notify user. |
+| `credential-stuffing` | `tags: auth-anomaly` | Velocity check, geo-impossible-travel, force-reauth, ticket. |
+| `data-exfiltration` | `tags: dlp` | Block egress, snapshot session, enrich destination, page DPO. |
+| `malware-analysis` | manual | Sandbox detonation + AI summary of behaviour. |
+| `insider-threat` | `tags: ueba` | Pull 30-day behaviour, peer comparison, escalate to HR-sec. |
+| `lateral-movement` | `tags: lateral` | Trace process tree, identity-graph hunt, contain pivot host. |
+| `privilege-escalation` | `tags: privesc` | Revoke session tokens, audit recent role changes. |
+| `c2-beacon` | `tags: c2` | Block destination, isolate beaconing host, enrich infra. |
+| `supply-chain-alert` | `tags: supply-chain` | Pin dep, scan repo, open security advisory. |
+| `cloud-misconfiguration` | `source: cspm` | Auto-remediate via IaC PR, notify owner. |
+| `vulnerability-critical` | `cvss>=9.0` | Patch advisory, asset graph blast-radius, ticket. |
+
+## Playbook editor
+
+The visual editor lives at **Playbooks → Editor** in the web app. It is built
+on React Flow and lets you:
+
+- Drag-and-drop nodes (trigger, enrichment, decision, action, notification).
+- Connect nodes to define `next_true` / `next_false` flow.
+- Configure `params`, `condition`, and `on_failure` inline per node.
+- Export to JSON, save to the API, or **Run now** with a sample payload.
+- Replay a past run with the same trigger context for debugging.
+
+## See also
+
+- [Plugin overview](../plugins/overview) — discover and install community playbooks from the marketplace.
+- [Connectors](../connectors) — the integrations your playbook steps call.
+- [Operations → Security](../operations/security) — RBAC for who can edit and
+  run playbooks.
+- [Glossary](../glossary) — terminology used in playbook authoring.

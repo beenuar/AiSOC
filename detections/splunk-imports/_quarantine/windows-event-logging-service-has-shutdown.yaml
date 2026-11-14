@@ -1,0 +1,42 @@
+id: splunk-security-content-d696f622-6b08-4336-b456-696cb5b43ba0
+name: Windows Event Logging Service Has Shutdown
+description: The following analytic detects the shutdown of the Windows Event Log
+  service by leveraging Windows Event ID 1100. This event is logged every time the
+  service stops, including during normal system shutdowns. Monitoring this activity
+  is crucial as it can indicate attempts to cover tracks or disable logging. If confirmed
+  malicious, an attacker could hide their activities, making it difficult to trace
+  their actions and investigate further incidents. Analysts should verify if the shutdown
+  was planned and review other alerts and data sources for additional suspicious behavior.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070.001
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-1100
+- https://www.ired.team/offensive-security/defense-evasion/disabling-windows-event-logs-by-suspending-eventlog-service-threads
+- https://attack.mitre.org/techniques/T1070/001/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1070.001/T1070.001.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=1100\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY action app change_type\n       dest\
+    \ dvc name\n       object_attrs object_category service\n       service_name signature\
+    \ signature_id\n       status subject vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_event_logging_service_has_shutdown_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d696f622-6b08-4336-b456-696cb5b43ba0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_event_logging_service_has_shutdown.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,37 @@
+id: splunk-security-content-218bf991-6c63-4c26-a682-6ac1a53ad8f8
+name: ESXi External Root Login Activity
+description: This detection identifies instances where the ESXi UI is accessed using
+  the root account instead of a delegated administrative user. Direct root access
+  to the UI bypasses role-based access controls and auditing practices, and may indicate
+  risky behavior, misconfiguration, or unauthorized activity by a malicious actor
+  using compromised credentials.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*root*" AND Message="*logged in*" | rex field=_raw
+    "root@(?<SrcIpAddr>\d{1,3}(?:\.\d{1,3}){3})" | rex field=_raw "Z (?<dest>[\w\.]+)\s"
+    | search SrcIpAddr != "127.0.0.1" AND SrcIpAddr != 192.168.0.0/16 AND SrcIpAddr
+    != 172.16.0.0/12 AND SrcIpAddr != 10.0.0.0/8 | stats min(_time) as firstTime max(_time)
+    as lastTime count by dest SrcIpAddr | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `esxi_external_root_login_activity_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 218bf991-6c63-4c26-a682-6ac1a53ad8f8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_external_root_login_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

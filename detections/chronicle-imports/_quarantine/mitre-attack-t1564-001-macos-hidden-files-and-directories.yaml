@@ -1,0 +1,43 @@
+id: chronicle-detection-rules-mitre-attack-t1564-001-macos-hidden-files-and-directories
+name: mitre_attack_T1564_001_macos_hidden_files_and_directories
+description: mitre_attack_T1564_001_macos_hidden_files_and_directories
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2021 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule mitre_attack_T1564_001_macos_hidden_files_and_directories\n{\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Manually setting\
+    \ a file or a directory to be hidden on macOS\"\n    reference = \"https://attack.mitre.org/techniques/T1564/001/\"\
+    \n    yara_version = \"YL2.0\"\n    rule_version = \"1.0\"\n\n  events:\n    (\n\
+    \      $e1.metadata.event_type = \"PROCESS_LAUNCH\" and\n      (\n        re.regex($e1.principal.process.command_line,\
+    \ `setfile -a V`) or\n        re.regex($e1.principal.process.command_line, `chflags\
+    \ hidden`)\n      )\n    )\n    or\n    (\n      $e1.metadata.event_type = \"\
+    FILE_MODIFICATION\" and\n      re.regex($e1.target.file.full_path, `^\\.`)\n \
+    \   )\n\n  condition:\n    $e1\n}"
+  chronicle_rule_name: mitre_attack_T1564_001_macos_hidden_files_and_directories
+provenance:
+  source: chronicle/detection-rules
+  source_id: mitre_attack_T1564_001_macos_hidden_files_and_directories
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/mitre_attack/T1564_001_macos_hidden_files_and_directories.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

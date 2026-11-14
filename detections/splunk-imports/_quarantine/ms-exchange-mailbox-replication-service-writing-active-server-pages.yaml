@@ -1,0 +1,48 @@
+id: splunk-security-content-985f322c-57a5-11ec-b9ac-acde48001122
+name: MS Exchange Mailbox Replication service writing Active Server Pages
+description: The following analytic identifies the creation of suspicious .aspx files
+  in specific directories associated with Exchange exploitation by the HAFNIUM group
+  and the ProxyShell vulnerability. It detects this activity by monitoring the MSExchangeMailboxReplication.exe
+  process, which typically does not write .aspx files. This behavior is significant
+  as it may indicate an active exploitation attempt on Exchange servers. If confirmed
+  malicious, attackers could gain unauthorized access, execute arbitrary code, or
+  maintain persistence within the environment. Immediate investigation and remediation
+  are crucial to prevent further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1133
+  - T1190
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/blackbyte-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes
+    where Processes.process_name=MSExchangeMailboxReplication.exe  by _time span=1h
+    Processes.process_id Processes.process_name Processes.process_guid Processes.dest
+    | `drop_dm_object_name(Processes)` | join process_guid, _time [| tstats `security_content_summariesonly`
+    count min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Filesystem
+    where Filesystem.file_path IN ("*\\HttpProxy\\owa\\auth\\*", "*\\inetpub\\wwwroot\\aspnet_client\\*",
+    "*\\HttpProxy\\OAB\\*") Filesystem.file_name="*.aspx" by _time span=1h Filesystem.dest
+    Filesystem.file_create_time Filesystem.file_name Filesystem.file_path | `drop_dm_object_name(Filesystem)`
+    | fields _time dest file_create_time file_name file_path process_name process_path
+    process process_guid] | dedup file_create_time | table dest file_create_time,
+    file_name, file_path, process_name | `ms_exchange_mailbox_replication_service_writing_active_server_pages_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 985f322c-57a5-11ec-b9ac-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/ms_exchange_mailbox_replication_service_writing_active_server_pages.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

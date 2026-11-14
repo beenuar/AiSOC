@@ -1,0 +1,30 @@
+title: AWS S3 Bucket Made Public
+id: aisoc-id-cl-0001-s3-public
+status: stable
+description: |
+  S3 bucket ACL or policy modified to grant public read/write.
+  Frequently precedes data exfiltration via static-website abuse.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1530
+  - attack.exfiltration
+  - aisoc.cloud
+detection:
+  acl_change:
+    event.module: aws
+    event.action|contains:
+      - 'PutBucketAcl'
+      - 'PutBucketPolicy'
+      - 'PutBucketPublicAccessBlock'
+    aws.event_source: 's3.amazonaws.com'
+  public_indicator:
+    aws.request_parameters|contains:
+      - 'AllUsers'
+      - 'AuthenticatedUsers'
+      - '"BlockPublicAcls":false'
+      - '"RestrictPublicBuckets":false'
+  condition: acl_change and public_indicator

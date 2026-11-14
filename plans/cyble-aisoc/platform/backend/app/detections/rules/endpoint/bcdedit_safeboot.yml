@@ -1,0 +1,28 @@
+title: BCDEdit Used to Disable Recovery or Set Safeboot
+id: aisoc-id-ep-0018-bcdedit
+status: stable
+description: |
+  bcdedit.exe used to disable recovery options, ignore boot failures,
+  or force safeboot — common ransomware impact step and used by
+  destructive malware.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1490
+  - attack.impact
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'bcdedit.exe'
+  args:
+    process.command_line|contains:
+      - 'recoveryenabled no'
+      - 'bootstatuspolicy ignoreallfailures'
+      - 'safeboot minimal'
+      - 'safeboot network'
+  condition: selection and args

@@ -1,0 +1,25 @@
+This slot is for a *second*, different video and is still empty.
+
+What now EXISTS is the deployment walkthrough at `demo/demo.mp4` — install to
+AI verdict on one host, 2 min 57 s. It is what `StartHero.tsx` links and what
+the README embeds a preview of. See `demo/README.md` for what is real in it.
+
+What does NOT exist is the product tour this file was originally written for:
+a short pass over the four seeded demo cases. Its brief, unchanged:
+
+* Recorded against `pnpm aisoc:demo --quick` (the deterministic 4-case path —
+    10|  DEMO-001 phishing, DEMO-002 cloud takeover, DEMO-003 insider exfil,
+  DEMO-004 ransomware). See `services/api/app/scripts/seed_demo.py`.
+* Opens on the console at `/cases?status=in_progress`, then lands on DEMO-004,
+  the case `pnpm aisoc:demo --quick` deeplinks to.
+* H.264 / 1280x720 / <= 8 MB, so the asset stays inside GitHub's 100 MB
+  per-file ceiling and inside the CDN's free egress.
+* That tour is of SEEDED SYNTHETIC data and must say so on screen. The
+  deployment walkthrough deliberately uses none.
+
+If you record it, land it at `demo/tour.mp4` rather than here, next to the
+    20|walkthrough, and add a row to `demo/README.md`.
+
+Do NOT commit a placeholder binary in place of a real one — empty `.mp4`
+artefacts get reported as "corrupt" by GitHub and break the OG card preview.
+A text placeholder keeps the slot honest.

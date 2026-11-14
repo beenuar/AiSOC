@@ -1,0 +1,6 @@
+{
+  "command_text": "logrotate /etc/logrotate.conf",
+  "event_type": "PATH",
+  "file_path": "/etc/cron.daily/logrotate",
+  "host": "linux-01"
+}

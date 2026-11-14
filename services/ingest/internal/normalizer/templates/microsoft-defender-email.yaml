@@ -1,0 +1,39 @@
+# Microsoft Defender for Office 365 / XDR alert email template.
+#
+# Captures the structured payload that Defender posts as a JSON blob
+# inside its forwarded incident notification email. The /v1/inbox/email
+# path peels the JSON out of the message body before invoking this
+# template; if you want to forward the raw email instead, use the
+# email-forwarded template, which preserves the .eml.
+#
+# Reference:
+#   https://learn.microsoft.com/en-us/microsoft-365/security/defender/api-overview
+id: microsoft-defender-email
+vendor_name: Microsoft
+product_name: Microsoft Defender XDR
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  alertId: finding.uid
+  title: finding.title
+  description: finding.description
+  category: finding.types
+  detectionSource: source
+  alertWebUrl: url
+  threatFamilyName: finding.evidence.process
+  serviceSource: finding.product.name
+  incidentId: finding.related_events.id
+  status: status
+severity_field: severity
+severity_map:
+  Informational: 1
+  Low: 2
+  Medium: 3
+  High: 4
+time_field: firstActivity
+message_field: title
+constants:
+  source_type: microsoft-defender-email
+  metadata.product.vendor_name: Microsoft
+  metadata.product.name: Microsoft Defender XDR

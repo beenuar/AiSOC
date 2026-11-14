@@ -1,0 +1,4 @@
+{
+  "method_name": "head-clusters.update",
+  "workload_identity_config": null
+}

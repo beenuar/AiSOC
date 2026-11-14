@@ -1,0 +1,39 @@
+id: splunk-security-content-9c2620a8-94a1-11ec-b40c-acde48001122
+name: Windows Event For Service Disabled
+description: The following analytic detects when a Windows service is modified from
+  a start type to disabled. It leverages system event logs, specifically EventCode
+  7040, to identify this change. This activity is significant because adversaries
+  often disable security or other critical services to evade detection and maintain
+  control over a compromised host. If confirmed malicious, this action could allow
+  attackers to bypass security defenses, leading to further exploitation and persistence
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2018/02/olympic-destroyer.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7040  EventData_Xml=\"*disabled*\"\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY Computer\
+    \ EventCode Name\n       UserID service ServiceName\n  | rename Computer as dest\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_event_for_service_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9c2620a8-94a1-11ec-b40c-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_event_for_service_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

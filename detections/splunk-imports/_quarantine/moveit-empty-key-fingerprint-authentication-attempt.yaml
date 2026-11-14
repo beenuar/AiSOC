@@ -1,0 +1,40 @@
+id: splunk-security-content-1a537acc-199f-4713-b5d7-3d98c05ab932
+name: MOVEit Empty Key Fingerprint Authentication Attempt
+description: This detection identifies attempts to authenticate with an empty public
+  key fingerprint in Progress MOVEit Transfer, which is a key indicator of potential
+  exploitation of the CVE-2024-5806 vulnerability. Such attempts are characteristic
+  of the authentication bypass technique used in this vulnerability, where attackers
+  try to impersonate valid users without providing proper credentials. While occasional
+  empty key fingerprint authentication attempts might occur due to misconfigurations,
+  a sudden increase or attempts from unexpected sources could signify malicious activity.
+  This analytic helps security teams identify and investigate potential exploitation
+  attempts of the MOVEit Transfer authentication bypass vulnerability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://labs.watchtowr.com/auth-bypass-in-un-limited-scenarios-progress-moveit-transfer-cve-2024-5806/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`moveit_sftp_logs` \"UserAuthRequestHandler: SftpPublicKeyAuthenticator:\
+    \ Attempted to authenticate empty public key fingerprint\"\n  | stats count\n\
+    \    BY source _raw\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `moveit_empty_key_fingerprint_authentication_attempt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1a537acc-199f-4713-b5d7-3d98c05ab932
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/moveit_empty_key_fingerprint_authentication_attempt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

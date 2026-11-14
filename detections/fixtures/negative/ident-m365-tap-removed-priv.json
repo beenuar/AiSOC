@@ -1,0 +1,4 @@
+{
+  "operation": "rules.create",
+  "target_user_priv": true
+}

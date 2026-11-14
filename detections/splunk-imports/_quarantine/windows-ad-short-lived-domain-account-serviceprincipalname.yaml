@@ -1,0 +1,43 @@
+id: splunk-security-content-b681977c-d90c-4efc-81a5-c58f945fb541
+name: Windows AD Short Lived Domain Account ServicePrincipalName
+description: The following analytic identifies the addition and quick deletion of
+  a Service Principal Name (SPN) to a domain account within 5 minutes. This detection
+  leverages EventCode 5136 from the Windows Security Event Log, focusing on changes
+  to the servicePrincipalName attribute. This activity is significant as it may indicate
+  an attempt to perform Kerberoasting, a technique used to crack the cleartext password
+  of a domain account offline. If confirmed malicious, this could allow an attacker
+  to gain unauthorized access to sensitive information or escalate privileges within
+  the domain environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - endpoint
+references:
+- https://adsecurity.org/?p=3466
+- https://www.thehacker.recipes/ad/movement/dacl/targeted-kerberoasting
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-5136
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 AttributeLDAPDisplayName=servicePrincipalName\n\
+    \  | transaction ObjectDN AttributeValue startswith=(EventCode=5136 OperationType=\"\
+    %%14674\") endswith=(EventCode=5136 OperationType=\"%%14675\")\n  | eval short_lived=case((duration<300),\"\
+    TRUE\")\n  | search short_lived = TRUE\n  | rename ObjectDN as user\n  | rename\
+    \ Computer as dest\n  | `windows_ad_short_lived_domain_account_serviceprincipalname_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b681977c-d90c-4efc-81a5-c58f945fb541
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_short_lived_domain_account_serviceprincipalname.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

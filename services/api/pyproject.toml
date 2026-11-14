@@ -1,0 +1,185 @@
+[tool.poetry]
+name = "aisoc-api"
+version = "0.1.0"
+description = "AiSOC Core API Service — Open-source AI Security Operations Center"
+authors = ["Beenu Arora <beenu@cyble.com>"]
+license = "MIT"
+# No `readme` key: these services are installed with `--no-root` and are not
+# published as packages. The key used to name a README.md that has never
+# existed in this tree, which made `poetry check` fail on a manifest error
+# and hid whether the lock was fresh.
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# Floored at 0.117 because below it this service cannot be imported at all.
+# Under `from __future__ import annotations` a `-> None` handler reaches
+# FastAPI as the string "None", which ForwardRef resolution turns into
+# `NoneType` — truthy — so FastAPI concludes the route declares a response
+# body and trips `assert is_body_allowed_for_status_code(204)`. 0.117.0
+# treats the resolved `NoneType` as "no body" again. Measured, not inferred:
+# every release from 0.111.0 to 0.116.2 raises at import on
+# `api/v1/endpoints/community.py`, 0.117.0 and later do not.
+# `tests/test_fastapi_floor.py` re-derives the boundary from the installed
+# version, so a Dependabot bump that lowers the floor fails rather than
+# producing an image that dies on startup.
+fastapi = ">=0.117,<0.163"
+uvicorn = { version = ">=0.29,<0.55", extras = ["standard"] }
+# EmailStr (used in auth/passkeys/tenants endpoints) requires the optional
+# email-validator package, which is only pulled in via the "email" extra.
+# Without it the API crashes on import with "email-validator is not installed".
+pydantic = { version = ">=2.7,<2.15", extras = ["email"] }
+pydantic-settings = "^2.2.1"
+sqlalchemy = { version = "^2.0.30", extras = ["asyncio"] }
+asyncpg = ">=0.29.0,<0.33"
+alembic = "^1.13.1"
+redis = { version = ">=5.0.4,<9.0.0", extras = ["hiredis"] }
+httpx = ">=0.27,<0.29"
+# PyJWT is the only JWT implementation in this service: first-party access and
+# refresh tokens, realtime tickets, and the OIDC / SAML assertion paths. It
+# replaced python-jose, whose unconditional `ecdsa` requirement carried
+# CVE-2024-23342 (Minerva timing attack on P-256) with no patched release
+# upstream — the maintainers state python-ecdsa offers no side-channel
+# resistance and will not fix it. Nothing here needed jose's JWE/JWS surface.
+PyJWT = ">=2.8,<3"
+# Direct dep for credential vault Fernet. One range across every service
+# that reads or writes a vault token — see services/connectors/pyproject.toml.
+cryptography = ">=46,<51"
+bcrypt = ">=4.1.2,<6.0.0"  # Used directly by app.core.security (passlib is no longer compatible with bcrypt >= 4)
+python-multipart = ">=0.0.9,<0.0.34"
+tenacity = ">=8.3,<10.0"
+structlog = ">=24.1,<27.0"
+prometheus-client = ">=0.20,<0.27"
+# Floored at 0.58b0, and the floor is a measurement. FastAPI 0.141 keeps an
+# opaque `_IncludedRouter` in `app.routes` rather than the flattened APIRoutes
+# older releases left there, and `_get_route_details` in
+# opentelemetry-instrumentation-fastapi reads `.path` off whatever matches.
+# Below 0.58b0 that raises AttributeError *inside the ASGI tracing middleware*,
+# before the request reaches a handler — so every request into an included
+# router, which is the whole of `/api/v1`, returns 500. `instrument_app(app)`
+# is unconditional in `create_application()`, so there is no configuration
+# that avoids it.
+#
+# This shipped. The lock resolved 0.45b0 because the range read `^0.45b0`, and
+# CI installed the package with no version bound at all, so CI resolved 0.66b0
+# and the app worked there while the image could not serve a route. Measured
+# against the exact locked set (fastapi 0.141.1 / starlette 1.7.0 / sdk 1.24.0):
+# 0.45b0, 0.46b0, 0.50b0, 0.52b0, 0.54b0, 0.56b0 and 0.57b0 all return 500;
+# 0.58b0 and every release after it return 200. The three services declaring
+# this package with an open-ended `>=0.45b0` locked 0.65b0 and were unaffected,
+# which is why only the two carrying a caret were broken.
+# The sdk moves with it: instrumentation 0.58b0 pairs with sdk 1.37.
+opentelemetry-sdk = ">=1.37,<2"
+opentelemetry-instrumentation-fastapi = ">=0.58b0,<0.70"
+opentelemetry-instrumentation-sqlalchemy = ">=0.58b0,<0.70"
+clickhouse-driver = "^0.2.8"
+# sqlglot powers the tenant-lake SQL rewriter (Workstream 7). We use it to
+# parse user-supplied SELECTs, enforce a table allowlist, and inject the
+# mandatory `tenant_id = '<uuid>'` predicate into every relation (including
+# subqueries) before the statement is forwarded to ClickHouse.
+#
+# The range must match the Dockerfile and every CI workflow exactly, and
+# `scripts/check_sqlglot_pin.py` fails the build if they drift. This is not
+# tidiness: sqlglot is the component that enforces tenant isolation on the
+# lake, so two builds of the same commit resolving different versions means
+# two different isolation guarantees. This line read `<31.0.0` while the
+# Dockerfile and CI read `<27`, and on 27+ the rewriter returned unscoped
+# SQL and reported success.
+#
+# One major wide, deliberately. The previous `>=23,<27` permitted four majors
+# of which exactly one was ever exercised, so three of them were installable
+# and untested. The rewriter suites and an adversarial corpus were run on the
+# 30 line; 27, 28 and 29 were not, and a range is a statement about what may
+# be installed rather than about what upstream has released.
+sqlglot = ">=30,<31"
+boto3 = "^1.34.0"
+neo4j = ">=5.19,<7.0"
+# Floored at 0.11.17, measured rather than chosen: every release from 0.11.0
+# to 0.11.16 carries `from pyparsing import List` in `sigma/exceptions.py`,
+# a `typing` name pyparsing used to re-export and no longer does. On
+# pyparsing 3.3.3 — what a fresh resolution takes today — importing
+# `sigma.exceptions` raises `cannot import name 'List' from 'pyparsing'`,
+# confirmed in a clean 3.11 venv. 0.11.17 is the first release that removed
+# the line, so the boundary is exact and not approximate.
+#
+# The committed lock resolves 0.11.23, so no shipped build takes that path.
+# The manifest permitted one that does, and a manifest that admits a version
+# which cannot import is how a fresh resolution becomes a silently different
+# engine — the same failure as the Sigma matcher CI could not grade.
+# Bounded rather than pinned: the lock decides what ships, and this line's
+# job is to exclude the releases that cannot run.
+pysigma = ">=0.11.17,<0.12"
+pysigma-backend-opensearch = "^1.0.0"
+yara-python = "^4.5.0"
+pyyaml = "^6.0.1"
+strawberry-graphql = { version = ">=0.236,<0.341", extras = ["fastapi"] }
+webauthn = ">=2.2,<4.0"
+weasyprint = ">=62,<71"          # WS-G2: server-side PDF generation from print-ready HTML
+# Phase 4.5 / Milestone 1F — the hunt scheduler now drives next-fire
+# computation through croniter, replacing the bespoke parser that only
+# understood a handful of common cadences. Pinned with a wide range
+# because croniter is API-stable and we only use the
+# `get_next` / `is_valid` surface.
+croniter = ">=2.0,<7.0"
+# Gap-closure Phase 8.1 — the retro-hunt consumer subscribes to the
+# `NEW_IOC` events `services/threatintel` emits. Same range `services/agents`
+# already declares, so the two services that consume AiSOC's own topics
+# resolve the same client: a consumer-group protocol difference between them
+# would surface as a rebalance nobody could explain. Only used by
+# `app.workers.retro_hunt_consumer`, which is off by default.
+aiokafka = ">=0.10,<0.15"
+# The SAML routes import `onelogin.saml2`, and this was declared in no
+# install path at all. `app/auth/saml.py` caught the resulting ImportError
+# and issued a signed session for a principal called `stub-saml-user` that
+# no identity provider had ever seen, so the stub was not a fallback: on a
+# stock install it was the only reachable path through the assertion
+# consumer. The handler answers 501 now, and declaring this is what makes
+# that 501 clearable rather than permanent.
+python3-saml = ">=1.16,<2"
+# Transitive floors for advisories published after main's last audit pass.
+# graphql-core arrives through strawberry-graphql, pyasn1 through the
+# SAML/crypto stack; neither is imported directly. Pinned here so the
+# resolver cannot fall back to the vulnerable version.
+# graphql-core: CVE-2026-119286 (fixed 3.3.1). pyasn1: CVE-2026-119194/5/6/7
+# (fixed 0.6.5).
+graphql-core = ">=3.3.1,<4"
+pyasn1 = ">=0.6.5,<0.7"
+
+[tool.poetry.group.dev.dependencies]
+# Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
+# pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
+# resolve together or not at all.
+pytest = ">=9.0.3,<10.0"
+pytest-asyncio = ">=1.0,<2.0"
+pytest-cov = ">=5,<8"
+# Eight test files open `sqlite+aiosqlite:///:memory:` and there is no
+# `import aiosqlite` anywhere — SQLAlchemy loads the driver by dialect name,
+# so nothing that reads imports can see the dependency. It was installed by
+# ci.yml and declared by nobody, which meant `poetry install` produced a tree
+# where those eight files error on collection.
+aiosqlite = ">=0.19,<0.23"
+httpx = ">=0.27,<0.29"
+# One range everywhere: `ruff format --check services/` is a hard gate and
+# ruff's formatter output changes between minors, so a contributor whose
+# manifest permits a newer ruff reformats the tree and reds their own PR.
+# Moving this range means reformatting the tree, which is its own change.
+ruff = ">=0.16.8,<0.17"
+mypy = ">=2.3.1,<3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+# Ruff config lives in the repo-root `ruff.toml` so the CI gate is consistent
+# across services. Don't add `[tool.ruff]` here — it would shadow the root.
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as requiring a live Postgres + alembic-migrated schema (run explicitly with AISOC_RUN_INTEGRATION=1)",
+]

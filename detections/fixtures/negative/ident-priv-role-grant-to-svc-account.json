@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "role_priv": true,
+  "target_user_type": "service_account"
+}

@@ -1,0 +1,24 @@
+title: Azure AD MFA Method Removed From Account
+id: aisoc-id-id-0016-mfa-removed
+status: stable
+description: |
+  MFA method removed from an Azure AD user account. Used by attackers
+  post-compromise to weaken the account, and by helpdesk social
+  engineering attacks to reset to attacker-controlled methods.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azuread
+  service: auditlogs
+tags:
+  - attack.t1556.006
+  - attack.defense_evasion
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    event.action:
+      - 'Delete user authentication method'
+      - 'User deleted security info'
+      - 'Disable Strong Authentication'
+  condition: selection

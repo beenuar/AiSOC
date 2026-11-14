@@ -1,0 +1,33 @@
+title: Linux Suspicious chmod 777 or +x in Tmp Path
+id: aisoc-id-ep-0025-linux-chmod-tmp
+status: stable
+description: |
+  chmod 777 (or chmod +x) applied to a binary in /tmp, /dev/shm, or
+  /var/tmp — classic Linux malware staging pattern (Mirai, XorDDoS,
+  Kinsing).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: linux
+  service: auditd
+tags:
+  - attack.t1222.002
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: auditd
+    event.action: 'process_started'
+    process.name: 'chmod'
+  perms:
+    process.command_line|contains:
+      - '777'
+      - '+x'
+      - '755'
+  tmp_path:
+    process.command_line|contains:
+      - '/tmp/'
+      - '/dev/shm/'
+      - '/var/tmp/'
+      - '/run/'
+  condition: selection and perms and tmp_path

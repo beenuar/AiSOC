@@ -1,0 +1,40 @@
+id: splunk-security-content-4d3a17b3-0a6d-4ae0-9421-46623a69c122
+name: Kubernetes Suspicious Image Pulling
+description: The following analytic detects suspicious image pulling in Kubernetes
+  environments. It identifies this activity by monitoring Kubernetes audit logs for
+  image pull requests that do not match a predefined list of allowed images. This
+  behavior is significant for a SOC as it may indicate an attacker attempting to deploy
+  malicious software or infiltrate the system. If confirmed malicious, the impact
+  could be severe, potentially leading to unauthorized access to sensitive systems
+  or data, and enabling further malicious activities within the cluster.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1526
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` requestObject.message=\"Pulling image*\"\n  | search NOT\
+    \ `kube_allowed_images`\n  | fillnull\n  | stats count\n    BY objectRef.name\
+    \ objectRef.namespace objectRef.resource\n       requestReceivedTimestamp requestURI\
+    \ responseStatus.code\n       sourceIPs{} stage user.groups{}\n       user.uid\
+    \ user.username userAgent\n       verb\n  | rename sourceIPs{} as src_ip, user.username\
+    \ as user\n  | `kubernetes_suspicious_image_pulling_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4d3a17b3-0a6d-4ae0-9421-46623a69c122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_suspicious_image_pulling.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

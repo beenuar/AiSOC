@@ -1,0 +1,30 @@
+# Funding model — see also https://github.com/beenuar/AiSOC/blob/main/SUPPORT.md
+#
+# AiSOC's development is funded and supported by Cyble (https://cyble.com),
+# who pay for the engineering time behind it and release the result under the
+# MIT licence. That is recorded in .github/CREDITS.md, not here, and
+# deliberately: a `custom:` entry below would render a "Sponsor this project"
+# button, which tells a reader they can fund AiSOC at that link. They cannot.
+# Cyble funds the project; the project does not collect money. Saying it the
+# other way round with a button would be a small lie in a prominent place.
+#
+# AiSOC is MIT-licensed and accepts no funding from the people running it. We
+# do not use GitHub Sponsors or Open Collective. If that changes, this file is
+# the canonical place where the link will appear, and keeping the stub here
+# unlocks the "Sponsor" tab once there is a real destination.
+#
+# Reference: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# github: [beenuar]
+# open_collective: aisoc
+# patreon:
+# tidelift:
+# community_bridge:
+# liberapay:
+# issuehunt:
+# otechie:
+# custom: []
+#
+# Whatever goes in `custom:` must return HTTP 200 before it is uncommented.
+# The example that used to sit on that line pointed at a path that 404s, and
+# a Sponsor button is the most visible link a repository has.

@@ -1,0 +1,23 @@
+id: det-application-013
+name: Open Redirect Pattern in URL Parameter
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Open Redirect
+  Pattern in URL Parameter'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1204.001
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri CONTAINS_ANY ["?next=http", "?redirect=http", "?url=http"]
+false_positives:
+- Approved redirect-after-login flows (allowlist destination)
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

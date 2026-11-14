@@ -1,0 +1,6 @@
+{
+  "distinct_ip_count_per_user": 1,
+  "event_type": "user.session.start",
+  "time_window_minutes": 60,
+  "user": "user@corp.com"
+}

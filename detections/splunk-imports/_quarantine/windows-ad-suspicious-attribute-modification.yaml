@@ -1,0 +1,49 @@
+id: splunk-security-content-5682052e-ce55-4f9f-8d28-59191420b7e0
+name: Windows AD Suspicious Attribute Modification
+description: 'This detection monitors changes to the following Active Directory attributes:
+  "msDS-AllowedToDelegateTo", "msDS-AllowedToActOnBehalfOfOtherIdentity", "msDS-KeyCredentialLink",
+  "scriptPath", and "msTSInitialProgram".  Modifications to these attributes can indicate
+  potential malicious activity or privilege escalation attempts. Immediate investigation
+  is recommended upon alert.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  - T1550
+  categories:
+  - endpoint
+references:
+- https://trustedsec.com/blog/a-hitchhackers-guide-to-dacl-based-detections-part-1-a
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 AttributeLDAPDisplayName IN (\"\
+    msDS-AllowedToDelegateTo\",\"msDS-AllowedToActOnBehalfOfOtherIdentity\",\"scriptPath\"\
+    ,\"msTSInitialProgram\") OperationType=%%14674  ```Changes to the attribute \"\
+    msDS-KeyCredentialLink\" are also worth moniroting, however tuning will need to\
+    \ be applied```\n  | table _time ObjectClass ObjectDN OpCorrelationID src_user\
+    \ SubjectLogonId DSName AttributeValue AttributeLDAPDisplayName\n  | rename SubjectLogonId\
+    \ as TargetLogonId, src_user as initiator, _time as eventTime\n  | appendpipe\
+    \ [\n  | map search=\"search `wineventlog_security` EventCode=4624 TargetLogonId=$TargetLogonId$\"\
+    ]\n  | stats min(eventTime) as _time values(initiator) as src_user, values(DSName)\
+    \ as targetDomain, values(ObjectDN) as ObjectDN, values(ObjectClass) as ObjectClass,\
+    \ values(src_category) as src_category, values(src_ip) as src_ip values(LogonType)\
+    \ as LogonType values(AttributeValue) as AttributeValue values(AttributeLDAPDisplayName)\
+    \ as AttributeLDAPDisplayName\n    BY TargetLogonId\n  | rex field=ObjectDN \"\
+    ^CN=(?P<cn>.*?),[A-Z]{2}\\=\"\n  | eval dest=if(ObjectClass=\"computer\",cn,null),\
+    \ user=if(ObjectClass=\"user\",cn,null)\n  | fields - cn\n  | `windows_ad_suspicious_attribute_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5682052e-ce55-4f9f-8d28-59191420b7e0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_suspicious_attribute_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

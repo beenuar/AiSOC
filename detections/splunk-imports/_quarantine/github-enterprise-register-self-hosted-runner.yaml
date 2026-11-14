@@ -1,0 +1,47 @@
+id: splunk-security-content-b27685a2-8826-4123-ab78-2d9d0d419ed0
+name: GitHub Enterprise Register Self Hosted Runner
+description: The following analytic identifies when a self-hosted runner is created
+  in GitHub Enterprise. The detection monitors GitHub Enterprise audit logs for actions
+  related to creating new self-hosted runners at the organization or enterprise level.
+  his behavior warrants monitoring because self-hosted runners execute workflow jobs
+  on customer-controlled infrastructure, which could be exploited by attackers to
+  execute malicious code, access sensitive data, or pivot to other systems. While
+  self-hosted runners are a legitimate feature, their creation should be carefully
+  controlled as compromised runners pose significant security risks. The impact includes
+  potential remote code execution, data exfiltration, and lateral movement within
+  the environment if a runner is compromised. SOC teams should investigate unexpected
+  runner creation events to verify they are authorized and properly secured, especially
+  if created by unfamiliar users or in unusual contexts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.wiz.io/blog/shai-hulud-2-0-ongoing-supply-chain-attack
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=enterprise.register_self_hosted_runner\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY actor, actor_id, actor_is_bot,\n       actor_location.country_code, business,\
+    \ business_id,\n       user_agent, action\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_register_self_hosted_runner_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b27685a2-8826-4123-ab78-2d9d0d419ed0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_register_self_hosted_runner.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

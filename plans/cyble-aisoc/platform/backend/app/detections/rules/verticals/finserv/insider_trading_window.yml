@@ -1,0 +1,31 @@
+title: Trader Accessed Material Non-Public Repo Before Market Open
+id: aisoc-vt-fin-0002-insider-trading-window
+status: experimental
+description: |
+  An identity tagged as a licensed trader read an M&A or earnings draft
+  document in the restricted research repository within 60 minutes of
+  market open. Compliance signal for potential MNPI front-running;
+  fires regardless of whether a trade actually followed because the
+  *access* itself is the policy violation.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: m365
+  service: sharepoint
+tags:
+  - attack.t1530
+  - attack.collection
+  - aisoc.vertical.finserv
+  - aisoc.compliance.mar
+detection:
+  selection:
+    event.module: m365.sharepoint
+    event.action: 'FileAccessed'
+    document.classification|contains:
+      - 'mnpi'
+      - 'restricted-research'
+      - 'earnings-draft'
+    actor.role|contains:
+      - 'trader'
+      - 'pm'
+  condition: selection

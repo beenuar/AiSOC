@@ -1,0 +1,5 @@
+{
+  "event_type": "user.session.start",
+  "user": "former-employee@corp.com",
+  "user_state": "ACTIVE"
+}

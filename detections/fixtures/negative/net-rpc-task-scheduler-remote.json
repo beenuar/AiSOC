@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "interface": "atsvc",
+  "src_role": "workstation"
+}

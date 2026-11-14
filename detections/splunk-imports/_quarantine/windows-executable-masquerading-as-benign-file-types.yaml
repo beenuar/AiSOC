@@ -1,0 +1,39 @@
+id: splunk-security-content-0470c8e7-dd8d-420f-8302-073e8a2b66f0
+name: Windows Executable Masquerading as Benign File Types
+description: The following analytic detects the presence of executable files masquerading
+  as benign file types on Windows systems. Adversaries employ this technique to evade
+  defenses and trick users into executing malicious code by renaming executables with
+  extensions commonly associated with documents, images, or other non-executable formats
+  (e.g., .pdf, .jpg, .doc, .png).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.008
+  categories:
+  - endpoint
+references:
+- https://www.linkedin.com/posts/mauricefielenbach_cybersecurity-incidentresponse-dfir-activity-7394805779448418304-g0gZ?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAuFTjIB5weY_kcyu4qp3kHbI4v49tO0zEk
+- https://www.blackhillsinfosec.com/a-sysmon-event-id-breakdown/
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://www.esentire.com/blog/evalusion-campaign-delivers-amatera-stealer-and-netsupport-rat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=29\nNOT `executable_extensions`\n| stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n  by Image file_name file_path\
+    \ process_guid file_hash process_id dest user EventCode\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_executable_masquerading_as_benign_file_types_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0470c8e7-dd8d-420f-8302-073e8a2b66f0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_executable_masquerading_as_benign_file_types.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

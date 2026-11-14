@@ -1,0 +1,5 @@
+{
+  "actor": "user@corp.com",
+  "operation_name": "Search-Mailbox -EstimateResultOnly",
+  "target": "ceo@corp.com"
+}

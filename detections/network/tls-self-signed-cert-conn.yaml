@@ -1,0 +1,24 @@
+id: det-network-013
+name: Outbound TLS to Server with Self-Signed Cert (Non-Allowed)
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound TLS to
+  Server with Self-Signed Cert (Non-Allowed)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1573.002
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: tls
+detection:
+  condition: |
+    tls_cert_self_signed == true
+    AND dst_in_allowlist == false
+false_positives:
+- Internal services with self-signed certs by design (allowlist)
+playbook: tpl-c2
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

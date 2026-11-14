@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-uac-bypass-via-event-viewer
+name: uac_bypass_via_event_viewer
+description: uac_bypass_via_event_viewer
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule uac_bypass_via_event_viewer {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects UAC bypass method using Windows event viewer\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/EIBSd85RV69M\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"defense_evasion, privilege_escalation, t1088\"\n\
+    \n  events:\n(($methregistry.metadata.product_event_type = \"13\" and re.regex($methregistry.target.registry.registry_key,\
+    \ `HKEY_USERS\\\\.*\\\\mscfile\\\\shell\\\\open\\\\command`)) or (($methregistry.metadata.product_event_type\
+    \ = \"1\" and re.regex($methregistry.principal.process.file.full_path, `.*\\\\\
+    eventvwr\\.exe`)) and not (re.regex($methregistry.target.process.file.full_path,\
+    \ `.*\\\\mmc\\.exe`))))\n\n  condition:\n    $methregistry\n}"
+  chronicle_rule_name: uac_bypass_via_event_viewer
+provenance:
+  source: chronicle/detection-rules
+  source_id: uac_bypass_via_event_viewer
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/uac_bypass_via_event_viewer.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

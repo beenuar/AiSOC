@@ -1,0 +1,1267 @@
+"""
+AiSOC API Configuration
+AiSOC — open-source AI Security Operations Center
+MIT License
+"""
+
+import ipaddress
+import logging
+import os
+import secrets
+import warnings
+from functools import lru_cache
+from typing import Any, Final
+
+from pydantic import AliasChoices, Field, PostgresDsn, RedisDsn, field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.version import resolve_version
+
+# Default placeholders shipped in source. Anything matching these in a
+# non-development environment triggers a hard startup warning (see
+# ``warn_if_insecure_defaults`` below). Exposed as a constant so tests
+# and infra can reference the same canonical list.
+INSECURE_SECRET_KEY_DEFAULTS: frozenset[str] = frozenset(
+    {
+        "change-me-in-production-at-least-32-chars",
+        "dev_secret_key_change_in_production",
+        "changeme",
+        "secret",
+        # The former realtime dev fallback. Published in this repository's
+        # history, so it is refused rather than forgotten: copying it out of an
+        # older checkout into .env must not produce a working deployment keyed
+        # on a value anyone can read.
+        "aisoc-dev-realtime-ticket-secret-not-for-production",
+    }
+)
+
+# Deterministic fallback secret for realtime WS/SSE tickets in development.
+# The API ticket endpoint and the Node realtime verifier BOTH fall back to
+# this literal when ``AISOC_REALTIME_JWT_SECRET`` is unset *and* the
+# environment is development-class, so local docker-compose works without any
+# secret plumbing. It is intentionally well-known and is treated as insecure
+# outside development (see ``realtime_ticket_secret``). The exact same literal
+# is hardcoded in ``services/realtime/src/index.ts`` — keep the two in sync.
+DEV_REALTIME_TICKET_SECRET: Final[str] = "aisoc-dev-realtime-ticket-secret-not-for-production"
+
+# ------------------------------------------------------------------
+# Canonical "dev mode" detection (H-8 + P2-A3).
+#
+# Before unification, the codebase had at least four different sets of
+# strings hand-rolled across multiple modules — each with a slightly
+# different list ("dev", "development", "local", "demo", sometimes
+# "test", sometimes none of the above). That meant the same boot could
+# count as "dev" for one check and "prod" for another, silently
+# bypassing safety rails or, worse, gating them on the wrong axis.
+#
+# These two frozensets are now the **only** truth in the codebase.
+#
+# ``DEV_ENVIRONMENTS``      – Used by most subsystems (table autocreate,
+#                             docs URLs, /metrics gate, structured-vs-JSON
+#                             logging, GraphiQL UI, credential-vault
+#                             ephemeral key, insecure-default warnings).
+#                             Includes ``"test"`` because pytest sets
+#                             ``ENV=test`` and we never want to gate
+#                             test-suite behaviour behind production
+#                             rails (e.g. requiring a real Fernet key).
+#
+# ``AUTH_BYPASS_ENVIRONMENTS`` – Used **only** by the request-time
+#                                no-credentials-→-demo-user shim in
+#                                ``app.api.v1.dev_auth``. Deliberately
+#                                excludes ``"test"`` so a test suite
+#                                that forgets to seed an Authorization
+#                                header gets a 401 instead of being
+#                                handed admin-on-the-demo-tenant — that
+#                                used to mask real auth regressions.
+# ------------------------------------------------------------------
+DEV_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo", "test"})
+AUTH_BYPASS_ENVIRONMENTS: Final[frozenset[str]] = frozenset({"development", "dev", "local", "demo"})
+
+
+def _normalize_env(value: str | None) -> str:
+    return (value or "").strip().lower()
+
+
+def is_dev_env(value: str | None) -> bool:
+    """Return True if ``value`` names a development-class environment.
+
+    Accepts any of ``development | dev | local | demo | test`` (case- and
+    whitespace-insensitive). This is the **single authoritative**
+    predicate; every other call site should route through this helper.
+    """
+    return _normalize_env(value) in DEV_ENVIRONMENTS
+
+
+def is_auth_bypass_env(value: str | None) -> bool:
+    """Return True if ``value`` permits the no-credentials demo-user shim.
+
+    Same canonical set as :func:`is_dev_env` minus ``"test"`` — see the
+    module-level rationale.
+
+    Naming a dev-class environment is now necessary and **not sufficient**:
+    :func:`auth_bypass_refusal` has to return ``None`` as well.
+    """
+    return _normalize_env(value) in AUTH_BYPASS_ENVIRONMENTS
+
+
+# ------------------------------------------------------------------
+# The anonymous shim needs an explicit opt-in, not just an environment name
+# ------------------------------------------------------------------
+# ``ENVIRONMENT`` defaulted to ``development`` in ``docker-compose.yml``, in
+# ``.env.example``, and therefore in the ``.env`` that ``ensure_env.py``
+# copies from it. So every stock ``docker compose up`` served an
+# uncredentialed request as an administrator, and the single-host guide told
+# operators to publish that console on ``0.0.0.0``.
+#
+# An environment name cannot carry that weight on its own. It is a label
+# chosen for logging verbosity and docs URLs, it defaults to a dev-class
+# value, and nothing about setting it says "and make this host anonymous".
+# So the shim now needs a flag whose only meaning is the bypass, which no
+# compose file and no template sets, plus a bind address that keeps the
+# consequence on the operator's own machine.
+
+#: The environment variable whose only job is to enable the anonymous shim.
+#: Deliberately not ``AISOC_DEV_MODE``: that flag already means eight other
+#: things across nine services, and a flag that means many things cannot be
+#: refused for one of them.
+DEV_AUTH_BYPASS_VAR: Final[str] = "AISOC_DEV_AUTH_BYPASS"
+
+#: Where the deployment publishes the console and the API, comma-separated.
+#: Supplied by compose so the API can answer "is anyone but this machine able
+#: to reach me", which it otherwise cannot know: it binds inside a container
+#: and sees only ``0.0.0.0``.
+PUBLISHED_BIND_VAR: Final[str] = "AISOC_PUBLISHED_BIND_ADDRS"
+
+_TRUTHY: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
+
+
+def _is_loopback(address: str) -> bool:
+    """Whether ``address`` reaches only the machine the stack runs on."""
+    host = address.strip().lower()
+    if not host:
+        return True
+    # Strip a port, and the brackets an IPv6 host:port form carries.
+    if host.startswith("["):
+        host = host.partition("]")[0].lstrip("[")
+    elif host.count(":") == 1:
+        host = host.partition(":")[0]
+    if host in {"localhost", "::1", "ip6-localhost"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A hostname that is not obviously loopback. Treat as reachable: the
+        # safe answer when the question cannot be decided is the one that
+        # refuses the bypass.
+        return False
+
+
+def auth_bypass_refusal(env: str | None = None) -> str | None:
+    """Why the anonymous shim must not serve this request, or ``None``.
+
+    Returns a sentence for the log, so an operator who expected the bypass
+    learns which condition withheld it rather than seeing an unexplained 401.
+    """
+    resolved = _normalize_env(env if env is not None else current_env_from_os())
+    if resolved not in AUTH_BYPASS_ENVIRONMENTS:
+        return f"ENVIRONMENT is {resolved or 'unset'!r}, which is not one of {sorted(AUTH_BYPASS_ENVIRONMENTS)}"
+    if os.getenv(DEV_AUTH_BYPASS_VAR, "").strip().lower() not in _TRUTHY:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is not set. Naming a development "
+            "environment no longer enables the anonymous shim on its own; set "
+            f"{DEV_AUTH_BYPASS_VAR}=1 deliberately, or use "
+            "infra/compose/docker-compose.dev.yml, which sets it"
+        )
+    published = [a for a in os.getenv(PUBLISHED_BIND_VAR, "").split(",") if a.strip()]
+    reachable = [a.strip() for a in published if not _is_loopback(a)]
+    if reachable:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is set, but this deployment publishes "
+            f"{', '.join(reachable)}, which is not loopback. An anonymous "
+            "administrator on a reachable address is not a developer "
+            "convenience. Bind to 127.0.0.1, or authenticate"
+        )
+    return None
+
+
+def current_env_from_os() -> str:
+    """Read the current environment from ``os.environ`` at call time.
+
+    This deliberately bypasses the cached :class:`Settings` singleton so
+    tests that ``monkeypatch.setenv("ENV", ...)`` mid-request still see
+    the override. Used by request-time gates only (e.g. dev-auth shim);
+    boot-time / once-per-process decisions should read ``settings.ENV``
+    or ``settings.ENVIRONMENT`` instead.
+    """
+    return _normalize_env(os.getenv("ENV") or os.getenv("ENVIRONMENT"))
+
+
+def is_dev_mode_runtime() -> bool:
+    """True if the live process is in a dev-class environment.
+
+    Combines :func:`current_env_from_os` with :func:`is_dev_env` so
+    monkeypatched env vars (tests) and the cached
+    :class:`Settings` object cannot disagree.
+    """
+    return is_dev_env(current_env_from_os())
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        extra="ignore",
+        # pydantic-settings v2 attempts to JSON-decode environment variables
+        # whose annotation is a complex type (list/dict/...) BEFORE any
+        # ``field_validator(mode="before")`` runs. That breaks our documented
+        # convention of comma-separated values for fields like ``CORS_ORIGINS``
+        # (e.g. ``CORS_ORIGINS=http://localhost:3000``). Disabling decoding
+        # makes the raw string flow into the validator unchanged, which then
+        # parses the comma-separated form. Operators who prefer JSON syntax
+        # can still pass ``["..."]`` via the .env file pathway because the
+        # validator falls through for non-string inputs.
+        enable_decoding=False,
+    )
+
+    # App
+    APP_NAME: str = "AiSOC API"
+    # Resolved, never defaulted: the build arg the image was stamped with,
+    # then the repo-root VERSION file, then the string "unknown". See
+    # app/core/version.py for why "unknown" rather than a numeric fallback.
+    APP_VERSION: str = Field(default_factory=resolve_version)
+    ENV: str = "development"
+    ENVIRONMENT: str = "development"  # alias for ENV
+    DEBUG: bool = False
+    API_PREFIX: str = "/api/v1"
+
+    # Security
+    SECRET_KEY: str = "change-me-in-production-at-least-32-chars"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ALGORITHM: str = "HS256"
+
+    # Bearer token required to scrape ``/metrics`` outside development.
+    # Empty string disables the gate (development default). When set, the
+    # endpoint requires ``Authorization: Bearer <METRICS_TOKEN>`` and
+    # otherwise returns 401. Prefer a long random hex string mounted as
+    # a kubernetes secret / fly.io secret in production.
+    METRICS_TOKEN: str = ""
+
+    # Application-layer encryption key for connector credentials and other
+    # sensitive ``auth_config`` payloads stored in Postgres. Must be a 32-byte
+    # url-safe base64 key (the Fernet format). Generate one with
+    # ``python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"``
+    # and load it via Fly secrets / k8s secret. When empty in a development
+    # environment the API auto-generates a process-local key on first use and
+    # logs a warning; outside development the API refuses to encrypt or
+    # decrypt anything until it's set, so credentials cannot be silently
+    # written in plaintext. Rotate by re-encrypting via
+    # ``AISOC_CREDENTIAL_KEY_ROTATION_FROM`` (comma-separated previous keys).
+    AISOC_CREDENTIAL_KEY: str = ""
+    AISOC_CREDENTIAL_KEY_ROTATION_FROM: str = ""
+
+    # Envelope encryption (``vault:v2``). When enabled each secret gets its own
+    # data-encryption key, and only the *wrapped* DEK is stored alongside the
+    # ciphertext — so a database dump is useless without the ability to unwrap,
+    # and one leaked DEK exposes one secret rather than the whole vault.
+    #
+    #   off   — Fernet under AISOC_CREDENTIAL_KEY (default; ``vault:v1``)
+    #   local — DEKs wrapped by a KEK held in AISOC_CREDENTIAL_KEK. Better blast
+    #           radius than v1, but the KEK is still on the host.
+    #   aws   — DEKs wrapped by AWS KMS; the KEK never leaves the HSM.
+    #
+    # Reads are always backward compatible: a ``vault:v1`` token written before
+    # this was enabled still decrypts under AISOC_CREDENTIAL_KEY. Turning it on
+    # is therefore safe without a migration; existing rows upgrade to v2 the
+    # next time they are written.
+    AISOC_CREDENTIAL_ENVELOPE: str = "off"
+    AISOC_CREDENTIAL_KEK: str = ""
+    AISOC_CREDENTIAL_KEK_ROTATION_FROM: str = ""
+    AISOC_KMS_KEY_ID: str = ""
+
+    # Internal URL for the connectors microservice. The API service proxies
+    # catalog lookups (``GET /connectors``) and stateless connection tests
+    # (``POST /connectors/{type}/test``) to this URL so the wizard UI can
+    # render schema-driven forms and verify credentials before saving.
+    # Default targets the docker-compose hostname; override locally with
+    # e.g. ``http://localhost:8088`` when the connectors service is
+    # exposed on the host. Empty disables proxying entirely (catalog and
+    # test endpoints will return 503).
+    CONNECTORS_SERVICE_URL: str = "http://connectors:8003"
+    CONNECTORS_SERVICE_TIMEOUT_SECONDS: float = 15.0
+
+    # Internal URL of ``services/threatintel``, which polls the public feeds
+    # (CISA KEV needs no key) and holds what they collected. The console's
+    # /threat-intel page reads through ``GET /threat-intel/indicators`` here;
+    # empty disables the proxy and that route reports it rather than rendering
+    # an empty list, because an empty list and an absent service look the same
+    # to a reader and call for different things.
+    THREATINTEL_SERVICE_URL: str = "http://threatintel:8005"
+    THREATINTEL_SERVICE_TIMEOUT_SECONDS: float = 10.0
+
+    # Public ingest base URL — surfaced in the wizard's "Reveal push URL"
+    # response so operators get a copy-pasteable curl example. Empty
+    # falls back to a relative path; production deployments should
+    # always set this (e.g. https://ingest.example.com).
+    INGEST_PUBLIC_URL: str = ""
+
+    # Public base URL for the API service, used to build the OAuth
+    # ``redirect_uri`` advertised to upstream identity providers. Must be
+    # registered verbatim in each tenant's OAuth app. In production this
+    # is e.g. ``https://api.example.com``; the callback path
+    # ``/api/v1/oauth/callback`` is appended automatically. Empty
+    # disables the hosted OAuth flow (start endpoint returns 503).
+    OAUTH_PUBLIC_BASE_URL: str = ""
+
+    # Public base URL of the analyst console (e.g. https://soc.example.com) —
+    # used as the default ``return_to`` after a successful OAuth callback so
+    # the operator lands back on /onboarding with the verify-data-flowing
+    # screen already polling, and as the origin of published replay share
+    # links. Empty falls back to this install's own local console rather than
+    # to any particular deployment's hostname.
+    CONSOLE_PUBLIC_BASE_URL: str = ""
+
+    # Deployment-neutral fallback for operator-facing absolute URLs
+    # (published replay links, tenant invite links) when
+    # ``CONSOLE_PUBLIC_BASE_URL`` is unset. Never hard-code a specific
+    # deployment's hostname here: a self-hosted install that emits share or
+    # invite links pointing at somebody else's console is a real leak, not a
+    # cosmetic one.
+    DEFAULT_CONSOLE_BASE_URL: str = "http://localhost:3000"
+
+    # Workstream 5 (self-healing) — auto OAuth refresh worker. The
+    # background loop runs inside the API process (``lifespan`` hook in
+    # main.py) and rotates expiring access_tokens for every connector
+    # provisioned via the hosted OAuth flow. Set
+    # ``OAUTH_REFRESH_WORKER_ENABLED=false`` to disable (e.g. in tests
+    # or when running the API behind a separate scheduler service).
+    #
+    # ``INTERVAL`` is the polling cadence in seconds. ``LEAD_TIME`` is
+    # how many seconds before ``expires_at`` we proactively refresh —
+    # 300s gives roughly a 5-minute margin so a slow provider response
+    # doesn't push us past expiry. ``ALARM_THRESHOLD`` is the consecutive
+    # failure count that flips ``health_status`` to ``unhealthy`` (the
+    # plan calls for 3).
+    OAUTH_REFRESH_WORKER_ENABLED: bool = True
+    OAUTH_REFRESH_INTERVAL_SECONDS: int = 60
+    OAUTH_REFRESH_LEAD_TIME_SECONDS: int = 300
+    OAUTH_REFRESH_ALARM_THRESHOLD: int = 3
+    # Per-provider HTTP timeout (seconds) for the token-exchange POST.
+    # Kept short because the worker runs in-band with the API event
+    # loop; a hung provider should not stall the cadence.
+    OAUTH_REFRESH_HTTP_TIMEOUT_SECONDS: float = 15.0
+
+    # ------------------------------------------------------------------
+    # WS-G2: Weekly Executive Digest auto-generation worker.
+    # Author: Beenu <beenu@cyble.com>
+    #
+    # The worker runs as a single ``asyncio.Task`` inside the API process
+    # (``lifespan`` hook in main.py). Every Monday at 00:xx UTC it generates
+    # a PDF (or HTML fallback) executive digest for every active tenant and
+    # persists a ``ReportArtefact`` row.
+    #
+    # ``WEEKLY_DIGEST_WORKER_ENABLED``      – Set false to disable (e.g. in
+    #                                         unit-test environments or when
+    #                                         digests are triggered externally).
+    # ``WEEKLY_DIGEST_POLL_INTERVAL_SECONDS`` – How often (seconds) the loop
+    #                                         checks whether it is Monday 00:xx.
+    #                                         Defaults to 3600 (1 hour). Must
+    #                                         be ≥ 60 to avoid a busy loop.
+    # ------------------------------------------------------------------
+    WEEKLY_DIGEST_WORKER_ENABLED: bool = True
+    WEEKLY_DIGEST_POLL_INTERVAL_SECONDS: int = 3600
+
+    # ------------------------------------------------------------------
+    # T3.4 — Saved-hunt scheduler. The worker scans ``aisoc_saved_hunts``
+    # and fires any hunt whose cron schedule says it's due, opening a
+    # case per hit. Default off until query execution is wired through to
+    # the in-process Elasticsearch client (see TODO in
+    # ``app.workers.hunt_scheduler``); flipping to ``true`` exercises the
+    # sweep + bookkeeping path which is the hot path covered by tests.
+    # ``HUNT_SCHEDULER_POLL_INTERVAL_SECONDS`` controls the sweep cadence
+    # (seconds). 30s gives sub-minute resolution for ``* * * * *`` saved
+    # hunts without thrashing the DB.
+    # The ``AISOC_HUNT_SCHEDULER_ENABLED`` env alias matches the operator-
+    # facing name documented in the task plan.
+    # ------------------------------------------------------------------
+    HUNT_SCHEDULER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("HUNT_SCHEDULER_ENABLED", "AISOC_HUNT_SCHEDULER_ENABLED"),
+    )
+    HUNT_SCHEDULER_POLL_INTERVAL_SECONDS: int = 30
+
+    # ------------------------------------------------------------------
+    # Intel-driven retro-hunts (gap-closure Phase 8.1).
+    #
+    # Off by default at the deployment level *and* per tenant. Two switches
+    # rather than one because they answer different questions: this one is the
+    # operator's ("may this deployment consume the intel topic at all"), and
+    # ``retro_hunt_settings.enabled`` is the customer's ("may AiSOC sweep my
+    # history"). A sweep costs warehouse time and, where it reaches a
+    # connected SIEM, possibly money, so neither answer may be assumed.
+    #
+    # The topic default is the one the *producer* actually uses.
+    # ``ThreatIntelPipeline.__init__`` carries a ``threat-intel-events``
+    # default that nothing reaches, because ``services/threatintel``'s
+    # lifespan overrides it with ``KAFKA_TOPIC_THREAT_INTEL``. A consumer that
+    # subscribed to the constructor default would read an empty topic forever
+    # and report healthy while doing so, so ``scripts/check_ioc_lake_mapping.py``
+    # compares this value against that service's setting.
+    # ------------------------------------------------------------------
+    # Default **off**, deliberately and permanently.
+    #
+    # A retro-hunt replays every newly-published indicator against a
+    # tenant's entire recorded history, so arming it on upgrade would
+    # change what a deployment does to its own lake without anyone asking
+    # — the same reasoning as the retention purge worker below.
+    #
+    # Off by default is not the same as untested: `retro-hunt-live.yml`
+    # grades the sweep and the consumer on every pull request, with the
+    # flag **on**, against a real ClickHouse and a real broker. See
+    # `docs/audit/MATURITY_DEFINITION.md` on why a flag's default does not
+    # bear on maturity but an ungraded flag does.
+    RETRO_HUNT_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETRO_HUNT_ENABLED", "AISOC_RETRO_HUNT_ENABLED"),
+    )
+    # Evaluation mode for retro-hunts: sweeps run exactly as live ones do —
+    # and still consume the tenant's sweep budget, because the warehouse scan
+    # the budget bounds was performed — but matches come back as recorded
+    # *proposals* and the mutation boundary inside `sweep_tenant` withholds
+    # every write: no alert opens, no sighting row lands, no counter moves.
+    # For rehearsing a re-hunt over history; off means live.
+    RETRO_HUNT_DRY_RUN: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETRO_HUNT_DRY_RUN", "AISOC_RETRO_HUNT_DRY_RUN"),
+    )
+    KAFKA_TOPIC_THREAT_INTEL: str = "aisoc.threat_intel"
+    RETRO_HUNT_CONSUMER_GROUP: str = "aisoc-retro-hunt"
+
+    # Retention purge worker. Applies each tenant's configured retention
+    # window by deleting aged rows from the ClickHouse lake and the Postgres
+    # alerts table.
+    #
+    # Default **off**, and dry-run when first switched on. Retention policies
+    # have been storable (and described as enforced) for several releases
+    # while nothing deleted anything, so arming this on upgrade would turn a
+    # version bump into unannounced data loss. Enable it deliberately, read
+    # the dry-run counts, then set RETENTION_WORKER_DRY_RUN=false.
+    #
+    # Only tenants with an explicit `retention_policies` row are purged; the
+    # defaults in app.services.retention pre-fill a form, they are not an
+    # instruction to delete. `audit_days` is stored but not purged — the audit
+    # log is an append-only hash chain and truncating it invalidates every
+    # subsequent verification.
+    # Depth 5.2. `report_templates.cron_schedule` has been a storable,
+    # editable field with no reader anywhere in the tree, so a tenant could
+    # set a schedule in the console and never receive a report. On by
+    # default: the worker generates and stores, and delivers only where an
+    # SMTP relay is configured, so switching it on cannot start emailing
+    # anybody a deployment has not set up a relay for.
+    REPORT_SCHEDULER_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("REPORT_SCHEDULER_ENABLED", "AISOC_REPORT_SCHEDULER_ENABLED"),
+    )
+    # Drains the outbound-webhook retry queue. On by default for the same
+    # reason: a destination is `enabled = FALSE` on creation, so with no
+    # destination configured this worker finds nothing and does nothing —
+    # and with one configured, a queue nothing drains is a table that fills
+    # up while the dead-letter view reads empty.
+    OUTBOUND_WEBHOOK_WORKER_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("OUTBOUND_WEBHOOK_WORKER_ENABLED", "AISOC_OUTBOUND_WEBHOOK_WORKER_ENABLED"),
+    )
+
+    RETENTION_WORKER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETENTION_WORKER_ENABLED", "AISOC_RETENTION_WORKER_ENABLED"),
+    )
+    RETENTION_WORKER_DRY_RUN: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("RETENTION_WORKER_DRY_RUN", "AISOC_RETENTION_WORKER_DRY_RUN"),
+    )
+    RETENTION_WORKER_INTERVAL_SECONDS: int = 21600  # 6h
+
+    # Depth 7.1 — the reported-phish report-mailbox poller. Off by default
+    # for the same reason the mailbox arms are: reading a tenant's mailbox
+    # on a schedule is a capability an operator opts into, not one an
+    # upgrade acquires. Enabling it alone changes nothing either — the
+    # worker also needs `connector_config.phishing_report_mailbox` on an
+    # enabled Microsoft 365 or Google Workspace connector, and it never
+    # guesses an address.
+    PHISHING_INTAKE_WORKER_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("PHISHING_INTAKE_WORKER_ENABLED", "AISOC_PHISHING_INTAKE_WORKER_ENABLED"),
+    )
+    PHISHING_INTAKE_WORKER_INTERVAL_SECONDS: int = 300  # 5m
+
+    # Approval-SLA expiry (deferral 9b). On by default, unlike the retention
+    # purge: that one deletes data, this one marks an already-abandoned
+    # request as abandoned and dispatches nothing. Leaving it off would keep
+    # the state it closes, where a pending containment waits forever and
+    # nobody can tell it from one still under consideration.
+    APPROVAL_EXPIRY_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("APPROVAL_EXPIRY_ENABLED", "AISOC_APPROVAL_EXPIRY_ENABLED"),
+    )
+    APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
+
+    # Shadow-reconciliation sweep (gap-closure Phase 2.1, D15). Polls each
+    # measuring tenant's own SIEM for the closures their analysts made there,
+    # so a tenant whose queue lives in Splunk ES still accumulates the track
+    # record autonomy is earned on.
+    #
+    # Default **off**, per the standing rule that a feature which calls out
+    # ships off by default. Two different people are involved: a tenant
+    # enabling shadow mode has asked to be measured, and the operator of the
+    # deployment is the one who decides whether the platform may reach a
+    # third-party API on a timer. `GET /api/v1/health/shadow-reconciliation`
+    # reports "disabled" in those words rather than looking like a healthy
+    # idle sweep.
+    #
+    # Every other value here bounds what this deployment does to somebody
+    # else's SIEM: the tick cadence, a per-connector floor so a short cadence
+    # cannot become a poll storm, a cap on connectors per pass so a large
+    # estate is spread across passes, and a cap on one window so a connector
+    # that was blocked for a month catches up in steps rather than asking for
+    # the month in a single search.
+    SHADOW_RECONCILE_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("SHADOW_RECONCILE_ENABLED", "AISOC_SHADOW_RECONCILE_ENABLED"),
+    )
+    SHADOW_RECONCILE_INTERVAL_SECONDS: int = 900  # 15m
+    SHADOW_RECONCILE_MIN_CONNECTOR_INTERVAL_SECONDS: int = 3600  # 1h
+    SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK: int = 10
+    # Re-read this much of the previous window. A vendor's search index lags
+    # its own close events, so a window starting exactly where the last one
+    # ended steps over anything indexed late. Re-reading is free of
+    # consequence: an already-graded finding comes back as already_resolved.
+    SHADOW_RECONCILE_OVERLAP_SECONDS: int = 900  # 15m
+    # How far a first pass may reach back when a connector has no watermark.
+    SHADOW_RECONCILE_MAX_LOOKBACK_HOURS: int = 168  # 7d
+    SHADOW_RECONCILE_MAX_WINDOW_HOURS: int = 24
+    SHADOW_RECONCILE_LIMIT: int = 1000
+
+    # Fix pass 3.7. Re-checks every standing autonomy grant against the
+    # demotion floors on a timer. Default **on**, unlike the sweep above, and
+    # the difference is what each one reaches: that one polls a customer's
+    # SIEM, this one aggregates rows this deployment already wrote and makes
+    # no outbound call. The thing it catches is a grant that has stopped being
+    # earned, which nobody is watching for by definition, so shipping it off
+    # would leave it off wherever it matters.
+    AUTONOMY_DRIFT_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AUTONOMY_DRIFT_ENABLED", "AISOC_AUTONOMY_DRIFT_ENABLED"),
+    )
+    AUTONOMY_DRIFT_INTERVAL_SECONDS: int = 600  # 10m
+    AUTONOMY_DRIFT_MAX_TENANTS_PER_TICK: int = 100
+
+    # Database
+    # The default points at the bundled compose Postgres with its dev password.
+    # In docker-compose.yml and .env.example the password is parameterised via
+    # ``POSTGRES_PASSWORD`` so a single env var rotates it across the stack;
+    # this default mirrors the compose default so ``aisoc serve`` works on a
+    # fresh clone with zero configuration.
+    DATABASE_URL: PostgresDsn = "postgresql+asyncpg://aisoc:aisoc_dev_secret@localhost:5432/aisoc"  # type: ignore[assignment]
+
+    # The role that applies the migration chain, which is *not* the role that
+    # serves requests. ``DATABASE_URL`` points at `aisoc_app`, which holds DML
+    # only and is subject to row-level security; DDL needs the table owner.
+    #
+    # Falls back to ``DATABASE_URL`` when unset, so a deployment that has not
+    # split the roles yet behaves exactly as it did before. Where they are
+    # split and this is left unset, the migration run fails on the first
+    # ``CREATE TABLE`` with "permission denied for schema public" — a loud
+    # failure at deploy time, which is the right place for it.
+    DATABASE_MIGRATION_URL: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("DATABASE_MIGRATION_URL", "AISOC_DATABASE_MIGRATION_URL"),
+    )
+    DATABASE_POOL_SIZE: int = 20
+    DATABASE_MAX_OVERFLOW: int = 10
+    # Recycle pooled connections before managed Postgres idle-closes them.
+    # Fly Postgres autostop + idle TCP teardown made stale pool entries the
+    # dominant source of ``ConnectionDoesNotExistError`` 500s on the hosted
+    # demo; 300s is well under typical idle timeouts while keeping churn low.
+    DATABASE_POOL_RECYCLE_SECONDS: int = 300
+
+    # Redis
+    REDIS_URL: RedisDsn = "redis://localhost:6379/0"  # type: ignore[assignment]
+    REDIS_POOL_SIZE: int = 20
+
+    # ClickHouse
+    CLICKHOUSE_HOST: str = "localhost"
+    CLICKHOUSE_PORT: int = 9000
+    CLICKHOUSE_DATABASE: str = "aisoc"
+    CLICKHOUSE_USER: str = "default"
+    CLICKHOUSE_PASSWORD: str = ""
+
+    # Kafka
+    # Canonical name across the stack is ``KAFKA_BOOTSTRAP_SERVERS`` (see
+    # ``.env.example`` and the docker-compose files). ``KAFKA_BROKERS`` is
+    # kept as a backward-compatible alias for older deployments.
+    KAFKA_BOOTSTRAP_SERVERS: str = "localhost:9092"
+    KAFKA_BROKERS: str = "localhost:9092"
+    KAFKA_TOPIC_EVENTS: str = "aisoc.normalized_events"
+    KAFKA_TOPIC_ALERTS: str = "aisoc.alerts"
+
+    # OpenSearch. This service constructs no OpenSearch client; the value is
+    # read only by esql_runner's SSRF allow-list, as the host an operator is
+    # permitted to point ES|QL at. `services/threatintel` is the only service
+    # that actually stores anything in OpenSearch.
+    OPENSEARCH_URL: str = "http://localhost:9200"
+
+    # Elasticsearch fallback for single-cluster self-hosted deployments.
+    #
+    # The primary source of warehouse credentials is the tenant's own
+    # connector row, configured from the console and encrypted by the
+    # credential vault — see `app/services/event_warehouse/credentials.py`.
+    # These two settings are the deployment-wide fallback for an operator
+    # who runs one cluster shared by every tenant and does not want to
+    # register a connector.
+    #
+    # They are declared here because `esql_runner` has always read them via
+    # `getattr(settings, "ES_URL", None)` and they were never fields, so the
+    # lookup returned None on every deployment. `Settings` sets
+    # `extra="ignore"`, so exporting ES_URL did not help either: the value
+    # was discarded and the "set them in environment variables" message
+    # repeated. Declaring them makes that message true.
+    ES_URL: str | None = None
+    ES_API_KEY: str | None = None
+
+    # Neo4j
+    NEO4J_URI: str = "bolt://localhost:7687"
+    NEO4J_USER: str = "neo4j"
+    NEO4J_PASSWORD: str = ""
+
+    # Qdrant
+    QDRANT_URL: str = "http://localhost:6333"
+
+    # CORS
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+
+    # Observability
+    OTEL_ENDPOINT: str = ""
+    LOG_LEVEL: str = "INFO"
+
+    # Multi-tenancy
+    MAX_TENANTS: int = 1000
+    DEFAULT_TENANT_PLAN: str = "starter"
+
+    # Deployment-wide per-tenant ceilings, e.g.
+    # `{"connectors": 25, "seats": 50}`. Empty by default: AiSOC ships
+    # uncapped, and `app/services/entitlements.py` reports `unlimited`
+    # rather than drawing headroom against a ceiling nobody set. A
+    # tenant's own `tenants.limits` JSONB overrides anything here, in
+    # either direction.
+    #
+    # Declared as a real field rather than read with `getattr`: an
+    # undeclared setting is silently dropped by `extra="ignore"`, so an
+    # operator who exports it gets no limits and no explanation.
+    AISOC_DEFAULT_TENANT_LIMITS: dict = {}
+
+    # Plugin system
+    AISOC_PLUGINS_DIR: str = "/opt/aisoc/plugins"
+
+    # Feature flags (Tier 3.5)
+    AISOC_VULN_BOOST: bool = True
+
+    # Plugin signature trust gate.
+    #   strict   – signed-and-verified manifests are required; unsigned or
+    #              invalid plugins are refused. Default in production.
+    #   warn     – unsigned/invalid plugins still load, but a structured
+    #              warning log is emitted and the plugin record carries
+    #              ``signature_status="warn"``. Useful while bootstrapping
+    #              a key-rotation workflow.
+    #   disabled – signature checks are skipped entirely. Only sane in a
+    #              fully isolated dev sandbox.
+    # Public keys live in ``PLUGIN_TRUSTED_KEYS_DIR`` as PEM files; any
+    # plugin whose ``manifest.signature`` verifies under one of them is
+    # considered trusted.
+    PLUGIN_TRUST_MODE: str = "strict"
+    PLUGIN_TRUSTED_KEYS_DIR: str = "/opt/aisoc/plugin-keys"
+
+    # Mobile responder PWA
+    # Web push runs in the realtime service; this base URL is used by the API
+    # gateway proxy at /api/v1/push/* so the frontend never has to know the
+    # realtime service exists. Internal token must match REALTIME's
+    # AISOC_INTERNAL_TOKEN to authorize internal push fan-out.
+    REALTIME_BASE_URL: str = "http://realtime:8086"
+    REALTIME_INTERNAL_TOKEN: str = ""
+
+    # services/actions — where a governed response action is actually
+    # executed. These were read inline with os.environ.get from one endpoint,
+    # which is why the default was wrong: `aisoc-actions` is the compose
+    # container_name, and the DNS name on the network is the service name,
+    # `actions`. Nothing noticed because the only caller was a fallback path.
+    AISOC_ACTIONS_BASE_URL: str = "http://actions:8085"
+    AISOC_ACTIONS_SERVICE_TOKEN: str = ""
+
+    # SAML/OIDC session token signing secret. Consumed by ``app/auth/saml.py``
+    # and ``app/auth/oidc.py`` to mint AiSOC session JWTs after an external
+    # identity provider returns a successful authn response. We surface this
+    # as a real Settings field (not just ``os.getenv``) so that
+    # ``warn_if_insecure_defaults`` can be exercised deterministically in
+    # tests by passing ``JWT_SECRET=""`` instead of mutating the environment.
+    JWT_SECRET: str = ""
+
+    # Shared HS256 secret governing short-lived WebSocket/SSE *tickets*. The
+    # API mints tickets at ``POST /api/v1/realtime/ticket`` (see
+    # ``app/api/v1/endpoints/realtime.py``) and the Node realtime service
+    # (``services/realtime``) verifies them on every WS upgrade and SSE
+    # request. Both sides MUST read the same value. This is intentionally a
+    # *different* secret from ``SECRET_KEY`` (which signs first-party API
+    # access tokens) and ``REALTIME_INTERNAL_TOKEN`` (service-to-service
+    # fan-out auth), so the realtime edge can be rotated independently and a
+    # leaked ticket secret never forges a full API session.
+    #
+    # Generated by ``make up`` and passed to both this service and realtime.
+    # When empty the ticket endpoint fails closed (503) and the realtime edge
+    # rejects every connection, in every environment — there is no development
+    # fallback, because the one that used to be here was a constant committed
+    # to this repository and no manifest ever set the real secret.
+    AISOC_REALTIME_JWT_SECRET: str = ""
+    # Time-to-live, in seconds, for minted realtime tickets. Kept short so a
+    # leaked ticket is only briefly useful; the frontend re-mints on every
+    # (re)connect. Clamped to a sane ceiling by the ticket endpoint.
+    AISOC_REALTIME_TICKET_TTL_SECONDS: int = 60
+
+    # Relying party identity for WebAuthn / Passkey ceremonies. RP_ID must
+    # match the eTLD+1 of the PWA origin (no scheme, no port). RP_NAME is
+    # what the OS prompt shows the user.
+    PASSKEY_RP_ID: str = "localhost"
+    PASSKEY_RP_NAME: str = "AiSOC"
+    PASSKEY_RP_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+    ]
+    PASSKEY_CHALLENGE_TTL_SECONDS: int = 300
+
+    @field_validator("PASSKEY_RP_ORIGINS", mode="before")
+    @classmethod
+    def parse_passkey_origins(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
+
+    # ------------------------------------------------------------------
+    # WS-B4: Detection-as-Code git PR path
+    # Author: Beenu - beenu@cyble.com
+    #
+    # When AISOC_GITHUB_TOKEN is set the promote-proposal endpoint opens a
+    # Pull Request in AISOC_GITHUB_REPO, committing the Sigma/YARA rule file
+    # under AISOC_GITHUB_DETECTIONS_PATH and stores the PR URL on the proposal
+    # record. All three settings must be non-empty for PR creation to be
+    # attempted; any missing setting silently skips PR creation (github_pr_url
+    # remains NULL).
+    # ------------------------------------------------------------------
+    AISOC_GITHUB_TOKEN: str = ""
+    AISOC_GITHUB_REPO: str = ""  # format: "org/repo"
+    AISOC_GITHUB_DETECTIONS_PATH: str = "detections"  # path inside repo root
+
+    # Demo mode (hosted at tryaisoc.com)
+    # When AISOC_DEMO_MODE=true the API rejects mutating requests outside the
+    # demo tenant with 403, surfaces a banner, and pre-seeds canonical data.
+    AISOC_DEMO_MODE: bool = False
+    AISOC_DEMO_TENANT: str = "demo"
+    AISOC_DEMO_BANNER: str = "Demo data resets daily at 00:00 UTC. All write actions are disabled."
+
+    # Optional services (toggle off for the lean Fly.io demo).
+    # When true the corresponding subsystem skips connection setup at boot
+    # and the API returns 503 for endpoints that require it.
+    AISOC_DISABLE_KAFKA: bool = False
+    AISOC_DISABLE_CLICKHOUSE: bool = False
+    AISOC_DISABLE_NEO4J: bool = False
+    AISOC_DISABLE_QDRANT: bool = False
+    # AISOC_DISABLE_OPENSEARCH is deliberately absent. It sat here with zero
+    # readers while three deploy configs set it and the env-var reference
+    # documented it, so an operator could switch off a subsystem this service
+    # never had. A flag that disables nothing is worse than no flag.
+
+    # ------------------------------------------------------------------
+    # v6 capability flags (AiSOC v6 capability roadmap).
+    # Every capability ships behind a flag so operators can stage rollout.
+    # All default to True in development; production deployments can pin
+    # individual flags via env vars (e.g. ``AISOC_FEATURE_RBA=false``).
+    # ------------------------------------------------------------------
+    # Wave 1 — close 2026 table-stakes
+    AISOC_FEATURE_RBA: bool = True  # Risk-Based Alerting + entity rollup
+    AISOC_FEATURE_CONFIDENCE: bool = True  # Detection confidence + explainability
+    AISOC_FEATURE_CHATOPS_VERIFY: bool = True  # Slack/Teams interactive user verification
+    AISOC_FEATURE_DETECTION_DRIFT: bool = True  # Weekly purple-team drift sweep
+    AISOC_FEATURE_KPI_BAR: bool = True  # 2026 KPI bar in SLA dashboard
+
+    # Wave 2 — eval-graded differentiation
+    AISOC_FEATURE_DAC: bool = True  # Detection-as-code lifecycle
+    AISOC_FEATURE_HUNT_AS_CODE: bool = True  # YAML hunt corpus + scheduler
+    AISOC_FEATURE_BENCHMARK_PUBLIC: bool = True  # Public scoreboard
+    AISOC_FEATURE_AIVAI_EVAL: bool = True  # AI-vs-AI adversary suite
+
+    # Wave 3 — operational maturity
+    AISOC_FEATURE_FED_SEARCH: bool = True  # Federated SIEM search
+    AISOC_FEATURE_MSSP: bool = True  # Parent-tenant console
+    AISOC_FEATURE_ASSET_INVENTORY: bool = True  # Asset table + KEV/EPSS
+    AISOC_FEATURE_INSIDER_THREAT: bool = True  # Insider-threat module
+    AISOC_FEATURE_REMEDIATION_TIERS: bool = True  # L0–L4 maturity tiers
+
+    # Wave 4 — strategic moat
+    AISOC_FEATURE_INTERNAL_TI: bool = True  # Closed-case IOC extraction
+    AISOC_FEATURE_CSPM: bool = True  # Cloud security posture
+    AISOC_FEATURE_IDENTITY_GRAPH: bool = True  # Identity-first correlation graph
+    AISOC_FEATURE_BOARD_REPORTS: bool = True  # Auto-generated monthly board reports
+
+    # Drift sweep cadence (hours). Used by services/purple-team scheduler when
+    # AISOC_FEATURE_DETECTION_DRIFT is True. Defaults to 168h (weekly).
+    AISOC_DRIFT_SWEEP_INTERVAL_HOURS: int = 168
+
+    # ------------------------------------------------------------------
+    # v1.5 SOC Console parity — funnel + pipeline health (PR-3).
+    # ------------------------------------------------------------------
+    # Denominator used by /metrics/funnel mitre_coverage. Defaults to the
+    # current size of the MITRE ATT&CK Enterprise technique catalog so the
+    # ratio stays interpretable as "% of ATT&CK we're watching for". Operators
+    # can pin a smaller universe (e.g. the subset they care about) via the env
+    # var ``AISOC_FUNNEL_MITRE_TOTAL``.
+    AISOC_FUNNEL_MITRE_TOTAL: int = 201
+
+    # /health/pipeline staleness thresholds (seconds). A connector is treated
+    # as "stale" when its ``last_event_at`` is older than the warn threshold
+    # and "down" when it exceeds the down threshold. Defaults match the
+    # 5-minute poll cadence documented in services/connectors.
+    AISOC_PIPELINE_STALE_WARN_SECONDS: int = 600  # 10 minutes
+    AISOC_PIPELINE_STALE_DOWN_SECONDS: int = 1800  # 30 minutes
+
+    # ------------------------------------------------------------------
+    # Air-gapped operating mode (Tier 3.1 — air-gapped certification).
+    # When AISOC_AIRGAPPED is True the API:
+    #   * refuses to make any LLM / threat-intel / model-phone-home
+    #     HTTP request to a host not in AISOC_AIRGAP_ALLOWLIST (or a
+    #     private IP / .local / *.internal hostname),
+    #   * surfaces a banner in the UI and a structured warning at boot
+    #     when an LLM is configured against a public host,
+    #   * pins detection rule and threat-intel feeds to local-only
+    #     sources (the rule loader skips any feed whose URL violates
+    #     the egress rule and logs the skip).
+    # The flag is honored by ``services/api/app/core/airgap.py`` —
+    # any HTTP outbound code path can call ``enforce_airgap_for_url(url)``
+    # to assert before issuing a request.
+    # ------------------------------------------------------------------
+    # EASM (External Attack Surface Management) — Tier 3.6.
+    # ------------------------------------------------------------------
+    AISOC_FEATURE_EASM: bool = True
+    AISOC_EASM_SHODAN_API_KEY: str = ""
+    AISOC_EASM_CENSYS_API_ID: str = ""
+    AISOC_EASM_CENSYS_API_SECRET: str = ""
+    AISOC_EASM_ACTIVE_SCAN_ENABLED: bool = False  # lightweight port probe; off by default
+    AISOC_EASM_SCAN_PORTS: list[int] = [22, 80, 443, 8080, 8443, 3389]
+
+    @field_validator("AISOC_EASM_SCAN_PORTS", mode="before")
+    @classmethod
+    def parse_scan_ports(cls, v: Any) -> list[int]:
+        if isinstance(v, str):
+            return [int(p.strip()) for p in v.split(",") if p.strip()]
+        return v
+
+    # ------------------------------------------------------------------
+    # Stage 3 #20 — Outbound MISP push from /threatintel/stix endpoints.
+    #
+    # When MISP_URL + MISP_API_KEY are set, the API can mirror published
+    # STIX indicators / bundles into a downstream MISP instance via the
+    # MISP REST API. The push is opt-in per request (``?push_to_misp=true``
+    # on POST /threatintel/stix/indicators and /bundles) unless
+    # ``MISP_PUSH_AUTO=true``, in which case every successful publish
+    # triggers a push.
+    #
+    # The push respects ``AISOC_AIRGAPPED`` — if MISP_URL points at a
+    # public host outside the allowlist, the call is refused at the
+    # ``enforce_airgap_for_url`` chokepoint rather than silently leaking.
+    #
+    # ``MISP_PUSH_DEFAULT_DISTRIBUTION``  – MISP distribution level
+    #     (0=org-only, 1=community, 2=connected, 3=all_communities,
+    #      4=sharing_group). Default 0 keeps everything in-org so an
+    #      operator who flips on auto-push doesn't accidentally publish
+    #      to the wider MISP ecosystem.
+    # ``MISP_PUSH_DEFAULT_THREAT_LEVEL``  – 1=high, 2=medium, 3=low,
+    #     4=undefined (MISP-native scale). Default 4.
+    # ``MISP_PUSH_DEFAULT_ANALYSIS``      – 0=initial, 1=ongoing,
+    #     2=completed. Default 0.
+    # ------------------------------------------------------------------
+    MISP_URL: str = ""
+    MISP_API_KEY: str = ""
+    MISP_VERIFY_SSL: bool = True
+    MISP_PUSH_AUTO: bool = False
+    MISP_PUSH_DEFAULT_DISTRIBUTION: int = 0
+    MISP_PUSH_DEFAULT_THREAT_LEVEL: int = 4
+    MISP_PUSH_DEFAULT_ANALYSIS: int = 0
+    MISP_PUSH_TIMEOUT_SECONDS: float = 30.0
+
+    AISOC_AIRGAPPED: bool = False
+    # Comma-separated host (or host:port) allowlist that overrides the
+    # blanket egress block when AISOC_AIRGAPPED=True. Use this for an
+    # internal LLM gateway (e.g. ``llm.corp.local``) or a private
+    # threat-intel mirror. Private IPs (RFC1918, loopback, link-local)
+    # and ``.local`` / ``.internal`` / ``.lan`` hostnames are always
+    # implicitly allowed.
+    AISOC_AIRGAP_ALLOWLIST: list[str] = []
+
+    @field_validator("AISOC_AIRGAP_ALLOWLIST", mode="before")
+    @classmethod
+    def parse_airgap_allowlist(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [host.strip().lower() for host in v.split(",") if host.strip()]
+        if isinstance(v, list):
+            return [str(host).strip().lower() for host in v if str(host).strip()]
+        return v
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors(cls, v: Any) -> list[str]:
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+
+    @model_validator(mode="after")
+    def _refuse_a_published_signing_key_on_a_deployed_demo(self) -> "Settings":
+        """Never let a key anyone can read sign a session (GHSA-m57m-6p4p-cq6p).
+
+        ``enforce_secure_defaults`` refuses an insecure default at boot, but
+        only when ``ENVIRONMENT=production``. ``infra/railway/railway.toml``
+        sets ``ENVIRONMENT = "demo"`` and never sets ``SECRET_KEY``, so the
+        documented one-click deploy came up on the internet signing tokens
+        with ``change-me-in-production-at-least-32-chars`` — a string in this
+        repository's front matter, good for a forged session as any tenant in
+        any role.
+
+        ``demo`` is the only member of ``DEV_ENVIRONMENTS`` that denotes a
+        *deployed* environment: ``development``, ``dev``, ``local`` and
+        ``test`` are on somebody's machine, where the placeholder is the
+        documented value and a per-process key would break every local flow
+        that signs something and reads it back. So the substitution is scoped
+        to ``demo`` alone, and the local environments are pinned untouched by
+        test.
+
+        Substitution rather than refusal, deliberately. Refusing is what
+        production does and is the obvious symmetry, but it would break the
+        one-click deploy for everyone following the documented path — and a
+        security default that breaks the documented path is one that gets
+        patched out downstream. Production keeps the louder answer, because a
+        production deployment that cannot keep a session across a restart is
+        a worse problem than one that will not start.
+
+        The cost is real and is said out loud rather than discovered: the key
+        lives for this process only, so sessions do not survive a restart,
+        and a demo running more than one replica needs a ``SECRET_KEY`` of
+        its own or the replicas will reject each other's tokens.
+        """
+        if _normalize_env(self.ENVIRONMENT) != "demo":
+            return self
+        if self.SECRET_KEY not in INSECURE_SECRET_KEY_DEFAULTS:
+            return self
+        # `object.__setattr__` is not needed — Settings is not frozen — but
+        # the assignment must not re-enter validation, which `model_config`
+        # already avoids by not setting `validate_assignment`.
+        self.SECRET_KEY = secrets.token_urlsafe(48)
+        # The module-level logger is created inside warn_if_insecure_defaults
+        # rather than at import, so this one is resolved by name here.
+        logging.getLogger("aisoc.config").error(
+            "insecure_default: SECRET_KEY was a published placeholder on a deployed demo. "
+            "A per-process key was generated so no token is signed with a value anyone can read. "
+            "Consequence: sessions end at the next restart, and a demo with more than one replica "
+            "must set SECRET_KEY itself or the replicas will reject each other's tokens."
+        )
+        return self
+
+    @model_validator(mode="after")
+    def _reconcile_env_aliases(self) -> "Settings":
+        """Keep ``ENV`` and ``ENVIRONMENT`` consistent.
+
+        Historically the codebase had two aliases for the same concept,
+        each populated from a different env var, each read from a
+        different module. When operators set only one (the common case),
+        the unset one stayed as the class default ``"development"`` —
+        silently bypassing the production gates that read the unset
+        side. This validator fixes both cases:
+
+        * If exactly one of ``ENV`` / ``ENVIRONMENT`` is set, mirror it
+          to the other.
+        * If both are set but disagree, emit a ``RuntimeWarning`` and
+          prefer ``ENVIRONMENT`` (the newer name) so the more-explicit
+          intent wins. Operators see the warning at boot and can
+          collapse to a single var.
+        """
+        env_raw = (self.ENV or "").strip()
+        environment_raw = (self.ENVIRONMENT or "").strip()
+
+        # ``"development"`` is the class default, which we use as the
+        # signal "this was never set by the operator". That's slightly
+        # lossy (an operator who explicitly types ENV=development looks
+        # the same as not-set), but the resulting behaviour is identical
+        # so the distinction doesn't matter.
+        env_is_default = _normalize_env(env_raw) == "development"
+        environment_is_default = _normalize_env(environment_raw) == "development"
+
+        if env_is_default and not environment_is_default:
+            # Operator set ENVIRONMENT but not ENV — mirror.
+            object.__setattr__(self, "ENV", environment_raw)
+        elif environment_is_default and not env_is_default:
+            # Operator set ENV but not ENVIRONMENT — mirror.
+            object.__setattr__(self, "ENVIRONMENT", env_raw)
+        elif not env_is_default and not environment_is_default and _normalize_env(env_raw) != _normalize_env(environment_raw):
+            # Both set and disagree: prefer ENVIRONMENT, warn loudly so
+            # ops collapses to one canonical name.
+            warnings.warn(
+                f"ENV={env_raw!r} and ENVIRONMENT={environment_raw!r} disagree; "
+                f"using ENVIRONMENT and mirroring to ENV. Set only one of these.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            object.__setattr__(self, "ENV", environment_raw)
+
+        return self
+
+    # Convenience predicates so callers don't need to import the module
+    # level helpers when they already have a ``settings`` reference.
+    @property
+    def is_dev(self) -> bool:
+        """True if this settings object names a dev-class environment."""
+        return is_dev_env(self.ENVIRONMENT)
+
+    @property
+    def is_production(self) -> bool:
+        """True if this is a non-dev (i.e. real) environment."""
+        return not self.is_dev
+
+    @property
+    def VERSION(self) -> str:  # noqa: N802 — long-standing public name
+        """Alias for :attr:`APP_VERSION`, read by ``/health`` and the spec.
+
+        A property rather than a second field, because two fields holding one
+        fact is two chances to disagree about it. It was a field defaulting to
+        the same stale literal, which also meant pydantic-settings would bind
+        a bare ``VERSION`` environment variable to it — and ``VERSION`` is a
+        name five steps in ``.github/workflows/release.yml`` already export
+        for their own purposes. Nothing should be able to move the version
+        this process reports except the build arg and the tree.
+        """
+        return self.APP_VERSION
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+def realtime_ticket_secret(s: Settings | None = None) -> str | None:
+    """Resolve the effective HS256 secret used to sign realtime WS/SSE tickets.
+
+    Returns the secret to sign with, or ``None`` when the deployment is not
+    configured to mint tickets (i.e. the ticket endpoint should fail closed
+    with 503).
+
+    Resolution rules — kept byte-for-byte in sync with the Node verifier in
+    ``services/realtime/src/index.ts``:
+
+    * If ``AISOC_REALTIME_JWT_SECRET`` is set to a non-empty, non-insecure
+      value, use it (any environment).
+    * Otherwise return ``None`` — the caller must fail closed.
+
+    There is deliberately no development fallback. Both this and the Node
+    verifier used to fall back to ``DEV_REALTIME_TICKET_SECRET``, a constant
+    committed to this repository, and no manifest ever set the real secret or
+    the environment variable the production check read — so that constant was
+    the effective HMAC key everywhere, and anyone who could reach the realtime
+    edge could mint a ticket for any tenant (GHSA-4m55-xhcm-wjcr).
+
+    ``make up`` now generates ``AISOC_REALTIME_JWT_SECRET`` and compose passes
+    it to this service and to realtime, so local stacks still work with zero
+    manual config — on a real key rather than a published one.
+    """
+    s = s or settings
+    configured = (s.AISOC_REALTIME_JWT_SECRET or "").strip()
+    if configured and configured not in INSECURE_SECRET_KEY_DEFAULTS:
+        return configured
+    return None
+
+
+def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
+    """Emit a structured warning for each insecure default still in place.
+
+    Returns the list of warning messages emitted. Called from
+    ``app.main`` during startup so operators see the warnings in the
+    very first lines of the API container's stdout — same place they'd
+    look for a panic.
+
+    The list is also returned so a /health/secrets endpoint (or a
+    deploy-time CI check) can assert on it without re-implementing the
+    rule. We deliberately ``warnings.warn`` rather than ``logger.error``
+    so test suites can assert on the warning category.
+    """
+    s = s or settings
+    msgs: list[str] = []
+
+    # Postgres transport. `sslmode` unset means `prefer` in libpq, which
+    # negotiates TLS when the server offers it and silently falls back to
+    # cleartext when it does not — so an operator reading "prefer" has no
+    # way to know which of the two actually happened, and a server that
+    # stops offering TLS downgrades every connection without a single log
+    # line. `disable` is worse and is what `docker-compose.yml` ships.
+    #
+    # Named here rather than enforced in the driver because every service
+    # builds its own engine, and the one place they all pass through at
+    # boot is this collector.
+    dsn = str(getattr(s, "DATABASE_URL", "") or "")
+    if dsn:
+        from urllib.parse import parse_qs as _parse_qs
+        from urllib.parse import urlsplit as _urlsplit
+
+        query = _parse_qs(_urlsplit(dsn).query)
+        sslmode = (query.get("sslmode") or query.get("ssl") or [""])[0].strip().lower()
+        # An explicit, named opt-out, mirroring AISOC_ALLOW_CLEARTEXT_KAFKA.
+        # It exists because in production these messages are boot-blockers
+        # and the bundled compose Postgres serves no certificate — without
+        # it the documented `make up` path fails on a machine where there is
+        # nothing to fix, which is precisely how a security default gets
+        # patched out downstream. The compose file sets it with the reason
+        # written beside it, so the choice is visible rather than absent.
+        if os.getenv("AISOC_ALLOW_CLEARTEXT_DB", "").strip().lower() in {"1", "true", "yes", "on"}:
+            pass
+        elif sslmode in {"disable", "allow", "false", "0"}:
+            msgs.append(
+                f"DATABASE_URL carries sslmode={sslmode!r}, so every query — alerts, "
+                "entities, credentials in the vault's ciphertext column — crosses the "
+                "network in the clear. Use sslmode=require at minimum, or verify-full "
+                "with a CA bundle."
+            )
+        elif not sslmode:
+            msgs.append(
+                "DATABASE_URL sets no sslmode, which libpq reads as 'prefer': TLS when "
+                "the server offers it and cleartext when it does not, with no way to "
+                "tell which happened. Set sslmode explicitly."
+            )
+
+    if s.SECRET_KEY in INSECURE_SECRET_KEY_DEFAULTS:
+        msgs.append("SECRET_KEY is set to a known insecure placeholder; rotate before exposing this instance to the network.")
+
+    # /metrics auth: outside dev we expect a non-empty token.
+    if not is_dev_env(s.ENVIRONMENT) and not s.METRICS_TOKEN:
+        msgs.append("METRICS_TOKEN is empty in a non-development environment — /metrics is currently unauthenticated.")
+
+    # Plugin trust mode: never silently default to disabled in prod.
+    if not is_dev_env(s.ENVIRONMENT) and s.PLUGIN_TRUST_MODE.lower() == "disabled":
+        msgs.append("PLUGIN_TRUST_MODE=disabled outside development — plugins will load without signature verification.")
+
+    # Connector credential vault: refuse to silently boot without an encryption
+    # key outside development. Without this, ``Connector.auth_config`` would
+    # round-trip in plaintext.
+    if not is_dev_env(s.ENVIRONMENT) and not s.AISOC_CREDENTIAL_KEY:
+        msgs.append("AISOC_CREDENTIAL_KEY is empty in a non-development environment — connector credentials cannot be encrypted at rest.")
+
+    # JWT signing secret used by the SAML/OIDC session-issuance paths in
+    # ``app/auth/saml.py`` and ``app/auth/oidc.py``. Those modules now refuse
+    # to sign tokens with an empty or well-known placeholder, but we still
+    # want a noisy boot-time warning so the operator sees the misconfig
+    # *before* the first SSO callback 500s.
+    if not is_dev_env(s.ENVIRONMENT) and (not s.JWT_SECRET or s.JWT_SECRET == "changeme-insecure-default"):
+        msgs.append(
+            "JWT_SECRET is empty or set to the well-known placeholder — SAML/OIDC "
+            "session token issuance will fail closed until you wire a real secret."
+        )
+
+    # Internal token used by the agents service to authenticate to the
+    # realtime service. We no longer ship a "changeme" default in code, but
+    # warn here so operators don't quietly run with no inter-service auth.
+    if not is_dev_env(s.ENVIRONMENT) and not s.REALTIME_INTERNAL_TOKEN:
+        msgs.append("REALTIME_INTERNAL_TOKEN is empty in a non-development environment — agent → realtime events are unauthenticated.")
+
+    # Realtime WS/SSE ticket secret. When unset (or set to a well-known
+    # placeholder) outside development the ticket endpoint fails closed (503)
+    # and the realtime service rejects every browser connection, so surface it
+    # loudly at boot rather than letting operators discover it via 503s.
+    if not is_dev_env(s.ENVIRONMENT) and realtime_ticket_secret(s) is None:
+        msgs.append(
+            "AISOC_REALTIME_JWT_SECRET is empty or set to a known insecure placeholder — "
+            "realtime WS/SSE ticket issuance will fail closed (503) and browser realtime "
+            "connections will be rejected until you wire a real secret."
+        )
+
+    # Air-gap sanity check: if an operator flipped on AISOC_AIRGAPPED but
+    # the LLM is still pointed at a public endpoint (api.openai.com, etc.)
+    # surface that as an insecure-default rather than silently 503-ing
+    # every LLM-backed endpoint at request time.
+    if s.AISOC_AIRGAPPED:
+        # Lazy import to avoid a circular reference (airgap.py imports settings).
+        try:
+            import os as _os
+
+            from app.core.airgap import is_host_allowed_for_airgap
+
+            llm_base = _os.getenv("LLM_BASE_URL") or _os.getenv("OPENAI_BASE_URL") or ""
+            if llm_base:
+                from urllib.parse import urlparse as _urlparse
+
+                host = (_urlparse(llm_base).hostname or "").lower()
+                if host and not is_host_allowed_for_airgap(host, s.AISOC_AIRGAP_ALLOWLIST):
+                    msgs.append(
+                        f"AISOC_AIRGAPPED=true but LLM_BASE_URL host '{host}' is not in the airgap allowlist — "
+                        "LLM calls will be refused. Point LLM_BASE_URL at a local Ollama/vLLM endpoint or add "
+                        "the host to AISOC_AIRGAP_ALLOWLIST."
+                    )
+        except Exception:  # pragma: no cover - never let the warning helper itself fail boot
+            pass
+
+    logger = logging.getLogger("aisoc.config")
+    for msg in msgs:
+        # ``stacklevel=2`` so the warning points at the caller of
+        # ``warn_if_insecure_defaults`` rather than this helper.
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        logger.warning("insecure_default: %s", msg)
+
+    return msgs
+
+
+def is_production(env: str | None) -> bool:
+    """True only for the literal ``production`` environment."""
+    return (env or "").strip().lower() == "production"
+
+
+def console_base_url(s: Settings | None = None) -> str:
+    """Resolve the console origin used to build operator-facing absolute URLs.
+
+    Single source of truth for published-replay share links and tenant invite
+    links. Both used to carry their own hard-coded literal, which is how they
+    drifted apart *and* how a specific deployment's hostname ended up in links
+    handed to self-hosted operators. Routing both through here means a future
+    change can only move them together.
+    """
+    s = s or settings
+    return ((s.CONSOLE_PUBLIC_BASE_URL or "").strip() or s.DEFAULT_CONSOLE_BASE_URL).rstrip("/")
+
+
+class InsecureProductionDefaultsError(RuntimeError):
+    """Raised at boot when insecure defaults remain in a production deploy."""
+
+
+def enforce_secure_defaults(s: Settings | None = None) -> list[str]:
+    """Warn everywhere; **hard-fail the boot** in production (Phase 2).
+
+    ``warn_if_insecure_defaults`` only warns, which means a production deploy
+    can silently start with ``changeme``/placeholder secrets. This wrapper is
+    the boot-time gate: it emits the same warnings and then, if
+    ``ENVIRONMENT=production`` and any insecure default remains, raises so the
+    container crash-loops loudly instead of serving with a known-bad secret.
+
+    Returns the (empty, in a healthy prod) list of messages so callers/tests
+    can assert on it.
+    """
+    s = s or settings
+    msgs = warn_if_insecure_defaults(s)
+    if is_production(s.ENVIRONMENT) and msgs:
+        raise InsecureProductionDefaultsError("Refusing to boot in production with insecure defaults:\n  - " + "\n  - ".join(msgs))
+    return msgs
+
+
+settings = get_settings()

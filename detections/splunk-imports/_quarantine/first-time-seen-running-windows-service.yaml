@@ -1,0 +1,40 @@
+id: splunk-security-content-823136f2-d755-4b6d-ae04-372b486a5808
+name: First Time Seen Running Windows Service
+description: The following analytic detects the first occurrence of a Windows service
+  running in your environment. It leverages Windows system event logs, specifically
+  EventCode 7036, to identify services entering the "running" state. This activity
+  is significant because the appearance of a new or previously unseen service could
+  indicate the installation of unauthorized or malicious software. If confirmed malicious,
+  this activity could allow an attacker to execute arbitrary code, maintain persistence,
+  or escalate privileges within the environment. Monitoring for new services helps
+  in early detection of potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7036\n  | rex field=Message \"The (?<service>[-\\\
+    (\\)\\s\\w]+) service entered the (?<state>\\w+) state\"\n  | where state=\"running\"\
+    \n  | lookup previously_seen_running_windows_services service as service OUTPUT\
+    \ firstTimeSeen\n  | where isnull(firstTimeSeen) OR firstTimeSeen > relative_time(now(),\
+    \ `previously_seen_windows_services_window`)\n  | table _time dest service\n \
+    \ | `first_time_seen_running_windows_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 823136f2-d755-4b6d-ae04-372b486a5808
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/first_time_seen_running_windows_service.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,46 @@
+id: splunk-security-content-c9fd1a54-0eab-4470-8970-d5fcc3c740fb
+name: Ollama Possible Model Exfiltration Data Leakage
+description: Detects data leakage and exfiltration attempts targeting Ollama model
+  metadata and configuration endpoints. Adversaries repeatedly query /api/show, /api/tags,
+  and /api/v1/models to systematically extract sensitive model information including
+  architecture details, fine-tuning parameters, system paths, Modelfile configurations,
+  and proprietary customizations. Multiple inspection attempts within a 15-minute
+  window indicate automated exfiltration of valuable intellectual property such as
+  custom model configurations, system prompts, and internal model specifications.
+  This activity represents unauthorized data disclosure that could enable competitive
+  intelligence gathering, model replication, or preparation for advanced attacks against
+  the AI infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` | rex field=_raw "\|\s+(?<status_code>\d+)\s+\|\s+(?<response_time>[\d\.]+)s\s+\|\s+(?<src_ip>[\:\da-f\.]+)\s+\|\s+(?<http_method>\w+)\s+\"(?<uri_path>[^\"]+)\""
+    | eval src=src_ip | eval dest=uri_path | where response_time > 55 | bin _time
+    span=15m | stats count, avg(response_time) as avg_response_time, max(response_time)
+    as max_response_time by _time, src, dest, uri_path | eval avg_response_time=round(avg_response_time,
+    2) | eval max_response_time=round(max_response_time, 2) | eval severity=case(
+    avg_response_time > 50, "high", avg_response_time > 40, "medium", 1=1, "low" )
+    | eval attack_type="Potential Data Exfiltration" | sort -_time | stats count by
+    _time, src, uri_path, avg_response_time, max_response_time, severity, attack_type
+    | `ollama_possible_model_exfiltration_data_leakage_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c9fd1a54-0eab-4470-8970-d5fcc3c740fb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_possible_model_exfiltration_data_leakage.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

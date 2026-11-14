@@ -1,0 +1,43 @@
+id: splunk-security-content-0db4da70-f14b-11eb-8043-acde48001122
+name: IcedID Exfiltrated Archived File Creation
+description: The following analytic detects the creation of suspicious files named
+  passff.tar and cookie.tar, which are indicative of archived stolen browser information
+  such as history and cookies on a machine compromised with IcedID. It leverages Sysmon
+  EventCode 11 to identify these specific filenames. This activity is significant
+  because it suggests that sensitive browser data has been exfiltrated, which could
+  lead to further exploitation or data breaches. If confirmed malicious, this could
+  allow attackers to access personal information, conduct further phishing attacks,
+  or escalate their presence within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1560.001
+  categories:
+  - endpoint
+references:
+- https://www.cisecurity.org/insights/white-papers/security-primer-icedid
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count values(Filesystem.file_path)
+    as file_path min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Filesystem
+    where Filesystem.file_path="*\\passff.tar" OR Filesystem.file_path="*\\cookie.tar"
+    by Filesystem.action Filesystem.dest Filesystem.file_access_time Filesystem.file_create_time
+    Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path
+    Filesystem.file_acl Filesystem.file_size Filesystem.process_guid Filesystem.process_id
+    Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `icedid_exfiltrated_archived_file_creation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0db4da70-f14b-11eb-8043-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/icedid_exfiltrated_archived_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

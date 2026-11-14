@@ -1,0 +1,25 @@
+id: det-endpoint-275
+name: WPAD Probe Reaching External Resolver
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'WPAD Probe Reaching
+  External Resolver'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1557.002
+- tlp.white
+category: endpoint
+log_source:
+  product: endpoint
+  service: dns
+detection:
+  condition: |
+    event_type == "dns_query"
+    AND query == "wpad.local"
+    AND external_resolver == true
+false_positives:
+- Misconfigured DHCP
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

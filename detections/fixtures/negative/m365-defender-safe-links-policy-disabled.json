@@ -1,0 +1,6 @@
+{
+  "operation": "Set-SafeLinksPolicy",
+  "parameters": {
+    "EnableSafeLinksForEmail": "True"
+  }
+}

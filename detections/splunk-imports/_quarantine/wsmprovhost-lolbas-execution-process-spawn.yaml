@@ -1,0 +1,59 @@
+id: splunk-security-content-2eed004c-4c0d-11ec-93e8-3e22fbd008af
+name: Wsmprovhost LOLBAS Execution Process Spawn
+description: The following analytic identifies `Wsmprovhost.exe` spawning a LOLBAS
+  execution process. It leverages Endpoint Detection and Response (EDR) data to detect
+  when `Wsmprovhost.exe` spawns child processes that are known LOLBAS (Living Off
+  the Land Binaries and Scripts) executables. This activity is significant because
+  it may indicate an adversary using Windows Remote Management (WinRM) to execute
+  code on remote endpoints, a common technique for lateral movement. If confirmed
+  malicious, this could allow attackers to execute arbitrary code, escalate privileges,
+  or maintain persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/006/
+- https://lolbas-project.github.io/
+- https://pentestlab.blog/2018/05/15/lateral-movement-winrm/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes WHERE\nProcesses.parent_process_name=wsmprovhost.exe\n\
+    Processes.process_name IN (\"Regsvcs.exe\", \"Ftp.exe\", \"OfflineScannerShell.exe\"\
+    , \"Rasautou.exe\", \"Schtasks.exe\", \"Xwizard.exe\", \"Dllhost.exe\", \"Pnputil.exe\"\
+    , \"Atbroker.exe\", \"Pcwrun.exe\", \"Ttdinject.exe\",\"Mshta.exe\", \"Bitsadmin.exe\"\
+    , \"Certoc.exe\", \"Ieexec.exe\", \"Microsoft.Workflow.Compiler.exe\", \"Runscripthelper.exe\"\
+    , \"Forfiles.exe\", \"Msbuild.exe\", \"Register-cimprovider.exe\", \"Tttracer.exe\"\
+    , \"Ie4uinit.exe\", \"Bash.exe\", \"Hh.exe\", \"SettingSyncHost.exe\", \"Cmstp.exe\"\
+    , \"Mmc.exe\", \"Stordiag.exe\", \"Scriptrunner.exe\", \"Odbcconf.exe\", \"Extexport.exe\"\
+    , \"Msdt.exe\", \"WorkFolders.exe\", \"Diskshadow.exe\", \"Mavinject.exe\", \"\
+    Regasm.exe\", \"Gpscript.exe\", \"Rundll32.exe\", \"Regsvr32.exe\", \"Msiexec.exe\"\
+    , \"Wuauclt.exe\", \"Presentationhost.exe\", \"Wmic.exe\", \"Runonce.exe\", \"\
+    Syncappvpublishingserver.exe\", \"Verclsid.exe\", \"Infdefaultinstall.exe\", \"\
+    Explorer.exe\", \"Installutil.exe\", \"Netsh.exe\", \"Wab.exe\", \"Dnscmd.exe\"\
+    , \"At.exe\", \"Pcalua.exe\", \"Msconfig.exe\")\nBY Processes.action Processes.dest\
+    \ Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n   Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \   Processes.process_name Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `wsmprovhost_lolbas_execution_process_spawn_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2eed004c-4c0d-11ec-93e8-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wsmprovhost_lolbas_execution_process_spawn.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

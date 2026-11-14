@@ -1,0 +1,53 @@
+id: splunk-security-content-babd8d10-d073-11ea-87d0-0242ac130003
+name: Detect Windows DNS SIGRed via Splunk Stream
+description: The following analytic detects attempts to exploit the SIGRed vulnerability
+  (CVE-2020-1350) in Windows DNS servers. It leverages Splunk Stream DNS and TCP data
+  to identify DNS SIG and KEY records, as well as TCP payloads exceeding 65KB. This
+  activity is significant because SIGRed is a critical wormable vulnerability that
+  allows remote code execution. If confirmed malicious, an attacker could gain unauthorized
+  access, execute arbitrary code, and potentially disrupt services, leading to severe
+  data breaches and infrastructure compromise. Immediate investigation and remediation
+  are crucial to mitigate these risks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1203
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`stream_dns`
+
+    | spath "query_type{}"
+
+    | search "query_type{}" IN (SIG,KEY)
+
+    | spath protocol_stack
+
+    | search protocol_stack="ip:tcp:dns"
+
+    | append [search `stream_tcp` bytes_out>65000]
+
+    | stats count by flow_id
+
+    | where count>1
+
+    | fields - count
+
+    | `detect_windows_dns_sigred_via_splunk_stream_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: babd8d10-d073-11ea-87d0-0242ac130003
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_windows_dns_sigred_via_splunk_stream.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,45 @@
+id: splunk-security-content-0a46537c-be02-11eb-92ca-acde48001122
+name: Allow Inbound Traffic By Firewall Rule Registry
+description: The following analytic detects suspicious modifications to firewall rule
+  registry settings that allow inbound traffic on specific ports with a public profile.
+  It leverages data from the Endpoint.Registry data model, focusing on registry paths
+  and values indicative of such changes. This activity is significant as it may indicate
+  an adversary attempting to grant remote access to a machine by modifying firewall
+  rules. If confirmed malicious, this could enable unauthorized remote access, potentially
+  leading to further exploitation, data exfiltration, or lateral movement within the
+  network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\System\\CurrentControlSet\\Services\\SharedAccess\\Parameters\\FirewallPolicy\\FirewallRules\\*"
+    Registry.registry_value_data = "*|Action=Allow|*" Registry.registry_value_data
+    = "*|Dir=In|*"  Registry.registry_value_data = "*|LPort=*") by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `allow_inbound_traffic_by_firewall_rule_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0a46537c-be02-11eb-92ca-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/allow_inbound_traffic_by_firewall_rule_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

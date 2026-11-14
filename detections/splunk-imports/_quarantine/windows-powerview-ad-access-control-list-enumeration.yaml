@@ -1,0 +1,45 @@
+id: splunk-security-content-39405650-c364-4e1e-a740-32a63ef042a6
+name: Windows PowerView AD Access Control List Enumeration
+description: The following analytic detects the execution of PowerView PowerShell
+  cmdlets `Get-ObjectAcl` or `Get-DomainObjectAcl`, which are used to enumerate Access
+  Control List (ACL) permissions for Active Directory objects. It leverages Event
+  ID 4104 from PowerShell Script Block Logging to identify this activity. This behavior
+  is significant as it may indicate an attempt to discover weak permissions in Active
+  Directory, potentially leading to privilege escalation. If confirmed malicious,
+  attackers could exploit these permissions to gain unauthorized access or escalate
+  their privileges within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  - T1069
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1078/002/
+- https://medium.com/r3d-buck3t/enumerating-access-controls-in-active-directory-c06e2efa8b89
+- https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/abusing-active-directory-acls-aces
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainObjectAcl/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  (ScriptBlockText=*get-objectacl* OR ScriptBlockText=*Get-DomainObjectAcl*)\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powerview_ad_access_control_list_enumeration_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 39405650-c364-4e1e-a740-32a63ef042a6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powerview_ad_access_control_list_enumeration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

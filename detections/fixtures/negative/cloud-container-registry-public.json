@@ -1,0 +1,5 @@
+{
+  "event_name": "UpdateRepositoryVisibility",
+  "repo": "internal-tooling",
+  "visibility": "private"
+}

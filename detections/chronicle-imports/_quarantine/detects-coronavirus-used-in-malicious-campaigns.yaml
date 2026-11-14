@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-detects-coronavirus-used-in-malicious-campaigns
+name: detects_coronavirus_used_in_malicious_campaigns
+description: detects_coronavirus_used_in_malicious_campaigns
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule detects_coronavirus_used_in_malicious_campaigns {\n meta:\n\
+    \    author = \"Osman Demir\"\n    description = \"Detects Covid-19 Malicious\
+    \ Campaign  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/ZZ8uTatNPagb\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"t1204, execution\"\n\n  events:\n(($selection.target.file.full_path\
+    \ = \"CORONA VIRUS AFFECTED CREW AND VESSEL.xlsm\" or $selection.target.file.full_path\
+    \ = \"CoronaVirusSafetyMeasures_pdf.exe\" or $selection.target.file.full_path\
+    \ = \"CoronaVirusSafetyMeasures_xls.exe\" or $selection.target.file.full_path\
+    \ = \"LIST OF CORONA VIRUS VICTIM.exe\" or $selection.target.file.full_path =\
+    \ \"POEA HEALTH ADVISORY re-2020 Novel Corona Virus.pdf.exe\" or $selection.target.file.full_path\
+    \ = \"POEA Advisories re-2020 Novel Corona Virus.2.pdf.exe\") or ($selection.target.file.md5\
+    \ = \"ab533d6ca0c2be8860a0f7fbfc7820ffd595edc63e540ff4c5991808da6a257d\" or $selection.target.file.md5\
+    \ = \"17161e0ab3907f637c2202a384de67fca49171c79b1b24db7c78a4680637e3d5\" or $selection.target.file.md5\
+    \ = \"315e297ac510f3f2a60176f9c12fcf92681bbad758135767ba805cdea830b9ee\" or $selection.target.file.md5\
+    \ = \"c9c0180eba2a712f1aba1303b90cbf12c1117451ce13b68715931abc437b10cd\" or $selection.target.file.md5\
+    \ = \"29367502e16bf1e2b788705014d0142d8bcb7fcc6a47d56fb82d7e333454e923\" or $selection.target.file.md5\
+    \ = \"3f40d4a0d0fe1eea58fa1c71308431b5c2ce6e381cacc7291e501f4eed57bfd2\" or $selection.target.file.md5\
+    \ = \"3e6166a6961bc7c23d316ea9bca87d8287a4044865c3e73064054e805ef5ca1a\" or $selection.target.file.md5\
+    \ = \"b78a3d21325d3db7470fbf1a6d254e23d349531fca4d7f458b33ca93c91e61cd\" or $selection.target.file.md5\
+    \ = \"2b35aa9c70ef66197abfb9bc409952897f9f70818633ab43da85b3825b256307\" or $selection.target.file.md5\
+    \ = \"0b3e7faa3ad28853bb2b2ef188b310a67663a96544076cd71c32ac088f9af74d\" or $selection.target.file.md5\
+    \ = \"13c0165703482dd521e1c1185838a6a12ed5e980e7951a130444cf2feed1102e\" or $selection.target.file.md5\
+    \ = \"fda64c0ac9be3d10c28035d12ac0f63d85bb0733e78fe634a51474c83d0a0df8\" or $selection.target.file.md5\
+    \ = \"126569286f8a4caeeaba372c0bdba93a9b0639beaad9c250b8223f8ecc1e8040\" or $selection.target.file.md5\
+    \ = \"b9e5849d3ad904d0a8532a886bd3630c4eec3a6faf0cc68658f5ee4a5e803be\" or $selection.target.file.md5\
+    \ = \"6cc5e1e72411c4f4b2033ddafe61fdb567cb0e17ba7a3247acd60cbd4bc57bfb\" or $selection.target.file.md5\
+    \ = \"7c12951672fb903f520136d191f3537bc74f832c5fc573909df4c7fa85c15105\" or $selection.target.file.md5\
+    \ = \"dd6cf8e8a31f67101f974151333be2f0d674e170edd624ef9b850e3ee8698fa2\"))\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: detects_coronavirus_used_in_malicious_campaigns
+provenance:
+  source: chronicle/detection-rules
+  source_id: detects_coronavirus_used_in_malicious_campaigns
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/detects_coronavirus_used_in_malicious_campaigns.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

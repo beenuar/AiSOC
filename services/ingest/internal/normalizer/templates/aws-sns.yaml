@@ -1,0 +1,39 @@
+# AWS SNS notification template.
+#
+# When SNS fans an alert out to AiSOC, the body is the SNS envelope
+# wrapping a Message string that's typically itself JSON. The inbox
+# handler unwraps that Message before applying this template, so paths
+# below address the inner payload (after JSON-decode of Message).
+#
+# Common emitters:
+#   - GuardDuty findings forwarded via SNS topic
+#   - Security Hub findings forwarded via SNS
+#   - CloudWatch alarms in OK/ALARM state
+#
+# Reference:
+#   https://docs.aws.amazon.com/sns/latest/dg/sns-message-and-json-formats.html
+id: aws-sns
+vendor_name: AWS
+product_name: AWS SNS
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  Subject: finding.title
+  Message: finding.description
+  TopicArn: source
+  MessageId: finding.uid
+  AlarmName: finding.title
+  AlarmDescription: finding.description
+  NewStateReason: message
+  Region: cloud.region
+severity_field: NewStateValue
+severity_map:
+  OK: 1
+  INSUFFICIENT_DATA: 2
+  ALARM: 4
+time_field: Timestamp
+message_field: Message
+constants:
+  source_type: aws-sns
+  cloud.provider: AWS

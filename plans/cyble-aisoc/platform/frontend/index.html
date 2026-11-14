@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyble AiSOC — Analyst Console</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: '#0a0e1a',
+          surface: '#111827',
+          surface2: '#1a2236',
+          border: '#1e2d47',
+          accent: '#3b82f6',
+        },
+        fontFamily: {
+          mono: ['SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', 'monospace'],
+        }
+      }
+    }
+  };
+</script>
+<style>
+  body { background: #0a0e1a; color: #e2e8f0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #1e2d47; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2d4163; }
+
+  .sev-critical { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); }
+  .sev-high     { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.3); }
+  .sev-medium   { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+  .sev-low      { background: rgba(16,185,129,0.10); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
+  .sev-info     { background: rgba(148,163,184,0.10); color: #94a3b8; border: 1px solid rgba(148,163,184,0.2); }
+
+  .pill { display:inline-flex; align-items:center; gap:5px; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.5; }
+
+  .verdict-true_positive  { color: #f87171; }
+  .verdict-false_positive { color: #34d399; }
+  .verdict-benign         { color: #94a3b8; }
+  .verdict-needs_human    { color: #fbbf24; }
+  .verdict-unknown        { color: #94a3b8; }
+
+  .risk-READ                 { background: rgba(16,185,129,0.10); color: #34d399; }
+  .risk-WRITE-REVERSIBLE     { background: rgba(59,130,246,0.12); color: #60a5fa; }
+  .risk-WRITE-SIGNIFICANT    { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .risk-DESTRUCTIVE          { background: rgba(239,68,68,0.18); color: #f87171; }
+
+  .agent-planner       { color: #c084fc; }
+  .agent-triager       { color: #60a5fa; }
+  .agent-investigator  { color: #34d399; }
+  .agent-responder     { color: #f87171; }
+  .agent-reporter      { color: #fbbf24; }
+  .agent-hunter        { color: #f472b6; }
+
+  .glow { box-shadow: 0 0 0 1px rgba(59,130,246,0.4), 0 0 24px rgba(59,130,246,0.15); }
+
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .fade-in { animation: fadeIn 0.25s ease-out; }
+
+  @keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .pulse-dot { animation: pulse-dot 1.4s ease-in-out infinite; }
+
+  .prose-narrative { line-height: 1.7; }
+  .prose-narrative ul { list-style: disc; padding-left: 22px; margin: 8px 0; }
+  .prose-narrative li { margin-bottom: 4px; }
+  .prose-narrative strong { color: #f1f5f9; font-weight: 600; }
+  .prose-narrative code { background: #0d1424; padding: 1px 6px; border-radius: 3px; font-size: 12.5px; color: #a5b4fc; }
+</style>
+</head>
+<body class="overflow-hidden">
+
+<div id="root"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "htm": "https://esm.sh/htm@3.1.1/react"
+  }
+}
+</script>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+id: splunk-security-content-5b2f4596-7d4c-11ec-88a7-acde48001122
+name: Windows NirSoft Utilities
+description: 'The following analytic identifies the execution of commonly used NirSoft
+  utilities on Windows systems.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  process execution details such as process name, parent process, and command-line
+  arguments.
+
+  This activity is significant for a SOC because NirSoft utilities, while legitimate,
+  can be used by adversaries for malicious purposes like credential theft or system
+  reconnaissance.
+
+  If confirmed malicious, this activity could lead to unauthorized access, data exfiltration,
+  or further system compromise.
+
+  Note that this search does not use a where clause to filter out known benign paths,
+  as NirSoft utilities can be executed from various locations. This might hinder performance
+  in environments with high data volumes.
+
+  Apply additional filtering as necessary to enhance this.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1588.002
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/uscert/ncas/alerts/TA18-201A
+- http://www.nirsoft.net/
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime FROM datamodel=Endpoint.Processes\nby Processes.action\
+    \ Processes.dest Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process\n   Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\n   Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| lookup update=true is_nirsoft_software\
+    \ filename as process_name OUTPUT nirsoftFile\n| search nirsoftFile=true\n| `windows_nirsoft_utilities_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5b2f4596-7d4c-11ec-88a7-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_nirsoft_utilities.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

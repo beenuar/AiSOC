@@ -1,0 +1,32 @@
+id: salesforce
+name: Salesforce Event Monitoring Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Salesforce Event Monitoring + Setup Audit Trail. Pulls EventLogFile entries
+  (logins, API usage, report exports) and SetupAuditTrail (admin config
+  changes).
+author: AiSOC Core Team
+tags: [saas, salesforce, crm, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/salesforce.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [instance_url, client_id, client_secret]
+  properties:
+    instance_url:
+      type: string
+      description: My Domain URL
+    client_id:
+      type: string
+      description: Connected App Consumer Key
+    client_secret:
+      type: string
+      description: Connected App Consumer Secret
+      secret: true
+    refresh_token:
+      type: string
+      description: Provided automatically when you connect via OAuth.
+      secret: true

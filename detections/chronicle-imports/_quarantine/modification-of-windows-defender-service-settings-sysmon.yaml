@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-modification-of-windows-defender-service-settings-sysmon
+name: modification_of_windows_defender_service_settings_sysmon
+description: modification_of_windows_defender_service_settings_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule modification_of_windows_defender_service_settings_sysmon\
+    \ {\n meta:\n    author = \"Ariel Millahuel\"\n    description = \"Detects modifications\
+    \ on Windows Defender Settings via Registry keys/values  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/EVsw1o6LJTlk\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"defense_evasion, t1036\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"13\" and (re.regex($selection1.target.registry.registry_key, `.*\\\\SYSTEM\\\
+    \\ControlSet001\\\\services\\\\WinDefend`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows Defender`)) and $selection1.metadata.event_type\
+    \ = \"SetValue\") or ($selection1.target.process.file.full_path = \"powershell.exe\"\
+    \ and re.regex($selection1.target.process.command_line, `.* .*/c powershell Set-MpPreference\
+    \ -DisableRealtimeMonitoring $true  .*`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: modification_of_windows_defender_service_settings_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: modification_of_windows_defender_service_settings_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/modification_of_windows_defender_service_settings__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

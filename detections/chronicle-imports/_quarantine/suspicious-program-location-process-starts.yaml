@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-suspicious-program-location-process-starts
+name: suspicious_program_location_process_starts
+description: suspicious_program_location_process_starts
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_program_location_process_starts {\n meta:\n  \
+    \  author = \"Florian Roth\"\n    description = \"Detects programs running in\
+    \ suspicious files system locations  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/N5l3cc8EJMOX\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/01/15\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n\n  events:\n((re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\$Recycle\\.bin`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Users\\\\Public\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Perflogs\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Windows\\\\Fonts\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Windows\\\\IME\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Windows\\\\addins\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Windows\\\\debug\\\\.*`)) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: suspicious_program_location_process_starts
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_program_location_process_starts
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/suspicious_program_location_process_starts.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

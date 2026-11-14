@@ -1,0 +1,4 @@
+{
+  "method_name": "google.logging.v2.ConfigServiceV2.DeleteSink",
+  "principal_email": "attacker@example.com"
+}

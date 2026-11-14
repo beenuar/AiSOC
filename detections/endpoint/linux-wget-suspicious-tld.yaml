@@ -1,0 +1,25 @@
+id: det-endpoint-184
+name: wget Pulling From Newly Registered TLD
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'wget Pulling From
+  Newly Registered TLD'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1105
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH_ANY ["/wget", "/curl"]
+    AND argv CONTAINS_ANY [".xyz", ".top", ".click", ".support"]
+false_positives:
+- Approved patch / maintenance window activity
+playbook: tpl-command-and-control
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

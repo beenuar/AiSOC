@@ -1,0 +1,46 @@
+id: splunk-security-content-ded9f9d7-edb8-48cf-8b72-1b459eee6785
+name: Cisco Smart Install Port Discovery and Status
+description: This analytic detects network traffic to TCP port 4786, which is used
+  by the Cisco Smart Install protocol. Smart Install is a plug-and-play configuration
+  and image-management feature that helps customers to deploy Cisco switches. This
+  protocol has been exploited via CVE-2018-0171, a vulnerability that allows unauthenticated
+  remote attackers to execute arbitrary code or cause denial of service conditions.
+  Recently, Cisco Talos reported that a Russian state-sponsored threat actor called
+  "Static Tundra" has been actively exploiting this vulnerability to compromise unpatched
+  and end-of-life network devices. Monitoring for traffic to this port can help identify
+  potential exploitation attempts or unauthorized Smart Install activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - network
+references:
+- https://blog.talosintelligence.com/static-tundra/
+- https://tools.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-20180328-smi2
+- https://github.com/AlrikRr/Cisco-Smart-Exploit
+- https://www.exploit-db.com/exploits/44451
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(All_Traffic.src_ip)\
+    \ as src_ip values(All_Traffic.src_port) as src_port values(All_Traffic.dest_ip)\
+    \ as dest_ip earliest(_time) as firstTime latest(_time) as lastTime FROM datamodel=Network_Traffic\n\
+    \  WHERE All_Traffic.dest_port=4786\n    AND\n    All_Traffic.transport=tcp\n\
+    \  BY All_Traffic.dest_ip All_Traffic.dest_port\n| `drop_dm_object_name(\"All_Traffic\"\
+    )`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_smart_install_port_discovery_and_status_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ded9f9d7-edb8-48cf-8b72-1b459eee6785
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_smart_install_port_discovery_and_status.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

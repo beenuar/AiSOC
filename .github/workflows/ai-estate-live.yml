@@ -1,0 +1,132 @@
+# The AI inventory, written and read against a real PostgreSQL.
+#
+# Why a live database and not a double
+# ------------------------------------
+# Three of the properties this item depends on are properties of PostgreSQL,
+# not of the Python, and a fake connection answers for none of them:
+#
+#   * `UNIQUE NULLS NOT DISTINCT` is what makes a provider key — which has no
+#     device — coalesce onto one row. Under the default NULL semantics every
+#     sighting inserts a new row and `first_seen_at` resets each time, so the
+#     inventory grows without bound and loses the one fact it exists to keep.
+#     Measured: reverting that one clause turns one row into three.
+#   * `LEAST`/`GREATEST` on conflict are what stop a replayed Kafka batch
+#     moving `first_seen_at` forward.
+#   * The row-level security policy is what stops one tenant reading
+#     another's AI estate, and it only applies when the connection is the
+#     DML-only `aisoc_app` role. A superuser walks past every policy even
+#     under FORCE ROW LEVEL SECURITY, which would make the isolation
+#     assertion pass for the wrong reason.
+#
+# No `paths:` filter. A path filter on a live job is how a gate comes to
+# report success without running: the job must be unconditional on a push and
+# on a pull request, so a change anywhere that breaks the inventory is graded.
+name: AI estate (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ai-estate-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ai-estate-live:
+    name: The observed AI estate survives a real database
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      AI_ESTATE_DSN: postgresql://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install what the fusion recorder needs
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet asyncpg structlog pytest "pytest-asyncio>=1.0,<2.0" \
+            "pydantic>=2,<3" pydantic-settings
+
+      # Every migration, in order, rather than the one that creates the
+      # table. A cherry-picked subset builds a schema no deployment has —
+      # `current_tenant_id()` and the `aisoc_app` role both come from earlier
+      # migrations, and without them the RLS assertions would pass vacuously.
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: A fixture estate of three kinds, written and read back
+        env:
+          ISOLATION_AI_ESTATE_DSN: ${{ env.AI_ESTATE_DSN }}
+        run: python -m pytest tests/isolation/test_ai_estate_live.py -v --tb=short
+
+      # Negative control one. Reverting `NULLS NOT DISTINCT` to PostgreSQL's
+      # default NULL semantics is the real defect, not an invented one: the
+      # deviceless kinds are provider keys and OAuth grants, which are
+      # exactly the rows an AI-governance review reads.
+      #
+      # Measured here: three rows for one key, each claiming to be first seen
+      # now.
+      - name: The suite fails when the identity constraint loses NULLS NOT DISTINCT
+        env:
+          ISOLATION_AI_ESTATE_DSN: ${{ env.AI_ESTATE_DSN }}
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -c "ALTER TABLE aisoc_ai_assets DROP CONSTRAINT aisoc_ai_assets_identity;" \
+            -c "ALTER TABLE aisoc_ai_assets ADD CONSTRAINT aisoc_ai_assets_identity UNIQUE (tenant_id, kind, external_id, device);"
+          if python -m pytest tests/isolation/test_ai_estate_live.py -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the default NULL semantics, so it is not"
+            echo "      measuring the constraint it claims to measure."
+            exit 1
+          fi
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -c "ALTER TABLE aisoc_ai_assets DROP CONSTRAINT aisoc_ai_assets_identity;" \
+            -c "ALTER TABLE aisoc_ai_assets ADD CONSTRAINT aisoc_ai_assets_identity UNIQUE NULLS NOT DISTINCT (tenant_id, kind, external_id, device);"
+          echo "OK: removing NULLS NOT DISTINCT fails the suite, as it must."
+
+      # Negative control two, on the other property a double cannot see.
+      - name: The suite fails when the tenant policy stops comparing tenants
+        env:
+          ISOLATION_AI_ESTATE_DSN: ${{ env.AI_ESTATE_DSN }}
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -c "DROP POLICY aisoc_ai_assets_tenant ON aisoc_ai_assets;" \
+            -c "CREATE POLICY aisoc_ai_assets_tenant ON aisoc_ai_assets USING (true);"
+          if python -m pytest tests/isolation/test_ai_estate_live.py -q >/dev/null 2>&1; then
+            echo "FAIL: one tenant could read another's AI estate and the suite passed."
+            exit 1
+          fi
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -c "DROP POLICY aisoc_ai_assets_tenant ON aisoc_ai_assets;" \
+            -c "CREATE POLICY aisoc_ai_assets_tenant ON aisoc_ai_assets USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);"
+          echo "OK: weakening the policy fails the suite, as it must."
+
+      - name: Green again on the restored schema
+        env:
+          ISOLATION_AI_ESTATE_DSN: ${{ env.AI_ESTATE_DSN }}
+        run: python -m pytest tests/isolation/test_ai_estate_live.py -q

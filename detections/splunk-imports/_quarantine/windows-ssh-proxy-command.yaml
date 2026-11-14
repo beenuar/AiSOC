@@ -1,0 +1,60 @@
+id: splunk-security-content-ac520039-21f1-4567-b528-5b7133dba76f
+name: Windows SSH Proxy Command
+description: 'This detection identifies potential abuse of SSH "ProxyCommand" or "LocalCommand"
+  by monitoring for suspicious process execution patterns.
+
+  Specifically, it looks for instances where ssh.exe (as a parent process) containing
+  "ProxyCommand" or "LocalCommand" in its arguments spawns potentially malicious child
+  processes like mshta, powershell, wscript, or cscript, or processes containing "http"
+  in their command line.
+
+  This technique can be used by attackers to execute arbitrary commands through SSH
+  proxy configurations, potentially enabling command & control activities or remote
+  code execution. The detection focuses on commonly abused Windows scripting engines
+  and web requests that may indicate malicious activity when spawned through SSH proxy
+  commands.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1572
+  - T1059.001
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://www.virustotal.com/gui/file/c33f82868dbbfc3ab03918f430b1a348499f5baf047b136ff0a4fc3e8addaa9b/detection
+- https://attack.mitre.org/techniques/T1572/
+- https://lolbas-project.github.io/lolbas/Binaries/Ssh/
+- https://man.openbsd.org/ssh_config#ProxyCommand
+- https://man.openbsd.org/ssh_config#LocalCommand
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    Processes.parent_process_name=\"ssh.exe\"\n(\n  Processes.parent_process = \"\
+    *ProxyCommand=*\"\n  OR\n  (\n    Processes.parent_process = \"* PermitLocalCommand=yes*\"\
+    \n    Processes.parent_process = \"* LocalCommand=*\"\n  )\n)\n\nProcesses.process\
+    \ IN (\n  \"*cscript*\",\n  \"*http*\",\n  \"*mshta*\",\n  \"*powershell*\",\n\
+    \  \"*pwsh*\",\n  \"*wmic*\",\n  \"*wscript*\"\n)\n\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path Processes.user Processes.user_id\n\
+    \   Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_ssh_proxy_command_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ac520039-21f1-4567-b528-5b7133dba76f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ssh_proxy_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

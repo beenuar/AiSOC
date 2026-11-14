@@ -1,0 +1,51 @@
+id: mitre-car-car-2013-02-003
+name: Processes Spawning cmd.exe
+description: The Windows [Command Prompt](https://en.wikipedia.org/wiki/cmd.exe) (`cmd.exe`)
+  is a utility that provides a command line interface to Windows operating systems.
+  It provides the ability to run additional programs and also has several built-in
+  commands such as `dir`, `copy`, `mkdir`, and `type`, as well as batch scripts (`.bat`).
+  Typically, when a user runs a command prompt, the parent process is `explorer.exe`
+  or another instance of the prompt. There may be automated programs, logon scripts,
+  or administrative tools that launch instances of the command prompt in order to
+  run scripts or other built-in commands. Spawning the process `cmd.exe` from certain
+  parents may be more indicative of malice. For example, if Adobe Reader or Outlook
+  launches a command shell, this may suggest that a malicious document has been loaded
+  and should be investigated. Thus, by looking for abnormal parent processes of `cmd.exe`,
+  it may be possible to detect adversaries.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      cmd = filter process where (exe == "cmd.exe")
+
+      output cmd'
+  - name: ''
+    type: DNIF
+    code: _fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $Process=regex(.*cmd\.exe.*)i
+      limit 100
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon event_id=1 image="*\cmd.exe"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-02-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-02-003.yaml
+notes:
+  car_status: needs_implementation

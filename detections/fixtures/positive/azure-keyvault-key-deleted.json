@@ -1,0 +1,5 @@
+{
+  "key_name": "prod-encrypt",
+  "operation_name": "KeyDelete",
+  "principal": "user@corp.com"
+}

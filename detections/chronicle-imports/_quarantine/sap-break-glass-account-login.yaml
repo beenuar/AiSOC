@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-sap-break-glass-account-login
+name: sap_break_glass_account_login
+description: sap_break_glass_account_login
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_break_glass_account_login {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Alerts whenever a default SAP administrative\
+    \ account (e.g., SAP*, DDIC, TMSADM) logs into the system. These accounts should\
+    \ be locked and used only for emergency 'break-glass' scenarios\"\n    severity\
+    \ = \"Low\"\n    tactic = \"TA0001\"\n    technique = \"T1078\"\n\n  events:\n\
+    \    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n    (\n        $e.additional.fields[\"\
+    msg_1\"] = /^AU1$|^AU5$/ or\n        $e.metadata.event_type = \"USER_LOGIN\"\n\
+    \    )\n    $e.principal.user.userid = $userid\n    $userid = /^DDIC$|^EARLYWATCH$|^SAP\\\
+    *$|^TMSADM$/ nocase\n\n  match:\n    $userid over 1h\n\n  outcome:\n    $event_count\
+    \ = count_distinct($e.metadata.id)\n    $risk_score = if($event_count < 10, 20,\
+    \ 40)\n    $vendor_name = array_distinct($e.metadata.vendor_name)\n    $product_name\
+    \ = array_distinct($e.metadata.product_name)\n    $product_severity = array_distinct($e.security_result.severity)\n\
+    \    $event_description = array_distinct($e.metadata.description)\n    $victim_name\
+    \ = array_distinct($e.target.user.userid)\n    $adversary_name = array_distinct($e.principal.user.userid)\n\
+    \    $result_time = min($e.metadata.event_timestamp.seconds)\n\n  condition:\n\
+    \    $e\n}"
+  chronicle_rule_name: sap_break_glass_account_login
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_break_glass_account_login
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_break_glass_account_login.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

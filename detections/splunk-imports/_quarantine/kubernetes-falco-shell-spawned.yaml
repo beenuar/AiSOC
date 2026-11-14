@@ -1,0 +1,43 @@
+id: splunk-security-content-d2feef92-d54a-4a19-8306-b47c6ceba5b2
+name: Kubernetes Falco Shell Spawned
+description: The following analytic detects instances where a shell is spawned within
+  a Kubernetes container. Leveraging Falco, a cloud-native runtime security tool,
+  this analytic monitors system calls within the Kubernetes environment and flags
+  when a shell is spawned. This activity is significant for a SOC as it may indicate
+  unauthorized access, allowing an attacker to execute arbitrary commands, manipulate
+  container processes, or escalate privileges. If confirmed malicious, this could
+  lead to data breaches, service disruptions, or unauthorized access to sensitive
+  information, severely impacting the Kubernetes infrastructure's integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`kube_container_falco` "A shell was spawned in a container"
+
+    |  fillnull
+
+    | stats count by container_image container_image_tag container_name parent proc_exepath
+    process user
+
+    | `kubernetes_falco_shell_spawned_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d2feef92-d54a-4a19-8306-b47c6ceba5b2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_falco_shell_spawned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

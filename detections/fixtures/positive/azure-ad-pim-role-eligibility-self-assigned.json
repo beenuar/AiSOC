@@ -1,0 +1,5 @@
+{
+  "actor": "principal-a",
+  "operation_name": "Add eligible member to role",
+  "target": "principal-a"
+}

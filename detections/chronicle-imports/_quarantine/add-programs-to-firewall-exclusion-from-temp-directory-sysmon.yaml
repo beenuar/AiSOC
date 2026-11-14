@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-add-programs-to-firewall-exclusion-from-temp-directory-sysmon
+name: add_programs_to_firewall_exclusion_from_temp_directory_sysmon
+description: add_programs_to_firewall_exclusion_from_temp_directory_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule add_programs_to_firewall_exclusion_from_temp_directory_sysmon\
+    \ {\n meta:\n    author = \"Alexandr Yampolskyi, SOC Prime\"\n    description\
+    \ = \"Add Programs To Firewall Exclusion From Temp Directory.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/KYjU6HWSJiqm\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/25\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204, t1059\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection.target.process.file.full_path, `.*\\\\netsh\\\
+    .exe`) and re.regex($selection.target.process.command_line, `.*netsh firewall\
+    \ add allowedprogram \\\"C:\\\\Users\\\\admin\\\\AppData\\\\Local\\\\Temp.*`)\
+    \ and re.regex($selection.target.process.command_line, `.*ENABLE`))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: add_programs_to_firewall_exclusion_from_temp_directory_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: add_programs_to_firewall_exclusion_from_temp_directory_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/add_programs_to_firewall_exclusion_from_temp_directory__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

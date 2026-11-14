@@ -1,0 +1,25 @@
+id: det-endpoint-059
+name: Application Compatibility Shim Database Installed
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Application Compatibility
+  Shim Database Installed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1546.011
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_name ENDSWITH "sdbinst.exe"
+    AND process_command_line CONTAINS_ANY [".sdb", "/install"]
+false_positives:
+- Microsoft compatibility tooling rolled by IT
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "authorized_networks_empty": true,
+  "method_name": "clusters.update-x",
+  "private_cluster": false
+}

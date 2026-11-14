@@ -1,0 +1,44 @@
+id: chronicle-detection-rules-kingminer-cryptojacker-sysmon
+name: kingminer_cryptojacker_sysmon
+description: kingminer_cryptojacker_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule kingminer_cryptojacker_sysmon {\n meta:\n    author = \"\
+    Alexandr Yampolskyi, SOC Prime\"\n    description = \"KingMiner cryptojacker Detector.\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Ow89LKIzK6qV\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/11/30\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1204\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and ($selection.target.file.md5 = \"dea32433519c4628deeac802c0f1435a1b0d27d89f1ae5c1729ec7223f9eb04d\"\
+    \ or $selection.target.file.md5 = \"147d572d7f6664c8adf42ef92e4dbad06c5d21cc820a20163d814c77136cfbab\"\
+    \ or $selection.target.file.md5 = \"122b7906a359deb22bf777c602ac2619ca5ea156c4937dcdf96583210677db52\"\
+    \ or $selection.target.file.md5 = \"c5894d2afc946c064f8c2b58791fe64b48e26f0da5bdcc6ef9ba147f334f43f9\"\
+    \ or $selection.target.file.md5 = \"e61fbe58c28720ac4c0a1822d5da9a622a24f352d34e6c1cf5f704dbdd9b9b34\"\
+    \ or $selection.target.file.md5 = \"2b54329a13c4f79bea3886a21a7ba5fe19c4418596b774893fdef020e03ed07d\"\
+    \ or $selection.target.file.md5 = \"f128a63c107c3006ebf448d6ec743d11eb491ecb508e4ce63ba084f9792c25da\"\
+    \ or $selection.target.file.md5 = \"7357bdf70d042f246de1f830de783499d75e61388eed93d9ce74180ce06524d0\"\
+    \ or $selection.target.file.md5 = \"956a1231726503d840794af61fb6ac9bc326296597eff1c8da636f84e3c32874\"\
+    \ or $selection.target.file.md5 = \"8fa8cdb771d7c66406a7116e9c09ed18030afb1f94430c807782274f3847cb92\"\
+    \ or $selection.target.file.md5 = \"a3598d3301630ba64aa7663980296b59df243f5f17ed1b4fd56dcbcab599231c\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: kingminer_cryptojacker_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: kingminer_cryptojacker_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/kingminer_cryptojacker__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

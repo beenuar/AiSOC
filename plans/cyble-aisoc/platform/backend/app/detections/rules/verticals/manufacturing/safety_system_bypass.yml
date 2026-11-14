@@ -1,0 +1,29 @@
+title: Safety Instrumented System Bypass or Override Engaged
+id: aisoc-vt-mfg-0005-sis-bypass-engaged
+status: experimental
+description: |
+  A safety instrumented system (SIS) interlock, ESD trip, or
+  safety-PLC override was engaged on a Triconex, HIMA, or Honeywell
+  Safety Manager controller. This is the TRITON/TRISIS attack
+  pattern; SIS bypasses outside scheduled testing are unconditionally
+  worth a P1 page.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: ot
+  service: sis
+tags:
+  - attack.t0858
+  - attack.impact
+  - aisoc.vertical.manufacturing
+  - aisoc.ics.safety
+detection:
+  selection:
+    event.module: ot.sis
+    event.action|in:
+      - 'override.engaged'
+      - 'interlock.bypassed'
+      - 'trip.disabled'
+  filter:
+    sis_test_window.active: true
+  condition: selection and not filter

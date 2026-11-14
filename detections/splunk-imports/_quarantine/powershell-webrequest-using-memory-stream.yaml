@@ -1,0 +1,45 @@
+id: splunk-security-content-103affa6-924a-4b53-aff4-1d5075342aab
+name: PowerShell WebRequest Using Memory Stream
+description: The following analytic detects the use of .NET classes in PowerShell
+  to download a URL payload directly into memory, a common fileless malware staging
+  technique. It leverages PowerShell Script Block Logging (EventCode=4104) to identify
+  suspicious PowerShell commands involving `system.net.webclient`, `system.net.webrequest`,
+  and `IO.MemoryStream`. This activity is significant as it indicates potential fileless
+  malware execution, which is harder to detect and can bypass traditional file-based
+  defenses. If confirmed malicious, this technique could allow attackers to execute
+  code in memory, evade detection, and maintain persistence in the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1105
+  - T1027.011
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/tracking-evolution-gootloader-operations
+- https://thedfirreport.com/2022/05/09/seo-poisoning-a-gootloader-story/
+- https://attack.mitre.org/techniques/T1059/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104  ScriptBlockText IN (\"*system.net.webclient*\"\
+    ,\"*system.net.webrequest*\") AND ScriptBlockText=\"*IO.MemoryStream*\"\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `powershell_webrequest_using_memory_stream_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 103affa6-924a-4b53-aff4-1d5075342aab
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_webrequest_using_memory_stream.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,230 @@
+name: Golden pipeline
+
+# The claim "AiSOC works end to end" is made by exactly one test, and this
+# workflow is what makes it true on every change.
+#
+# It boots the CORE profile exactly as `make up` does, then pushes one real
+# event through the real spine — ingest, Kafka, fusion, detection, promotion,
+# Postgres — and reads the alert back from the public API. Nothing is stubbed
+# and no stage is reached past, because a test that bypasses a component
+# cannot tell you that component works.
+#
+# Also runs the README's own quick-start commands, so documentation drift
+# fails the build rather than a user's first evening.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: golden-pipeline-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  golden:
+    name: One real event through the real pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Disk exhaustion inside the runner corrupts Kafka's log dir, and the
+      # broker then reports healthy while refusing every request — a failure
+      # that reads as "the pipeline is broken" and costs an afternoon. The
+      # runner ships with several GB of unused toolchains.
+      - name: Reclaim disk before starting the stack
+        run: |
+          set -euo pipefail
+          echo "before: $(df -h / | awk 'NR==2{print $4}') free"
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
+          echo "after:  $(df -h / | awk 'NR==2{print $4}') free"
+
+      - name: Generate the secrets the stack needs
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          # `make up` runs this, and the stack now needs it to boot: with
+          # ENVIRONMENT defaulting to production, ingest refuses to start
+          # without a JWT_SECRET and the API refuses without METRICS_TOKEN.
+          # That is the services being right — ingest previously started on a
+          # literal published in this repository — but a workflow that copies
+          # `.env.example` and stops has provisioned an environment no real
+          # deployment ever has.
+          python3 scripts/ensure_env.py
+          python3 scripts/ensure_env.py --check
+
+      - name: Build the CORE images from this commit
+        run: |
+          set -euo pipefail
+          docker compose build ingest-worker fusion api
+
+      - name: Start the CORE stack (what `make up` does)
+        run: |
+          set -euo pipefail
+          docker compose up -d postgres redis zookeeper kafka
+          docker compose up -d api ingest-worker fusion
+
+      - name: Wait for the stack to be usable
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do
+            api=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8000/health || echo 000)
+            ing=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8081/health || echo 000)
+            fus=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://localhost:8003/health || echo 000)
+            echo "attempt $i: api=$api ingest=$ing fusion=$fus"
+            [ "$api$ing$fus" = "200200200" ] && exit 0
+            sleep 5
+          done
+          echo "::error::services did not become healthy"
+          docker compose ps
+          docker compose logs --tail=80
+          exit 1
+
+      # The doctor is a shipped user-facing command. If it cannot read its own
+      # healthy stack, it is worse than nothing — it teaches users to distrust
+      # it. So it runs here against a stack we know is good.
+      - name: make doctor reports a healthy stack
+        run: ./scripts/doctor.sh
+
+      # The quick start ends at a login form, and for a long time that is
+      # where it ended: `make up` and `make smoke` both passed and no account
+      # existed that could sign in. A pipeline test cannot catch that, because
+      # nothing in the pipeline authenticates. So the documented command runs
+      # here and the credential it prints is used against the real route — the
+      # same two steps a new user performs, in the same order.
+      - name: make bootstrap creates an administrator that can log in
+        run: |
+          set -euo pipefail
+          out="$(docker compose run --rm -T api python -m app.scripts.bootstrap_admin)"
+          echo "$out" | sed 's/^\(  Password \).*/\1<redacted>/'
+
+          email="$(printf '%s' "$out" | awk '/^  Email/ {print $2}')"
+          password="$(printf '%s' "$out" | awk '/^  Password/ {print $2}')"
+          if [ -z "$email" ] || [ -z "$password" ]; then
+            echo "::error::bootstrap printed no credential a user could copy"
+            exit 1
+          fi
+
+          code="$(curl -s -o /tmp/login.json -w '%{http_code}' \
+            -X POST http://localhost:8000/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            --data "$(python3 -c 'import json,sys; print(json.dumps({"email":sys.argv[1],"password":sys.argv[2]}))' "$email" "$password")")"
+
+          if [ "$code" != "200" ]; then
+            # 422 is the original defect: the address was rejected before the
+            # password was ever compared. Name it so the next reader does not
+            # have to rediscover that it is not a wrong-password failure.
+            echo "::error::login returned $code for the credential bootstrap just printed"
+            jq . /tmp/login.json || cat /tmp/login.json
+            exit 1
+          fi
+          jq -e '.access_token | length > 0' /tmp/login.json >/dev/null
+          echo "logged in as $email with the password the tool printed"
+
+      # Re-running must not hand out a password that does not work. `make up`
+      # calls bootstrap unconditionally, so this runs on every start.
+      - name: bootstrap is idempotent
+        run: |
+          set -euo pipefail
+          out="$(docker compose run --rm -T api python -m app.scripts.bootstrap_admin)"
+          echo "$out"
+          printf '%s' "$out" | grep -q 'already exists' || {
+            echo "::error::a second bootstrap did not report the existing administrator"
+            exit 1
+          }
+
+      # /v1/ingest/batch is authenticated, so the pipeline test has to hold a
+      # credential like any other caller. Minted through the shipped command
+      # rather than inserted into Postgres, so this step also covers the path
+      # an operator follows.
+      - name: Mint the ingest credential the pipeline test needs
+        run: |
+          set -euo pipefail
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_ingest_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_INGEST_TOKEN=$token" >> "$GITHUB_ENV"
+
+      # Re-running must return the same token rather than leaving a trail of
+      # live credentials nobody revokes. `make smoke` calls this on every run.
+      - name: Minting is idempotent
+        run: |
+          set -euo pipefail
+          again="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet)"
+          echo "::add-mask::$again"
+          if [ "$again" != "$AISOC_INGEST_TOKEN" ]; then
+            echo "::error::a second mint returned a different token"
+            exit 1
+          fi
+          echo "confirmed: a second mint reused the existing push token"
+
+      # The alert reads need a credential too. They used to succeed with none,
+      # because an uncredentialed request resolved to a demo administrator in
+      # a development-class environment and every documented path produced
+      # one — so this workflow was reading the API as an anonymous admin
+      # without anybody having decided that. Minted through the shipped
+      # command, for the same reason the ingest token is.
+      - name: Mint the API credential the alert reads need
+        run: |
+          set -euo pipefail
+          docker compose run --rm -T api python -m app.scripts.bootstrap_admin >/dev/null 2>&1 || true
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_api_token --quiet)"
+          if [ -z "$token" ]; then
+            echo "::error::mint_api_token printed nothing"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          echo "AISOC_API_TOKEN=$token" >> "$GITHUB_ENV"
+
+      - name: Golden pipeline — one real event end to end
+        run: python3 tests/e2e/golden_pipeline/run_golden_pipeline.py
+
+      # A green run proves the pipeline works. It does not prove the test
+      # would notice if it stopped working, which is the property that makes
+      # the gate worth having.
+      - name: The gate fails when the pipeline is broken
+        run: |
+          set -euo pipefail
+          docker compose stop fusion
+          if AISOC_GOLDEN_TIMEOUT=25 python3 tests/e2e/golden_pipeline/run_golden_pipeline.py; then
+            echo "::error::the golden pipeline passed with fusion stopped — the gate proves nothing"
+            exit 1
+          fi
+          echo "confirmed: the gate fails when the spine is broken"
+          docker compose start fusion
+
+      - name: Published figures still match the tree
+        run: python3 scripts/project_stats.py --check
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          docker compose ps || true
+          for s in kafka ingest-worker fusion api; do
+            echo "── $s ──"; docker compose logs --tail=60 "$s" || true
+          done
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v || true

@@ -1,0 +1,42 @@
+id: splunk-security-content-bc24922d-987c-4645-b288-f8c73ec194c4
+name: Cloud Compute Instance Created With Previously Unseen Image
+description: The following analytic detects the creation of cloud compute instances
+  using previously unseen image IDs. It leverages cloud infrastructure logs to identify
+  new image IDs that have not been observed before. This activity is significant because
+  it may indicate unauthorized or suspicious activity, such as the deployment of malicious
+  payloads or unauthorized access to sensitive information. If confirmed malicious,
+  this could lead to data breaches, unauthorized access, or further compromise of
+  the cloud environment. Immediate investigation is required to determine the legitimacy
+  of the instance creation and to mitigate potential threats.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count earliest(_time) as firstTime, latest(_time) as lastTime\
+    \ values(All_Changes.object_id) as dest FROM datamodel=Change\n  WHERE All_Changes.action=created\n\
+    \  BY All_Changes.Instance_Changes.image_id, All_Changes.user\n| `drop_dm_object_name(\"\
+    All_Changes\")`\n| `drop_dm_object_name(\"Instance_Changes\")`\n| where image_id\
+    \ != \"unknown\"\n| lookup previously_seen_cloud_compute_images image_id as image_id\
+    \ OUTPUT firstTimeSeen, enough_data\n| eventstats max(enough_data) as enough_data\n\
+    | where enough_data=1\n| eval firstTimeSeenImage=min(firstTimeSeen)\n| where isnull(firstTimeSeenImage)\
+    \ OR firstTimeSeenImage > relative_time(now(), \"-24h@h\")\n| table firstTime,\
+    \ user, image_id, count, dest\n| `security_content_ctime(firstTime)`\n| `cloud_compute_instance_created_with_previously_unseen_image_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bc24922d-987c-4645-b288-f8c73ec194c4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/cloud_compute_instance_created_with_previously_unseen_image.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

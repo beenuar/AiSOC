@@ -1,0 +1,11 @@
+{
+  "action": "CREATED",
+  "target_path": "/home/alice/.ssh/known_hosts",
+  "hostname": "workstation-12",
+  "node_key": "ws012ccc",
+  "tenant_id": "acme",
+  "process_name": "ssh",
+  "pid": 8810,
+  "username": "alice",
+  "event_time": "2026-05-10T11:33:00Z"
+}

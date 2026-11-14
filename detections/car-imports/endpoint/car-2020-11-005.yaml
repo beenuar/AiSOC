@@ -1,0 +1,56 @@
+id: mitre-car-car-2020-11-005
+name: Clear Powershell Console Command History
+description: Adversaries may attempt to conceal their tracks by deleting the history
+  of commands run within the Powershell console, or turning off history saving to
+  begin with. This analytic looks for several commands that would do this. This does
+  not capture the event if it is done within the console itself; only commandline-based
+  commands are detected. Note that the command to remove the history file directly
+  may very a bit if the history file is not saved in the default path on a particular
+  system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1070
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - clear or disable Powershell console history via commandline
+    type: Pseudocode
+    code: "processes = search Process:Create\nclear_commands = filter processes where\
+      \ (\n  command_line =\"*rm (Get-PSReadlineOption).HistorySavePath*\" OR command_line=\"\
+      *del (Get-PSReadlineOption).HistorySavePath*\" OR command_line=\"*Set-PSReadlineOption\
+      \ –HistorySaveStyle SaveNothing*\" OR command_line=\"*Remove-Item (Get-PSReadlineOption).HistorySavePath*\"\
+      )  OR command_linee=\"del*Microsoft\\Windows\\Powershell\\PSReadline\\ConsoleHost_history.txt\"\
+      )\noutput clear_commands\n"
+  - name: Splunk Search - clear command history via Powershell
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (CommandLine="*rm (Get-PSReadlineOption).HistorySavePath*"
+      OR CommandLine="*del (Get-PSReadlineOption).HistorySavePath*" OR CommandLine="*Set-PSReadlineOption
+      –HistorySaveStyle SaveNothing*" OR CommandLine="*Remove-Item (Get-PSReadlineOption).HistorySavePath*"
+      OR CommandLine="del*Microsoft\\Windows\\Powershell\\PSReadline\\ConsoleHost_history.txt")
+
+      '
+  - name: LogPoint Search - clear command history via Powershell
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 (command="*rm (Get-PSReadlineOption).HistorySavePath*"
+      OR command="*del (Get-PSReadlineOption).HistorySavePath*" OR command="*Set-PSReadlineOption
+      –HistorySaveStyle SaveNothing*" OR command="*Remove-Item (Get-PSReadlineOption).HistorySavePath*"
+      OR command="del*Microsoft\Windows\Powershell\PSReadline\ConsoleHost_history.txt")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-005
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-005.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,46 @@
+id: splunk-security-content-81f1dce0-0f18-11ec-a5d7-acde48001122
+name: Change To Safe Mode With Network Config
+description: The following analytic detects the execution of a suspicious `bcdedit`
+  command that configures a host to boot in safe mode with network support. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on command-line
+  executions involving `bcdedit.exe` with specific parameters. This activity is significant
+  because it is a known technique used by BlackMatter ransomware to force a compromised
+  host into safe mode for continued encryption. If confirmed malicious, this could
+  allow attackers to bypass certain security controls, persist in the environment,
+  and continue their malicious activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2021/08/09/blackmatter-ransomware-emerges-from-the-shadow-of-darkside/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = bcdedit.exe Processes.process=\"*/set*\" Processes.process=\"*{current}*\"\
+    \  Processes.process=\"*safeboot*\" Processes.process=\"*network*\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `change_to_safe_mode_with_network_config_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 81f1dce0-0f18-11ec-a5d7-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/change_to_safe_mode_with_network_config.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

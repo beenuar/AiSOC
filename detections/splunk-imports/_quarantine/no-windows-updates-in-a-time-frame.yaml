@@ -1,0 +1,41 @@
+id: splunk-security-content-1a77c08c-2f56-409c-a2d3-7d64617edd4f
+name: No Windows Updates in a time frame
+description: The following analytic identifies Windows endpoints that have not generated
+  an event indicating a successful Windows update in the last 60 days. It leverages
+  the 'Update' data model in Splunk, specifically looking for the latest 'Installed'
+  status events from Microsoft Windows. This activity is significant for a SOC because
+  endpoints that are not regularly patched are vulnerable to known exploits and security
+  vulnerabilities. If confirmed malicious, this could indicate a compromised endpoint
+  that is intentionally being kept unpatched, potentially allowing attackers to exploit
+  unpatched vulnerabilities and gain unauthorized access or control.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` max(_time) as lastTime FROM\
+    \ datamodel=Updates\n  WHERE Updates.status=Installed Updates.vendor_product=\"\
+    Microsoft Windows\"\n  BY Updates.dest Updates.status Updates.vendor_product\n\
+    | rename Updates.dest as Host\n| rename Updates.status as \"Update Status\"\n\
+    | rename Updates.vendor_product as Product\n| eval isOutlier=if(lastTime <= relative_time(now(),\
+    \ \"-60d@d\"), 1, 0)\n| `security_content_ctime(lastTime)`\n| search isOutlier=1\n\
+    | rename lastTime as \"Last Update Time\",\n| table Host, \"Update Status\", Product,\
+    \ \"Last Update Time\"\n| `no_windows_updates_in_a_time_frame_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1a77c08c-2f56-409c-a2d3-7d64617edd4f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/no_windows_updates_in_a_time_frame.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

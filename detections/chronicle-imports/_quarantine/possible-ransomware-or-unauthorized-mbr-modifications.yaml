@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-possible-ransomware-or-unauthorized-mbr-modifications
+name: possible_ransomware_or_unauthorized_mbr_modifications
+description: possible_ransomware_or_unauthorized_mbr_modifications
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_ransomware_or_unauthorized_mbr_modifications {\n\
+    \ meta:\n    author = \"@neu5ron\"\n    description = \"Detects, possibly, malicious\
+    \ unauthorized usage of bcdedit.exe  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/MQ4AnLs4Jrnq\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/02/07\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"defense_evasion, t1070, persistence,\
+    \ t1067\"\n\n  events:\n(re.regex($selection.target.process.command_line, `.*\\\
+    \\bcdedit\\.exe`) and (re.regex($selection.target.process.command_line, `.*delete.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*deletevalue.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*import.*`)) and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: possible_ransomware_or_unauthorized_mbr_modifications
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_ransomware_or_unauthorized_mbr_modifications
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/possible_ransomware_or_unauthorized_mbr_modifications.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

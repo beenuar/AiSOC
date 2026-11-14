@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-cobaltstrike-process-injection
+name: cobaltstrike_process_injection
+description: cobaltstrike_process_injection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule cobaltstrike_process_injection {\n meta:\n    author = \"\
+    Olaf Hartong, Florian Roth\"\n    description = \"Detects a possible remote threat\
+    \ creation with certain characteristics which are typical for Cobalt Strike beacons\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/0my4NPTHAeXn\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"process_injection, t1055\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"8\" and re.regex($selection.target.process.file.file_metadata.pe.import_hash,\
+    \ `.*0B80`))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: cobaltstrike_process_injection
+provenance:
+  source: chronicle/detection-rules
+  source_id: cobaltstrike_process_injection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/cobaltstrike_process_injection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

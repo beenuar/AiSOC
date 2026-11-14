@@ -1,0 +1,216 @@
+# Two escalations of authority, against real Postgres and real credentials.
+#
+# Why this exists
+# ---------------
+# GHSA-jfvq-94hv-4wrj: an `aisoc_` API key resolves to a `CurrentUser` carrying
+# its owner's id and role, so every dependency typed `AuthUser` admitted one.
+# The passkey and TOTP enrolment routes were typed exactly that way, so a key
+# scoped to `alerts:read` — refused at `GET /connectors` — registered a passkey
+# on its owner's account and signed in with it, receiving a console session
+# with the owner's full role. Enumerating before fixing found a route the
+# report does not name: `DELETE /passkeys/credentials/{id}` answered 204 to a
+# key with `scopes: []`.
+#
+# GHSA-6cwm-cx8p-h7f5: the tenant-provisioning and waitlist admin gates allowed
+# `admin:tenants` / `admin:waitlist` OR `settings:write`. Neither of the first
+# two existed in any catalog, so the fallback was the only reachable branch —
+# and `tenant_admin` holds `settings:write`, while `GET /admin/tenants` selects
+# every tenant on the deployment with no predicate.
+#
+# Why live
+# --------
+# Every property here is a row: an API key's scopes, a user's role, and the
+# permission catalog are all database state. A constructed principal carries
+# whatever it was built with, and no stand-in can show that a key reaches a
+# route at all — which is the half of the first report that matters most. So
+# this drives the real ASGI application with its real auth dependencies against
+# real Postgres with the migration chain applied, and mints real credentials in
+# it. The passkey assertions are produced by a software authenticator and
+# judged by the production verifier, so the positive control proves a real
+# ceremony still completes rather than that a mock returned True.
+#
+# No `paths:` filter. A path filter here would mean the gate skips on exactly
+# the pull request that reshapes the auth dependency it exists to protect.
+name: Auth escalation (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs, never on `github.ref`
+  # alone: that shape cancels the run for the commit before it, and a check
+  # that was cancelled never graded the commit it is reported against.
+  group: auth-escalation-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  auth-escalation-live:
+    name: a scoped key cannot mint a session, and settings:write cannot reach every tenant
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner: a superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, so grading authorization as the
+      # owner would also seed rows nothing else could reproduce.
+      AUTHESC_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      SUITE: ../../tests/isolation/test_auth_escalation_live.py
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real application pulls in the real application's whole
+      # import chain, and a set that differs from the lock tests software
+      # nobody ships.
+      - name: Install the API from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # The permission catalog is the subject of half this suite, so prove the
+      # migration that seeds it actually landed rather than trusting a clean
+      # apply. A missing row here would make every `admin:tenants` assertion
+      # pass for the wrong reason: nobody holds a permission that is not there.
+      - name: The deployment-wide permissions exist, and no role holds them
+        run: |
+          set -euo pipefail
+          seeded=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM permissions WHERE name IN ('admin:tenants','admin:waitlist')")
+          if [ "$seeded" != "2" ]; then
+            echo "FAIL: migration 159 did not seed both permissions (found $seeded)."
+            exit 1
+          fi
+          granted=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id
+              WHERE p.name IN ('admin:tenants','admin:waitlist')")
+          if [ "$granted" != "0" ]; then
+            echo "FAIL: $granted role grant(s) exist for a deployment-wide permission."
+            echo "      Only the wildcard roles may hold these; a tenant-scoped grant"
+            echo "      reopens GHSA-6cwm-cx8p-h7f5."
+            exit 1
+          fi
+          echo "OK: both permissions seeded, held by no tenant-scoped role."
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: A scoped key and a tenant_admin are both refused
+        working-directory: services/api
+        env:
+          ISOLATION_AUTHESC_DSN: ${{ env.AUTHESC_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: python -m pytest "$SUITE" -v --tb=short
+
+      # Negative control one: put the API key back into the enrolment routes.
+      #
+      # `SessionUser` is the whole fix for GHSA-jfvq-94hv-4wrj. Reverting it to
+      # `AuthUser` is exactly what shipped, so it must make this suite fail. If
+      # it does not, the suite is not driving the production dependency and its
+      # green tick means nothing — worth failing the build over, because the
+      # alternative is a check that certifies an authorization control while
+      # being blind to it.
+      #
+      # The guard above the edit keeps this honest over time: if the dependency
+      # is reshaped so the string is not found, the control fails loudly rather
+      # than passing by editing nothing.
+      - name: The suite fails when the enrolment routes take a key again
+        working-directory: services/api
+        env:
+          ISOLATION_AUTHESC_DSN: ${{ env.AUTHESC_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/api/v1/endpoints/passkeys.py
+          cp "$TARGET" /tmp/passkeys.bak
+          restore() { cp /tmp/passkeys.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/passkeys.py")
+          s = p.read_text()
+          if "user: SessionUser," not in s:
+              print("FAIL: the dependency this control reverts is not there to revert.")
+              print("      passkeys.py has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace("user: SessionUser,", "user: AuthUser,"))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the API key readmitted to passkey enrolment."
+            echo "      It is not grading the production dependency."
+            exit 1
+          fi
+          echo "OK: readmitting the key makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q
+
+      # Negative control two: put the `settings:write` fallback back.
+      #
+      # The two findings have different fixes in different files, so one
+      # control cannot cover both. Without this, the tenant-provisioning half
+      # of the suite could rot untested behind a green tick earned entirely by
+      # the passkey half.
+      - name: The suite fails when the settings:write fallback returns
+        working-directory: services/api
+        env:
+          ISOLATION_AUTHESC_DSN: ${{ env.AUTHESC_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/api/v1/endpoints/tenant_provision.py
+          cp "$TARGET" /tmp/tenant_provision.bak
+          restore() { cp /tmp/tenant_provision.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/tenant_provision.py")
+          s = p.read_text()
+          needle = '    if await user.has_permission_db("admin:tenants", db):\n        return\n'
+          if needle not in s:
+              print("FAIL: the gate this control weakens is not there to weaken.")
+              print("      _require_admin has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, needle + '    if await user.has_permission_db("settings:write", db):\n        return\n', 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the settings:write fallback restored."
+            echo "      It is not grading the production gate."
+            exit 1
+          fi
+          echo "OK: restoring the fallback makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q

@@ -1,0 +1,6 @@
+{
+  "application": "Google Drive for Desktop",
+  "baseline_oauth_app_volume_z": 0.5,
+  "event_type": "oauth_token_event",
+  "user": "mara.l@example.com"
+}

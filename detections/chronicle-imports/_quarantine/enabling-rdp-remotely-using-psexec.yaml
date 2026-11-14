@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-enabling-rdp-remotely-using-psexec
+name: enabling_rdp_remotely_using_psexec
+description: enabling_rdp_remotely_using_psexec
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule enabling_rdp_remotely_using_psexec {\n meta:\n    author\
+    \ = \"Ruslan Mikhalov, SOC Prime Team\"\n    description = \"Detects enabling\
+    \ RDP remotely via PsExec.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/zkQq2YsKMtBj\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/03/13\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Defense Evasion, t1112, Execution, t1059\"\n\n \
+    \ events:\n($sysmon_remoterdpenable.metadata.product_event_type = \"1\" and re.regex($sysmon_remoterdpenable.target.process.file.full_path,\
+    \ `.*\\\\reg\\.exe`) and $sysmon_remoterdpenable.target.process.command_line =\
+    \ \"\\\"reg\\\" add \\\"HKEY_LOCAL_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\\
+    Control\\\\Terminal Server\\\" /v fDenyTSConnections /t REG_DWORD /d 0 /f\" and\
+    \ re.regex($sysmon_remoterdpenable.principal.process.command_line, `.*\\\\PSEXESVC\\\
+    .exe`))\n\n  condition:\n    $sysmon_remoterdpenable\n}"
+  chronicle_rule_name: enabling_rdp_remotely_using_psexec
+provenance:
+  source: chronicle/detection-rules
+  source_id: enabling_rdp_remotely_using_psexec
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/enabling_rdp_remotely_using_psexec.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

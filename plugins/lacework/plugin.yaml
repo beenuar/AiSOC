@@ -1,0 +1,30 @@
+id: lacework
+name: Lacework / Fortinet FortiCNAPP Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Lacework cloud security platform. Pulls alerts (events) and supports
+  compliance / configuration query.
+author: AiSOC Core Team
+tags: [cloud, lacework, cnapp, compliance]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/lacework.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [account, key_id, secret]
+  properties:
+    account:
+      type: string
+      description: "First label of your Lacework console URL: https://<account>.lacework.net"
+    subaccount:
+      type: string
+      description: Subaccount (optional)
+    key_id:
+      type: string
+      description: Access Key ID
+    secret:
+      type: string
+      description: Secret Key
+      secret: true

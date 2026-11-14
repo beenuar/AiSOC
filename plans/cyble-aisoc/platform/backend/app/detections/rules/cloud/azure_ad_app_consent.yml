@@ -1,0 +1,32 @@
+title: Azure AD Illicit OAuth App Consent
+id: aisoc-id-cl-0011-azure-app-consent
+status: stable
+description: |
+  User consented to an OAuth application requesting high-risk Graph
+  scopes (Mail.Read, Files.Read.All, offline_access). Classic
+  consent-phishing pattern used by Storm-0558 and similar actors.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azure
+  service: signinlogs
+tags:
+  - attack.t1528
+  - attack.credential_access
+  - aisoc.cloud
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azure
+    azure.operation_name|contains:
+      - 'Consent to application'
+      - 'Add app role assignment'
+  risky_scope:
+    azure.properties.scopes|contains:
+      - 'Mail.Read'
+      - 'Mail.ReadWrite'
+      - 'Files.Read.All'
+      - 'Files.ReadWrite.All'
+      - 'offline_access'
+      - 'Directory.Read.All'
+  condition: selection and risky_scope

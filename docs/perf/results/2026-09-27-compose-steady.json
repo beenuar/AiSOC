@@ -1,0 +1,151 @@
+{
+  "schema": "aisoc.load_harness/v1",
+  "measured_at": "2026-09-27T13:48:29+00:00",
+  "hardware": {
+    "os": "Darwin 25.5.0",
+    "arch": "arm64",
+    "python": "3.14.3",
+    "cpu_count": 18,
+    "cpu": "Apple M5 Max",
+    "memory_bytes": "137438953472",
+    "container_runtime": "docker 29.5.2",
+    "runtime_cpus": "8",
+    "runtime_memory_bytes": "16732614656"
+  },
+  "deployment": "docker-compose",
+  "not_a_production_slo": true,
+  "slo_disclaimer": "These are measurements of one deployment on the hardware named above, on the date named above. They are not a service-level objective and no support commitment is derived from them. Sustained throughput on other hardware, other storage and other event mixes will differ. The regression floors in perf.yml are set well below the measured values so they fire on a catastrophic regression rather than on runner jitter.",
+  "run": {
+    "run_id": "p90516752",
+    "attempted_events": 12000,
+    "accepted_events": 12000,
+    "alerts_observed": 12000,
+    "distinct_events_alerted": 12000,
+    "missing_events": 0,
+    "duplicate_alert_rows": 0,
+    "push_wall_seconds": 150.643365083,
+    "drain_wall_seconds": 0.14412212371826172,
+    "drain_settled": true,
+    "clock_offset_seconds": -0.10294818878173828,
+    "clock_offset_spread_seconds": 0.01700878143310547,
+    "producer": {
+      "run_id": "p90516752",
+      "mode": "load",
+      "marker_prefix": "aisoc-load",
+      "ingest_url": "http://localhost:8081/v1/ingest/batch",
+      "tenant": "00000000-0000-0000-0000-000000000001",
+      "started_at": "2026-09-27T13:45:53.040041Z",
+      "ended_at": "2026-09-27T13:48:23.683406083Z",
+      "wall_seconds": 150.643365083,
+      "workers": 4,
+      "batch_size": 20,
+      "target_eps": 120,
+      "requested_events": 12000,
+      "attempted_events": 12000,
+      "accepted_events": 12000,
+      "rejected_events": 0,
+      "refused_events": 0,
+      "transport_error_events": 0,
+      "accepted_eps": 79.65833738106129,
+      "http_status_counts": {
+        "200": 600
+      },
+      "seq_low": 0,
+      "seq_high": 11999
+    },
+    "total_wall_seconds": 156.68188285827637
+  },
+  "metrics": {
+    "consumer_lag_drained": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 0.0
+    },
+    "consumer_lag_in_flight": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 0.0
+    },
+    "dead_letter_rate": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 12000,
+      "value": 0.0
+    },
+    "delivery_ratio": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 12000,
+      "value": 1.0
+    },
+    "ingest_accepted_eps": {
+      "unit": "events/s",
+      "measured": true,
+      "samples": 12000,
+      "value": 79.65833738106129
+    },
+    "latency_max_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 12000,
+      "value": 1272.6917266845703
+    },
+    "latency_p50_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 12000,
+      "value": 976.099967956543
+    },
+    "latency_p95_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 12000,
+      "value": 1090.498924255371
+    },
+    "latency_p99_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 12000,
+      "value": 1155.9815406799316
+    },
+    "pipeline_eps": {
+      "unit": "alerts/s",
+      "measured": true,
+      "samples": 12000,
+      "value": 80.08123818883172
+    }
+  },
+  "resources": [
+    {
+      "at": "2026-09-27T13:48:25+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.14%",
+          "memory": "155.2MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "0.16%",
+          "memory": "80.21MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.08%",
+          "memory": "201.2MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "23.32MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "0.57%",
+          "memory": "758.3MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "0.01%",
+          "memory": "159.6MiB / 15.58GiB"
+        }
+      }
+    }
+  ]
+}

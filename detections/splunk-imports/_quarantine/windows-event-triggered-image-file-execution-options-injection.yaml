@@ -1,0 +1,40 @@
+id: splunk-security-content-f7abfab9-12ea-44e8-8745-475f9ca6e0a4
+name: Windows Event Triggered Image File Execution Options Injection
+description: The following analytic identifies the creation or modification of Image
+  File Execution Options (IFEO) registry keys, detected via EventCode 3000 in the
+  Application channel. This detection leverages Windows Event Logs to monitor for
+  process names added to IFEO under specific registry paths. This activity is significant
+  as it can indicate attempts to set traps for process monitoring or debugging, often
+  used by attackers for persistence or evasion. If confirmed malicious, this could
+  allow an attacker to execute arbitrary code or manipulate process behavior, leading
+  to potential system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1546.012
+  categories:
+  - endpoint
+references:
+- https://blog.thinkst.com/2022/09/sensitive-command-token-so-much-offense.html
+- https://docs.microsoft.com/en-us/windows-hardware/drivers/debugger/registry-entries-for-silent-process-exit
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_application` EventCode=3000\n  | rename param1 AS \"Process\"\
+    \ param2 AS \"Exit_Code\"\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY Process Exit_Code dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_event_triggered_image_file_execution_options_injection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f7abfab9-12ea-44e8-8745-475f9ca6e0a4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_event_triggered_image_file_execution_options_injection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

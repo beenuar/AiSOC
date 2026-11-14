@@ -1,0 +1,5 @@
+{
+  "command_line": "sqlite3 ~/notes.db",
+  "host": "mac-01",
+  "image_basename": "sqlite3"
+}

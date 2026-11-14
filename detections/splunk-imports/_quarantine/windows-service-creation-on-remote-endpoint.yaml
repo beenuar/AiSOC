@@ -1,0 +1,48 @@
+id: splunk-security-content-e0eea4fa-4274-11ec-882b-3e22fbd008af
+name: Windows Service Creation on Remote Endpoint
+description: The following analytic identifies the creation of a Windows Service on
+  a remote endpoint using `sc.exe`. It detects this activity by analyzing process
+  execution logs from Endpoint Detection and Response (EDR) agents, focusing on command-line
+  arguments that include remote paths and service creation commands. This behavior
+  is significant because adversaries often exploit the Service Control Manager for
+  lateral movement and remote code execution. If confirmed malicious, this activity
+  could allow attackers to execute arbitrary code on remote systems, potentially leading
+  to further compromise and persistence within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/win32/services/service-control-manager
+- https://docs.microsoft.com/en-us/windows/win32/services/controlling-a-service-using-sc
+- https://attack.mitre.org/techniques/T1543/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process_name=sc.exe
+    OR Processes.original_file_name=sc.exe) (Processes.process=*\\\\* AND Processes.process=*create*
+    AND Processes.process=*binpath*) by Processes.action Processes.dest Processes.original_file_name
+    Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid
+    Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path
+    Processes.process Processes.process_exec Processes.process_guid Processes.process_hash
+    Processes.process_id Processes.process_integrity_level Processes.process_name
+    Processes.process_path Processes.user Processes.user_id Processes.vendor_product
+    | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`| `security_content_ctime(lastTime)`
+    | `windows_service_creation_on_remote_endpoint_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e0eea4fa-4274-11ec-882b-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_creation_on_remote_endpoint.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

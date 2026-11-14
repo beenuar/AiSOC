@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-netntlm-downgrade-attack
+name: netntlm_downgrade_attack
+description: netntlm_downgrade_attack
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule netntlm_downgrade_attack {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects post exploitation using NetNTLM downgrade\
+    \ attacks  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/XzZiURQ3EeoE\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/03/20\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"credential_access, t1212\"\n\n  events:\n($selection1.metadata.product_event_type\
+    \ = \"13\" and (re.regex($selection1.target.registry.registry_key, `.*SYSTEM\\\
+    \\.*ControlSet.*\\\\Control\\\\Lsa\\\\lmcompatibilitylevel`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*SYSTEM\\\\.*ControlSet.*\\\\Control\\\\Lsa\\\\NtlmMinClientSec`) or re.regex($selection1.target.registry.registry_key,\
+    \ `.*SYSTEM\\\\.*ControlSet.*\\\\Control\\\\Lsa\\\\RestrictSendingNTLMTraffic`)))\n\
+    \n  condition:\n    $selection1\n}"
+  chronicle_rule_name: netntlm_downgrade_attack
+provenance:
+  source: chronicle/detection-rules
+  source_id: netntlm_downgrade_attack
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/netntlm_downgrade_attack_part_1.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

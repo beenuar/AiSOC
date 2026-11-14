@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-sap-data-changed-during-debugging
+name: sap_data_changed_during_debugging
+description: sap_data_changed_during_debugging
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_data_changed_during_debugging {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects in-memory data changes (CUL) during\
+    \ an ABAP debugging session. Identifies if the debugger is the same as the session\
+    \ owner.\"\n    severity = \"Critical\"\n    tactic = \"TA0005\"\n    technique\
+    \ = \"T1564\"\n\n  events:\n    $e.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n\
+    \n    $e.additional.fields[\"msg_1\"] = \"CUL\"\n\n    $debugger = $e.additional.fields[\"\
+    param1_1\"]\n    $session_owner = $e.principal.user.userid\n\n    // exclusions\n\
+    \    not $debugger in %sap_admin_users.user\n\n  match:\n    $session_owner over\
+    \ 30m\n\n  outcome:\n    $risk_score = 90\n    $target_sid = array_distinct($e.target.application)\n\
+    \    $debugging_user = array_distinct($debugger)\n    $source_user = array_distinct($session_owner)\n\
+    \n    $source_user_is_debugger = array_distinct(if($debugger = $session_owner,\
+    \ \"true\", \"false\"))\n\n    $change_field = array_distinct($e.additional.fields[\"\
+    param2_1\"])\n    $change = array_distinct($e.additional.fields[\"param3_1\"])\n\
+    \    $method = array_distinct(re.capture($e.additional.fields[\"paramx_1\"], `Meth:(.*?),\\\
+    s`))\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_data_changed_during_debugging
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_data_changed_during_debugging
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_data_changed_during_debugging.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

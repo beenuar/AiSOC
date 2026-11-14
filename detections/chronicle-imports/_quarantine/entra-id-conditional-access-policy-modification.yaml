@@ -1,0 +1,52 @@
+id: chronicle-detection-rules-entra-id-conditional-access-policy-modification
+name: entra_id_conditional_access_policy_modification
+description: entra_id_conditional_access_policy_modification
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_conditional_access_policy_modification {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects when an Entra ID conditional\
+    \ access policy has been modified\"\n    rule_id = \"mr_0c3f7309-a3e3-4c80-9b33-12ade9f499f8\"\
+    \n    rule_name = \"Entra ID conditional access policy modification\"\n    tactic\
+    \ = \"TA0004\"\n    technique = \"T1484\"\n    type = \"alert\"\n    platform\
+    \ = \"azure\"\n    data_source = \"o365\"\n    severity = \"Low\"\n    priority\
+    \ = \"Low\"\n\n  events:\n    $cloud.metadata.event_type = \"USER_RESOURCE_UPDATE_CONTENT\"\
+    \n    $cloud.metadata.product_event_type = \"Update policy.\"\n    $cloud.metadata.product_name\
+    \ = \"Office 365\"\n    $cloud.metadata.vendor_name = \"Microsoft\"\n    $cloud.target.application\
+    \ = \"AzureActiveDirectory\"\n    $cloud.target.resource.attribute.labels.key\
+    \ = \"extendedAuditEventCategory\"\n    $cloud.target.resource.attribute.labels.value\
+    \ = \"Policy\"\n    $cloud.principal.user.userid = $user\n\n  match:\n    $user\
+    \ over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($cloud.metadata.id)\n\
+    \    $user_agent = array_distinct($cloud.network.http.user_agent)\n    $policy_name\
+    \ = array_distinct($cloud.security_result.detection_fields[\"target_1\"])\n  \
+    \  $security_summary = array_distinct($cloud.security_result.summary)\n    $target_application\
+    \ = array_distinct($cloud.target.application)\n    //$principal_user_userid =\
+    \ array_distinct($group.principal.user.userid)\n\n  condition:\n    $cloud\n}"
+  chronicle_rule_name: entra_id_conditional_access_policy_modification
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_conditional_access_policy_modification
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_conditional_access_policy_modification.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

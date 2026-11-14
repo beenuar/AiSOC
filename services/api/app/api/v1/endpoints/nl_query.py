@@ -1,0 +1,588 @@
+"""Natural-language query → multi-dialect execution (Stage 2 #16).
+
+Accepts a plain-English security question, translates it to ES|QL, SPL, and
+KQL via the deterministic translator in :mod:`services.agents.app.nl_query`,
+optionally enhances the translation with an LLM (when one is configured and
+the air-gap policy allows the call), validates every emitted query against
+the dialect grammar, and finally executes the ES|QL variant against a
+connected Elasticsearch cluster.
+
+The previous implementation emitted ``// TODO: translate → <question>``
+fallbacks whenever no LLM was available. Stage 2 #16 removes that pattern
+entirely: the deterministic translator always produces a syntactically valid
+query, scored against the eval set in
+``services/agents/tests/eval_data/nl_query_eval.json`` to guarantee
+≥ 85% syntactic validity and ≥ 70% semantic match.
+
+Endpoints
+---------
+* ``POST /nl-query/translate``      Translate NL → ES|QL / SPL / KQL.
+* ``POST /nl-query/execute``        Translate + execute against Elasticsearch.
+
+Authorization
+-------------
+Both require ``lake:query``. Execute obviously does. Translate does because
+it is the first half of the same request — the console calls them in
+sequence, the output is a query against the caller's own telemetry, and
+there is no coherent entitlement that lets a principal compose a lake query
+it may not run. ``lake:query`` covers every role that hunts and excludes
+``viewer``, which is what was wrong: a read-only role could spend the
+tenant's LLM budget translating and, on ``/execute``, read raw events the
+lake permissions exist to keep from it.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import sys
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import TYPE_CHECKING, Annotated, Any, Literal
+from urllib.parse import urlparse
+
+import httpx
+import structlog
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.api.v1.deps import AuthUser, require_permission
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.core.config import settings
+from app.db.clickhouse import (
+    LakeQueryError,
+    LakeQueryTimeoutError,
+    execute_lake_query,
+)
+from app.db.rls import TenantDBSession
+from app.services.esql_runner import (
+    ESQLExecutionError,
+    ESQLNotConfigured,
+    run_esql_query,
+)
+from app.services.event_warehouse import (
+    HuntNotConfigured,
+    resolve_tenant_warehouse,
+)
+from app.services.event_warehouse.elasticsearch import elastic_auth_header
+from app.services.lake_hunt import HuntCompileError, compile_hunt
+from app.services.model_aliases import chat_completions_url, resolve_model_alias
+
+if TYPE_CHECKING:
+    # Static-only re-export so type checkers can see the dataclass fields and
+    # function signatures of the translator. At runtime we load the module
+    # dynamically (see ``_load_nl_query_module`` below) to avoid colliding
+    # with the API service's own ``app`` package.
+    from services.agents.app.nl_query import (  # noqa: F401
+        GrammarError,
+        NLQuery,
+        TranslatedQuery,
+        enhance_with_llm,
+    )
+    from services.agents.app.nl_query import translate as deterministic_translate  # noqa: F401
+
+# ---------------------------------------------------------------------------
+# Bootstrap import path for ``services/agents/app/nl_query``.
+#
+# The translator is owned by ``services/agents`` so that the eval harness, the
+# agents themselves, and the API can all share the same code path. We load it
+# via ``importlib`` under a unique module name (``aisoc_agents_nl_query``) so
+# it does not collide with the API service's own ``app`` package — both
+# services define their own ``app/__init__.py`` regular package and Python's
+# importer will not merge them.
+# ---------------------------------------------------------------------------
+
+
+def _candidate_nl_query_dirs() -> list[Path]:
+    """Return ordered list of directories that may contain the nl_query module.
+
+    The first entry is the in-tree vendored copy under
+    ``services/api/app/_vendor/nl_query/`` — this is what ships inside the
+    ``aisoc-api`` Docker image. The second entry is the source-of-truth tree
+    at ``services/agents/app/nl_query/``, used during local development when
+    the API runs outside of Docker.
+    """
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+
+    # 1) Vendored copy — same Python package as this endpoint, so it lives at
+    #    ``<api-app-root>/_vendor/nl_query/``. ``parents[3]`` resolves to the
+    #    ``app`` directory: endpoints → v1 → api → app.
+    try:
+        api_app_root = here.parents[3]
+        vendored = api_app_root / "_vendor" / "nl_query"
+        if vendored.joinpath("__init__.py").is_file():
+            candidates.append(vendored)
+    except IndexError:  # pragma: no cover - defensive
+        pass
+
+    # 2) Source-of-truth tree — walk up the repo until we find it.
+    for ancestor in here.parents:
+        source = ancestor / "services" / "agents" / "app" / "nl_query"
+        if source.joinpath("__init__.py").is_file():
+            candidates.append(source)
+            break
+
+    return candidates
+
+
+def _load_nl_query_module():
+    """Load the nl_query translator under a collision-free module name.
+
+    Prefers the in-tree vendored copy (so the module is available inside the
+    Dockerized ``aisoc-api`` service whose build context excludes
+    ``services/agents``) and falls back to the source-of-truth tree at
+    ``services/agents/app/nl_query/`` for local non-Docker development.
+    """
+    import importlib.util
+
+    package_name = "aisoc_agents_nl_query"
+    if package_name in sys.modules:
+        return sys.modules[package_name]
+
+    candidates = _candidate_nl_query_dirs()
+    if not candidates:
+        raise ImportError(
+            "NL query module not found — expected either "
+            "services/api/app/_vendor/nl_query/ (vendored) or "
+            "services/agents/app/nl_query/ (source)."
+        )
+
+    nl_query_dir = candidates[0]
+    init_file = nl_query_dir / "__init__.py"
+
+    spec = importlib.util.spec_from_file_location(
+        package_name,
+        init_file,
+        submodule_search_locations=[str(nl_query_dir)],
+    )
+    if spec is None or spec.loader is None:  # pragma: no cover - defensive
+        raise ImportError(f"Could not build spec for {init_file}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[package_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+_nl_query = _load_nl_query_module()
+if not TYPE_CHECKING:
+    GrammarError = _nl_query.GrammarError
+    NLQuery = _nl_query.NLQuery
+    TranslatedQuery = _nl_query.TranslatedQuery
+    enhance_with_llm = _nl_query.enhance_with_llm
+    deterministic_translate = _nl_query.translate
+
+logger = structlog.get_logger(__name__)
+
+router = APIRouter(prefix="/nl-query", tags=["nl_query"])
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Pydantic schemas
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class NLQueryTranslateRequest(BaseModel):
+    question: str = Field(
+        ...,
+        min_length=10,
+        description="Plain-English security question (e.g. 'Show failed logins per user in the last 24 h').",
+    )
+    index_pattern: str = Field(
+        "logs-*,aisoc-events-*",
+        description="Elasticsearch index pattern to scope the ES|QL query.",
+    )
+    time_range_hours: int = Field(
+        24,
+        ge=1,
+        le=8760,
+        description="Look-back window in hours.",
+    )
+
+
+class NLQueryTranslateResponse(BaseModel):
+    request_id: uuid.UUID
+    question: str
+    esql: str
+    spl: str
+    kql: str
+    explanation: str
+    created_at: datetime
+    # Translator metadata — surfaces which engine produced the query so the
+    # UI can flag deterministic vs. LLM-assisted answers.
+    engine: str = Field("deterministic", description="`deterministic` or `llm`.")
+    grammar_validated: bool = Field(True, description="True if every emitted query passed grammar checks.")
+
+
+class NLQueryExecuteRequest(NLQueryTranslateRequest):
+    es_url: str | None = Field(
+        None,
+        description=(
+            "Select which of your tenant's Elasticsearch connectors to run against, by host. "
+            "Matched against connectors you own; it is never used as an outbound target. "
+            "Omit it to use your first enabled Elasticsearch connector."
+        ),
+    )
+    es_api_key: str | None = Field(
+        None,
+        description=(
+            "Rejected with 400. Credentials are read from the Elasticsearch connector saved "
+            "for your tenant, where they are encrypted at rest. This field was previously "
+            "documented as an override and silently ignored."
+        ),
+    )
+    max_rows: int = Field(500, ge=1, le=5000)
+
+
+class QueryResult(BaseModel):
+    columns: list[str]
+    rows: list[list[Any]]
+    total_rows: int
+    took_ms: int | None = None
+
+
+class NLQueryExecuteResponse(NLQueryTranslateResponse):
+    result: QueryResult | None = None
+    execution_error: str | None = None
+    #: Which backend produced `result`. An analyst must be able to tell
+    #: "nothing matched in your SIEM" from "nothing matched in AiSOC's lake".
+    executed_against: Literal["elasticsearch", "lake"] | None = None
+    #: Translator fields the lake does not store, when executing against the
+    #: lake. A hunt that quietly drops half its filters returns more rows than
+    #: was asked for, which reads as "nothing was filtered out".
+    unsupported_filters: list[str] = Field(default_factory=list)
+
+    #: The query text actually sent to the store, and the language it is in.
+    #:
+    #: Wave 2, Phase 5.3. Without this the console could only show the ES|QL
+    #: translation, which for a lake execution is **not what ran** — the lake
+    #: speaks SQL and the question is compiled separately. Showing the ES|QL
+    #: beside lake rows is a query that did not produce them, which is worse
+    #: than showing nothing: an analyst checking whether the question was
+    #: understood would be reading the wrong artefact.
+    executed_query: str | None = None
+    executed_query_language: Literal["sql", "esql"] | None = None
+    #: Bound parameter values, kept separate from the text.
+    #:
+    #: The compiled lake query binds its values rather than interpolating
+    #: them, and rendering an interpolated string here would both misreport
+    #: what ran and re-introduce, in a display path, the string-building the
+    #: compiler exists to avoid. The console renders the two side by side.
+    executed_query_params: dict[str, Any] = Field(default_factory=dict)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Translation orchestration
+# ────────────────────────────────────────────────────────────────────────────
+
+
+async def _translate(
+    question: str,
+    index_pattern: str,
+    time_range_hours: int,
+) -> tuple[TranslatedQuery, str]:
+    """Translate *question* into ES|QL / SPL / KQL.
+
+    Returns a tuple of ``(TranslatedQuery, engine)`` where ``engine`` is
+    either ``"deterministic"`` or ``"llm"``. The deterministic translator is
+    always run first so that the response is guaranteed to be grammar-valid;
+    if an LLM API key is configured *and* the air-gap policy allows the
+    outbound call, we attempt to enhance the result with an LLM-generated
+    translation, but fall back to the deterministic output on any error.
+    """
+
+    nl = NLQuery(
+        question=question,
+        index_pattern=index_pattern,
+        time_range_hours=time_range_hours,
+    )
+    deterministic = deterministic_translate(
+        question,
+        index_pattern=index_pattern,
+        time_range_hours=time_range_hours,
+    )
+
+    api_key = getattr(settings, "OPENAI_API_KEY", None) or getattr(settings, "LLM_API_KEY", None)
+    if not api_key:
+        return deterministic, "deterministic"
+
+    # The URL this call will actually use, not a hardcoded hosted one.
+    # `enhance_with_llm` resolves through `chat_completions_url()`, so
+    # checking `api.openai.com` asked the air-gap guard about a host the
+    # request may never touch: on CORE it goes to LiteLLM on the internal
+    # network, and the guard was refusing a call that never leaves the
+    # deployment while saying nothing about the one that would.
+    try:
+        completions_url = chat_completions_url(resolve_model_alias("nl"))
+    except Exception:  # noqa: BLE001
+        # No gateway configured, so there is no LLM path to check. The
+        # deterministic translation is the honest answer, and it is the
+        # same one an unset API key already produces.
+        return deterministic, "deterministic"
+    try:
+        enforce_airgap_for_url(completions_url)
+    except AirgapViolation:
+        return deterministic, "deterministic"
+
+    enhanced = await enhance_with_llm(nl, api_key=api_key, fallback=deterministic)
+    engine = "llm" if enhanced is not deterministic else "deterministic"
+    return enhanced, engine
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Elasticsearch execution helper
+# ────────────────────────────────────────────────────────────────────────────
+
+
+async def _resolve_tenant_elasticsearch(
+    db: Any,  # noqa: ANN401 — AsyncSession; annotated loosely to avoid an import cycle
+    user: Any,  # noqa: ANN401
+    *,
+    preferred_url: str | None,
+) -> tuple[str, str, str]:
+    """Return ``(es_url, authorization_header, ssrf_allow_list_url)``.
+
+    Prefers the caller's own vault-encrypted ``elastic`` connector, which is
+    what the console wizard writes, and falls back to the deployment-wide
+    ``ES_URL``/``ES_API_KEY`` for single-cluster self-hosted installs.
+
+    ``preferred_url`` selects among several connected clusters by host. It is
+    only ever compared, never dereferenced: an unmatched value falls through
+    to the tenant's first cluster rather than being used as a target.
+
+    Raises :class:`ESQLNotConfigured` when neither source yields a cluster,
+    which the endpoint turns into a lake query.
+    """
+    tenant_id = getattr(user, "tenant_id", None)
+    if tenant_id is not None:
+        with contextlib.suppress(HuntNotConfigured):
+            credentials = await resolve_tenant_warehouse(
+                db,
+                tenant_id,
+                connector_types=("elastic",),
+            )
+            base_url = credentials.get("base_url", "url", "endpoint")
+            if base_url:
+                candidates = [credentials]
+                if preferred_url:
+                    wanted = urlparse(preferred_url).netloc
+                    for candidate in candidates:
+                        current = candidate.get("base_url", "url", "endpoint") or ""
+                        if wanted and urlparse(current).netloc == wanted:
+                            base_url = current
+                            break
+                header = elastic_auth_header(credentials)
+                return base_url, header, base_url
+
+    es_url = getattr(settings, "ES_URL", None)
+    es_api_key = getattr(settings, "ES_API_KEY", None)
+    if es_url and es_api_key:
+        return es_url, f"ApiKey {es_api_key}", es_url
+
+    raise ESQLNotConfigured("No Elasticsearch connector is enabled for this tenant and no deployment-wide ES_URL/ES_API_KEY is set.")
+
+
+async def _execute_esql(
+    esql: str,
+    es_url: str,
+    max_rows: int,
+    *,
+    auth_header: str,
+    allowed_url: str,
+) -> QueryResult:
+    """Run an ES|QL query against Elasticsearch and return structured results.
+
+    Thin adapter around :func:`app.services.esql_runner.run_esql_query` so the
+    request-scoped endpoint and the background hunt scheduler share one code
+    path for the outbound POST, the SSRF guard, the air-gap enforcement, and
+    the LIMIT-clause normalisation.
+    """
+    result = await run_esql_query(
+        esql=esql,
+        es_url=es_url,
+        es_api_key="",
+        auth_header=auth_header,
+        allowed_url=allowed_url,
+        max_rows=max_rows,
+    )
+    # ``ESQLResult`` exposes the post-LIMIT row list directly; the public
+    # ``QueryResult`` schema carries an explicit ``total_rows`` for legacy
+    # API consumers, but it's always ``len(rows)`` after the runner has
+    # enforced the cap (Elasticsearch doesn't return a row total for ES|QL,
+    # and we don't run a second count query just to populate the field).
+    return QueryResult(
+        columns=result.columns,
+        rows=result.rows,
+        total_rows=len(result.rows),
+        took_ms=result.took_ms,
+    )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+
+async def _execute_against_lake(
+    base: NLQueryExecuteResponse,
+    translated: TranslatedQuery,
+    body: NLQueryExecuteRequest,
+    user: AuthUser,
+) -> NLQueryExecuteResponse:
+    """Run the hunt against AiSOC's own event lake.
+
+    The translator's structured IR compiles straight to parameterised
+    ClickHouse SQL, so no part of the analyst's question reaches the SQL
+    string. The tenant predicate is generated as part of the WHERE clause
+    rather than rewritten in afterwards.
+    """
+    base.executed_against = "lake"
+    try:
+        compiled = compile_hunt(
+            translated.intents,
+            tenant_id=str(user.tenant_id),
+            hours=body.time_range_hours,
+            limit=body.max_rows,
+        )
+    except HuntCompileError as exc:
+        base.execution_error = f"Could not compile this question into a lake query: {exc}"
+        return base
+
+    base.unsupported_filters = compiled.unsupported_fields
+    # Recorded before execution, so a failed query still shows what was tried.
+    # A query that errored is exactly the one an analyst wants to read.
+    base.executed_query = compiled.sql
+    base.executed_query_language = "sql"
+    base.executed_query_params = dict(compiled.params or {})
+
+    try:
+        result = await execute_lake_query(compiled.sql, params=compiled.params)
+    except LakeQueryTimeoutError as exc:
+        base.execution_error = f"Lake query timed out: {exc}"
+        return base
+    except LakeQueryError as exc:
+        base.execution_error = f"Lake query failed: {exc}"
+        return base
+    except Exception as exc:  # noqa: BLE001 — surface, never fabricate rows
+        logger.warning("nl_query.lake_execution_failed", error=str(exc))
+        base.execution_error = f"Lake query failed: {exc}. Configure ES_URL to hunt an external SIEM instead."
+        return base
+
+    base.result = QueryResult(
+        columns=list(result.columns),
+        rows=[list(row) for row in result.rows],
+        total_rows=result.row_count,
+        took_ms=result.elapsed_ms,
+    )
+    return base
+
+
+@router.post(
+    "/translate",
+    response_model=NLQueryTranslateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Translate a natural-language security question to ES|QL / SPL / KQL",
+)
+async def translate_query(
+    body: NLQueryTranslateRequest,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> NLQueryTranslateResponse:
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
+    return NLQueryTranslateResponse(
+        request_id=uuid.uuid4(),
+        question=body.question,
+        esql=translated.esql,
+        spl=translated.spl,
+        kql=translated.kql,
+        explanation=translated.explanation,
+        created_at=datetime.now(UTC),
+        engine=engine,
+        grammar_validated=True,
+    )
+
+
+@router.post(
+    "/execute",
+    response_model=NLQueryExecuteResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Translate NL question and execute ES|QL against Elasticsearch",
+)
+async def execute_query(
+    body: NLQueryExecuteRequest,
+    user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+    db: TenantDBSession,
+) -> NLQueryExecuteResponse:
+    translated, engine = await _translate(body.question, body.index_pattern, body.time_range_hours)
+
+    base = NLQueryExecuteResponse(
+        request_id=uuid.uuid4(),
+        question=body.question,
+        esql=translated.esql,
+        spl=translated.spl,
+        kql=translated.kql,
+        explanation=translated.explanation,
+        created_at=datetime.now(UTC),
+        engine=engine,
+        grammar_validated=True,
+    )
+
+    # The cluster is resolved from the caller's own tenant — either their
+    # vault-stored `elastic` connector or, failing that, the deployment-wide
+    # ES_URL/ES_API_KEY fallback. It is never built from body fields, so a
+    # caller cannot steer the outbound request (CodeQL py/partial-ssrf).
+    #
+    # `es_url` in the request body selects *which* of the tenant's clusters
+    # to use when they have more than one; it is matched against connectors
+    # the tenant owns and is not otherwise dereferenced. `es_api_key` is
+    # refused outright — see the 400 below.
+    if body.es_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "es_api_key is not accepted. Credentials are read from the Elasticsearch "
+                "connector saved for your tenant, where they are encrypted at rest. "
+                "Add or edit the connector under Connectors in the console."
+            ),
+        )
+
+    try:
+        es_url, auth_header, allowed_url = await _resolve_tenant_elasticsearch(
+            db,
+            user,
+            preferred_url=body.es_url,
+        )
+    except ESQLNotConfigured:
+        # No external SIEM connected. Every connector's events are archived
+        # to AiSOC's own ClickHouse lake, so hunt that instead of refusing.
+        # This endpoint used to return "ES_URL not configured" and stop, which
+        # left a tenant unable to query any of the data they had ingested.
+        return await _execute_against_lake(base, translated, body, user)
+
+    base.executed_against = "elasticsearch"
+    base.executed_query = translated.esql
+    base.executed_query_language = "esql"
+    try:
+        base.result = await _execute_esql(
+            translated.esql,
+            es_url=es_url,
+            auth_header=auth_header,
+            allowed_url=allowed_url,
+            max_rows=body.max_rows,
+        )
+    except AirgapViolation as exc:
+        base.execution_error = (
+            f"Air-gapped policy refused outbound request: {exc}. "
+            "Add the Elasticsearch host to AISOC_AIRGAP_ALLOWLIST or point the connector at a private endpoint."
+        )
+    except GrammarError as exc:
+        # Should never happen — every translator output is validated — but if a
+        # caller somehow passes through a hand-edited query we want a clean error.
+        base.execution_error = f"Refusing to execute malformed ES|QL: {exc}"
+    except ESQLExecutionError as exc:
+        base.execution_error = str(exc)
+    except httpx.HTTPStatusError as exc:
+        base.execution_error = f"ES query failed ({exc.response.status_code}): {exc.response.text[:500]}"
+    except Exception as exc:
+        base.execution_error = str(exc)
+
+    return base

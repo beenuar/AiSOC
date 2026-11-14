@@ -1,0 +1,304 @@
+"""Cross-platform detection rule translation (tier2-translation).
+
+AST-aware translator between Sigma YAML, Splunk SPL, Microsoft Sentinel KQL,
+Google Chronicle YARA-L2/UDM, and Elastic ES|QL.  Uses an LLM for high-fidelity
+translation when ``OPENAI_API_KEY`` is set; falls back to field-map substitution
+for common patterns when no key is configured.
+
+Endpoints
+---------
+* ``POST /translation/translate``   Translate a rule from one format to multiple targets.
+* ``GET  /translation/formats``     List supported source/target formats.
+
+Authorization
+-------------
+``POST /translate`` requires ``rules:read`` — deliberately the read and not
+the write. It persists nothing: a caller hands in rule text and gets rule
+text back. What it does need is entitlement to the detection surface at all,
+and ``rules:read`` is exactly that: held by ``tenant_admin``, ``soc_lead``
+and ``threat_hunter``, withheld from ``viewer``. ``rules:write`` would be
+stronger than the act and would diverge from the drafting routes in
+``nl_detection.py`` and ``detection_loop.py``, which make the same
+read-to-draft, write-to-persist distinction.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import os
+from typing import Annotated, Any, Literal
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field
+
+from app.api.v1.deps import AuthUser, require_permission
+from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
+from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/translation", tags=["translation"])
+
+# ────────────────────────────────────────────────────────────────────────────
+# Supported formats
+# ────────────────────────────────────────────────────────────────────────────
+
+DetectionFormat = Literal["sigma", "spl", "kql", "esql", "yara_l2", "udm"]
+
+_FORMAT_LABELS: dict[DetectionFormat, str] = {
+    "sigma": "Sigma YAML",
+    "spl": "Splunk SPL",
+    "kql": "Microsoft Sentinel KQL (OOTB & Analytics Rules)",
+    "esql": "Elastic ES|QL",
+    "yara_l2": "Google Chronicle YARA-L2",
+    "udm": "Google Chronicle UDM Search",
+}
+
+# ────────────────────────────────────────────────────────────────────────────
+# Pydantic schemas
+# ────────────────────────────────────────────────────────────────────────────
+
+
+class TranslateRequest(BaseModel):
+    source_format: DetectionFormat = Field(..., description="Format of the input rule.")
+    source_rule: str = Field(..., min_length=5, description="The raw rule text to translate.")
+    target_formats: list[DetectionFormat] = Field(
+        default=["sigma", "spl", "kql", "esql"],
+        description="Output formats to produce.",
+    )
+
+
+class TranslationResult(BaseModel):
+    format: DetectionFormat
+    label: str
+    rule: str
+    notes: str | None = None
+
+
+class TranslateResponse(BaseModel):
+    source_format: DetectionFormat
+    results: list[TranslationResult]
+    warnings: list[str] = []
+
+
+class FormatsResponse(BaseModel):
+    formats: dict[str, str]
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# LLM helper
+# ────────────────────────────────────────────────────────────────────────────
+
+_SYSTEM = """You are an expert security engineer specialising in detection rule translation.
+You translate detection rules between Sigma YAML, Splunk SPL, Microsoft Sentinel KQL,
+Elastic ES|QL, Google Chronicle YARA-L2, and Google Chronicle UDM Search.
+
+Rules for translation:
+- Preserve ALL detection logic precisely (field names, operators, values, threshold).
+- Map field names using OCSF / ECS / Sigma field conventions to each platform's native fields.
+- Add platform-appropriate pipeline/index/timeframe clauses.
+- Return ONLY valid JSON. No prose before or after.
+
+Return JSON with this exact structure:
+{
+  "results": [
+    {"format": "<format>", "rule": "<rule_text>", "notes": "<optional notes>"},
+    ...
+  ],
+  "warnings": ["<any caveats>"]
+}
+"""
+
+
+def _user_prompt(req: TranslateRequest) -> str:
+    targets = ", ".join(req.target_formats)
+    return (
+        f"SOURCE FORMAT: {req.source_format}\n\n"
+        f"SOURCE RULE:\n```\n{req.source_rule}\n```\n\n"
+        f"Translate the above rule to: {targets}.\n"
+        "Return valid JSON only."
+    )
+
+
+async def _llm_translate(req: TranslateRequest) -> dict[str, Any] | None:
+    model = os.getenv("LLM_MODEL") or resolve_model_alias("nl")
+    # Resolved together with the route: when the call goes to the bundled
+    # gateway the bearer is the gateway's master key, not a provider key.
+    api_key = resolve_api_key(model)
+    if not api_key:
+        return None
+    completions_url = chat_completions_url(model)
+    # Air-gap check: refuses the call entirely (rather than silently
+    # falling back to template-substitution) so misconfigurations are
+    # loud. The except-Exception below would otherwise swallow this.
+    try:
+        enforce_airgap_for_url(completions_url)
+    except AirgapViolation:
+        raise
+    try:
+        # T2.3 — the contract runs before the request, so a vendor rule
+        # pasted in with a raw log sample attached is refused rather than
+        # forwarded.
+        body = await safe_chat_completions_request(
+            api_key=api_key,
+            model=model,
+            messages=[
+                {"role": "system", "content": _SYSTEM},
+                {"role": "user", "content": _user_prompt(req)},
+            ],
+            url=completions_url,
+            timeout=60.0,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+        )
+        return json.loads(body["choices"][0]["message"]["content"])
+    except LLMContractViolation as exc:
+        # %-style, not a `reason=` keyword: `logger` here is
+        # `logging.getLogger`, not structlog, and the stdlib Logger rejects
+        # unknown keywords with a TypeError. An exception raised inside an
+        # `except` block is not caught by a sibling handler, so the
+        # `except Exception` below never saw it and the TypeError escaped —
+        # the one path whose whole job is to degrade gracefully was the one
+        # that raised.
+        logger.warning("translation.llm_contract_violation reason=%s", exc.reason)
+        return None
+    except Exception:
+        return None
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Template-based fallback (field-map substitution)
+# ────────────────────────────────────────────────────────────────────────────
+
+# Sigma → target field map (common ECS / OCSF fields)
+_FIELD_MAP: dict[str, dict[str, str]] = {
+    "spl": {
+        "EventID": "EventCode",
+        "Image": "process_name",
+        "CommandLine": "process_path",
+        "TargetUserName": "user",
+        "DestinationIp": "dest_ip",
+        "SourceIp": "src_ip",
+    },
+    "kql": {
+        "EventID": "EventID",
+        "Image": "NewProcessName",
+        "CommandLine": "CommandLine",
+        "TargetUserName": "TargetUserName",
+        "DestinationIp": "RemoteIP",
+        "SourceIp": "InitiatingProcessRemoteIP",
+    },
+    "esql": {
+        "EventID": "event.code",
+        "Image": "process.executable",
+        "CommandLine": "process.command_line",
+        "TargetUserName": "user.name",
+        "DestinationIp": "destination.ip",
+        "SourceIp": "source.ip",
+    },
+    "yara_l2": {
+        "EventID": "metadata.product_event_type",
+        "Image": "principal.process.file.full_path",
+        "CommandLine": "principal.process.command_line",
+        "TargetUserName": "target.user.userid",
+        "DestinationIp": "target.ip",
+        "SourceIp": "principal.ip",
+    },
+    "udm": {
+        "EventID": "metadata.product_event_type",
+        "Image": "principal.process.file.full_path",
+        "CommandLine": "principal.process.command_line",
+        "TargetUserName": "target.user.userid",
+        "DestinationIp": "target.ip",
+        "SourceIp": "principal.ip",
+    },
+}
+
+
+def _fallback_templates(req: TranslateRequest) -> dict[str, Any]:
+    """Produce best-effort template translations without an LLM."""
+    results = []
+    warnings = ["LLM not configured — using field-map template substitution. Review output carefully."]
+
+    for fmt in req.target_formats:
+        if fmt == req.source_format:
+            results.append({"format": fmt, "rule": req.source_rule, "notes": "Same as source."})
+            continue
+
+        rule = req.source_rule
+        field_map = _FIELD_MAP.get(fmt, {})
+        for src_field, tgt_field in field_map.items():
+            rule = rule.replace(src_field, tgt_field)
+
+        if fmt == "spl":
+            rule = f"index=* sourcetype=WinEventLog\n| search {rule}"
+        elif fmt == "kql":
+            rule = f"SecurityEvent\n| where {rule}"
+        elif fmt == "esql":
+            rule = f"FROM logs-*\n| WHERE {rule}"
+        elif fmt == "yara_l2":
+            rule = f'rule translated_rule {{\n  meta:\n    author = "AiSOC"\n  condition:\n    {rule}\n}}'
+        elif fmt == "udm":
+            rule = f"// Chronicle UDM Search\n{rule}"
+
+        results.append({"format": fmt, "rule": rule, "notes": "Template translation — verify field names."})
+
+    return {"results": results, "warnings": warnings}
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Endpoints
+# ────────────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/translate",
+    response_model=TranslateResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Translate a detection rule across formats",
+)
+async def translate_rule(body: TranslateRequest, user: Annotated[AuthUser, Depends(require_permission("rules:read"))]) -> TranslateResponse:
+    if not body.target_formats:
+        raise HTTPException(status_code=400, detail="At least one target_format is required.")
+
+    try:
+        payload = await _llm_translate(body)
+    except AirgapViolation as exc:
+        # Surface the misconfig clearly instead of silently falling back —
+        # otherwise an operator who flipped on AISOC_AIRGAPPED would see
+        # quietly degraded translations with no signal that the LLM was
+        # being refused.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "airgap_violation", "message": str(exc)},
+        ) from exc
+    if not payload:
+        payload = _fallback_templates(body)
+
+    results = [
+        TranslationResult(
+            format=r["format"],
+            label=_FORMAT_LABELS.get(r["format"], r["format"]),
+            rule=r["rule"],
+            notes=r.get("notes"),
+        )
+        for r in payload.get("results", [])
+        if r.get("format") and r.get("rule")
+    ]
+
+    return TranslateResponse(
+        source_format=body.source_format,
+        results=results,
+        warnings=payload.get("warnings", []),
+    )
+
+
+@router.get(
+    "/formats",
+    response_model=FormatsResponse,
+    summary="List supported detection rule formats",
+)
+async def list_formats() -> FormatsResponse:
+    return FormatsResponse(formats=_FORMAT_LABELS)  # type: ignore[arg-type]

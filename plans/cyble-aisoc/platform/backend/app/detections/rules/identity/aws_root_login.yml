@@ -1,0 +1,24 @@
+title: AWS Root Account Console Login
+id: aisoc-id-0007-aws-root-login
+status: stable
+description: |
+  Root account used for AWS console login. Per AWS Well-Architected,
+  root should be locked behind hardware MFA and never used for normal
+  operations.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1078.004
+  - attack.privilege_escalation
+  - aisoc.identity
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: cloudtrail
+    aws.eventName: 'ConsoleLogin'
+    aws.userIdentity.type: 'Root'
+    aws.responseElements.ConsoleLogin: 'Success'
+  condition: selection

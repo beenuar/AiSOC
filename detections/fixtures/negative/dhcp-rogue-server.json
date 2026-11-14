@@ -1,0 +1,5 @@
+{
+  "event_type": "DHCP_OFFER",
+  "src_mac": "00:11:22:33:44:55",
+  "src_mac_in_allowed_dhcp": true
+}

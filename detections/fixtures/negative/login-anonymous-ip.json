@@ -1,0 +1,5 @@
+{
+  "event_type": "user.session.start",
+  "ip_anonymizer": false,
+  "user": "ceo@corp.com"
+}

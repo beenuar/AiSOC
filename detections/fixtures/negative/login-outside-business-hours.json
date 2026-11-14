@@ -1,0 +1,7 @@
+{
+  "event_type": "user.session.start",
+  "hour_of_day_local": 10,
+  "outcome": "SUCCESS",
+  "user": "admin@corp.com",
+  "user_role": "admin"
+}

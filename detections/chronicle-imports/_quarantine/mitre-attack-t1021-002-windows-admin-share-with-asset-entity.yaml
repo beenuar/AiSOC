@@ -1,0 +1,68 @@
+id: chronicle-detection-rules-mitre-attack-t1021-002-windows-admin-share-with-asset-entity
+name: mitre_attack_T1021_002_windows_admin_share_with_asset_entity
+description: mitre_attack_T1021_002_windows_admin_share_with_asset_entity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule mitre_attack_T1021_002_windows_admin_share_with_asset_entity {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Net use commands\
+    \ for SMB/Windows admin shares based on asset entity group\"\n    rule_id = \"\
+    mr_7b7fbe57-12a8-4254-ad73-b9e9024cbc8a\"\n    rule_name = \"MITRE ATT&CK T1021.002\
+    \ Windows Admin Share With Asset Entity\"\n    tactic = \"TA0008\"\n    technique\
+    \ = \"T1021.002\"\n    type = \"alert\"\n    tags = \"asset entity\"\n    platform\
+    \ = \"Windows\"\n    assumption = \"Assumes ingestion of Windows assets to entity\
+    \ graph\"\n    data_source = \"microsoft sysmon, microsoft windows events\"\n\
+    \    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $process.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n    $process.target.process.command_line = /net.*use.*(C|ADMIN|IPC)\\\
+    $/ nocase\n    $process.principal.ip = $ip\n\n    // Correlate with asset entity\
+    \ data\n    $asset.graph.entity.ip = $ip\n    $asset.graph.metadata.entity_type\
+    \ = \"ASSET\"\n    $asset.graph.metadata.source_type = \"ENTITY_CONTEXT\"\n  \
+    \  $asset.graph.entity.asset.platform_software.platform = \"WINDOWS\"\n    //\
+    \ Can be modified to focus rule on different groups or removed if not needed\n\
+    \    $asset.graph.relations.entity.group.group_display_name = \"Domain Computers\"\
+    \n\n  match:\n    $ip over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count\
+    \ = count_distinct($process.metadata.id)\n    // added to populate alert graph\
+    \ with additional context\n    // Commented out principal.hostname because principal.ip\
+    \ is already represented in graph as match variable. If match changes, can uncomment\
+    \ to add to results\n    //$principal_hostname = array_distinct($process.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($process.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($process.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($process.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($process.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($process.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    $process\
+    \ and $asset\n}"
+  chronicle_rule_name: mitre_attack_T1021_002_windows_admin_share_with_asset_entity
+provenance:
+  source: chronicle/detection-rules
+  source_id: mitre_attack_T1021_002_windows_admin_share_with_asset_entity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/mitre_attack_T1021_002_windows_admin_share_with_asset_entity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

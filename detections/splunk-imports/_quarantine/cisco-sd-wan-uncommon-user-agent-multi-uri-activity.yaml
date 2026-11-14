@@ -1,0 +1,49 @@
+id: splunk-security-content-201022d7-a35c-470a-93ff-ae335c42e69d
+name: Cisco SD-WAN - Uncommon User-Agent Multi-URI Activity
+description: 'This hunting search is designed to surface source IP activity using
+  uncommon HTTP user-agents across multiple URI paths in Cisco SD-WAN Manager serviceproxy
+  access logs.
+
+  It looks for source and user-agent combinations that access more than one distinct
+  URI, then keeps only low-volume behavior (`requests<=50`) to reduce noise from normal
+  high-volume traffic.
+
+  Use this hunt to pivot on `http_user_agent` and `src` and identify possible automation,
+  scripted reconnaissance, or exploitation attempts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1595
+  categories:
+  - network
+references:
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-authbp-qwCX8D4v
+- https://github.com/zerozenxlabs/CVE-2026-20127---Cisco-SD-WAN-Preauth-RCE
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_sd_wan_service_proxy_access`\n| rex field=_raw \"^\\[.*?\\]\\\
+    s+\\\"(?<http_method>\\S+)\\s+(?<uri>\\S+)\\s+(?<http_protocol>[^\\\"]+)\\\"\\\
+    s+(?<http_response_code>\\S+)\\s+(?<response_flags>\\S+)\\s+(?<bytes_in>\\S+)\\\
+    s+(?<bytes_out>\\S+)\\s+(?<duration>\\S+)\\s+(?<upstream_service_time>\\S+)\\\
+    s+\\\"(?<src>[^\\\"]+)\\\"\\s+\\\"(?<http_user_agent>[^\\\"]+)\\\"\\s+\\\"(?<x_request_id>[^\\\
+    \"]+)\\\"\\s+\\\"(?<dest>[^\\\"]+)\\\"\\s+\\\"(?<upstream_host>[^\\\"]+)\\\"\"\
+    \n| rex field=uri \"(?<uri_path>[^\\?]+)(?<uri_query>\\?.*)?\"\n| bin _time span=5m\n\
+    | stats count as requests\n        min(_time) as firstTime\n        max(_time)\
+    \ as lastTime\n        values(uri) as uri\n        dc(uri) as uri_count\nby src\
+    \ http_user_agent\n| where requests<=50 AND uri_count>1\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| sort 0 +requests\n| `cisco_sd_wan___uncommon_user_agent_multi_uri_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 201022d7-a35c-470a-93ff-ae335c42e69d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_sd_wan___uncommon_user_agent_multi_uri_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

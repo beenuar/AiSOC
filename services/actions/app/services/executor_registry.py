@@ -1,0 +1,87 @@
+"""
+Executor registry: maps ActionType to executor implementation.
+
+WS-E live vendor integrations are wired here alongside the original simulation executors.
+Each executor falls back to simulation mode when vendor credentials are absent from
+ActionRequest.parameters — no credentials = safe, observable simulation.
+"""
+
+from app.executors.chatops import ChatOpsVerifyExecutor
+from app.executors.endpoint import (
+    CaptureForensicsExecutor,
+    IsolateHostExecutor,
+    KillProcessExecutor,
+    QuarantineFileExecutor,
+    RunAVScanExecutor,
+    RunScriptExecutor,
+)
+from app.executors.identity import (
+    DisableUserExecutor,
+    ForceMFAExecutor,
+    ResetPasswordExecutor,
+    SuspendSessionExecutor,
+)
+from app.executors.mailbox import (
+    BlockSenderExecutor,
+    PurgeEmailExecutor,
+    RestoreEmailExecutor,
+    UnblockSenderExecutor,
+)
+from app.executors.network import AllowIPExecutor, BlockDomainExecutor, BlockIPExecutor
+from app.executors.notification import CreateTicketExecutor, NotifySlackExecutor
+from app.executors.siem import (
+    AckAlertExecutor,
+    BlockIOCExecutor,
+    CreateNotableEventExecutor,
+    SearchSIEMExecutor,
+    SuppressAlertExecutor,
+    SyncDetectionRuleExecutor,
+    UpdateAlertDispositionExecutor,
+    UpdateWatcherExecutor,
+)
+from app.models.action import ActionType
+
+EXECUTOR_REGISTRY = {
+    # Network
+    ActionType.BLOCK_IP: BlockIPExecutor(),
+    ActionType.ALLOW_IP: AllowIPExecutor(),
+    ActionType.BLOCK_DOMAIN: BlockDomainExecutor(),
+    # Endpoint (CrowdStrike RTR + Microsoft Defender)
+    ActionType.ISOLATE_HOST: IsolateHostExecutor(),
+    ActionType.QUARANTINE_FILE: QuarantineFileExecutor(),
+    ActionType.KILL_PROCESS: KillProcessExecutor(),
+    ActionType.RUN_SCRIPT: RunScriptExecutor(),
+    ActionType.RUN_AV_SCAN: RunAVScanExecutor(),
+    # Evidence acquisition. The agent proposes this on the C2 / exfiltration
+    # path, where it previously resolved to nothing.
+    ActionType.CAPTURE_FORENSICS: CaptureForensicsExecutor(),
+    # Identity (Okta)
+    ActionType.DISABLE_USER: DisableUserExecutor(),
+    ActionType.RESET_PASSWORD: ResetPasswordExecutor(),
+    ActionType.SUSPEND_SESSION: SuspendSessionExecutor(),
+    ActionType.FORCE_MFA: ForceMFAExecutor(),
+    # SIEM (Splunk + Elastic) + Defender IoC
+    ActionType.SEARCH_SIEM: SearchSIEMExecutor(),
+    ActionType.CREATE_NOTABLE_EVENT: CreateNotableEventExecutor(),
+    ActionType.SYNC_DETECTION_RULE: SyncDetectionRuleExecutor(),
+    ActionType.UPDATE_WATCHER: UpdateWatcherExecutor(),
+    ActionType.BLOCK_IOC: BlockIOCExecutor(),
+    # Phase 3.3 — alert lifecycle (Splunk ES / Elastic Security / MDE).
+    ActionType.ACK_ALERT: AckAlertExecutor(),
+    ActionType.SUPPRESS_ALERT: SuppressAlertExecutor(),
+    # Two-way loop: AiSOC's verdict back onto the source finding.
+    ActionType.UPDATE_ALERT_DISPOSITION: UpdateAlertDispositionExecutor(),
+    # Depth 7.1 — mailbox remediation. These delegate to the live-action
+    # arms rather than reimplementing them, so there is one "purge a
+    # message" and both doors reach it. They are here because the post-action
+    # verifier is keyed by ActionType: a capability that declares a probe and
+    # has no ActionType declares a probe nothing can call.
+    ActionType.PURGE_EMAIL: PurgeEmailExecutor(),
+    ActionType.RESTORE_EMAIL: RestoreEmailExecutor(),
+    ActionType.BLOCK_SENDER: BlockSenderExecutor(),
+    ActionType.UNBLOCK_SENDER: UnblockSenderExecutor(),
+    # Notifications & orchestration
+    ActionType.NOTIFY_SLACK: NotifySlackExecutor(),
+    ActionType.CREATE_TICKET: CreateTicketExecutor(),
+    ActionType.CHATOPS_VERIFY: ChatOpsVerifyExecutor(),
+}

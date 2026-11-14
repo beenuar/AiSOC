@@ -1,0 +1,23 @@
+title: BITSAdmin Used to Download Remote Payload
+id: aisoc-id-ep-0015-bitsadmin-download
+status: stable
+description: bitsadmin.exe used as a LOLBAS to stage payloads.
+author: Cyble AiSOC
+level: medium
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1197
+  - attack.t1105
+  - attack.defense_evasion
+  - aisoc.endpoint
+  - lolbas
+detection:
+  selection_img:
+    process.executable|endswith: '\bitsadmin.exe'
+  selection_args:
+    process.command_line|contains:
+      - '/transfer'
+      - '/addfile'
+  condition: selection_img and selection_args

@@ -1,0 +1,39 @@
+id: splunk-security-content-c2a332c3-24a2-4e24-9455-0e80332e6746
+name: Web Remote ShellServlet Access
+description: The following analytic identifies attempts to access the Remote ShellServlet
+  on a web server, specifically targeting Confluence servers vulnerable to CVE-2023-22518
+  and CVE-2023-22515. It leverages web data to detect URLs containing "*plugins/servlet/com.jsos.shell/*"
+  with a status code of 200. This activity is significant as it is commonly associated
+  with web shells and other malicious behaviors, potentially leading to unauthorized
+  command execution. If confirmed malicious, attackers could gain remote code execution
+  capabilities, compromising the server and potentially the entire network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- http://www.servletsuite.com/servlets/shell.htm
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime FROM\
+    \ datamodel=Web\n  WHERE Web.url IN (\"*plugins/servlet/com.jsos.shell/*\") Web.status=200\n\
+    \  BY Web.http_user_agent, Web.status Web.http_method,\n     Web.url, Web.url_length,\
+    \ Web.src,\n     Web.dest, sourcetype\n| `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `web_remote_shellservlet_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c2a332c3-24a2-4e24-9455-0e80332e6746
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/web_remote_shellservlet_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

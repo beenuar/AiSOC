@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.999,
+  "event_type": "system.idp.lifecycle.create",
+  "outcome": "SUCCESS",
+  "user": "ken.o@example.com"
+}

@@ -1,0 +1,106 @@
+"""
+$name — AiSOC connector plugin.
+
+Connectors are owned by ``services/connectors``. They subclass ``BaseConnector``
+and implement three async methods:
+
+- ``test_connection()`` — quick health check used by the UI "Test" button.
+- ``fetch_alerts()``    — pull a batch of upstream records on each poll tick.
+- ``normalize()``       — map vendor records onto the AiSOC OCSF-aligned schema.
+
+The in-process ``ConnectorScheduler`` will instantiate this class once per
+enabled tenant instance and call ``fetch_alerts`` on the configured cadence.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+import httpx
+
+# When this plugin lives inside the AiSOC monorepo, prefer the real base class:
+#   from services.connectors.app.connectors.base import BaseConnector, ConnectorSchema
+# The shim below lets the scaffold lint cleanly outside the monorepo.
+try:  # pragma: no cover
+    from services.connectors.app.connectors.base import BaseConnector, ConnectorSchema
+except Exception:  # pragma: no cover
+    BaseConnector = object  # type: ignore[misc,assignment]
+    ConnectorSchema = dict  # type: ignore[misc,assignment]
+
+
+SEVERITY_MAP: dict[str, str] = {
+    # Map vendor-native severities onto AiSOC's four-tier ladder.
+    # info | low | medium | high
+}
+
+
+class Connector(BaseConnector):  # type: ignore[misc]
+    """$name connector."""
+
+    connector_id = "$slug"
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:  # type: ignore[override]
+        # Mirrors plugin.yaml.config_schema. Kept as a classmethod so the API
+        # service can describe this connector without instantiating it.
+        return ConnectorSchema(  # type: ignore[call-arg]
+            name="$slug",
+            label="$name",
+            description="$name connector",
+            category="siem",  # edr | siem | cloud | iam | saas | vcs | network
+            fields=[],
+            oauth=None,
+            default_poll_interval_seconds=300,
+        )
+
+    def __init__(self, instance_id: str, tenant_id: str, config: dict[str, Any]) -> None:
+        super().__init__(instance_id=instance_id, tenant_id=tenant_id, config=config)
+        self.base_url: str = config["base_url"].rstrip("/")
+        self.api_key: str | None = config.get("api_key")
+        self.verify_tls: bool = bool(config.get("verify_tls", True))
+        self.page_size: int = int(config.get("page_size", 100))
+
+    def _client(self) -> httpx.AsyncClient:
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+        return httpx.AsyncClient(
+            base_url=self.base_url,
+            headers=headers,
+            verify=self.verify_tls,
+            timeout=httpx.Timeout(15.0, connect=5.0),
+        )
+
+    async def test_connection(self) -> dict[str, Any]:
+        """Quick reachability + auth check."""
+        async with self._client() as client:
+            resp = await client.get("/health")
+            resp.raise_for_status()
+            return {"ok": True, "status": resp.status_code}
+
+    async def fetch_alerts(self, since_iso: str | None = None) -> list[dict[str, Any]]:
+        """Pull a batch of vendor records.
+
+        The scheduler hands us the high-watermark from the last successful tick
+        as ``since_iso``. Use it to ask the upstream for "everything newer than".
+        """
+        params: dict[str, Any] = {"limit": self.page_size}
+        if since_iso:
+            params["since"] = since_iso
+
+        async with self._client() as client:
+            resp = await client.get("/alerts", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            return list(data.get("results", []))
+
+    def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Map a vendor record onto the AiSOC OCSF-aligned event shape."""
+        return {
+            "source": "$slug",
+            "vendor_id": str(raw.get("id", "")),
+            "timestamp": raw.get("timestamp"),
+            "title": raw.get("title", ""),
+            "description": raw.get("description", ""),
+            "severity": SEVERITY_MAP.get(str(raw.get("severity", "")).lower(), "info"),
+            "raw": raw,
+        }

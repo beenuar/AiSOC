@@ -1,0 +1,52 @@
+id: splunk-security-content-06b8ec9a-d3b5-4882-8f16-04b4d10f5eab
+name: Azure AD User Consent Blocked for Risky Application
+description: The following analytic detects instances where Azure AD has blocked a
+  user's attempt to grant consent to a risky or potentially malicious application.
+  This detection leverages Azure AD audit logs, focusing on user consent actions and
+  system-driven blocks. Monitoring these blocked consent attempts is crucial as it
+  highlights potential threats early on, indicating that a user might be targeted
+  or that malicious applications are attempting to infiltrate the organization. If
+  confirmed malicious, this activity suggests that Azure's security measures successfully
+  prevented a harmful application from accessing organizational data, warranting immediate
+  investigation to understand the context and take preventive measures.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1528
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1528/
+- https://www.microsoft.com/en-us/security/blog/2022/09/22/malicious-oauth-applications-used-to-compromise-email-servers-and-spread-spam/
+- https://learn.microsoft.com/en-us/azure/active-directory/manage-apps/protect-against-consent-phishing
+- https://learn.microsoft.com/en-us/defender-cloud-apps/investigate-risky-oauth
+- https://www.alteredsecurity.com/post/introduction-to-365-stealer
+- https://github.com/AlteredSecurity/365-Stealer
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` operationName="Consent to application" properties.result=failure
+    | rename properties.* as * | eval reason_index = if(mvfind(''targetResources{}.modifiedProperties{}.displayName'',
+    "ConsentAction.Reason") >= 0, mvfind(''targetResources{}.modifiedProperties{}.displayName'',
+    "ConsentAction.Reason"), -1) | eval permissions_index = if(mvfind(''targetResources{}.modifiedProperties{}.displayName'',
+    "ConsentAction.Permissions") >= 0, mvfind(''targetResources{}.modifiedProperties{}.displayName'',
+    "ConsentAction.Permissions"), -1) | search reason_index >= 0 | eval reason = mvindex(''targetResources{}.modifiedProperties{}.newValue'',reason_index)
+    | eval permissions = mvindex(''targetResources{}.modifiedProperties{}.newValue'',permissions_index)
+    | search reason = "\"Risky application detected\"" | rex field=permissions "Scope:
+    (?<Scope> [ ^,]+)" | fillnull | stats count min(_time) as firstTime max(_time)
+    as lastTime by dest user src vendor_account vendor_product reason Scope signature
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `azure_ad_user_consent_blocked_for_risky_application_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 06b8ec9a-d3b5-4882-8f16-04b4d10f5eab
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_user_consent_blocked_for_risky_application.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

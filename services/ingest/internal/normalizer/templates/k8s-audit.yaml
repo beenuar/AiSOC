@@ -1,0 +1,34 @@
+id: k8s-audit
+vendor_name: Kubernetes
+product_name: Kubernetes Audit
+class_uid: 6003
+class_name: API Activity
+activity_id: 1
+field_map:
+  auditID: finding.uid
+  verb: activity_name
+  user.username: actor.user.name
+  objectRef.resource: finding.title
+  objectRef.namespace: cloud.account.uid
+  objectRef.name: resource.name
+  sourceIPs.0: src_endpoint.ip
+  userAgent: http_request.user_agent
+  responseStatus.code: status_code
+  stage: status_detail
+severity_field: severity
+severity_map:
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  warning: 3
+  high: 4
+  critical: 5
+  fatal: 6
+time_field: stageTimestamp
+message_field: verb
+constants:
+  source_type: k8s-audit
+  metadata.product.vendor_name: Kubernetes
+  metadata.product.name: Kubernetes Audit
+  cloud.provider: kubernetes

@@ -1,0 +1,44 @@
+id: splunk-security-content-429d611b-3183-49a7-b235-fc4203c4e1cb
+name: Windows Defender ASR Rule Disabled
+description: The following analytic identifies when a Windows Defender ASR rule disabled
+  events. ASR is a feature of Windows Defender Exploit Guard that prevents actions
+  and apps that are typically used by exploit-seeking malware to infect machines.
+  ASR rules are applied to processes and applications. When a process or application
+  attempts to perform an action that is blocked by an ASR rule, an event is generated.
+  This detection searches for ASR rule disabled events that are generated when an
+  ASR rule is disabled.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://asrgen.streamlit.app/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ms_defender` EventCode IN (5007) | rex field=New_Value "0x(?<New_Registry_Value>\\d+)$"
+    | rex field=Old_Value "0x(?<Old_Registry_Value>\\d+)$" | rex field=New_Value "Rules\\\\(?<ASR_ID>[A-Fa-f0-9\\-]+)\\s*="
+    | eval New_Registry_Value=case(New_Registry_Value=="0", "Disabled", New_Registry_Value=="1",
+    "Block", New_Registry_Value=="2", "Audit", New_Registry_Value=="6", "Warn") |
+    eval Old_Registry_Value=case(Old_Registry_Value=="0", "Disabled", Old_Registry_Value=="1",
+    "Block", Old_Registry_Value=="2", "Audit", Old_Registry_Value=="6", "Warn") |
+    search New_Registry_Value="Disabled" | stats count min(_time) as firstTime max(_time)
+    as lastTime by host, New_Value, Old_Value, Old_Registry_Value, New_Registry_Value,
+    ASR_ID | lookup asr_rules ID AS ASR_ID OUTPUT ASR_Rule | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)`| rename host as dest | `windows_defender_asr_rule_disabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 429d611b-3183-49a7-b235-fc4203c4e1cb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_defender_asr_rule_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

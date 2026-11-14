@@ -1,0 +1,59 @@
+id: splunk-security-content-ab59d5ee-8694-4832-a332-cefcf66a9057
+name: Cisco Duo Policy Skip 2FA for Other Countries
+description: 'The following analytic detects when a Duo policy is created or updated
+  to allow access without two-factor authentication (2FA)
+
+  for users in countries other than the default. It identifies this behavior by searching
+  Duo administrator activity logs for policy
+
+  creation or update actions where the policy description indicates that access is
+  permitted without 2FA for certain user locations.
+
+  This is achieved by parsing the relevant fields in the logs and filtering for the
+  specific condition of ''Allow access without 2FA.''
+
+  This behavior is significant for a Security Operations Center (SOC) because bypassing
+  2FA for any user group or location weakens
+
+  the organization''s security posture and increases the risk of unauthorized access.
+  Attackers or malicious insiders may exploit
+
+  such policy changes to circumvent strong authentication controls, potentially leading
+  to account compromise, data breaches, or
+
+  lateral movement within the environment. Early detection of these policy modifications
+  enables the SOC to investigate and respond
+
+  before attackers can leverage the weakened controls, thereby reducing the risk and
+  impact of a successful attack.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search user_locations_default_action=\"Allow\
+    \ access without 2FA\"\n  | rename object as user\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY action actionlabel description\n\
+    \       user admin_email\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_policy_skip_2fa_for_other_countries_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ab59d5ee-8694-4832-a332-cefcf66a9057
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_skip_2fa_for_other_countries.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

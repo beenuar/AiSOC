@@ -1,0 +1,39 @@
+id: splunk-security-content-cfe094b4-0737-4a33-9d63-e0562ce2b883
+name: ESXi Bulk VM Termination
+description: This detection identifies when all virtual machines on an ESXi host are
+  abruptly terminated, which may indicate malicious activity such as a deliberate
+  denial-of-service, ransomware staging, or an attempt to destroy critical workloads.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1673
+  - T1529
+  - T1499
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` | rex field=_raw "\s\[(?<user>[^\]]+)\]:\s(?<shell_command>.+)$"
+    | rex field=_raw "Z (?<dest>[\w\.]+)\s.*:\s(?<esxicli_Command>esxcli\s.+)" | eval
+    command=mvappend(esxicli_Command, shell_Command) | where isnotnull(command) |
+    search (command="pkill -9 vmx-*") OR ( command="*esxcli*" AND command="*--format-param*"
+    AND command="*vm process list*" AND command="*awk*" AND command="*esxcli vm process
+    kill*") | stats min(_time) as firstTime max(_time) as lastTime values(_time) as
+    timeStamp values(command) as commands values(user) as user by dest | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `esxi_bulk_vm_termination_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: cfe094b4-0737-4a33-9d63-e0562ce2b883
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_bulk_vm_termination.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

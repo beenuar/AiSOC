@@ -1,0 +1,44 @@
+id: splunk-security-content-e6f1bb1b-f441-492b-9126-902acda217da
+name: Detect S3 access from a new IP
+description: The following analytic identifies access to an S3 bucket from a new or
+  previously unseen remote IP address. It leverages S3 bucket-access logs, specifically
+  focusing on successful access events (http_status=200). This activity is significant
+  because access from unfamiliar IP addresses could indicate unauthorized access or
+  potential data exfiltration attempts. If confirmed malicious, this activity could
+  lead to unauthorized data access, data theft, or further exploitation of the compromised
+  S3 bucket, posing a significant risk to sensitive information stored within the
+  bucket.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1530
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`aws_s3_accesslogs` http_status=200  [search `aws_s3_accesslogs` http_status=200\n\
+    \  | stats earliest(_time) as firstTime latest(_time) as lastTime\n    BY bucket_name\
+    \ remote_ip\n  | inputlookup append=t previously_seen_S3_access_from_remote_ip\n\
+    \  | stats min(firstTime) as firstTime, max(lastTime) as lastTime\n    BY bucket_name\
+    \ remote_ip\n  | outputlookup previously_seen_S3_access_from_remote_ip\n  | eval\
+    \ newIP=if(firstTime >= relative_time(now(), \"-70m@m\"), 1, 0)\n  | where newIP=1\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | table bucket_name remote_ip]\n  | iplocation remote_ip\n  | rename remote_ip\
+    \ as src_ip\n  | table _time bucket_name src_ip City Country operation request_uri\n\
+    \  | `detect_s3_access_from_a_new_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e6f1bb1b-f441-492b-9126-902acda217da
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_s3_access_from_a_new_ip.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

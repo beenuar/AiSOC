@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "image_name": "prefix-docker:dind-suffix"
+}

@@ -1,0 +1,39 @@
+id: splunk-security-content-bf39c3a3-b191-4d42-8738-9d9797bd0c3a
+name: Kubernetes DaemonSet Deployed
+description: The following analytic detects the creation of a DaemonSet in a Kubernetes
+  cluster. This behavior is identified by monitoring Kubernetes Audit logs for the
+  creation event of a DaemonSet. DaemonSets ensure a specific pod runs on every node,
+  making them a potential vector for persistent access. This activity is significant
+  for a SOC as it could indicate an attempt to maintain persistent access to the Kubernetes
+  infrastructure. If confirmed malicious, it could lead to persistent attacks, service
+  disruptions, or unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`kube_audit` \"objectRef.resource\"=daemonsets verb=create\n  | fillnull\n\
+    \  | stats count values(user.groups{}) as user_groups\n    BY kind objectRef.name\
+    \ objectRef.namespace\n       objectRef.resource requestObject.kind responseStatus.code\n\
+    \       sourceIPs{} stage user.username\n       userAgent verb\n  | rename sourceIPs{}\
+    \ as src_ip, user.username as user\n  | `kubernetes_daemonset_deployed_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bf39c3a3-b191-4d42-8738-9d9797bd0c3a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_daemonset_deployed.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

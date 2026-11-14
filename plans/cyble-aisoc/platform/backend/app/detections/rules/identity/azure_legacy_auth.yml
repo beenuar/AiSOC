@@ -1,0 +1,29 @@
+title: Azure AD Legacy Authentication Allowed Sign-in
+id: aisoc-id-0003-azure-legacy-auth
+status: stable
+description: |
+  Successful sign-in using a legacy / basic authentication protocol
+  (POP/IMAP/SMTP-AUTH, EAS, etc) that bypasses MFA.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: azure
+  service: signinlogs
+tags:
+  - attack.t1078.004
+  - attack.defense_evasion
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    event.action: signin
+    event.outcome: success
+    azure.client_app_used:
+      - 'IMAP4'
+      - 'POP3'
+      - 'Authenticated SMTP'
+      - 'Exchange ActiveSync'
+      - 'Other clients'
+  condition: selection
+falsepositives:
+  - Legitimate scanner/MFP devices not yet migrated to modern auth.

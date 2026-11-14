@@ -1,0 +1,75 @@
+[
+  {
+    "id": 10001,
+    "author_id": 17,
+    "author_name": "Alice Admin",
+    "entity_id": 7,
+    "entity_type": "Group",
+    "details": {
+      "custom_message": "User_add",
+      "author_name": "Alice Admin",
+      "author_email": "alice@corp.test",
+      "ip_address": "203.0.113.5",
+      "target_details": "bob@corp.test"
+    },
+    "created_at": "2026-06-28T10:00:00Z"
+  },
+  {
+    "id": 10002,
+    "author_id": 17,
+    "author_name": "Alice Admin",
+    "entity_id": 7,
+    "entity_type": "Group",
+    "details": {
+      "custom_message": "Personal_access_token_create",
+      "author_name": "Alice Admin",
+      "author_email": "alice@corp.test",
+      "ip_address": "203.0.113.5"
+    },
+    "created_at": "2026-06-28T10:05:00Z"
+  },
+  {
+    "id": 10003,
+    "author_id": 9,
+    "author_name": "Bob Engineer",
+    "entity_id": 42,
+    "entity_type": "Project",
+    "details": {
+      "custom_message": "Remove_protected_branch",
+      "author_name": "Bob Engineer",
+      "author_email": "bob@corp.test",
+      "ip_address": "203.0.113.6",
+      "target_details": "main"
+    },
+    "created_at": "2026-06-28T10:10:00Z"
+  },
+  {
+    "id": 10004,
+    "author_id": 9,
+    "author_name": "Bob Engineer",
+    "entity_id": 42,
+    "entity_type": "Project",
+    "details": {
+      "custom_message": "Project_destroyed",
+      "author_name": "Bob Engineer",
+      "author_email": "bob@corp.test",
+      "ip_address": "203.0.113.6",
+      "target_details": "legacy-service"
+    },
+    "created_at": "2026-06-28T10:15:00Z"
+  },
+  {
+    "id": 10005,
+    "author_id": 17,
+    "author_name": "Alice Admin",
+    "entity_id": 7,
+    "entity_type": "Group",
+    "details": {
+      "custom_message": "Description_changed",
+      "author_name": "Alice Admin",
+      "author_email": "alice@corp.test",
+      "ip_address": "203.0.113.5"
+    },
+    "created_at": "2026-06-28T10:20:00Z"
+  }
+]

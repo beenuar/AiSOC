@@ -1,0 +1,47 @@
+id: splunk-security-content-f533ca6c-9440-4686-80cb-7f294c07812a
+name: Detect Certify With PowerShell Script Block Logging
+description: The following analytic detects the use of the Certify tool via an in-memory
+  PowerShell function to enumerate Active Directory Certificate Services (AD CS) environments.
+  It leverages PowerShell Script Block Logging (EventCode 4104) to identify specific
+  command patterns associated with Certify's enumeration and exploitation functions.
+  This activity is significant as it indicates potential reconnaissance or exploitation
+  attempts against AD CS, which could lead to unauthorized certificate issuance. If
+  confirmed malicious, attackers could leverage this to escalate privileges, persist
+  in the environment, or access sensitive information by abusing AD CS.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://github.com/GhostPack/Certify
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText IN (\"*find *\") AND ScriptBlockText\
+    \ IN (\"* /vulnerable*\",\"* -vulnerable*\",\"* /enrolleeSuppliesSubject *\",\"\
+    * /json /outfile*\")) OR (ScriptBlockText IN (,\"*auth *\",\"*req *\",) AND ScriptBlockText\
+    \ IN (\"* -ca *\",\"* -username *\",\"* -u *\")) OR (ScriptBlockText IN (\"*request\
+    \ *\",\"*download *\") AND ScriptBlockText IN (\"* /ca:*\"))\n  | fillnull\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | eval file_name = case(isnotnull(file_name),file_name,true(),\"\
+    unknown\")\n  | eval signature = substr(command,0,256)\n  | `detect_certify_with_powershell_script_block_logging_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f533ca6c-9440-4686-80cb-7f294c07812a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_certify_with_powershell_script_block_logging.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

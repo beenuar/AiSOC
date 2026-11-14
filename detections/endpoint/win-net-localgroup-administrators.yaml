@@ -1,0 +1,24 @@
+id: det-endpoint-103
+name: net localgroup administrators Enumerated
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'net localgroup
+  administrators Enumerated'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1087.001
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_command_line CONTAINS_ANY ["net localgroup administrators", "net.exe localgroup administrators"]
+false_positives:
+- IT helpdesk routine check
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

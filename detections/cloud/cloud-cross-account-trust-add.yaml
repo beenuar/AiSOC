@@ -1,0 +1,25 @@
+id: det-cloud-040
+name: Cross-Account Trust Added to Privileged Role
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Cross-Account Trust
+  Added to Privileged Role'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: cloud
+log_source:
+  product: cloud
+  service: iam
+detection:
+  condition: |
+    event_name IN ["UpdateAssumeRolePolicy", "PutRolePolicy"]
+    AND trusted_principal_external_account == true
+    AND external_account_in_allowlist == false
+false_positives:
+- Approved partner SaaS integration (allowlist required)
+playbook: tpl-cloud-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,6 @@
+{
+  "action": "git.clone",
+  "baseline_principal_volume_z": 0.1,
+  "resource": "example-org/payments-core",
+  "user": "ci-runner-bot"
+}

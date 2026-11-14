@@ -1,0 +1,39 @@
+id: hunt-imperva-waf-blocked-then-allowed-same-path
+name: Requests to one path blocked repeatedly then allowed
+description: |
+  A blocked attacker is the control working, and blocks alone are background noise on any public service. The transition to allowed on the same path is the moment a bypass was found.
+version: 1.0.0
+severity: high
+category: application
+tags:
+  - mitre.attack.t1190
+  - hunt.application
+log_sources:
+  - imperva
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did a source get blocked repeatedly on a path and then succeed on it?
+  indicators:
+    - field: "source"
+      equals: "imperva"
+    - field: "priorBlocksSamePath"
+      gte: 20
+    - field: "action"
+      equals: "allow"
+expected:
+  positive_incident_id: INC-HUNT-067
+  positive_template_id: hunt-imperva-waf-blocked-then-allowed-same-path
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-067-NEG
+  # The negative inverts action, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1190/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

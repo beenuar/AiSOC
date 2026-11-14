@@ -1,0 +1,49 @@
+id: splunk-security-content-ea4e2c41-dbfb-4f5f-a7b6-9ac1b7f104aa
+name: O365 Multi-Source Failed Authentications Spike
+description: The following analytic identifies a spike in failed authentication attempts
+  within an Office 365 environment, indicative of a potential distributed password
+  spraying attack. It leverages UserLoginFailed events from O365 Management Activity
+  logs, focusing on ErrorNumber 50126. This detection is significant as it highlights
+  attempts to bypass security controls using multiple IP addresses and user agents.
+  If confirmed malicious, this activity could lead to unauthorized access, data breaches,
+  privilege escalation, and lateral movement within the organization. Early detection
+  is crucial to prevent account takeovers and mitigate subsequent threats.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory Operation=UserLoginFailed\
+    \ ErrorNumber=50126\n  | bucket span=5m _time\n  | eval uniqueIPUserCombo = src_ip\
+    \ . \"-\" . user\n  | fillnull\n  | stats earliest(_time) as firstTime max(_time)\
+    \ as lastTime dc(uniqueIPUserCombo) as uniqueIpUserCombinations, dc(user) as uniqueUsers,\
+    \ dc(src_ip) as uniqueIPs, values(user) as user, values(src_ip) as ips, values(user_agent)\
+    \ as user_agents values(signature) as signature values(src) as src values(dest)\
+    \ as dest\n    BY _time vendor_account vendor_product\n  | where uniqueIpUserCombinations\
+    \ > 20 AND uniqueUsers > 20 AND uniqueIPs > 20\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_multi_source_failed_authentications_spike_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ea4e2c41-dbfb-4f5f-a7b6-9ac1b7f104aa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multi_source_failed_authentications_spike.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

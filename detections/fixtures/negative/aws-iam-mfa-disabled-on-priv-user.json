@@ -1,0 +1,4 @@
+{
+  "event_name": "AttachUserPolicy",
+  "target_user_priv": true
+}

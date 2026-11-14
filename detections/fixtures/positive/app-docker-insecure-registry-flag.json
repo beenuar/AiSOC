@@ -1,0 +1,4 @@
+{
+  "event_type": "daemon_config",
+  "insecure_registries_count": 100.0
+}

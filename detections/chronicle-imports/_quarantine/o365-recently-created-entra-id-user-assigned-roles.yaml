@@ -1,0 +1,63 @@
+id: chronicle-detection-rules-o365-recently-created-entra-id-user-assigned-roles
+name: o365_recently_created_entra_id_user_assigned_roles
+description: o365_recently_created_entra_id_user_assigned_roles
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_recently_created_entra_id_user_assigned_roles {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects when a user is created\
+    \ in Entra ID and assigned roles within a defined time window.\"\n    rule_id\
+    \ = \"mr_c0406a96-4ed1-4dd2-9629-aa5a2c881222\"\n    rule_name = \"O365 Recently\
+    \ Created Entra ID User Assigned Roles\"\n    tactic = \"TA0003\"\n    technique\
+    \ = \"T1098.003\"\n    assumption = \"The list msgraph_watchlist_roles is populated\
+    \ with role names, ie Application Administrator\"\n    type = \"alert\"\n    platform\
+    \ = \"azure\"\n    data_source = \"o365\"\n    severity = \"Medium\"\n    priority\
+    \ = \"Medium\"\n\n  events:\n    (\n        $create.metadata.event_type = \"USER_CREATION\"\
+    \ and\n        $create.metadata.product_event_type = \"Add user.\" and\n     \
+    \   $create.metadata.product_name = \"Office 365\" and\n        $create.security_result.action\
+    \ = \"ALLOW\" and\n        $create.target.user.userid = $userid\n    )\n    $create.metadata.event_timestamp.seconds\
+    \ < $role.metadata.event_timestamp.seconds\n    (\n        $role.metadata.event_type\
+    \ = \"USER_UNCATEGORIZED\" and\n        $role.metadata.product_event_type = \"\
+    Add member to role.\" and\n        $role.metadata.product_name = \"Office 365\"\
+    \ and\n        $role.security_result.action = \"ALLOW\" and\n        //The reference\
+    \ list msgraph_watchlist_roles matches on the role name. List contents example\
+    \ row: Global Administrator //manage all aspects of Azure AD and Microsoft services\
+    \ that use Azure AD identities 62e90394-69f5-4237-9190-012177145e10\n        //If\
+    \ you wanted to detect on specific roles, they could be added to a reference list\
+    \ and the following line uncommented\n        //$role.target.resource.attribute.roles.name\
+    \ in %msgraph_watchlist_roles and\n        $role.target.user.userid = $userid\n\
+    \    )\n\n  match:\n    $userid over 90m\n\n  outcome:\n    $risk_score = max(if($role.target.resource.attribute.roles.name\
+    \ = /Administrator/ nocase, 85, 35))\n    $security_summary = array_distinct($role.security_result.summary)\n\
+    \    $user_agent = array_distinct($role.network.http.user_agent)\n    $assigned_role\
+    \ = array_distinct($role.target.resource.attribute.roles.name)\n    //added to\
+    \ populate alert graph with additional context\n    $principal_user_userid = array_distinct($create.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($create.target.user.userid)\n\n  condition:\n\
+    \    $create and $role\n}"
+  chronicle_rule_name: o365_recently_created_entra_id_user_assigned_roles
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_recently_created_entra_id_user_assigned_roles
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_recently_created_entra_id_user_assigned_roles.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

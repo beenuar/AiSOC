@@ -1,0 +1,51 @@
+id: splunk-security-content-7e03b682-3965-4598-8e91-a60a40a3f7e4
+name: Windows Scheduled Task Created Via XML
+description: 'The following analytic detects the creation of scheduled tasks in Windows
+  using schtasks.exe with the "XML" parameter.
+
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on command-line executions and process details.
+
+  This activity is significant as it is a common technique for establishing persistence
+  or achieving privilege escalation, often used by malware like Trickbot and Winter-Vivern.
+  While creating a scheduled task via XML may be legitimate, it can also be abused
+  by attackers. If confirmed malicious, this could allow attackers to maintain access,
+  execute additional payloads, and potentially lead to data theft or ransomware deployment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.005
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_CERT_UA/status/1620781684257091584
+- https://cert.gov.ua/article/3761104
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    (Processes.process_name=schtasks.exe OR Processes.original_file_name=schtasks.exe)\n\
+    Processes.process IN (\"* /create *\", \"* -create *\")\nProcesses.process IN\
+    \ (\"* /xml *\", \"* -xml *\")\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec\n   Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n   Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_scheduled_task_created_via_xml_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7e03b682-3965-4598-8e91-a60a40a3f7e4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_scheduled_task_created_via_xml.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

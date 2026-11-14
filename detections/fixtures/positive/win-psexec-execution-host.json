@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "process_command_line": "prefix-\\\\-suffix",
+  "process_name": "head-psexec.exe"
+}

@@ -1,0 +1,7 @@
+{
+  "baseline_principal_volume_z": 0.7,
+  "event_name": "download",
+  "event_type": "drive",
+  "resource": "Team-Offsite-Agenda.docx",
+  "user": "mara.l@example.com"
+}

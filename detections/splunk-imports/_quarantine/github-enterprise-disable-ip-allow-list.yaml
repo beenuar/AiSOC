@@ -1,0 +1,45 @@
+id: splunk-security-content-afed020e-edcd-4913-a675-cebedf81d4fb
+name: GitHub Enterprise Disable IP Allow List
+description: The following analytic identifies when an IP allow list is disabled in
+  GitHub Enterprise. The detection monitors GitHub Enterprise audit logs for actions
+  related to disabling IP allow lists at the organization or enterprise level. This
+  behavior is concerning because IP allow lists are a critical security control that
+  restricts access to GitHub Enterprise resources to only trusted IP addresses. When
+  disabled, it could indicate an attacker attempting to bypass access controls to
+  gain unauthorized access from untrusted networks. The impact includes potential
+  exposure of sensitive code repositories and GitHub Enterprise resources to access
+  from any IP address. SOC teams should investigate such events, especially if they
+  were not pre-approved changes, as they may indicate compromise of admin credentials
+  or malicious insider activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=ip_allow_list.disable\n  | fillnull\n  |\
+    \ stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor, actor_id,\
+    \ actor_is_bot,\n       actor_location.country_code, business, business_id,\n\
+    \       user_agent, user_id, action\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_disable_ip_allow_list_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: afed020e-edcd-4913-a675-cebedf81d4fb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_disable_ip_allow_list.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

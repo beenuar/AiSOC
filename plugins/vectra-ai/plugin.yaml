@@ -1,0 +1,34 @@
+id: vectra_ai
+name: Vectra AI Platform Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Network, identity and cloud detections from the Vectra AI Platform via the
+  v3.4 detection events API, with OAuth2 client credentials. One alert per
+  detection, carrying its host or account and ATT&CK techniques; detections
+  a customer triage rule has marked are not raised. Vectra no longer scores
+  individual detections, so none is given a severity the vendor did not
+  publish. Read-only; nothing here closes, tags or triages a detection.
+author: AiSOC Core Team
+tags: [ndr, network, detections, vectra, vectra-ai]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/vectra_ai.py
+license: MIT
+# The first release that contains this connector. v23.4.0 was cut before it
+# merged; the next release's PR confirms or corrects this value, the same way
+# the v23.4.0 release PR did for huntress.
+min_aisoc_version: "23.5.0"
+config_schema:
+  type: object
+  required: [base_url, client_id, client_secret]
+  properties:
+    base_url:
+      type: string
+      description: The address of your Vectra AI Platform console, such as https://123456789012.uw2.portal.vectra.ai. HTTPS only.
+    client_id:
+      type: string
+      description: Client ID of an API client created under Configuration > Access > API Clients, with a role that can read detections.
+    client_secret:
+      type: string
+      description: Secret key of the API client. It is shown once, when the client is created.
+      secret: true

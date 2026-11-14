@@ -1,0 +1,44 @@
+id: splunk-security-content-65d4b105-ec52-48ec-ac46-289d0fbf7d96
+name: Windows Impair Defense Delete Win Defender Profile Registry
+description: The following analytic detects the deletion of the Windows Defender main
+  profile registry key. It leverages data from the Endpoint.Registry datamodel, specifically
+  monitoring for deleted actions within the Windows Defender registry path. This activity
+  is significant as it indicates potential tampering with security defenses, often
+  associated with Remote Access Trojans (RATs) and other malware. If confirmed malicious,
+  this action could allow an attacker to disable Windows Defender, reducing the system's
+  ability to detect and respond to further malicious activities, thereby compromising
+  endpoint security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/malwarebytes-news/2021/02/lazyscripter-from-empire-to-double-rat/
+- https://app.any.run/tasks/45f5d114-91ea-486c-ab01-41c4093d2861/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\Policies\\Microsoft\\Windows Defender" Registry.action = deleted by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_impair_defense_delete_win_defender_profile_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 65d4b105-ec52-48ec-ac46-289d0fbf7d96
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_delete_win_defender_profile_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,4 @@
+{
+  "event_name": "__benign__",
+  "policy_arn": "arn:aws:iam::aws:policy/AdministratorAccess"
+}

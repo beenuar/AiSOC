@@ -1,0 +1,30 @@
+title: Certutil Used to Download Remote File
+id: aisoc-id-ep-0028-certutil-download
+status: stable
+description: |
+  certutil.exe invoked with -urlcache or -verifyctl arguments to
+  download a remote file. Classic LOLBin technique for staging
+  payloads while masquerading as a legitimate Windows utility.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: process_creation
+tags:
+  - attack.t1105
+  - attack.t1218
+  - attack.command_and_control
+  - aisoc.endpoint
+  - aisoc.lolbas
+detection:
+  selection:
+    process.name|endswith: '\certutil.exe'
+  download:
+    process.command_line|contains:
+      - '-urlcache'
+      - '-verifyctl'
+      - '-split'
+      - '/urlcache'
+      - 'http://'
+      - 'https://'
+  condition: selection and download

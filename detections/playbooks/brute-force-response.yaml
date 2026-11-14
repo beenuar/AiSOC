@@ -1,0 +1,126 @@
+id: brute-force-response-v1
+name: Brute Force Attack Response
+description: >
+  Responds to brute force and credential stuffing attacks against authentication
+  endpoints. Implements progressive lockout, blocks attacking IPs, enables
+  CAPTCHA enforcement, and notifies the security team.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - brute-force
+  - credential-stuffing
+  - authentication
+  - network
+  - identity
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - brute-force
+
+steps:
+  - id: enrich-attack
+    name: Enrich Brute Force Attack Data
+    type: enrich
+    params:
+      source: identity_provider
+      fields:
+        - target_account
+        - source_ip
+        - country
+        - attempt_count
+        - success_count
+        - time_window_minutes
+        - targeted_endpoint
+        - user_agent
+        - ip_asn
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-source
+    name: Investigate Attack Source
+    type: investigate
+    params:
+      query: >
+        auth_failures source_ip={{ alert.source_ip }}
+        last_hours=24
+      context_fields:
+        - alert.source_ip
+        - alert.attempt_count
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-success
+    name: Check If Any Login Succeeded
+    type: condition
+    condition:
+      field: alert.success_count
+      operator: gt
+      value: 0
+    next_true: lock-account-and-alert
+    next_false: block-attacker
+
+  - id: lock-account-and-alert
+    name: Lock Breached Account Immediately
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.target_account }}/lock"
+      body:
+        reason: "Brute force succeeded — account locked for security review"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: block-attacker
+    name: Block Attacking IP at Firewall
+    type: block_ip
+    params:
+      ip_field: alert.source_ip
+      direction: inbound
+      duration_hours: 24
+      comment: "Brute force attack — {{ alert.attempt_count }} attempts — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+    retry_max: 2
+
+  - id: notify-security
+    name: Notify Security Team
+    type: notify
+    params:
+      channel: "#security-alerts"
+      message: |
+        🔨 *Brute Force Attack Detected*
+        Target: `{{ alert.target_account }}`
+        Source: `{{ alert.source_ip }}` ({{ alert.country }})
+        Attempts: {{ alert.attempt_count }} in {{ alert.time_window_minutes }}min
+        Successes: {{ alert.success_count }}
+        Endpoint: `{{ alert.targeted_endpoint }}`
+        Account locked: {{ steps.lock-account-and-alert.status }}
+        IP blocked: {{ steps.block-attacker.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Brute Force Incident Ticket
+    type: create_ticket
+    params:
+      title: "BRUTE-FORCE: {{ alert.target_account }} — {{ alert.attempt_count }} attempts from {{ alert.source_ip }}"
+      severity: P2
+      assignee_group: security-ops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Brute Force Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Attacking IP blocked; account locked if successful; security team notified."
+    timeout_seconds: 15
+    on_failure: continue

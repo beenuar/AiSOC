@@ -1,0 +1,201 @@
+# The durable approval pause, against the Postgres it claims to use.
+#
+# Why this exists
+# ---------------
+# The offline suite is 15 tests against `_FakeRows` and `_FakePool`. It is a
+# useful test of the module's logic and cannot prove the thing the feature is
+# named for, because every property that matters belongs to the database:
+# "survives a restart" is a claim about rows on disk, and "a double-tap
+# resolves once" is enforced by a partial unique index that the fake
+# re-implements in Python.
+#
+# A hand-written re-implementation of a constraint is the
+# double-more-capable-than-the-real-thing shape that caused four of six
+# defects in one live-QA pass. The README also claimed "live Postgres
+# suspend/resume" before this file existed, which was simply untrue.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request.
+name: Playbook pause + ledger (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: playbook-pause-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  playbook-pause-live:
+    name: Playbook pause, ledger and evidence bundles against real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Two roles, as the default deployment ships them. `aisoc` owns the
+      # schema and runs the migrations; `aisoc_app` is DML-only and is the
+      # role the RLS policies apply to, so it is the one the suite connects
+      # as. A superuser ignores every policy even under FORCE ROW LEVEL
+      # SECURITY, which would let a cross-tenant assertion pass for the
+      # wrong reason — `check_runtime_db_role.py` refuses that wiring.
+      PLAYBOOK_DSN: postgresql://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio 
+
+      # The evidence-bundle suite drives the **API** service through a
+      # real ASGI client, so it pulls in that service's import chain —
+      # which is not the agents one. It failed on `bcrypt`, reached
+      # through app.core.security, and the fix is the same as the comment
+      # above: install from the service's own lockfile rather than adding
+      # the missing name to a hand-curated list, which only works until
+      # the next import.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+
+      # The whole chain, in order.
+      #
+      # This started as a cherry-picked 001/002/081 — enough for the pause
+      # table, and `002` is needed because `081`'s RLS policy calls
+      # `current_tenant_id()`, which a migration applied alone does not
+      # have. Then the ledger suite joined this job and failed on
+      # `relation "investigation_runs" does not exist`, because its tables
+      # arrive later in the chain.
+      #
+      # A cherry-picked subset builds a schema no deployment has, which is
+      # the opposite of the point. Applying everything costs seconds and
+      # cannot be wrong in this direction.
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # `002_rls.sql` creates `aisoc_app` with a placeholder password. Set
+      # the real one here, after the migrations have run, so the suite can
+      # connect as the role the policies apply to.
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: The pause suspends, survives, resumes, expires and isolates
+        working-directory: services/agents
+        env:
+          ISOLATION_PLAYBOOK_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_playbook_pause_live.py -v --tb=short
+
+      # The Investigation Ledger, the surface an auditor reads. Its
+      # offline test drives a `_FakeConn` and opens no connection, so it
+      # cannot prove the rows exist, that RLS applies, or that the
+      # foreign keys refuse an event for a run nobody started.
+      - name: The Investigation Ledger persists, scopes and refuses
+        working-directory: services/agents
+        env:
+          ISOLATION_LEDGER_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_ledger_live.py -v --tb=short
+
+      # Gap-closure wave 1. Two case tables that never synchronised, so
+      # every case metric was blind to every case an analyst created.
+      # Unit tests passed throughout, because each tests its query
+      # against whichever table the test itself seeded.
+      - name: One case table, and the metrics can see it
+        working-directory: services/api
+        env:
+          ISOLATION_CASES_DSN: ${{ env.PLAYBOOK_DSN }}
+          DATABASE_URL: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_one_case_table_live.py -v --tb=short
+
+      # Gap-closure wave 0. Each of these covers a mechanism that was
+      # complete, tested and unreachable because the table or column it
+      # depended on had no writer — which is precisely what a unit test
+      # cannot see, since the code was correct and the data never arrived.
+      - name: The wave-0 no-writer defects are closed
+        working-directory: services/api
+        env:
+          ISOLATION_WAVE0_DSN: ${{ env.PLAYBOOK_DSN }}
+          DATABASE_URL: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_wave0_integrity_live.py -v --tb=short
+
+      # Parity 3.7. The format's own suite builds bundles from dicts, so
+      # it cannot show that the *route* assembles one from ledger rows —
+      # where `raw_alert` is JSONB, `started_at` is tz-aware, ids are
+      # UUIDs and cost is Numeric, every one of which has a repr JSON
+      # cannot serialise.
+      - name: An evidence bundle exports, verifies and stays tenant-scoped
+        working-directory: services/api
+        env:
+          ISOLATION_BUNDLE_DSN: ${{ env.PLAYBOOK_DSN }}
+          DATABASE_URL: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_evidence_bundle_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # `aisoc_playbook_pauses_run_idx` is the partial unique index on
+      # `status = 'waiting'` that stops one run having two live pauses. The
+      # offline suite re-implements that rule in Python and so would pass
+      # whether or not the index exists.
+      #
+      # Dropping it must make the suite go red. Measured: one test fails,
+      # `test_two_waiting_pauses_for_one_run_are_refused`, which is exactly
+      # the one that asserts the database refuses rather than the module.
+      #
+      # Note the sibling `test_a_double_tap_resolves_once` keeps passing
+      # without the index, and that is correct — single resolution is
+      # enforced by the atomic `UPDATE ... WHERE status = 'waiting'`, which
+      # is a different mechanism. Two properties, two tests; a control that
+      # broke both would be telling us less, not more.
+      - name: The gate fails when the partial unique index is gone
+        working-directory: services/agents
+        env:
+          ISOLATION_PLAYBOOK_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: |
+          psql -h localhost -U aisoc -d aisoc -q -c \
+            "DROP INDEX IF EXISTS aisoc_playbook_pauses_run_idx;"
+          if python -m pytest ../../tests/isolation/test_playbook_pause_live.py -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed without the partial unique index, so it is not"
+            echo "      proving the database enforces single resolution."
+            exit 1
+          fi
+          echo "OK: dropping the index makes the suite fail, as it must."
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -f ../../services/api/migrations/081_playbook_pauses.sql
+          python -m pytest ../../tests/isolation/test_playbook_pause_live.py -q

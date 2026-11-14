@@ -1,0 +1,21 @@
+title: AWS IAM Access Key Created for Existing User
+id: aisoc-id-cl-0017-access-key-create
+status: stable
+description: |
+  New long-lived IAM access key created. Frequently used by attackers
+  for persistence after compromising an account, and a poor practice
+  even when done legitimately.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1098.001
+  - attack.persistence
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws.cloudtrail
+    event.action: 'CreateAccessKey'
+  condition: selection

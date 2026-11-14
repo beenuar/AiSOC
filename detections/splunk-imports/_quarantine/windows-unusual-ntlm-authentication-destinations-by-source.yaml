@@ -1,0 +1,47 @@
+id: splunk-security-content-ae9b0df5-5fb0-477f-abc9-47faf42aa91d
+name: Windows Unusual NTLM Authentication Destinations By Source
+description: The following analytic detects when an unusual number NTLM authentications
+  is attempted by the same source against multiple destinations. This activity generally
+  results when an attacker attempts to brute force, password spray, or otherwise authenticate
+  to a multiple domain joined Windows devices using an NTLM based process/attack.
+  This same activity may also generate a large number of EventID 4776 events as well.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://techcommunity.microsoft.com/t5/ask-the-directory-services-team/ntlm-blocking-and-you-application-analysis-and-auditing/ba-p/397191
+- https://techcommunity.microsoft.com/t5/microsoft-defender-for-identity/enriched-ntlm-authentication-data-using-windows-event-8004/m-p/871827
+- https://www.varonis.com/blog/investigate-ntlm-brute-force
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-nrpc/4d1235e3-2c96-4e9f-a147-3cb338a0d09f
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ntlm_audit`\nEventCode = 8004\nSChannelName=* WorkstationName=*\n\
+    ```CIM alignment, remove leading \\\\ from some auth attempts ```\n| eval src\
+    \ = replace(WorkstationName,\"\\\\\\\\\",\"\")\n| eval dest = SChannelName, user\
+    \ = UserName\n\n``` Remove NTLM auths to self, improves accuracy for certain applications\
+    \ ```\n| where SChannelName!=src\n\n| stats count min(_time) as firstTime\n  \
+    \            max(_time) as lastTime\n              dc(eval(upper(dest))) as unique_count\
+    \ by src\n| eventstats avg(unique_count) as unique_avg\n             stdev(unique_count)\
+    \ as unique_std\n\n``` adjust formula for sensitivity```\n| eval upperBound_unique=(1+unique_avg+unique_std*3)\n\
+    \n| eval isOutlier=CASE(unique_count > upperBound_unique, 1, true(), 0)\n| where\
+    \ isOutlier==1\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_unusual_ntlm_authentication_destinations_by_source_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ae9b0df5-5fb0-477f-abc9-47faf42aa91d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unusual_ntlm_authentication_destinations_by_source.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

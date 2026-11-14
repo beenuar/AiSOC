@@ -1,0 +1,23 @@
+id: det-application-164
+name: M365 Exchange Management Role Assigned
+description: Exchange roles are a privilege surface of their own, separate from directory roles.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "New-ManagementRoleAssignment"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

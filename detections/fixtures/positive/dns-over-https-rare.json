@@ -1,0 +1,7 @@
+{
+  "dst_host": "evil.tld",
+  "dst_in_doh_allowlist": false,
+  "method": "POST",
+  "src_host": "wks-001",
+  "url_path": "/dns-query"
+}

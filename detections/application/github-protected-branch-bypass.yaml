@@ -1,0 +1,29 @@
+id: det-application-016
+name: Push to Protected Branch by Non-Admin
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Push to Protected
+  Branch by Non-Admin'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1195.002
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    action == "git.push"
+    AND ref_in_protected_branches == true
+    AND actor_role NOT IN ["admin", "release"]
+false_positives:
+- Emergency hotfix workflow (must reference change ticket)
+playbook: tpl-supply-chain
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): wants `ref_in_protected_branches` and `actor_role`
+  on a git.push, and the audit entry carries neither a ref nor the actor''s org role. The observable form
+  of a protection bypass in this telemetry is `protected_branch.policy_override`, which app-protected-branch-disabled
+  already matches.'
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

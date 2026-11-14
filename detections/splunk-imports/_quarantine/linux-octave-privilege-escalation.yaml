@@ -1,0 +1,47 @@
+id: splunk-security-content-78f7487d-42ce-4f7f-8685-2159b25fb477
+name: Linux Octave Privilege Escalation
+description: The following analytic detects the execution of GNU Octave with elevated
+  privileges, specifically when it runs system commands via sudo. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process command-line
+  arguments that include "octave-cli," "--eval," "system," and "sudo." This activity
+  is significant because it indicates a potential privilege escalation attempt, allowing
+  a user to execute commands as root. If confirmed malicious, this could lead to full
+  system compromise, enabling an attacker to gain root access and execute arbitrary
+  commands, severely impacting system security and integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/octave/
+- https://en.wikipedia.org/wiki/GNU_Octave
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process=\"\
+    *octave-cli*\"\n    AND\n    Processes.process=\"*--eval*\"\n    AND\n    Processes.process=\"\
+    *system*\"\n    AND\n    Processes.process=\"*sudo*\"\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_octave_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 78f7487d-42ce-4f7f-8685-2159b25fb477
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_octave_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

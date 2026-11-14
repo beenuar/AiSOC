@@ -1,0 +1,7 @@
+{
+  "operation": "Set-CsTenantFederationConfiguration",
+  "parameters": {
+    "AllowFederatedUsers": "True",
+    "AllowedDomains": "AllowAllKnownDomains"
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "action": "protected_branch.policy_override",
+  "actor_in_pipeline": false
+}

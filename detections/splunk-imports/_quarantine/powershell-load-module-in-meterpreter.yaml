@@ -1,0 +1,42 @@
+id: splunk-security-content-d5905da5-d050-48db-9259-018d8f034fcf
+name: Powershell Load Module in Meterpreter
+description: The following analytic detects the execution of suspicious PowerShell
+  commands associated with Meterpreter modules, such as "MSF.Powershell" and "MSF.Powershell.Meterpreter".
+  It leverages PowerShell Script Block Logging (EventCode=4104) to capture and analyze
+  the full command sent to PowerShell. This activity is significant as it indicates
+  potential post-exploitation actions, including credential dumping and persistence
+  mechanisms. If confirmed malicious, an attacker could gain extensive control over
+  the compromised system, escalate privileges, and maintain long-term access, posing
+  a severe threat to the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/OJ/metasploit-payloads/blob/master/powershell/MSF.Powershell/Scripts.cs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*MSF.Powershell*\"\
+    ,\"*MSF.Powershell.Meterpreter*\",\"*MSF.Powershell.Meterpreter.Kiwi*\",\"*MSF.Powershell.Meterpreter.Transport*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `powershell_load_module_in_meterpreter_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d5905da5-d050-48db-9259-018d8f034fcf
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_load_module_in_meterpreter.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

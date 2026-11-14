@@ -1,0 +1,44 @@
+id: splunk-security-content-efebf0c4-dcf4-496f-85a2-5ab7ad8fa876
+name: Kubernetes Shell Running on Worker Node
+description: The following analytic identifies shell activity within the Kubernetes
+  privilege scope on a worker node. It leverages process metrics from an OTEL collector
+  hostmetrics receiver, specifically process.cpu.utilization and process.memory.utilization,
+  pulled from Splunk Observability Cloud. This activity is significant as unauthorized
+  shell processes can indicate potential security threats, providing attackers an
+  entry point to compromise the node and the entire Kubernetes cluster. If confirmed
+  malicious, this activity could lead to data theft, service disruption, privilege
+  escalation, lateral movement, and further attacks, severely compromising the cluster's
+  security and integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart/tree/main
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats avg(process.cpu.utilization) as process.cpu.utilization avg(process.memory.utilization)\
+    \ as process.memory.utilization where `kubernetes_metrics` AND process.executable.name\
+    \ IN (\"sh\",\"bash\",\"csh\", \"tcsh\") by host.name k8s.cluster.name k8s.node.name\
+    \ process.pid process.executable.name span=10s\n| search process.cpu.utilization>0\
+    \ OR process.memory.utilization>0\n| stats avg(process.cpu.utilization) as process.cpu.utilization\
+    \ avg(process.memory.utilization) as process.memory.utilization\n  BY host.name\
+    \ k8s.cluster.name k8s.node.name\n     process.pid process.executable.name\n|\
+    \ rename host.name as host\n| `kubernetes_shell_running_on_worker_node_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: efebf0c4-dcf4-496f-85a2-5ab7ad8fa876
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_shell_running_on_worker_node.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,25 @@
+title: ACH Origination Velocity Exceeds Tenant Baseline by 5x
+id: aisoc-vt-fin-0004-ach-velocity-anomaly
+status: experimental
+description: |
+  ACH NACHA batch origination count for the current hour exceeds the
+  rolling 30-day same-hour-of-week baseline by five standard deviations.
+  Common pattern in corporate account takeover where attackers push
+  numerous low-value transfers to avoid single-transaction limits.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: payments
+  service: ach_origination
+tags:
+  - attack.t1565.002
+  - attack.impact
+  - aisoc.vertical.finserv
+  - aisoc.compliance.nacha
+detection:
+  selection:
+    event.module: payments.ach
+    event.action: 'batch.originated'
+  anomaly:
+    velocity.sigma|gte: 5.0
+  condition: selection and anomaly

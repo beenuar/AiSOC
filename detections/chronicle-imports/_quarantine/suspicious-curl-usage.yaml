@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-suspicious-curl-usage
+name: suspicious_curl_usage
+description: suspicious_curl_usage
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_curl_usage {\n meta:\n    author = \"Emir Erdogan\"\
+    \n    description = \"cURL is a command line browser, and often used by attackers\
+    \ to download malware.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NTrME73OyT8w\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1059, T1188, T1079, T1041\"\n\n  events:\n($selection.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\System32\\\\curl.exe\" and $selection.principal.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\System32\\\\cmd.exe\" and (re.regex($selection.target.process.command_line,\
+    \ `.*curl ftp.*`) or re.regex($selection.target.process.command_line, `.*curl\
+    \ --socks5 torproxy.*`) or re.regex($selection.target.process.command_line, `.*curl\
+    \ -F .*\\.exe.*`) or re.regex($selection.target.process.command_line, `.*curl\
+    \ --dns-ipv4-addr.*`) or re.regex($selection.target.process.command_line, `.*curl\
+    \ --dns-interface eth1.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*curl --resolve.*`) or re.regex($selection.target.process.command_line, `.*curl\
+    \ --header \\\"X-Application: BotClient\\\".*`)))\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: suspicious_curl_usage
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_curl_usage
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/suspicious_curl_usage.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

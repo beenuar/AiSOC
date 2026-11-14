@@ -1,0 +1,25 @@
+id: det-application-018
+name: Kubernetes Pulled Image From Untrusted Registry
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Kubernetes Pulled
+  Image From Untrusted Registry'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1525
+- tlp.white
+category: application
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    verb == "create"
+    AND object_resource == "pods"
+    AND image_registry_in_allowlist == false
+false_positives:
+- Sandbox/research clusters (allowlist namespace)
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

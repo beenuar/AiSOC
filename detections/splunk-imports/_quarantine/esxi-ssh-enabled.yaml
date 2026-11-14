@@ -1,0 +1,33 @@
+id: splunk-security-content-b8003567-c5b6-445b-8966-ecdacc81c24d
+name: ESXi SSH Enabled
+description: This detection identifies SSH being enabled on ESXi hosts, which can
+  be an early indicator of malicious activity. Threat actors often use SSH to gain
+  persistent remote access after compromising credentials or exploiting vulnerabilities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.004
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*SSH access has been enabled" | rex field=_raw
+    "Z (?<dest>[\w\.]+)\s" | stats min(_time) as firstTime max(_time) as lastTime
+    count by dest Message | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `esxi_ssh_enabled_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b8003567-c5b6-445b-8966-ecdacc81c24d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_ssh_enabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

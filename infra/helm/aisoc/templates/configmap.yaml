@@ -1,0 +1,34 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aisoc.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+data:
+  LOG_LEVEL: {{ .Values.global.logLevel | default "info" | quote }}
+  ENVIRONMENT: {{ .Values.global.environment | default "production" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.global.otelEndpoint | default "" | quote }}
+  OTEL_SERVICE_NAME: {{ include "aisoc.fullname" . | quote }}
+  {{- /*
+    The broker address, for every deployment in the release.
+
+    It was set on exactly one: ueba-deployment.yaml read
+    `.Values.kafka.bootstrapServers` and nothing else did. `services/ingest`
+    reads KAFKA_BOOTSTRAP_SERVERS (falling back to KAFKA_BROKERS) and
+    `services/fusion` reads KAFKA_BOOTSTRAP_SERVERS, both defaulting in code
+    to localhost:9092, which inside a pod resolves to the pod itself. So a
+    Helm install produced an ingest that published to nowhere and a fusion
+    that consumed nothing, with every object created, every probe green and
+    nothing in any log to say the spine was not connected. This is the same
+    shape as the Compose-era `common_env` defect recorded in the AWS notes:
+    one canonical variable, set in one place, missed everywhere else.
+
+    Both spellings are emitted because the Go service accepts either and
+    third-party sidecars in this ecosystem disagree about which is canonical.
+  */}}
+  KAFKA_BOOTSTRAP_SERVERS: {{ include "aisoc.kafkaBootstrap" . | quote }}
+  KAFKA_BROKERS: {{ include "aisoc.kafkaBootstrap" . | quote }}
+  {{- range $k, $v := .Values.global.extraConfig }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}

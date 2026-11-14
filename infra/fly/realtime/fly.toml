@@ -1,0 +1,59 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AiSOC Demo - Realtime service (WebSocket)
+#
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-realtime.fly.dev was NXDOMAIN when last measured (2026-09-28);
+# the public WS host below answers HTTP 525, the edge without its origin.
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-realtime.fly.dev
+# Internal name:  aisoc-demo-realtime.internal:4000
+# Public WS:      wss://ws.tryaisoc.com  (CNAME → aisoc-demo-realtime.fly.dev)
+#
+# The web frontend connects directly over wss:// using NEXT_PUBLIC_WS_URL.
+# In demo mode the realtime service multiplexes Redis pub/sub for "alert
+# created" / "investigation event" fanout. Kafka is intentionally disabled
+# to keep the demo lean.
+# ──────────────────────────────────────────────────────────────────────────────
+
+app = "aisoc-demo-realtime"
+primary_region = "iad"
+kill_signal    = "SIGINT"
+kill_timeout   = "5s"
+
+# No [build] override: flyctl resolves `dockerfile` relative to fly.toml's
+# location, not cwd. Omitting it makes flyctl fall back to
+# `<cwd>/Dockerfile`, and the deploy script cd's into services/realtime/
+# before invoking `flyctl deploy`, so the right Dockerfile is picked up.
+
+[env]
+  NODE_ENV         = "production"
+  PORT             = "4000"
+  AISOC_DEMO_MODE  = "true"
+  AISOC_DISABLE_KAFKA = "true"
+  # WebSocket origin allowlist: anything the browser can plausibly load the
+  # UI from. tryaisoc.com is the canonical public origin; the .fly.dev host
+  # stays on the list as a fallback (direct app access for debugging) and
+  # ws.tryaisoc.com is harmless because origin checks compare the loading
+  # page's origin, not the WS hostname.
+  ALLOWED_ORIGINS  = "https://tryaisoc.com,https://aisoc-demo-web.fly.dev"
+
+[http_service]
+  internal_port       = 4000
+  force_https         = true
+  # Realtime needs to stay up - sleeping kills WS connections
+  auto_stop_machines  = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes           = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "5s"
+    path         = "/health"
+
+[[vm]]
+  size      = "shared-cpu-1x"
+  memory_mb = 512

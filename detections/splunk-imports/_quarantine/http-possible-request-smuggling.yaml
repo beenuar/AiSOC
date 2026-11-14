@@ -1,0 +1,46 @@
+id: splunk-security-content-97d85f98-9d15-41a0-8682-7030454875e7
+name: HTTP Possible Request Smuggling
+description: HTTP request smuggling is a technique for interfering with the way a
+  web site processes sequences of HTTP requests that are received from one or more
+  users. Request smuggling vulnerabilities are often critical in nature, allowing
+  an attacker to bypass security controls, gain unauthorized access to sensitive data,
+  and directly compromise other application users. This detection identifies a common
+  request smuggling technique of using both Content-Length and Transfer-Encoding headers
+  to cause a parsing confusion between the frontend and backend.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - application
+references:
+- https://portswigger.net/web-security/request-smuggling#what-is-http-request-smuggling
+- https://portswigger.net/research/http1-must-die
+- https://www.vaadata.com/blog/what-is-http-request-smuggling-exploitations-and-security-best-practices/
+- https://www.securityweek.com/new-http-request-smuggling-attacks-impacted-cdns-major-orgs-millions-of-websites/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`suricata` (http.request_headers{}.name=\"*Content-Length*\" http.request_headers{}.name=\"\
+    *Transfer-Encoding*\") OR (http.request_headers{}.name=\"*Content-Length*\" http.request_headers{}.value=\"\
+    *Transfer-Encoding*\") OR (http.request_headers{}.value=\"*Content-Length*\" http.request_headers{}.name=\"\
+    *Transfer-Encoding*\") OR (http.request_headers{}.name=\"*Content-Length*\" http.request_headers{}.value=\"\
+    0\")\n  | rename dest_ip as dest\n  | rex field=_raw \"request_headers.:\\[(?<headers>.*)\\\
+    ]\"\n  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest,\
+    \ dest_port, src_ip,\n       http.url, http.http_method, http.http_user_agent,\n\
+    \       http.protocol, http.status, headers\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `http_possible_request_smuggling_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 97d85f98-9d15-41a0-8682-7030454875e7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/http_possible_request_smuggling.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

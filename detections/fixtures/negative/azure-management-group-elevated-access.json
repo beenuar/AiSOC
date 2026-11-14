@@ -1,0 +1,4 @@
+{
+  "operation_name": "Microsoft.Authorization/roleAssignments/write",
+  "caller": "user@corp.com"
+}

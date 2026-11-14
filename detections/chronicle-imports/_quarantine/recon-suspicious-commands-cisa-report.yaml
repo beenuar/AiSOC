@@ -1,0 +1,91 @@
+id: chronicle-detection-rules-recon-suspicious-commands-cisa-report
+name: recon_suspicious_commands_cisa_report
+description: recon_suspicious_commands_cisa_report
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule recon_suspicious_commands_cisa_report {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects suspicious commands as identified\
+    \ in CISA Living off the Land pdf. Alone they may be normal but in concert, they\
+    \ may be worth looking into\"\n    rule_id = \"mr_66edb4f7-a7e2-4ce6-a247-d09319b7eeea\"\
+    \n    rule_name = \"Recon Suspicious Commands CISA Report\"\n    type = \"hunt\"\
+    \n    platform = \"Windows\"\n    data_source = \"microsoft sysmon, microsoft\
+    \ windows events\"\n    reference = \"https://media.defense.gov/2023/May/24/2003229517/-1/-1/0/CSA_Living_off_the_Land.PDF\"\
+    \n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n    $process.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n    $process.principal.hostname = $hostname\n    $process.target.process.command_line\
+    \ = $command_line\n\n    // cisa report referenced cmd /c in their report throughout,\
+    \ can filter this in/out for tuning as needed\n    // other wmic switches like\
+    \ /user and /password, these have been excluded to focus on the commands being\
+    \ issued since local access does not require these\n    (\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*7z.*a.*-p.*c:\\\\windows\\\\temp\\\\.*.7z`) nocase or\n       \
+    \ re.regex($process.target.process.command_line, `(|cmd.*/c).*c:\\\\Windows\\\\\
+    system32\\\\pcwrun.exe.*c:\\\\Users\\\\Administrator\\\\Desktop\\\\Win.exe`) nocase\
+    \ or\n        re.regex($process.target.process.command_line, `(|cmd.*/c|cmdbak.*/c).*ping.*-n.*1.*127\\\
+    .0\\.0\\.1.*c:\\\\Windows\\\\temp\\\\(putty|tmp).log`) nocase or\n        // The\
+    \ following line could be swapped for the previous line for a looser match. It\
+    \ was observed during testing that a c2 running powershell logged putty.log as\
+    \ a file creation but not in the command line process event\n        //re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*ping.*-n.*1.*127\\.0\\.0\\.1`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*dir.*127\\.0\\.0\\.1\\\\c\\$.*/od`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*ping.*-a.*-n.*1`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*wmic.*process.*call.*create.*net.*stop.*C:\\\\Windows\\\\Temp\\\
+    \\tmp.log\"`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*\\\\ADMIN\\$\\\\__.*2&gt;&amp;1`) nocase or\n        //The following\
+    \ line could be swapped for the previous line for a looser match, but potentially\
+    \ noisier\n        //re.regex($process.target.process.command_line, `(|cmd.*/c).*\\\
+    \\ADMIN\\$\\\\__`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*net.*use.*127\\.0\\.0\\.1\\\\ipc\\$.*/y.*/d`) nocase or\n     \
+    \   re.regex($process.target.process.command_line, `(|cmd.*/c).*powershell.*start-process.*-filepath.*c:\\\
+    \\windows\\\\temp\\\\.*.bat.*-windowstyle.*Hidden`) nocase or\n        re.regex($process.target.process.command_line,\
+    \ `(|cmd.*/c).*rar\\.exe.*a.*c:\\\\Windows\\\\temp\\\\.*D:\\\\.*`) nocase or\n\
+    \        re.regex($process.target.process.command_line, `(|cmd.*/c).*wmic.*cmd.*/c.*whoami`)\
+    \ nocase or\n        re.regex($process.target.process.command_line, `(|cmd.*/c).*xcopy.*c:\\\
+    \\windows\\\\temp\\\\hp.*d:\\\\`) nocase\n    )\n\n  match:\n    $hostname over\
+    \ 15m\n\n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($process.metadata.id)\n\
+    \    $unique_command_line_threshold = 5\n    // added to populate alert graph\
+    \ with additional context\n    // Commented out principal.hostname because it\
+    \ is already represented in graph as match variable. If match changes, can uncomment\
+    \ to add to results\n    //$principal_hostname = array_distinct($process.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($process.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($process.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($process.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($process.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($process.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($process.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($process.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($process.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($process.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($process.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($process.target.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($process.principal.user.userid)\n\n  condition:\n    // modify\
+    \ the condition value for command line to throttle how many of these unique commands\
+    \ can be seen until the rule is triggered\n    $process and #command_line > 5\n\
+    }"
+  chronicle_rule_name: recon_suspicious_commands_cisa_report
+provenance:
+  source: chronicle/detection-rules
+  source_id: recon_suspicious_commands_cisa_report
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/recon_suspicious_commands_cisa_report.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,23 @@
+id: det-application-081
+name: Sensitive Data Left via an AI Agent
+description: A guardrail matched sensitive content on its way out through an agent. An agent with retrieval
+  access is an exfiltration path that authenticates as itself and looks like normal application traffic.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1567
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "sensitive_data_egress"
+false_positives:
+- Approved data-processing workflow not yet added to the allowlist
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

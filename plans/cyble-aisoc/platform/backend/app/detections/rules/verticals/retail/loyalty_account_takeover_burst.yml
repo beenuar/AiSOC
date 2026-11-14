@@ -1,0 +1,28 @@
+title: Loyalty Account Credential-Stuffing Burst Against Single Tenant
+id: aisoc-vt-ret-0003-loyalty-account-takeover
+status: experimental
+description: |
+  Rate of failed-then-successful loyalty/rewards-program logins from a
+  single source ASN exceeds the per-tenant baseline. Credential
+  stuffing against loyalty programs has become a primary fraud vector
+  because reward points are highly liquid on resale markets and
+  loyalty stores are less protected than checkout.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: loyalty
+  service: auth
+tags:
+  - attack.t1110.004
+  - attack.credential_access
+  - aisoc.vertical.retail
+  - aisoc.fraud
+detection:
+  selection:
+    event.module: loyalty.auth
+    event.action: 'login.succeeded'
+  context:
+    prior_failures.same_asn|gte: 50
+  anomaly:
+    asn.success_rate.sigma|gte: 4.0
+  condition: selection and context and anomaly

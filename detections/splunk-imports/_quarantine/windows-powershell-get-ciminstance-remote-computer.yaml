@@ -1,0 +1,40 @@
+id: splunk-security-content-d8c972eb-ed84-431a-8869-ca4bd83257d1
+name: Windows PowerShell Get CIMInstance Remote Computer
+description: The following analytic detects the use of the Get-CimInstance cmdlet
+  with the -ComputerName parameter, indicating an attempt to retrieve information
+  from a remote computer. It leverages PowerShell Script Block Logging to identify
+  this specific command execution. This activity is significant as it may indicate
+  unauthorized remote access or information gathering by an attacker. If confirmed
+  malicious, this could allow the attacker to collect sensitive data from remote systems,
+  potentially leading to further exploitation or lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/cimcmdlets/get-ciminstance?view=powershell-7.3
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=\"*get-ciminstance*\" AND\
+    \ ScriptBlockText=\"*computername*\"\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_powershell_get_ciminstance_remote_computer_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d8c972eb-ed84-431a-8869-ca4bd83257d1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_get_ciminstance_remote_computer.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

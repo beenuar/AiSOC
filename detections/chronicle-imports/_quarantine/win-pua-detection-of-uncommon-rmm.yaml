@@ -1,0 +1,132 @@
+id: chronicle-detection-rules-win-pua-detection-of-uncommon-rmm
+name: win_pua_detection_of_uncommon_rmm
+description: win_pua_detection_of_uncommon_rmm
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule win_pua_detection_of_uncommon_rmm {\n\n  meta:\n    author = \"Georg Lauenstein\
+    \ - suresecure GmbH\"\n    description = \"This detection rule identifies uncommon\
+    \ or suspicious Remote Monitoring and Management (RMM) tools, leveraging intelligence\
+    \ from the LOL-RMM (Living Off the Land RMM) project. While RMM tools are widely\
+    \ used for IT administration, remote support, and network management, they are\
+    \ also frequently abused by attackers, initial access brokers (IABs), and ransomware\
+    \ operators to establish persistent remote access, execute malicious commands,\
+    \ or deploy additional payloads. This rule detects RMM software that is not commonly\
+    \ observed in the environment, indicating potential unauthorized access or lateral\
+    \ movement.\"\n    rule_id = \"mr_f5681a0f-215f-4055-80c7-864ee39bcfb8\"\n   \
+    \ rule_name = \"Uncommon or Suspicious RMM Tool Execution Detected\"\n    tactic\
+    \ = \"TA0011\"\n    technique = \"T1219\"\n    reference = \"https://lolrmm.io/\"\
+    \n    type = \"alert\"\n    platform = \"Windows, EDR\"\n    data_source = \"\
+    Microsoft Sysmon, Windows Event Logs\"\n    severity = \"Medium\"  // Adjust based\
+    \ on your risk assessment\n    priority = \"Medium\"  // Adjust based on your\
+    \ incident response process\n\n  events:\n    $rmm_tool.metadata.event_type =\
+    \ \"PROCESS_LAUNCH\"\n\n    (\n      // 247ithelp.com (ConnectWise) RMM\n    \
+    \  $rmm_tool.target.process.file.full_path = /\\\\Remote Workforce Client\\.exe$/\
+    \ nocase\n    ) or\n\n    (\n      // Potential Acronic Cyber Protect (Remotix)\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\AcronisCyberProtectConnectAgent\\.exe$/ nocase\n    ) or\n\n    (\n      //\
+    \ Potential AeroAdmin RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\aeroadmin\\.exe|\\\\AeroAdmin\\.exe/ nocase\n    ) or\n\n    (\n    \
+    \  // Potential Air Live Drive RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\AirLiveDrive\\.exe$/ nocase\n    ) or\n\n    (\n      // Potential AliWangWang-remote-control\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\alitask\\.exe$/ nocase\n    ) or\n\n    (\n      // Potential Alpemix RMM Tool\
+    \ Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\\AlpemixService\\\
+    .exe$/ nocase\n    ) or\n\n    (\n      // Potential Any Support RMM Tool Process\
+    \ Activity\n      $rmm_tool.target.process.file.full_path = /\\\\ManualLauncher\\\
+    .exe$/ nocase\n    ) or\n\n    (\n      // Potential Anyplace Control RMM Tool\
+    \ Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\\apc_host\\\
+    .exe$/ nocase\n    ) or\n\n    (\n      // Potential aria2 RMM Tool Process Activity\n\
+    \      $rmm_tool.target.process.file.full_path = /\\\\aria2c\\.exe$/ nocase\n\
+    \    ) or\n\n    (\n      // Potential Atera RMM Tool Process Activity\n     \
+    \ $rmm_tool.target.process.file.full_path = /\\\\AgentPackageNetworkDiscovery\\\
+    .exe|\\\\AgentPackageTaskScheduler\\.exe|\\\\AteraAgent\\.exe|\\\\atera_agent\\\
+    .exe|\\\\ateraagent\\.exe/ nocase\n    ) or\n\n    (\n      // Potential Auvik\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\auvik\\.engine\\.exe|\\\\auvik\\.agent\\.exe/ nocase\n    ) or\n\n    (\n  \
+    \    // Potential Absolute (Computrace) RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\rpcnet\\.exe|\\\\ctes\\.exe|\\\\ctespersitence\\.exe|\\\\cteshostsvc\\\
+    .exe|\\\\rpcld\\.exe/ nocase\n    ) or\n\n    (\n      // Potential Bluetrait\
+    \ MSP Agent Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\Bluetrait MSP Agent\\.exe|\\\\BluetraitUserAgent\\.exe|\\\\Bluetrait\
+    \ Agent\\\\libraries\\\\paexec\\.exe/ nocase\n    ) or\n\n    (\n      // Potential\
+    \ BeamYourScreen RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\beamyourscreen\\.exe|\\\\beamyourscreen-host\\.exe/ nocase\n    ) or\n\
+    \n    (\n      // Potential Connectwise Automate (LabTech) RMM Tool Process Activity\n\
+    \      $rmm_tool.target.process.file.full_path = /\\\\ltsvc\\.exe|\\\\ltsvcmon\\\
+    .exe|\\\\lttray\\.exe/ nocase\n    ) or\n\n    (\n      // Potential Duplicati\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\Duplicati\\.Server\\.exe$/ nocase\n    ) or\n\n    (\n      // Potential FixMe.it\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\FixMeit Unattended Access Setup\\.exe|\\\\TiExpertStandalone\\.exe|\\\\FixMeit\
+    \ Client\\.exe|\\\\FixMeit Expert Setup\\.exe|\\\\TiExpertCore\\.exe|\\\\TiClientCore\\\
+    .exe/ nocase\n    ) or\n\n    (\n      // Potential FleetDeck.io RMM Tool Process\
+    \ Activity\n      $rmm_tool.target.process.file.full_path = /\\\\fleetdeck_agent_svc\\\
+    .exe|\\\\fleetdeck_commander_svc\\.exe|\\\\fleetdeck_installer\\.exe|\\\\fleetdeck_commander_launcher\\\
+    .exe|\\\\fleetdeck_agent\\.exe/ nocase\n    ) or\n\n    (\n      // Potential\
+    \ Level.io RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\level-windows-amd64\\.exe|\\\\level\\.exe|\\\\level-remote-control-ffmpeg\\\
+    .exe/ nocase\n    ) or\n\n    (\n      // Potential NetSupport Manager RMM Tool\
+    \ Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\\pcictlui\\\
+    .exe|\\\\client32\\.exe|\\\\pcicfgui\\.exe/ nocase\n    ) or\n\n    (\n      //\
+    \ Potential NinjaRMM RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\ninjarmmagent\\.exe|\\\\NinjaRMMAgent\\.exe|\\\\NinjaRMMAgenPatcher\\\
+    .exe|\\\\ninjarmm-cli\\.exe/ nocase\n    ) or\n\n    (\n      // Potential REMCOS\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\remcos/ nocase\n    ) or\n\n    (\n      // Potential Rocket Remote Desktop\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\RocketRemoteDesktop_Setup\\.exe$/ nocase\n    ) or\n\n    (\n      // Potential\
+    \ Tactical RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\tacticalrmm\\.exe$/ nocase\n    ) or\n\n    (\n      // Potential TightVNC\
+    \ RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path = /\\\
+    \\tvnviewer\\.exe|\\\\tvnserver\\.exe/ nocase\n    ) or\n\n    (\n      // Potential\
+    \ Zoho Assist RMM Tool Process Activity\n      $rmm_tool.target.process.file.full_path\
+    \ = /\\\\zaservice\\.exe|\\\\ZA_Access\\.exe|\\\\ZohoMeeting\\.exe|\\\\Zohours\\\
+    .exe|\\\\zohotray\\.exe|\\\\ZohoURSService\\.exe|\\\\Zaservice\\.exe|\\\\za_connect\\\
+    .exe|\\\\ZMAgent\\.exe/ nocase\n    )\n\n    $rmm_tool.principal.hostname = $hostname\n\
+    \    $rmm_tool.target.process.file.full_path = $image\n    $rmm_tool.extracted.fields[\"\
+    Company\"] = $rmm_company_info\n\n    // Filter for known RMM Tools based on Customer\
+    \ Information\n    // not $rmm_tool.target.process.file.full_path in %known_rmm_tools\
+    \ nocase\n\n  match:\n    $hostname, $image, $rmm_company_info over 10m\n\n  outcome:\n\
+    \    $risk_score = max(65)\n    $event_count = count_distinct($rmm_tool.metadata.id)\n\
+    \    $principal_process_pid = array_distinct($rmm_tool.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($rmm_tool.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($rmm_tool.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($rmm_tool.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($rmm_tool.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($rmm_tool.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($rmm_tool.target.process.pid)\n    $target_process_command_line\
+    \ = array_distinct($rmm_tool.target.process.command_line)\n    $target_process_file_sha256\
+    \ = array_distinct($rmm_tool.target.process.file.sha256)\n    $target_process_file_full_path\
+    \ = array_distinct($rmm_tool.target.process.file.full_path)\n    $target_process_product_specific_process_id\
+    \ = array_distinct($rmm_tool.target.process.product_specific_process_id)\n   \
+    \ $principal_user_userid = array_distinct($rmm_tool.principal.user.userid)\n\n\
+    \  condition:\n    $rmm_tool\n}"
+  chronicle_rule_name: win_pua_detection_of_uncommon_rmm
+provenance:
+  source: chronicle/detection-rules
+  source_id: win_pua_detection_of_uncommon_rmm
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/win_pua_detection_of_uncommon_rmm.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

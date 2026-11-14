@@ -1,0 +1,23 @@
+title: Okta API Token Created
+id: aisoc-id-id-0012-okta-api-token
+status: stable
+description: |
+  Okta API token created — long-lived credentials that bypass MFA
+  and IP restrictions. Frequently abused by attackers post-compromise
+  to maintain persistent access.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1098.001
+  - attack.persistence
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action:
+      - 'system.api_token.create'
+      - 'system.api_token.update'
+  condition: selection

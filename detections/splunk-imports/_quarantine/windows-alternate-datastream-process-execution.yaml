@@ -1,0 +1,54 @@
+id: splunk-security-content-30c32c5c-41fe-45db-84fe-275e4320da3f
+name: Windows Alternate DataStream - Process Execution
+description: The following analytic detects when a process attempts to execute a file
+  from within an NTFS file system alternate data stream. This detection leverages
+  process execution data from sources like Windows process monitoring or Sysmon Event
+  ID 1, focusing on specific processes known for such behavior. This activity is significant
+  because alternate data streams can be used by threat actors to hide malicious code,
+  making it difficult to detect. If confirmed malicious, this could allow an attacker
+  to execute hidden code, potentially leading to unauthorized actions and further
+  compromise of the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/api0cradle/cdd2d0d0ec9abb686f0e89306e277b8f
+- https://car.mitre.org/analytics/CAR-2020-08-001/
+- https://blogs.juniper.net/en-us/threat-research/bitpaymer-ransomware-hides-behind-windows-alternate-data-streams
+- https://blog.netwrix.com/2022/12/16/alternate_data_stream/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count min(_time) as firstTime max(_time) as lastTime values(Processes.process_current_directory)\
+    \ as directory\nfrom datamodel=Endpoint.Processes where\nProcesses.parent_process_name\
+    \ != \"unknown\"\nProcesses.process_name IN (\n    \"appvlp.exe\",\n    \"bitsadmin.exe\"\
+    ,\n    \"control.exe\",\n    \"cscript.exe\",\n    \"forfiles.exe\",\n    \"ftp.exe\"\
+    ,\n    \"mavinject.exe\",\n    \"mshta.exe\",\n    \"powershell_ise.exe\",\n \
+    \   \"powershell.exe\",\n    \"pwsh.exe\",\n    \"regini.exe\",\n    \"regscr32.exe\"\
+    ,\n    \"rundll32.exe\",\n    \"sc.exe\",\n    \"wmic.exe\",\n    \"wscript.exe\"\
+    \n)\n\nby Processes.action Processes.dest Processes.original_file_name Processes.parent_process\n\
+    \   Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id\n\
+    \   Processes.parent_process_name Processes.parent_process_path Processes.process\n\
+    \   Processes.process_exec Processes.process_guid Processes.process_hash\n   Processes.process_id\
+    \ Processes.process_integrity_level Processes.process_name\n   Processes.process_path\
+    \ Processes.user Processes.user_id Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | regex process=\"(\\b)\\w+(\\.\\w+)?:\\w+(\\.\\w{2,4})(?!\\.)(\\b|\\s|&)\"\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_alternate_datastream___process_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 30c32c5c-41fe-45db-84fe-275e4320da3f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_alternate_datastream___process_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

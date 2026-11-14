@@ -1,0 +1,27 @@
+id: sumo-logic
+name: Sumo Logic Cloud SIEM Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Sumo Logic Cloud SIEM Enterprise (CSE). Pulls insights and signals, and
+  supports log search jobs across the platform.
+author: AiSOC Core Team
+tags: [siem, sumo-logic, cloud-siem]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sumo_logic.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [deployment, access_id, access_key]
+  properties:
+    deployment:
+      type: string
+      description: Deployment
+    access_id:
+      type: string
+      description: Access ID
+    access_key:
+      type: string
+      description: Access Key
+      secret: true

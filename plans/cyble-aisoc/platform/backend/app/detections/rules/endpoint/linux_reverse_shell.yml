@@ -1,0 +1,40 @@
+title: Linux Interactive Reverse Shell Pattern
+id: aisoc-id-ep-0031-linux-reverse-shell
+status: stable
+description: |
+  Common interactive reverse-shell one-liners observed in process
+  command lines on Linux endpoints — bash, python, perl, nc
+  patterns that connect back to an attacker controlled host.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: linux
+  service: process_creation
+tags:
+  - attack.t1059.004
+  - attack.execution
+  - attack.command_and_control
+  - aisoc.endpoint
+detection:
+  bash_dev_tcp:
+    process.command_line|contains:
+      - 'bash -i >& /dev/tcp/'
+      - '/dev/tcp/'
+      - '0<&'
+  nc_reverse:
+    process.command_line|contains:
+      - 'nc -e /bin/sh'
+      - 'nc -e /bin/bash'
+      - 'ncat -e /bin/sh'
+      - 'ncat -e /bin/bash'
+  python_reverse:
+    process.command_line|contains:
+      - 'socket.socket'
+      - 'pty.spawn'
+      - 'os.dup2'
+  perl_reverse:
+    process.command_line|contains:
+      - 'perl -e'
+      - 'use Socket'
+      - 'IO::Socket::INET'
+  condition: 1 of bash_dev_tcp or 1 of nc_reverse or (1 of python_reverse) or 1 of perl_reverse

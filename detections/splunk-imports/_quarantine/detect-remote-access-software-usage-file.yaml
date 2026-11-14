@@ -1,0 +1,64 @@
+id: splunk-security-content-3bf5541a-6a45-4fdc-b01d-59b899fff961
+name: Detect Remote Access Software Usage File
+description: 'The following analytic detects the writing of files from known remote
+  access software to disk within the environment.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  file path, file name, and user information.
+
+  This activity is significant as adversaries often use remote access tools like AnyDesk,
+  GoToMyPC, LogMeIn, and TeamViewer to maintain unauthorized access.
+
+  If confirmed malicious, this could allow attackers to persist in the environment,
+  potentially leading to data exfiltration, further compromise, or complete control
+  over affected systems.
+
+  It is best to update both the remote_access_software_usage_exception.csv lookup
+  and the remote_access_software lookup with any known or approved remote access software
+  to reduce false positives and increase coverage.
+
+  In order to enhance performance, the detection filters for specific file names extensions
+  / names that are used in the remote_access_software lookup.
+
+  If add additional entries, consider updating the search filters to include those
+  file names / extensions as well, if not alread covered.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1219/
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime,\n\
+    \        max(_time) as lastTime\n        values(Filesystem.file_path) as file_path\n\
+    from datamodel=Endpoint.Filesystem\nwhere Filesystem.file_name IN (\n  \"*.app\"\
+    ,\n  \"*.exe\",\n  \"*.msi\",\n  \"*.pkg\",\n  \"*echoware.dll\",\n  \"*Idrive.*\"\
+    ,\n  \"*rdp2tcp.py\"\n)\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\n\
+    \   Filesystem.file_create_time Filesystem.file_hash\n   Filesystem.file_modify_time\
+    \ Filesystem.file_name\n   Filesystem.file_path Filesystem.file_acl Filesystem.file_size\n\
+    \   Filesystem.process_guid Filesystem.process_id\n   Filesystem.user Filesystem.vendor_product\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(Filesystem)`\n| lookup remote_access_software remote_utility\
+    \ AS file_name OUTPUT isutility, description as signature, comment_reference as\
+    \ desc, category\n| search isutility = TRUE\n| `remote_access_software_usage_exceptions`\n\
+    | `detect_remote_access_software_usage_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3bf5541a-6a45-4fdc-b01d-59b899fff961
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_remote_access_software_usage_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

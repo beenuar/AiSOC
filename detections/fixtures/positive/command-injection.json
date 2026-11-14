@@ -1,0 +1,4 @@
+{
+  "host": "app.corp.com",
+  "request_uri": "/ping?host=10.0.0.5;cat /etc/passwd"
+}

@@ -1,0 +1,49 @@
+id: splunk-security-content-9ed27cea-4e27-4eff-b2c6-aac9e78a7517
+name: Windows Attempt To Stop Security Service
+description: The following analytic detects attempts to stop security-related services
+  on an endpoint, which may indicate malicious activity. It leverages data from Endpoint
+  Detection and Response (EDR) agents, specifically searching for processes involving
+  the "sc.exe" or "net.exe" command with the "stop" parameter or the PowerShell "Stop-Service"
+  cmdlet. This activity is significant because disabling security services can undermine
+  the organization's security posture, potentially leading to unauthorized access,
+  data exfiltration, or further attacks like malware installation or privilege escalation.
+  If confirmed malicious, this behavior could compromise the endpoint and the entire
+  network, necessitating immediate investigation and response.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1562.001/T1562.001.md#atomic-test-14---disable-arbitrary-security-windows-service
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        (`process_net`\n        OR\n        `process_sc`) Processes.process=\"\
+    * stop *\"\n    )\n    OR Processes.process=\"*Stop-Service *\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| lookup security_services_lookup service\
+    \ as process OUTPUTNEW category, description\n| search category=security\n| `windows_attempt_to_stop_security_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9ed27cea-4e27-4eff-b2c6-aac9e78a7517
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_attempt_to_stop_security_service.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,59 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AiSOC Demo - Agents service (LangGraph orchestrator + investigator)
+#
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-agents.fly.dev was NXDOMAIN when last measured (2026-09-28).
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-agents.fly.dev
+# Internal name:  aisoc-demo-agents.internal:8084
+#
+# Reads:  Postgres, Redis, KB (in-image), MITRE ATT&CK JSON (in-image)
+# Writes: investigation_runs, investigation_events, investigation_artifacts
+#
+# Note: in demo mode the agents call a deterministic offline pipeline
+# (no OPENAI_API_KEY required). Operators can enable LLM-backed mode by
+# setting OPENAI_API_KEY as a Fly secret.
+# ──────────────────────────────────────────────────────────────────────────────
+
+app = "aisoc-demo-agents"
+primary_region = "iad"
+kill_signal    = "SIGINT"
+kill_timeout   = "10s"            # agent runs may need to flush ledger writes
+
+# No [build] override: flyctl resolves `dockerfile` relative to fly.toml's
+# location, not cwd. Omitting it makes flyctl fall back to
+# `<cwd>/Dockerfile`, and the deploy script cd's into services/agents/
+# before invoking `flyctl deploy`, so the right Dockerfile is picked up.
+
+[env]
+  ENVIRONMENT     = "demo"
+  LOG_LEVEL       = "info"
+  PORT            = "8084"
+  AISOC_DEMO_MODE = "true"
+  CORE_API_URL    = "http://aisoc-demo-api.internal:8000"
+  # In demo mode, fall back to deterministic pipeline if no key set
+  AISOC_AGENT_MODE = "deterministic"
+  ATTCK_DATA_PATH  = "/app/data/enterprise-attack.json"
+
+[http_service]
+  internal_port       = 8084
+  force_https         = true
+  # Never auto-stop: the web app proxies AI Copilot / agent calls over 6PN
+  # (aisoc-demo-agents.internal:8084), and 6PN connections do NOT trigger Fly's
+  # auto-start, so a stopped machine 500s the Copilot. Keep it warm 24/7.
+  auto_stop_machines  = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes           = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "30s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "5s"
+    path         = "/health"
+
+[[vm]]
+  size      = "shared-cpu-2x"     # agent runs are CPU-bound during burst
+  memory_mb = 2048

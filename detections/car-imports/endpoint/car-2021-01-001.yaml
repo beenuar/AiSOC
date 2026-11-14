@@ -1,0 +1,33 @@
+id: mitre-car-car-2021-01-001
+name: Identifying Port Scanning Activity
+description: After compromising an initial machine, adversaries commonly attempt to
+  laterally move across the network. The first step to attempt the lateral movement
+  often involves conducting host identification, port and service scans on the internal
+  network via the compromised machine using tools such as Nmap, Cobalt Strike, etc.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1046
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Flow
+detection:
+  implementations:
+  - name: Splunk search - Identifying Internal hosts and services for lateral movement
+    type: Splunk
+    code: sourcetype='firewall_logs' dest_ip = 'internal_subnet' | stats dc(dest_port)
+      as pcount by src_ip | where pcount >5
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-001.yaml
+notes:
+  car_status: needs_implementation

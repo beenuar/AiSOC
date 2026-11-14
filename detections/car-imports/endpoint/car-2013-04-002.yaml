@@ -1,0 +1,96 @@
+id: mitre-car-car-2013-04-002
+name: Quick execution of a series of suspicious commands
+description: "Certain commands are frequently used by malicious actors and infrequently\
+  \ used by normal users. By looking for execution of these commands in short periods\
+  \ of time, we can not only see when a malicious user was on the system but also\
+  \ get an idea of what they were doing.\n\n  Commands of interest:\n\n-   arp.exe\n\
+  -   at.exe\n-   attrib.exe\n-   cscript.exe\n-   dsquery.exe\n-   hostname.exe\n\
+  -   ipconfig.exe\n-   mimikatz.exe\n-   nbstat.exe\n-   net.exe\n-   netsh.exe\n\
+  -   nslookup.exe\n-   ping.exe\n-   quser.exe\n-   qwinsta.exe\n-   reg.exe\n- \
+  \  runas.exe\n-   sc.exe\n-   schtasks.exe\n-   ssh.exe\n-   systeminfo.exe\n- \
+  \  taskkill.exe\n-   telnet.exe\n-   tracert.exe\n-   wscript.exe\n-   xcopy.exe\n\
+  \n### Output Description\n\nThe host on which the commands were executed, the time\
+  \ of execution, and what commands were executed"
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087
+  - T1003
+  - T1069
+  - T1057
+  - T1021
+  - T1543
+  - T1112
+  - T1574
+  - T1018
+  - T1569
+  - T1053
+  - T1029
+  - T1033
+  - T1007
+  - T1082
+  - T1049
+  - T1016
+  - T1010
+  - T1518
+  - T1046
+  - T1562
+  - T1098
+  - T1059
+  - T1012
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "processes = search Process:Create\nreg_processes = filter processes where\
+      \ (exe == \"arp.exe\" or exe == \"at.exe\" or exe == \"attrib.exe\"\n or exe\
+      \ == \"cscript.exe\" or exe == \"dsquery.exe\" or exe == \"hostname.exe\"\n\
+      \ or exe == \"ipconfig.exe\" or exe == \"mimikatz.exe\" or exe == \"nbstat.exe\"\
+      \n or exe == \"net.exe\" or exe == \"netsh.exe\" or exe == \"nslookup.exe\"\n\
+      \ or exe == \"ping.exe\" or exe == \"quser.exe\" or exe == \"qwinsta.exe\"\n\
+      \ or exe == \"reg.exe\" or exe == \"runas.exe\" or exe == \"sc.exe\"\n or exe\
+      \ == \"schtasks.exe\" or exe == \"ssh.exe\" or exe == \"systeminfo.exe\"\n or\
+      \ exe == \"taskkill.exe\" or exe == \"telnet.exe\" or exe == \"tracert.exe\"\
+      \n or exe == \"wscript.exe\" or exe == \"xcopy.exe\")\nreg_grouped = group reg\
+      \ by hostname, ppid where(max time between two events is 30 minutes)\noutput\
+      \ reg_grouped"
+  - name: ''
+    type: Sigma
+    code: ''
+  - name: ''
+    type: DNIF
+    code: '_fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $App=regex(arp\.exe|at\.exe|attrib\.exe|cscript\.exe|dsquery\.exe|hostname\.exe|ipconfig\.exe|mimikatz.exe|nbstat\.exe|net\.exe|netsh\.exe|nslookup\.exe|ping\.exe|quser\.exe|qwinsta\.exe|reg\.exe|runas\.exe|sc\.exe|schtasks\.exe|ssh\.exe|systeminfo\.exe|taskkill\.exe|telnet\.exe|tracert\.exe|wscript\.exe|xcopy\.exe)i
+      group count_unique $App limit 100
+
+      >>_agg count
+
+      >>_checkif int_compare Count > 1 include'
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image IN ["*\arp.exe", "*\at.exe", "*\attrib.exe",
+      "*\cscript.exe", "*\dsquery.exe", "*\hostname.exe", "*\ipconfig.exe", "*\mimikatz.exe",
+      "*\nbstat.exe", "*\net.exe", "*\netsh.exe", "*\nslookup.exe", "*\ping.exe",
+      "*\quser.exe", "*\qwinsta.exe", "*\reg.exe", "*\runas.exe", "*\sc.exe", "*\schtasks.exe",
+      "*\ssh.exe", "*\systeminfo.exe", "*\taskkill.exe", "*\telnet.exe", "*\tracert.exe",
+      "*\wscript.exe", "*\xcopy.exe"]
+
+      | chart count() as cnt by host
+
+      | search cnt > 1'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-04-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-04-002.yaml
+notes:
+  car_status: needs_implementation

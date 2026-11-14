@@ -1,0 +1,4 @@
+{
+  "argv": "prefix--R-suffix",
+  "event_type": "ssh_command"
+}

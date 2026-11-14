@@ -1,0 +1,27 @@
+id: mimecast
+name: Mimecast Email Security Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Mimecast Email Security 2.0 API. Pulls held messages, SIEM events, and URL
+  protect verdicts as alerts.
+author: AiSOC Core Team
+tags: [email, mimecast, saas, phishing]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/mimecast.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, client_id, client_secret]
+  properties:
+    region:
+      type: string
+      description: Region
+    client_id:
+      type: string
+      description: Client ID
+    client_secret:
+      type: string
+      description: Client Secret
+      secret: true

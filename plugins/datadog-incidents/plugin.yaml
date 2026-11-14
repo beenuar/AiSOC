@@ -1,0 +1,39 @@
+id: datadog-incidents
+name: Datadog Incidents Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Pulls open Datadog incidents and security signals into AiSOC for unified
+  triage. Supports both the Incidents API and the Security Monitoring signals
+  API so AiSOC can mirror infra alerts and security findings side-by-side.
+author: AiSOC Core Team
+tags: [observability, datadog, incidents, signals, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/datadog-incidents
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_key, app_key]
+  properties:
+    api_key:
+      type: string
+      description: "Datadog API key"
+      secret: true
+    app_key:
+      type: string
+      description: "Datadog application key with read access"
+      secret: true
+    site:
+      type: string
+      default: datadoghq.com
+      description: "Datadog site (datadoghq.com, datadoghq.eu, us3.datadoghq.com, etc.)"
+    feeds:
+      type: array
+      items:
+        type: string
+        enum: [incidents, security_signals]
+      default: [incidents, security_signals]
+    poll_interval_seconds:
+      type: integer
+      default: 60
+      minimum: 30

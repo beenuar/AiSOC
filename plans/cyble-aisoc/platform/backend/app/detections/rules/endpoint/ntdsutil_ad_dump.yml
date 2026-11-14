@@ -1,0 +1,27 @@
+title: NTDSUtil Active Directory Database Extraction
+id: aisoc-id-ep-0016-ntdsutil
+status: stable
+description: |
+  ntdsutil.exe executed with "ifm" / "create full" / "ac in"
+  arguments — used to dump the Active Directory database (ntds.dit)
+  for offline credential extraction.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1003.003
+  - attack.credential_access
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'ntdsutil.exe'
+  args:
+    process.command_line|contains:
+      - 'ifm'
+      - 'create full'
+      - 'ac in'
+  condition: selection and args

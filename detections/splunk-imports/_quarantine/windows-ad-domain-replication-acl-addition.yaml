@@ -1,0 +1,65 @@
+id: splunk-security-content-8c372853-f459-4995-afdc-280c114d33ab
+name: Windows AD Domain Replication ACL Addition
+description: The following analytic detects the addition of permissions required for
+  a DCSync attack, specifically DS-Replication-Get-Changes, DS-Replication-Get-Changes-All,
+  and DS-Replication-Get-Changes-In-Filtered-Set. It leverages EventCode 5136 from
+  the Windows Security Event Log to identify when these permissions are granted. This
+  activity is significant because it indicates potential preparation for a DCSync
+  attack, which can be used to replicate AD objects and exfiltrate sensitive data.
+  If confirmed malicious, an attacker could gain extensive access to Active Directory,
+  leading to severe data breaches and privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/1522b774-6464-41a3-87a5-1e5633c3fbbb
+- https://github.com/SigmaHQ/sigma/blob/29a5c62784faf986dc03952ae3e90e3df3294284/rules/windows/builtin/security/win_security_account_backdoor_dcsync_rights.yml
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 ObjectClass=domainDNS\n  | stats\
+    \ min(_time) as _time values(eval(if(OperationType==\"%%14675\",AttributeValue,null)))\
+    \ as old_value values(eval(if(OperationType==\"%%14674\",AttributeValue,null)))\
+    \ as new_value values(OperationType) as OperationType\n      BY ObjectClass ObjectDN\
+    \ OpCorrelationID\n      src_user SubjectLogonId dest\n  | rex field=old_value\
+    \ max_match=10000 \"\\((?P<old_values>.*?)\\)\"\n  | rex field=new_value max_match=10000\
+    \ \"\\((?P<new_ace>.*?)\\)\"\n  | mvexpand new_ace\n  | where NOT new_ace IN (old_values)\n\
+    \  | rex field=new_ace \"(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);;(?P<aceSid>.*?)$\"\
+    \n  | search aceObjectGuid IN (\"1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\",\"1131f6ad-9c07-11d1-f79f-00c04fc2dcd2\"\
+    ,\"89e95b76-444d-4c62-991a-0facbeda640c\")\n  | rex max_match=100 field=aceAccessRights\
+    \ \"(?P<AccessRights>[A-Z]{2})\"\n  | rex max_match=100 field=aceFlags \"(?P<aceFlags>[A-Z]{2})\"\
+    \n  | lookup msad_guid_lookup guid as aceObjectGuid OUTPUT displayName as ControlAccessRights\n\
+    \  | lookup ace_access_rights_lookup access_rights_string as AccessRights OUTPUT\
+    \ access_rights_value\n  | lookup ace_type_lookup ace_type_string as aceType OUTPUT\
+    \ ace_type_value\n  | lookup ace_flag_lookup flag_string as aceFlags OUTPUT flag_value\
+    \ as ace_flag_value\n  | lookup builtin_groups_lookup builtin_group_string as\
+    \ aceSid OUTPUT builtin_group_name as builtin_group\n  | eval aceType=coalesce(ace_type_value,aceType),\
+    \ aceFlags=coalesce(ace_flag_value,\"This object only\"), aceAccessRights=if(aceAccessRights=\"\
+    CCDCLCSWRPWPDTLOCRSDRCWDWO\",\"Full control\",coalesce(access_rights_value,AccessRights)),\
+    \ aceControlAccessRights=coalesce(ControlAccessRights,aceObjectGuid), user=coalesce(user,\
+    \ group, builtin_group, aceSid)\n  | stats min(_time) as _time values(aceType)\
+    \ as aceType values(aceFlags) as aceFlags(inheritance) values(aceControlAccessRights)\
+    \ as aceControlAccessRights values(aceAccessRights) as aceAccessRights values(new_ace)\
+    \ as new_ace values(SubjectLogonId) as SubjectLogonId\n      BY ObjectClass ObjectDN\
+    \ src_user dest user\n  | search (aceControlAccessRights=\"Replicating Directory\
+    \ Changes\" AND aceControlAccessRights=\"Replicating Directory Changes All\")\
+    \ OR (aceControlAccessRights=\"1131f6aa-9c07-11d1-f79f-00c04fc2dcd2\" AND aceControlAccessRights=\"\
+    1131f6ad-9c07-11d1-f79f-00c04fc2dcd2\")\n  | `windows_ad_domain_replication_acl_addition_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8c372853-f459-4995-afdc-280c114d33ab
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_domain_replication_acl_addition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

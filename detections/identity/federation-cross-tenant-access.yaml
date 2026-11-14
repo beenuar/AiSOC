@@ -1,0 +1,23 @@
+id: det-identity-040
+name: Cross-Tenant Identity Access Granted
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Cross-Tenant Identity
+  Access Granted'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: azuread-audit
+detection:
+  condition: |
+    operation_name == "Add cross-tenant access policy"
+false_positives:
+- Approved B2B partnership (allowlisted partner-tenant)
+playbook: tpl-cloud-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

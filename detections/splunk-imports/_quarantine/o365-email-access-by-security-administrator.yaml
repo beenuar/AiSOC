@@ -1,0 +1,38 @@
+id: splunk-security-content-c6998a30-fef4-4e89-97ac-3bb0123719b4
+name: O365 Email Access By Security Administrator
+description: The following analytic identifies when a user with sufficient access
+  to O365 Security & Compliance portal uses premium investigation features (Threat
+  Explorer) to directly view email. Adversaries may exploit privileged access with
+  this premium feature to enumerate or exfiltrate sensitive data.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  - T1567
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/threat-explorer-investigate-delivered-malicious-email?view=o365-worldwide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Operation=AdminMailAccess\n\
+    \  | rename InternetMessageId as signature_id, UserId as src_user\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY signature\
+    \ dest user\n       src vendor_account vendor_product\n       src_user signature_id\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `o365_email_access_by_security_administrator_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c6998a30-fef4-4e89-97ac-3bb0123719b4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_access_by_security_administrator.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

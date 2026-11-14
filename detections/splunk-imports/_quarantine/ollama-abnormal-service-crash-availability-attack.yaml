@@ -1,0 +1,43 @@
+id: splunk-security-content-327fa152-9b56-4e4e-bc0b-2795d4068afa
+name: Ollama Abnormal Service Crash Availability Attack
+description: Detects critical service crashes, fatal errors, and abnormal process
+  terminations in Ollama that may indicate exploitation attempts, resource exhaustion
+  attacks, malicious input triggering unhandled exceptions, or deliberate denial of
+  service attacks designed to disrupt AI model availability and degrade system stability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` (level=ERROR OR level=FATAL OR "service stopped" OR
+    "terminated" OR "exit" OR "shutdown" OR "crash" OR "killed") | rex field=_raw
+    "msg=\"(?<msg>[^\"]+)\"" | rex field=_raw "exit_code=(?<exit_code>\d+)" | bin
+    _time span=5m | stats count as termination_count, earliest(_time) as first_seen,
+    latest(_time) as last_seen, values(msg) as error_messages, values(exit_code) as
+    exit_codes, dc(msg) as unique_errors by host | eval first_seen=strftime(first_seen,
+    "%Y-%m-%d %H:%M:%S") | eval last_seen=strftime(last_seen, "%Y-%m-%d %H:%M:%S")
+    | eval severity=case( termination_count > 5, "critical", termination_count > 2,
+    "high", 1=1, "medium" ) | eval attack_type=case( termination_count > 5, "Resource
+    Exhaustion", termination_count > 2, "Repeated Service Failures", 1=1, "Service
+    Instability" ) | where termination_count > 1 | table first_seen, last_seen, host,
+    termination_count, unique_errors, error_messages, severity, attack_type | `ollama_abnormal_service_crash_availability_attack_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 327fa152-9b56-4e4e-bc0b-2795d4068afa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_abnormal_service_crash_availability_attack.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

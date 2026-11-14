@@ -1,0 +1,25 @@
+id: det-endpoint-041
+name: Windows Service Created With Suspicious BinaryPath
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Windows Service
+  Created With Suspicious BinaryPath'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1543.003
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: services
+detection:
+  condition: |
+    event_id == 7045
+    AND service_image_path CONTAINS_ANY ["\users\public\", "\appdata\local\temp\", "\programdata\"]
+false_positives:
+- Approved patch / maintenance window activity
+- Sanctioned automation/IaC pipeline
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

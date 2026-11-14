@@ -1,0 +1,33 @@
+title: LSASS Memory Access from Non-System Process
+id: aisoc-id-ep-0004-lsass-access
+status: stable
+description: |
+  Non-Windows-signed process opened a handle to lsass.exe with at
+  least PROCESS_VM_READ rights. Strong credential-dump signal
+  (Mimikatz, ProcDump, comsvcs.dll MiniDump).
+author: Cyble AiSOC
+level: critical
+logsource:
+  category: process_access
+  product: windows
+tags:
+  - attack.t1003.001
+  - attack.credential_access
+  - aisoc.endpoint
+detection:
+  target:
+    target.process.executable|endswith: '\lsass.exe'
+  access:
+    process.access_mask|contains:
+      - '0x10'
+      - '0x40'
+      - '0x1010'
+      - '0x1410'
+      - '0x1438'
+  filter_signed:
+    source.process.signature.signer:
+      - 'Microsoft Windows'
+      - 'Microsoft Corporation'
+  condition: target and access and not filter_signed
+falsepositives:
+  - Endpoint agents that legitimately scan lsass — allow-list by signer.

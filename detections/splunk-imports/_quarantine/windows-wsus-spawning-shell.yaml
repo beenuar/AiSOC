@@ -1,0 +1,50 @@
+id: splunk-security-content-76ea28ac-6f10-43fd-b5fe-340022ad0fd3
+name: Windows WSUS Spawning Shell
+description: The following analytic identifies instances where a shell (PowerShell.exe
+  or Cmd.exe) is spawned from wsusservice.exe, the Windows Server Update Services
+  process. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process creation events where the parent process is wsusservice.exe.
+  This activity is significant as it may indicate exploitation of CVE-2025-59287,
+  a critical deserialization vulnerability in WSUS that allows unauthenticated remote
+  code execution. If confirmed malicious, this behavior could allow attackers to execute
+  arbitrary commands on WSUS servers, potentially leading to system compromise, data
+  exfiltration, domain enumeration, or further lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1505.003
+  categories:
+  - endpoint
+references:
+- https://www.huntress.com/blog/exploitation-of-windows-server-update-services-remote-code-execution-vulnerability
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2025-59287
+- https://hawktrace.com/blog/CVE-2025-59287-UNAUTH
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process_name)\
+    \ as process_name values(Processes.process) as process min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=wsusservice.exe\n\
+    \    AND\n    `process_cmd`\n    OR\n    `process_powershell`\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_wsus_spawning_shell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 76ea28ac-6f10-43fd-b5fe-340022ad0fd3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_wsus_spawning_shell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

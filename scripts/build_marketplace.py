@@ -1,0 +1,883 @@
+#!/usr/bin/env python3
+"""Build the AiSOC marketplace index from on-disk content.
+
+This script walks the canonical content directories and emits a single
+authoritative ``marketplace/index.json`` describing every detection,
+playbook, and plugin shipped with this repo.
+
+Sources walked:
+
+- ``detections/<category>/*.yaml``        - curated AiSOC detection rules
+- ``playbooks/packs/v1/<category>/*.json`` - production playbook pack v1
+- ``plugins/<plugin-id>/plugin.yaml``     - reference plugin manifests
+
+The output schema is consumed by:
+
+- ``apps/web/public/marketplace/index.json`` (UI fetches this directly)
+- ``apps/web/src/components/marketplace/MarketplaceView.tsx``
+- The "Sync Marketplace Index" CI workflow
+
+The schema deliberately captures MITRE ATT&CK technique IDs so the
+marketplace UI can offer a real coverage filter (the plan calls for a
+"MITRE filter" specifically).
+
+Usage:
+
+    python3 scripts/build_marketplace.py             # build & write
+    python3 scripts/build_marketplace.py --check     # fail if drift
+    python3 scripts/build_marketplace.py --print     # write to stdout
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import re
+import sys
+from collections.abc import Iterable
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
+DETECTIONS_DIR = REPO_ROOT / "detections"
+PLAYBOOKS_PACKS_DIR = REPO_ROOT / "playbooks" / "packs"
+PLUGINS_DIR = REPO_ROOT / "plugins"
+COMMUNITY_DETECTIONS_DIR = REPO_ROOT / "detections" / "community"
+COMMUNITY_PLAYBOOKS_DIR = REPO_ROOT / "playbooks" / "community"
+COMMUNITY_PLUGINS_DIR = REPO_ROOT / "plugins" / "community"
+
+OUTPUT_PRIMARY = REPO_ROOT / "marketplace" / "index.json"
+OUTPUT_PUBLIC = REPO_ROOT / "apps" / "web" / "public" / "marketplace" / "index.json"
+
+#: A third copy, inside the API service's Docker build context.
+#:
+#: The API image is built with `services/api` as its context, so the
+#: repository-root `marketplace/` directory is not visible to `COPY . .` and
+#: the published image shipped without an index at all. Every containerised
+#: deployment therefore answered 503 on the marketplace — reported in
+#: discussion #374 and true of every release since the endpoint was written.
+#:
+#: `apps/web/public/marketplace/index.json` is the same arrangement for the
+#: console, so this follows a pattern the repository already relies on rather
+#: than introducing one. `scripts/check_marketplace_index_parity.py` asserts
+#: the three stay byte-identical.
+OUTPUT_API_PACKAGED = REPO_ROOT / "services" / "api" / "app" / "data" / "marketplace" / "index.json"
+
+DETECTION_CATEGORIES = {
+    "cloud",
+    "identity",
+    "endpoint",
+    "network",
+    "application",
+    "data-exfil",
+}
+
+# Top-level dirs under detections/ that are NOT native rule directories
+# but contain rules in some tier (we walk these separately).
+#
+# `playbooks` is here because `detections/playbooks/*.yaml` holds 25 response
+# playbooks — `trigger:`/`steps:`, no `detection:` block — and this walker
+# indexed every one of them as `"type": "detection"`. That is the whole of the
+# gap between the 7,016 this script published and the 6,991 the README, the
+# truth table and `detection_truth_table.py` all publish: the truth table's
+# own `SKIP_DIRS` has always held `{"fixtures", "playbooks"}`, so the two
+# walkers were reading the same tree and disagreeing about what a detection
+# is. They are indexed below as playbooks, which is what they are, so the
+# marketplace keeps them and neither count is inflated.
+DETECTION_NATIVE_SKIP = {
+    "fixtures",
+    "community",
+    "playbooks",
+    "sigma-imports",
+    "car-imports",
+    "splunk-imports",
+    "chronicle-imports",
+}
+
+# Imported detection tiers: directory name -> source name used in the
+# `provenance.source` field of the rule (and the `source` we project
+# into the marketplace item).
+IMPORTED_TIER_DIRS: dict[str, str] = {
+    "sigma-imports": "sigmahq",
+    "car-imports": "mitre-car",
+    "splunk-imports": "splunk-security-content",
+    "chronicle-imports": "chronicle-detection-rules",
+}
+
+MITRE_RE = re.compile(r"mitre\.attack\.(t\d{4}(?:\.\d{3})?)", re.IGNORECASE)
+MITRE_LOOSE_RE = re.compile(r"mitre\.(t\d{4}(?:\.\d{3})?)", re.IGNORECASE)
+MITRE_BARE_RE = re.compile(r"^t\d{4}(?:\.\d{3})?$", re.IGNORECASE)
+
+
+def normalise_tags(raw: Any) -> list[str]:
+    """Flatten the ``tags`` block into a list of dotted strings.
+
+    Native rules emit ``['mitre.attack.t1234', 'tlp.white']``. The detection
+    importers emit a dict shape: ``{'mitre': ['T1234'], 'categories': ['endpoint']}``.
+    Downstream code expects strings, so we project the dict shape into the
+    same dotted form (``mitre.attack.t1234``, ``categories.endpoint``).
+    """
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(t) for t in raw if isinstance(t, str)]
+    if isinstance(raw, dict):
+        out: list[str] = []
+        for key, values in raw.items():
+            if not isinstance(values, list):
+                continue
+            for v in values:
+                if not isinstance(v, str):
+                    continue
+                if str(key).lower() == "mitre":
+                    out.append(f"mitre.attack.{v.lower()}")
+                else:
+                    out.append(f"{key}.{v}")
+        return out
+    return []
+
+
+def extract_mitre(tags: Iterable[Any]) -> list[str]:
+    """Extract uppercase MITRE technique IDs from a tag block.
+
+    Accepts:
+      * the strict ``mitre.attack.tXXXX[.YYY]`` form,
+      * the looser ``mitre.tXXXX[.YYY]`` form that some playbooks use,
+      * bare ``T1234`` IDs as emitted by the detection importers under
+        ``tags.mitre``.
+
+    The argument may be a list of strings *or* a dict like
+    ``{'mitre': ['T1234'], 'categories': ['endpoint']}``.
+    """
+    out: list[str] = []
+
+    def _add(tid: str) -> None:
+        u = tid.upper()
+        if u not in out:
+            out.append(u)
+
+    if isinstance(tags, dict):
+        # Fast path for the importer shape — just consume tags['mitre'].
+        for v in tags.get("mitre") or []:
+            if isinstance(v, str) and MITRE_BARE_RE.match(v):
+                _add(v)
+
+    iterable = tags if isinstance(tags, (list, tuple)) else normalise_tags(tags)
+    for tag in iterable or []:
+        if not isinstance(tag, str):
+            continue
+        m = MITRE_RE.search(tag) or MITRE_LOOSE_RE.search(tag)
+        if m:
+            _add(m.group(1))
+            continue
+        if MITRE_BARE_RE.match(tag):
+            _add(tag)
+    return out
+
+
+def detection_files() -> list[Path]:
+    """Walk only the native detection tier (``detections/<category>/``)."""
+    files: list[Path] = []
+    if not DETECTIONS_DIR.exists():
+        return files
+    for child in sorted(DETECTIONS_DIR.iterdir()):
+        if not child.is_dir() or child.name in DETECTION_NATIVE_SKIP:
+            continue
+        for f in sorted(child.rglob("*.yaml")):
+            files.append(f)
+    return files
+
+
+@lru_cache(maxsize=1)
+def engine_rule_ids() -> frozenset[str]:
+    """Ids the detection engine loads, across both compiled rulesets."""
+    ids: set[str] = set()
+    for name in ("detection_ruleset.json", "detection_ruleset_imported.json"):
+        path = REPO_ROOT / "services" / "fusion" / "app" / "data" / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        ids |= {str(r["id"]) for r in data.get("rules") or [] if r.get("id")}
+    return frozenset(ids)
+
+
+def imported_detection_files() -> list[tuple[Path, str, bool]]:
+    """Return (path, source_name, is_quarantined) for every imported rule.
+
+    Walks the tier directories declared in :data:`IMPORTED_TIER_DIRS`.
+
+    Quarantine used to be read off the directory name, and that stopped being
+    true when the Sigma compiler began translating rules in place: 1,724 files
+    still sit under ``_quarantine/`` and the engine loads every one of them. A
+    published figure calling those quarantined would understate the capability
+    in exactly the direction this repository normally guards the other way, and
+    the fix is the same one the truth table already applies — ask the engine,
+    not the path. A rule is quarantined when the engine does not load it.
+    """
+    out: list[tuple[Path, str, bool]] = []
+    if not DETECTIONS_DIR.exists():
+        return out
+    loaded = engine_rule_ids()
+    for tier_dir, source_name in IMPORTED_TIER_DIRS.items():
+        root = DETECTIONS_DIR / tier_dir
+        if not root.exists():
+            continue
+        for f in sorted(root.rglob("*.yaml")):
+            try:
+                rel = f.relative_to(root).parts
+            except ValueError:
+                continue
+            in_quarantine_dir = bool(rel) and rel[0] == "_quarantine"
+            if in_quarantine_dir and loaded:
+                try:
+                    doc = yaml.safe_load(f.read_text(encoding="utf-8"))
+                except Exception:  # noqa: BLE001 — a bad file stays quarantined
+                    doc = None
+                rule_id = str(doc.get("id")) if isinstance(doc, dict) and doc.get("id") else ""
+                in_quarantine_dir = rule_id not in loaded
+            out.append((f, source_name, in_quarantine_dir))
+    return out
+
+
+def playbook_files() -> list[Path]:
+    if not PLAYBOOKS_PACKS_DIR.exists():
+        return []
+    return sorted(PLAYBOOKS_PACKS_DIR.rglob("*.playbook.json"))
+
+
+def standalone_playbook_files() -> list[Path]:
+    """Response playbooks that live under ``detections/playbooks/``.
+
+    Same document shape as a pack entry — ``trigger``/``steps`` — written as
+    YAML and filed under the detections tree. They are not part of the v1
+    pack, so they are counted separately from it: ``stats.playbook_packs``
+    stays the pack figure the landing page quotes, and ``stats.playbooks``
+    is every playbook the marketplace indexes.
+    """
+    directory = DETECTIONS_DIR / "playbooks"
+    if not directory.exists():
+        return []
+    return sorted(directory.rglob("*.yaml"))
+
+
+def plugin_manifests() -> list[Path]:
+    if not PLUGINS_DIR.exists():
+        return []
+    out: list[Path] = []
+    for child in sorted(PLUGINS_DIR.iterdir()):
+        if not child.is_dir() or child.name == "community":
+            continue
+        manifest = child / "plugin.yaml"
+        if manifest.exists():
+            out.append(manifest)
+    return out
+
+
+def community_detection_files() -> list[Path]:
+    if not COMMUNITY_DETECTIONS_DIR.exists():
+        return []
+    return sorted(COMMUNITY_DETECTIONS_DIR.rglob("*.yaml"))
+
+
+def community_playbook_files() -> list[Path]:
+    if not COMMUNITY_PLAYBOOKS_DIR.exists():
+        return []
+    return sorted(COMMUNITY_PLAYBOOKS_DIR.rglob("*.playbook.json"))
+
+
+def community_plugin_manifests() -> list[Path]:
+    if not COMMUNITY_PLUGINS_DIR.exists():
+        return []
+    out: list[Path] = []
+    for child in sorted(COMMUNITY_PLUGINS_DIR.iterdir()):
+        if not child.is_dir():
+            continue
+        manifest = child / "plugin.yaml"
+        if manifest.exists():
+            out.append(manifest)
+    return out
+
+
+def _why_not_executable(*, quarantined: bool, tier: str, enabled: bool | None) -> str:
+    """Why the engine skips a rule, in terms the rule file can be checked against.
+
+    The fallback this replaces said every row that was not quarantined carried
+    `enabled: false` — true of the rules that set the flag, and false of the
+    community tier, which is catalogue-only because nothing walks
+    `detections/community/` into the engine's loaded set. A community rule with
+    `enabled: true` in its file therefore reached the catalogue telling the
+    reader its author had disabled it. A reason that names the rule file has to
+    be true of the rule file, and `tests/test_marketplace_executable_split.py`
+    now checks that it is.
+    """
+    if quarantined:
+        return "imported rule; upstream query language not directly executable by the AiSOC engine yet"
+    if tier == "community":
+        return (
+            "community rule; the engine loads the native and imported rule sets, "
+            "not `detections/community/`, so this is catalogue-only until promoted"
+        )
+    if enabled is False:
+        return "disabled in the rule file (`enabled: false`); the engine does not load it"
+    return "not compiled into the engine's rule set"
+
+
+def build_detection_item(
+    path: Path,
+    *,
+    source: str,
+    tier: str,
+    quarantined: bool = False,
+) -> dict[str, Any] | None:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw_tags = data.get("tags")
+    mitre = extract_mitre(raw_tags or [])
+    tags = normalise_tags(raw_tags)
+    category = data.get("category") or path.parent.name
+    enabled = data.get("enabled")
+    # The engine's own loaded set, which is what `docs/detections/truth-table.md`
+    # calls executable and what the README's 2,603 counts.
+    rule_id = str(data.get("id") or path.stem)
+    executable = rule_id in engine_rule_ids()
+    if quarantined:
+        # Quarantine directory layout has the category two levels below the
+        # tier root (e.g. sigma-imports/_quarantine/cloud/foo.yaml).
+        if not data.get("category"):
+            try:
+                rel = path.relative_to(DETECTIONS_DIR).parts
+                if len(rel) >= 4 and rel[1] == "_quarantine":
+                    category = rel[2]
+            except ValueError:
+                pass  # path is not relative to DETECTIONS_DIR; category stays None
+
+    item: dict[str, Any] = {
+        "id": data.get("id") or path.stem,
+        "type": "detection",
+        "name": data.get("name") or data.get("id") or path.stem,
+        "description": (data.get("description") or "").strip(),
+        "version": data.get("version", "1.0.0"),
+        "author": data.get("author", "AiSOC"),
+        "tags": [t for t in tags if not t.lower().startswith("mitre.")],
+        "severity": data.get("severity"),
+        "category": category,
+        "mitre_techniques": mitre,
+        "log_source": (data.get("log_source") or {}).get("product"),
+        "playbook": data.get("playbook"),
+        "verified": tier == "stable",
+        "source": source,
+        "tier": tier,
+        "enabled": False if (quarantined or enabled is False) else True,
+        # Whether the engine loads this rule, which is the only thing that
+        # decides whether it can fire.
+        #
+        # **Not** `enabled`. That field is the YAML's own flag OR-ed with the
+        # directory, and the two disagree with the engine in one direction at
+        # scale: 1,724 rules carry `enabled: false` in their file and the
+        # engine loads all of them, because the Sigma compiler began
+        # translating rules in place without rewriting the flag. Publishing
+        # `enabled` as the capability signal would mark those 1,724 working
+        # rules unusable — understating the corpus in exactly the direction
+        # this repository normally guards the other way.
+        #
+        # `docs/detections/truth-table.md` already asks the engine rather
+        # than the path, and 2,603 is the figure the README publishes. This
+        # reads the same set, so the catalogue cannot disagree with them.
+        "executable": executable,
+        "path": path.relative_to(REPO_ROOT).as_posix(),
+    }
+    # Every rule that cannot fire says why. The reason used to be written
+    # only on the quarantine branch, so a rule the engine skips for any other
+    # cause arrived in the catalogue indistinguishable from a working one.
+    if not executable:
+        item["quarantine_reason"] = data.get("quarantine_reason") or _why_not_executable(
+            quarantined=quarantined, tier=tier, enabled=enabled
+        )
+    provenance = data.get("provenance")
+    if isinstance(provenance, dict):
+        item["provenance"] = {
+            "source": provenance.get("source"),
+            # DRL-1.1 requires author identification to travel with a shared
+            # copy. This projection dropped it, and the item-level `author`
+            # below defaulted to "AiSOC" — so the console did not merely omit
+            # the upstream author on 3,132 imported Sigma rules, it named this
+            # project in their place. Reported as #1680 by Florian Roth.
+            "author": provenance.get("author"),
+            "source_id": provenance.get("source_id"),
+            "source_commit": provenance.get("source_commit"),
+            "license": provenance.get("license"),
+            "license_url": provenance.get("license_url"),
+            "imported_at": provenance.get("imported_at"),
+            "upstream_path": provenance.get("upstream_path"),
+        }
+        # The person who wrote the rule outranks the default. `author` is what
+        # every catalogue surface renders and what a reader takes to be the
+        # credit, so an imported rule carries its upstream author there too.
+        upstream_author = str(provenance.get("author") or "").strip()
+        if upstream_author:
+            item["author"] = upstream_author
+    return item
+
+
+def build_playbook_item(path: Path, *, source: str, tier: str, pack: bool = True) -> dict[str, Any] | None:
+    try:
+        text = path.read_text(encoding="utf-8")
+        data = yaml.safe_load(text) if path.suffix in {".yaml", ".yml"} else json.loads(text)
+    except Exception as exc:
+        print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw_tags = data.get("tags")
+    mitre = extract_mitre(raw_tags or [])
+    tags = normalise_tags(raw_tags)
+    trigger_block = data.get("trigger") or {}
+    trigger = trigger_block.get("on") if isinstance(trigger_block, dict) else None
+    severities = trigger_block.get("severity") if isinstance(trigger_block, dict) else None
+    severity: str | None = None
+    if isinstance(severities, list) and severities:
+        # Pick the highest declared severity for display.
+        order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+        severity = max(
+            severities,
+            key=lambda s: order.get(str(s).lower(), 0),
+        )
+    return {
+        "id": data.get("id") or path.stem,
+        "type": "playbook",
+        "name": data.get("name") or path.stem,
+        "description": (data.get("description") or "").strip(),
+        "version": data.get("version", "1.0.0"),
+        "author": data.get("author", "AiSOC"),
+        "tags": [t for t in tags if not t.lower().startswith("mitre.")],
+        "severity": severity,
+        "trigger": trigger,
+        "steps": len(data.get("steps") or []),
+        "category": path.parent.name,
+        "mitre_techniques": mitre,
+        "verified": tier == "stable",
+        "source": source,
+        "tier": tier,
+        "pack": pack,
+        "enabled": True,
+        "path": path.relative_to(REPO_ROOT).as_posix(),
+    }
+
+
+def build_plugin_item(path: Path, *, source: str, tier: str | None = None) -> dict[str, Any] | None:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        print(f"WARN: could not parse {path}: {exc}", file=sys.stderr)
+        return None
+    if not isinstance(data, dict):
+        return None
+    tags = normalise_tags(data.get("tags"))
+    plugin_dir = path.parent
+    has_python = (plugin_dir / "plugin.py").exists()
+    has_go = (plugin_dir / "go" / "main.go").exists()
+    sdks: list[str] = []
+    if has_python:
+        sdks.append("python")
+    if has_go:
+        sdks.append("go")
+
+    # Resolve tier. A plugin manifest can self-declare ``tier:`` to mark
+    # itself as ``beta`` or ``community``. Otherwise we infer from source
+    # and how complete the implementation is. Manifest-only plugins (no
+    # plugin.py + no go/main.go) get demoted to ``beta`` so we don't pass
+    # off scaffolds as production-ready.
+    declared_tier = (data.get("tier") or "").strip().lower() or None
+    if declared_tier in {"stable", "beta", "community"}:
+        resolved_tier = declared_tier
+    elif tier is not None:
+        resolved_tier = tier
+    elif source == "community":
+        resolved_tier = "community"
+    elif not (has_python or has_go):
+        resolved_tier = "beta"
+    else:
+        resolved_tier = "stable"
+
+    return {
+        "id": data.get("id") or plugin_dir.name,
+        "type": "plugin",
+        "name": data.get("name") or plugin_dir.name,
+        "description": (data.get("description") or "").strip(),
+        "version": data.get("version", "1.0.0"),
+        "author": data.get("author", "AiSOC"),
+        "tags": tags,
+        "plugin_type": data.get("plugin_type"),
+        "license": data.get("license"),
+        "homepage": data.get("homepage"),
+        "min_aisoc_version": data.get("min_aisoc_version"),
+        "sdks": sdks,
+        "mitre_techniques": [],
+        "verified": resolved_tier == "stable",
+        "source": source,
+        "tier": resolved_tier,
+        "path": path.relative_to(REPO_ROOT).as_posix(),
+    }
+
+
+def collect_items() -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+
+    # Detections — native (stable) tier
+    for f in detection_files():
+        item = build_detection_item(f, source="core", tier="stable")
+        if item:
+            items.append(item)
+
+    # Detections — imported tiers (one per upstream corpus)
+    for f, src_name, quarantined in imported_detection_files():
+        item = build_detection_item(f, source=src_name, tier="imported", quarantined=quarantined)
+        if item:
+            items.append(item)
+
+    # Detections — community tier
+    for f in community_detection_files():
+        item = build_detection_item(f, source="community", tier="community")
+        if item:
+            items.append(item)
+
+    # Playbooks
+    for f in playbook_files():
+        item = build_playbook_item(f, source="core", tier="stable")
+        if item:
+            items.append(item)
+    for f in community_playbook_files():
+        item = build_playbook_item(f, source="community", tier="community")
+        if item:
+            items.append(item)
+    for f in standalone_playbook_files():
+        item = build_playbook_item(f, source="core", tier="stable", pack=False)
+        if item:
+            items.append(item)
+
+    # Plugins
+    for f in plugin_manifests():
+        item = build_plugin_item(f, source="core")
+        if item:
+            items.append(item)
+    for f in community_plugin_manifests():
+        item = build_plugin_item(f, source="community", tier="community")
+        if item:
+            items.append(item)
+
+    return items
+
+
+def categories_block(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "playbooks",
+            "label": "Response Playbooks",
+            "description": ("Automated incident-response workflows triggered by alerts or manual invocation."),
+        },
+        {
+            "id": "detections",
+            "label": "Detection Rules",
+            "description": (
+                "Curated YAML rules for identifying malicious or "
+                "suspicious activity across cloud, identity, endpoint, "
+                "network, application, and data-exfil categories."
+            ),
+        },
+        {
+            "id": "plugins",
+            "label": "Plugins",
+            "description": (
+                "Reference connectors, enrichers, actions, and "
+                "widgets shipped with both Python and Go SDK "
+                "implementations for cross-language parity."
+            ),
+        },
+    ]
+
+
+def _tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
+    """Count items per tier (stable, beta, imported, community)."""
+    counts: dict[str, int] = {}
+    for item in items:
+        tier = item.get("tier") or "stable"
+        counts[tier] = counts.get(tier, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def _detection_tier_breakdown(items: list[dict[str, Any]]) -> dict[str, int]:
+    """Count detection items per tier — the main 'are we at open-source-SIEM scale' headline."""
+    counts: dict[str, int] = {}
+    for item in items:
+        if item.get("type") != "detection":
+            continue
+        tier = item.get("tier") or "stable"
+        counts[tier] = counts.get(tier, 0) + 1
+    return dict(sorted(counts.items()))
+
+
+def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compute MITRE ATT&CK coverage across detections + playbooks.
+
+    Returns aggregate counts per technique plus a per-tier breakdown so the
+    UI can render a stacked coverage matrix (native vs imported vs community)
+    rather than a single flat number.
+    """
+    techniques: dict[str, int] = {}
+    executable_techniques: dict[str, int] = {}
+    by_tier: dict[str, dict[str, int]] = {}
+    for item in items:
+        tier = item.get("tier") or "stable"
+        runs = bool(item.get("executable", True))
+        for tid in item.get("mitre_techniques") or []:
+            techniques[tid] = techniques.get(tid, 0) + 1
+            if runs:
+                executable_techniques[tid] = executable_techniques.get(tid, 0) + 1
+            tier_map = by_tier.setdefault(tier, {})
+            tier_map[tid] = tier_map.get(tid, 0) + 1
+
+    return {
+        # The headline. A technique counts only when a rule that can actually
+        # fire carries the tag, because the previous figure counted every
+        # rule on disk including the reference-only ones, and a reader takes
+        # a coverage number as a statement about what the product detects.
+        "unique_techniques": len(executable_techniques),
+        "techniques": dict(sorted(executable_techniques.items())),
+        "total_with_mitre": sum(1 for i in items if i.get("mitre_techniques") and i.get("executable", True)),
+        # Kept, clearly named, because the on-disk corpus is a real thing a
+        # reader may want to size. It is not coverage.
+        "unique_techniques_all_rules": len(techniques),
+        "techniques_all_rules": dict(sorted(techniques.items())),
+        # This is tag coverage, not detection efficacy: it says a rule claims
+        # the technique, not that the rule would catch an attacker using it.
+        "measure": "attack_technique_tags_on_executable_rules",
+        "by_tier": {tier: dict(sorted(tids.items())) for tier, tids in by_tier.items()},
+    }
+
+
+def _attach_content_hashes(items: list[dict[str, Any]]) -> None:
+    """Record each item's SHA-256 in the index itself.
+
+    Install used to hash the file on disk, which meant the API needed the
+    `detections/`, `playbooks/` and `plugins/` trees at runtime. Its image is
+    built from `services/api` and contains none of them, so an install in any
+    container failed even once the index was found. Carrying the digest here
+    makes the index self-describing and removes the dependency entirely.
+
+    A missing file is recorded as `None` rather than skipped, so the parity
+    gate can report it instead of the index quietly describing fewer items
+    than it lists.
+    """
+    for item in items:
+        relative = item.get("path")
+        if not isinstance(relative, str):
+            item["sha256"] = None
+            continue
+        source = REPO_ROOT / relative
+        item["sha256"] = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+
+
+def _assert_unique_identities(items: list[dict[str, Any]]) -> None:
+    """Refuse to emit an index where two entries answer to the same identity.
+
+    ``(type, id)`` is the identity every consumer keys on, and two entries
+    sharing one breaks all of them in different ways. The console keys its
+    grid children on it, and React maps old fibers by key when it reconciles:
+    a second fiber with the same key overwrites the first in that map, so the
+    overwritten one is never handed to ``deleteChild`` and stays mounted
+    through every later render. Two installable playbooks therefore survived
+    into the ``Reference only`` view, which by definition holds nothing
+    installable, and the grid rendered more children than its own header
+    counted. ``POST /v1/marketplace/install`` resolves ``(type, id)`` by first
+    match, so the entry a reader clicked was not necessarily the one that got
+    installed — a different document, a different step count, a different
+    content hash.
+
+    Both collisions in the shipped index were between the v1 pack tree and the
+    standalone response playbooks under ``detections/playbooks/``, which use
+    the same ``<slug>-v1`` convention in slug spaces that happened to overlap.
+    """
+    seen: dict[tuple[str, str], str] = {}
+    collisions: list[str] = []
+    for item in items:
+        identity = (str(item.get("type")), str(item.get("id")))
+        path = str(item.get("path") or "<no path>")
+        if identity in seen:
+            collisions.append(f"  {identity[0]}:{identity[1]}\n    {seen[identity]}\n    {path}")
+        else:
+            seen[identity] = path
+    if collisions:
+        raise SystemExit("marketplace: two entries share a (type, id); every consumer keys on it.\n" + "\n".join(collisions))
+
+
+def build_index() -> dict[str, Any]:
+    items = collect_items()
+    items.sort(key=lambda i: (i["type"], i.get("id", "")))
+    _assert_unique_identities(items)
+    _attach_content_hashes(items)
+    return {
+        "$schema": "https://example.com/schemas/marketplace/v1.json",
+        "version": "1.0.0",
+        "generated": dt.datetime.now(dt.UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+        "categories": categories_block(items),
+        "stats": {
+            "total": len(items),
+            "playbooks": sum(1 for i in items if i["type"] == "playbook"),
+            # The v1 pack alone. Quoted on the landing page as "N playbook
+            # packs", so it must not absorb the standalone response playbooks
+            # under `detections/playbooks/`, which are playbooks but not part
+            # of the pack.
+            "playbook_packs": sum(1 for i in items if i["type"] == "playbook" and i.get("pack")),
+            "detections": sum(1 for i in items if i["type"] == "detection"),
+            "plugins": sum(1 for i in items if i["type"] == "plugin"),
+            "verified": sum(1 for i in items if i.get("verified")),
+            "community": sum(1 for i in items if i.get("source") == "community"),
+            "by_tier": _tier_breakdown(items),
+            "detections_by_tier": _detection_tier_breakdown(items),
+            # The split a reader of this catalogue needs, and the one it did
+            # not have. `quarantined` counted rows carrying a
+            # `quarantine_reason` — 4,213 against 4,388 rules the engine does
+            # not load — so the published figure and the truth table's were
+            # two numbers nothing compared.
+            #
+            # Both read `executable`, which is membership of the engine's
+            # loaded rule set, so they partition the catalogue: every item is
+            # one or the other and they sum to `total`. Playbooks and plugins
+            # are not engine rules and carry no `executable` field, so they
+            # default to the executable side — they are shipped, installable
+            # content, and calling them non-executable would be its own
+            # falsehood.
+            "executable": sum(1 for i in items if i.get("executable", True)),
+            "quarantined": sum(1 for i in items if not i.get("executable", True)),
+            # The three states, reported separately because the single
+            # `executable` figure above conflates two different things and a
+            # reader of a marketplace index takes it as a detection count.
+            # It reads 2,767 while the item flags say 2,603, and the 164 in
+            # between are the playbooks and plugins described above, which
+            # carry no flag at all. Both numbers are defensible; publishing
+            # only one of them and calling it `executable` is not.
+            "executable_detections": sum(1 for i in items if i.get("executable") is True),
+            "reference_only_detections": sum(1 for i in items if i.get("executable") is False),
+            "not_a_detection": sum(1 for i in items if "executable" not in i),
+        },
+        "mitre_coverage": coverage_block(items),
+        "items": items,
+    }
+
+
+def write_index(index: dict[str, Any]) -> None:
+    payload = json.dumps(index, indent=2, sort_keys=False) + "\n"
+    for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED):
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        # `newline="\n"` is not cosmetic. Text-mode writes on Windows turn
+        # every `\n` into `\r\n`, so this 11 MB file came out with 256k CRLF
+        # line endings and every line of it showed as changed against the
+        # copy CI builds on Linux. `marketplace:check` could not catch it:
+        # it read the file back in text mode, which translates the endings
+        # away, so the two halves agreed on content written by different
+        # rules. The check below now compares bytes for that reason.
+        destination.write_text(payload, encoding="utf-8", newline="\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero if the on-disk index does not match the build.",
+    )
+    parser.add_argument(
+        "--print",
+        dest="print_only",
+        action="store_true",
+        help="Print built index to stdout instead of writing files.",
+    )
+    args = parser.parse_args()
+
+    index = build_index()
+    serialised = json.dumps(index, indent=2, sort_keys=False) + "\n"
+
+    if args.print_only:
+        sys.stdout.write(serialised)
+        return 0
+
+    if args.check:
+        # Every destination write_index() writes. It used to check two of the
+        # three, so `marketplace:check` reported "up to date" while the copy
+        # inside the API's Docker build context was stale or absent — the
+        # state that made the marketplace answer 503 in every container
+        # (discussion #374). A check that verifies fewer places than the
+        # writer writes is one that certifies the case it cannot see.
+        # Read bytes, not text. A text read translates CRLF to LF, so a file
+        # written on Windows compared equal to one built here while differing
+        # from the committed copy in every line. Line endings are part of what
+        # this gate publishes, so they are part of what it checks.
+        existing = {
+            destination: (destination.read_bytes() if destination.exists() else b"")
+            for destination in (OUTPUT_PRIMARY, OUTPUT_PUBLIC, OUTPUT_API_PACKAGED)
+        }
+
+        # Compare ignoring `generated` timestamp.
+        def _strip_generated(s: str | bytes) -> str:
+            if not s:
+                return ""
+            try:
+                obj = json.loads(s)
+            except Exception:
+                return s.decode("utf-8", "replace") if isinstance(s, bytes) else s
+            obj.pop("generated", None)
+            return json.dumps(obj, indent=2, sort_keys=False) + "\n"
+
+        rebuilt_no_ts = _strip_generated(serialised)
+        stale = [
+            str(destination.relative_to(REPO_ROOT))
+            for destination, content in existing.items()
+            # `b"\r"` in the raw bytes: same JSON, different line endings, and
+            # the committed file is LF. Comparing parsed JSON alone accepted it.
+            if _strip_generated(content) != rebuilt_no_ts or b"\r" in content
+        ]
+        if stale:
+            # Named, because "the index is stale" sent people to the one they
+            # already had open rather than the one that was actually wrong.
+            print(
+                f"stale or missing: {', '.join(stale)}. Run: pnpm marketplace:sync",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"marketplace index is up to date in {len(existing)} locations ({index['stats']['total']} items).")
+        return 0
+
+    write_index(index)
+    print(
+        f"Wrote marketplace index: total={index['stats']['total']} "
+        f"detections={index['stats']['detections']} "
+        f"playbooks={index['stats']['playbooks']} "
+        f"plugins={index['stats']['plugins']} "
+        f"mitre_techniques={index['mitre_coverage']['unique_techniques']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

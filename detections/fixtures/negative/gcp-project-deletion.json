@@ -1,0 +1,5 @@
+{
+  "method_name": "UndeleteProject",
+  "principal": "user@corp.com",
+  "project": "prod-revenue"
+}

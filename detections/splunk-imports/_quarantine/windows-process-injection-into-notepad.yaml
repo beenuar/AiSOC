@@ -1,0 +1,45 @@
+id: splunk-security-content-b8340d0f-ba48-4391-bea7-9e793c5aae36
+name: Windows Process Injection into Notepad
+description: The following analytic detects process injection into Notepad.exe using
+  Sysmon EventCode 10. It identifies suspicious GrantedAccess requests (0x40 and 0x1fffff)
+  to Notepad.exe, excluding common system paths like System32, Syswow64, and Program
+  Files. This behavior is often associated with the SliverC2 framework by BishopFox.
+  Monitoring this activity is crucial as it may indicate an initial payload attempting
+  to execute malicious code within Notepad.exe. If confirmed malicious, this could
+  allow attackers to execute arbitrary code, potentially leading to privilege escalation
+  or persistent access within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055.002
+  categories:
+  - endpoint
+references:
+- https://dominicbreuker.com/post/learning_sliver_c2_08_implant_basics/
+- https://www.cybereason.com/blog/sliver-c2-leveraged-by-many-threat-actors
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=10 TargetImage IN (*\\notepad.exe) NOT (SourceImage
+    IN ("*\\system32\\*","*\\syswow64\\*","*\\Program Files\\*")) GrantedAccess IN
+    ("0x40","0x1fffff") | stats count min(_time) as firstTime max(_time) as lastTime
+    by CallTrace EventID GrantedAccess Guid Opcode ProcessID SecurityID SourceImage
+    SourceProcessGUID SourceProcessId TargetImage TargetProcessGUID TargetProcessId
+    UserID dest granted_access parent_process_exec parent_process_guid parent_process_id
+    parent_process_name parent_process_path process_exec process_guid process_id process_name
+    process_path signature signature_id user_id vendor_product | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_process_injection_into_notepad_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b8340d0f-ba48-4391-bea7-9e793c5aae36
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_process_injection_into_notepad.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

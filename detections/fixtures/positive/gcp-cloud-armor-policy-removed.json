@@ -1,0 +1,4 @@
+{
+  "method_name": "v1.compute.securityPolicies.delete",
+  "principal_email": "attacker@example.com"
+}

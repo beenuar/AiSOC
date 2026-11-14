@@ -1,0 +1,27 @@
+title: Mass File Rename on Clinical File Share Suggesting Ransomware
+id: aisoc-vt-hlth-0004-ransomware-clinical-share
+status: experimental
+description: |
+  Burst of file renames or extension changes on a file share tagged as
+  clinical (radiology PACS exports, lab reports, imaging archives)
+  above the per-share calibration baseline. Healthcare ransomware
+  almost always touches these shares first because they hold the
+  business-critical imaging and reports.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: windows
+  service: fileshare
+tags:
+  - attack.t1486
+  - attack.impact
+  - aisoc.vertical.healthcare
+  - aisoc.ransomware
+detection:
+  selection:
+    event.module: windows.fileshare
+    event.action: 'file.renamed'
+    share.classification: 'clinical'
+  threshold:
+    renames_per_minute|gte: 100
+  condition: selection and threshold

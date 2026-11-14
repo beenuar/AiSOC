@@ -1,0 +1,42 @@
+id: splunk-security-content-5e0b1936-8f99-4399-8ee2-9edc5b32e170
+name: Windows Screen Capture Via Powershell
+description: The following analytic detects the execution of a PowerShell script designed
+  to capture screen images on a host. It leverages PowerShell Script Block Logging
+  to identify specific script block text patterns associated with screen capture activities.
+  This behavior is significant as it may indicate an attempt to exfiltrate sensitive
+  information by capturing desktop screenshots. If confirmed malicious, this activity
+  could allow an attacker to gather visual data from the compromised system, potentially
+  leading to data breaches or further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1113
+  categories:
+  - endpoint
+references:
+- https://twitter.com/_CERT_UA/status/1620781684257091584
+- https://cert.gov.ua/article/3761104
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell`\nEventCode=4104\nScriptBlockText IN (\n    \"*[Drawing.Graphics]::FromImage*\"\
+    ,\n    \"*Drawing.Bitmap*\",\n    \"*Graphics.FromImage*\"\n)\nScriptBlockText\
+    \ = \"*.CopyFromScreen*\"\n| fillnull\n| stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n  BY dest signature signature_id\n     user_id vendor_product EventID\n\
+    \     Guid Opcode Name\n     Path ProcessID ScriptBlockId\n     ScriptBlockText\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_screen_capture_via_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5e0b1936-8f99-4399-8ee2-9edc5b32e170
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_screen_capture_via_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

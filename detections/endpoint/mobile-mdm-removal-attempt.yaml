@@ -1,0 +1,23 @@
+id: det-endpoint-260
+name: MDM Profile Removal Attempted
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'MDM Profile Removal
+  Attempted'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562
+- tlp.white
+category: endpoint
+log_source:
+  product: mdm
+  service: compliance
+detection:
+  condition: |
+    event_type == "profile_remove_attempt"
+false_positives:
+- Authorised offboarding
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

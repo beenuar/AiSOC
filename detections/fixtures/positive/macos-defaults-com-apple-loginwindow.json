@@ -1,0 +1,5 @@
+{
+  "argv": "write com.apple.loginwindow",
+  "event_type": "exec",
+  "process_path": "head-/defaults"
+}

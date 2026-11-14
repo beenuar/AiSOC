@@ -1,0 +1,45 @@
+id: mitre-car-car-2020-09-003
+name: Indicator Blocking - Driver Unloaded
+description: Adversaries may attempt to evade system defenses by unloading minifilter
+  drivers used by host-based sensors such as Sysmon through the use of the fltmc command-line
+  utility. Accordingly, this analytic looks for command-line invocations of this utility
+  when used to unload minifilter drivers.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - fltmc invocation
+    type: Pseudocode
+    code: "processes = search Process:Create\nfltmc_processes = filter processes where\
+      \ (\n  exe = \"fltmc.exe\" AND command_line = \"*unload*\")\noutput fltmc_processes\n"
+  - name: Splunk search - fltmc invocation
+    type: Splunk
+    code: 'index=client EventCode=1 CommandLine="*unload*" (Image="C:\\Windows\\SysWOW64\\fltMC.exe"
+      OR Image="C:\\Windows\\System32\\fltMC.exe")
+
+      '
+  - name: LogPoint search - fltmc invocation
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon command="*unload*" (image="C:\Windows\SysWOW64\fltMC.exe"
+      OR image="C:\Windows\System32\fltMC.exe")
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-09-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-09-003.yaml
+notes:
+  car_status: needs_implementation

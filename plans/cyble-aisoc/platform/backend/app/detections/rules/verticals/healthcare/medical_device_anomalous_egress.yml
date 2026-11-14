@@ -1,0 +1,27 @@
+title: Medical Device Initiated Outbound Connection to Non-Vendor IP
+id: aisoc-vt-hlth-0003-medical-device-egress
+status: experimental
+description: |
+  A network asset classified as a medical device (infusion pump, MRI,
+  imaging gateway, biomed VLAN) initiated an outbound session to an
+  address outside the allow-listed vendor service network. Biomed
+  devices should never beacon arbitrarily; this is an early IoMT
+  compromise indicator.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: network
+  service: firewall
+tags:
+  - attack.t1071
+  - attack.command_and_control
+  - aisoc.vertical.healthcare
+  - aisoc.iomt
+detection:
+  selection:
+    event.module: network.firewall
+    event.action: 'connection.allowed'
+    source.zone: 'biomed'
+  filter:
+    destination.in_vendor_allowlist: true
+  condition: selection and not filter

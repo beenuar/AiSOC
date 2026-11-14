@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "external_resolver": true,
+  "query": "wpad.local"
+}

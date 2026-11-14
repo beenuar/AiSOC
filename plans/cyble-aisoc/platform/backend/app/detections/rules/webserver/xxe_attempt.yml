@@ -1,0 +1,22 @@
+title: XML External Entity (XXE) Injection Attempt
+id: aisoc-id-ws-0010-xxe
+status: stable
+description: |
+  HTTP request body contains an XML payload declaring an external
+  DTD entity (SYSTEM "file:" or "http:"). Classic XXE pattern used
+  to read local files or trigger SSRF.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1190
+  - attack.initial_access
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  xxe:
+    http.request.body|re: '(?i)<!ENTITY\s+\S+\s+SYSTEM\s+"(file|http|https|ftp|gopher|expect|php|jar|netdoc):'
+  condition: selection and xxe

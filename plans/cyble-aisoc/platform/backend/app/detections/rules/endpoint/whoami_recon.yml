@@ -1,0 +1,31 @@
+title: Suspicious Reconnaissance via whoami / net / nltest
+id: aisoc-id-ep-0022-recon-burst
+status: experimental
+description: |
+  whoami /all, net group "domain admins", or nltest /dclist
+  executed from a single host in a short window — classic
+  early-stage hands-on-keyboard reconnaissance.
+author: Cyble AiSOC
+level: low
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1033
+  - attack.t1087.002
+  - attack.discovery
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+  recon:
+    process.command_line|contains:
+      - 'whoami /all'
+      - 'whoami /groups'
+      - 'net group "domain admins"'
+      - 'net group "enterprise admins"'
+      - 'nltest /dclist'
+      - 'nltest /domain_trusts'
+      - 'net localgroup administrators'
+  condition: selection and recon

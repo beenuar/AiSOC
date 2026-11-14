@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-.xyz-suffix",
+  "exe": "head-/wget",
+  "syscall": "execve"
+}

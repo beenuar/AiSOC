@@ -1,0 +1,185 @@
+# The TAXII 2.1 server, against real Postgres (depth plan 4.2).
+#
+# Why this is a live job rather than part of the general Python suite:
+# every property worth proving here is a boundary condition over real rows
+# with a real ordering. A mocked session answers whatever the test handed
+# it, so the off-by-one that loses a polling client's indicators — two rows
+# written by one feed poll sharing `updated_at` to the microsecond — is
+# invisible to it, and so is a missing tenant predicate on a collection
+# lookup.
+#
+# No `paths:` filter. A cross-tenant read guard must grade every pull
+# request, not only ones that touch a named path.
+name: TAXII server (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: taxii-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  taxii-live:
+    name: TAXII pages every indicator exactly once, and only this tenant's
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. POSTGRES_USER (aisoc) is a
+      # superuser and ignores every RLS policy even under FORCE ROW LEVEL
+      # SECURITY, so a suite proving tenant scoping while connected as it
+      # would pass with the policies removed.
+      TAXII_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      # The owner, used only to run migrations and to seed the fixture's
+      # two tenants — rows the runtime role is correctly not allowed to
+      # write, because its RLS WITH CHECK requires a tenant it has not
+      # been given.
+      TAXII_DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment. The suite constructs its principal
+      # directly, but a tree where `development` is in scope could grow a
+      # path that resolves an uncredentialed caller to a demo admin, and
+      # then the tenant-scoping cases would pass for the wrong reason.
+      ENVIRONMENT: test
+      SECRET_KEY: ci-taxii-signing-secret-at-least-32-chars
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite
+      # that drives real route functions pulls in the real service's whole
+      # import chain.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # Migration 110's index is what keeps a collection poll from sorting
+      # the tenant's whole store on every request. Asserted rather than
+      # assumed: a migration that ran and created nothing is the shape this
+      # repository keeps finding.
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: The paging index exists
+        run: |
+          set -euo pipefail
+          found=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM pg_indexes WHERE indexname = 'idx_ioc_taxii_paging'")
+          if [ "$found" != "1" ]; then
+            echo "FAIL: idx_ioc_taxii_paging was not created by migration 110."
+            exit 1
+          fi
+          echo "OK: idx_ioc_taxii_paging is present."
+
+      - name: Pagination, tenant scoping and the refused write
+        working-directory: services/api
+        env:
+          ISOLATION_TAXII_DSN: ${{ env.TAXII_DSN }}
+          ISOLATION_TAXII_ADMIN_DSN: ${{ env.TAXII_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.TAXII_DSN }}
+        run: python -m pytest ../../tests/isolation/test_taxii_server_live.py -v --tb=short
+
+      # The suite must not be able to pass by not running. A live job whose
+      # tests all skipped reports success and proves nothing, which this
+      # repository has shipped before.
+      - name: The suite actually ran
+        working-directory: services/api
+        env:
+          ISOLATION_TAXII_DSN: ${{ env.TAXII_DSN }}
+          ISOLATION_TAXII_ADMIN_DSN: ${{ env.TAXII_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.TAXII_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_taxii_server_live.py -q 2>&1 | tee /tmp/taxii-run.txt
+          if grep -qE '[0-9]+ skipped' /tmp/taxii-run.txt; then
+            echo "FAIL: a case skipped in the job whose whole purpose is to run it live."
+            exit 1
+          fi
+          if ! grep -qE '[0-9]+ passed' /tmp/taxii-run.txt; then
+            echo "FAIL: no case reported as passed."
+            exit 1
+          fi
+
+      # The negative control.
+      #
+      # Replace the (updated_at, id) row-value cursor with the bare
+      # timestamp comparison it replaced. Two of the fixture's indicators
+      # share updated_at to the microsecond — what one feed poll produces —
+      # so the single-row pagination walk must then lose one. Without this,
+      # a cursor that quietly stopped working would pass the suite above.
+      - name: The gate fails when the cursor compares only the timestamp
+        working-directory: services/api
+        env:
+          ISOLATION_TAXII_DSN: ${{ env.TAXII_DSN }}
+          ISOLATION_TAXII_ADMIN_DSN: ${{ env.TAXII_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.TAXII_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/api/v1/endpoints/taxii.py /tmp/taxii.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/taxii.py")
+          s = p.read_text()
+          # Built line by line rather than as a triple-quoted literal: a
+          # de-indented continuation line inside a YAML block scalar ends
+          # the block, which is a parse error in this file rather than a
+          # failure in the step.
+          needle = "\n".join([
+              "        stmt = stmt.where(",
+              "            or_(",
+              "                ThreatIntelIOC.updated_at > stamp,",
+              "                and_(ThreatIntelIOC.updated_at == stamp, ThreatIntelIOC.id > row_id),",
+              "            )",
+              "        )",
+          ])
+          if needle not in s:
+              print("negative control could not find the row-value cursor predicate; "
+                    "the pager has been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "        stmt = stmt.where(ThreatIntelIOC.updated_at > stamp)", 1))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_taxii_server_live.py::TestPagination::test_paging_one_at_a_time_yields_every_indicator_exactly_once" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/taxii.bak app/api/v1/endpoints/taxii.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: the walk passed with a timestamp-only cursor, so it does not prove the ordering."
+            exit 1
+          fi
+          echo "OK: a timestamp-only cursor loses an indicator and the walk goes red, as it must."

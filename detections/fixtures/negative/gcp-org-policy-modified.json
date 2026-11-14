@@ -1,0 +1,5 @@
+{
+  "method_name": "google.cloud.orgpolicy.v2.OrgPolicy.GetEffectivePolicy",
+  "policy": "compute.requireOsLogin",
+  "principal": "user@corp.com"
+}

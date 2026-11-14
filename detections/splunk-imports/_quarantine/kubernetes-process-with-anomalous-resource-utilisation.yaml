@@ -1,0 +1,48 @@
+id: splunk-security-content-25ca9594-7a0d-4a95-a5e5-3228d7398ec8
+name: Kubernetes Process with Anomalous Resource Utilisation
+description: The following analytic identifies high resource utilization anomalies
+  in Kubernetes processes. It leverages process metrics from an OTEL collector and
+  hostmetrics receiver, fetched via the Splunk Infrastructure Monitoring Add-on. The
+  detection uses a lookup table with average and standard deviation values to spot
+  anomalies. This activity is significant as high resource utilization can indicate
+  security threats like cryptojacking, unauthorized data exfiltration, or compromised
+  containers. If confirmed malicious, such anomalies can disrupt services, exhaust
+  resources, increase costs, and allow attackers to evade detection or maintain access.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| mstats avg(process.*) as process.* where `kubernetes_metrics` by
+    host.name k8s.cluster.name k8s.node.name process.executable.name span=10s | eval
+    key = ''k8s.cluster.name'' + ":" + ''host.name'' + ":" + ''process.executable.name''
+    | lookup k8s_process_resource_baseline key | fillnull | eval anomalies = "" |
+    foreach stdev_* [ eval anomalies =if( ''<<MATCHSTR>>'' > (''avg_<<MATCHSTR>>''
+    + 4 * ''stdev_<<MATCHSTR>>''), anomalies + "<<MATCHSTR>> higher than average by
+    " + tostring(round((''<<MATCHSTR>>'' - ''avg_<<MATCHSTR>>'')/''stdev_<<MATCHSTR>>''
+    ,2)) + " Standard Deviations. <<MATCHSTR>>=" + tostring(''<<MATCHSTR>>'') + "
+    avg_<<MATCHSTR>>=" + tostring(''avg_<<MATCHSTR>>'') + " ''stdev_<<MATCHSTR>>''="
+    + tostring(''stdev_<<MATCHSTR>>'') + ", " , anomalies) ] | eval anomalies = replace(anomalies,
+    ",\s$", "") | where anomalies!="" | stats count values(anomalies) as anomalies
+    by host.name k8s.cluster.name k8s.node.name process.executable.name | sort - count
+    | where count > 5 | rename host.name as host | `kubernetes_process_with_anomalous_resource_utilisation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 25ca9594-7a0d-4a95-a5e5-3228d7398ec8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_process_with_anomalous_resource_utilisation.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

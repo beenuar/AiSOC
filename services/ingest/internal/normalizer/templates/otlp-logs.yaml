@@ -1,0 +1,72 @@
+# OpenTelemetry Protocol (OTLP) logs.
+#
+# Used by the OTLP logs receiver in services/ingest, which accepts
+# ExportLogsServiceRequest over HTTP in both the protobuf and the JSON
+# encodings the specification defines.
+#
+# Class 1007 Process Activity, in category 1 (System Activity), for the
+# same reason syslog.yaml is: an OTLP log record is an application saying
+# something about itself. The promoter promotes category 2 unconditionally,
+# so filing routine application logs as findings would turn every line into
+# an alert, which is precisely the noise this platform exists to remove. A
+# detection rule is what turns one of these into an alert.
+#
+# The receiver flattens a record's resource attributes, scope and log
+# attributes into a single namespace before this template is applied, so a
+# rule can clause on `service.name` or any attribute the emitter set.
+#
+# References:
+#   https://opentelemetry.io/docs/specs/otlp/
+#   https://opentelemetry.io/docs/specs/otel/logs/data-model/
+id: otlp-logs
+vendor_name: OpenTelemetry
+product_name: OTLP
+class_uid: 1007
+class_name: Process Activity
+activity_id: 1
+field_map:
+  body: message
+  severity_text: metadata.labels.severity_text
+  severity_number: metadata.labels.severity_number
+  trace_id: metadata.correlation_uid
+  span_id: metadata.labels.span_id
+  scope_name: metadata.logged_by
+  host.name: device.hostname
+  service.name: actor.process.name
+  process.pid: actor.process.pid
+  event.name: metadata.event_code
+  raw: raw_data
+# OTLP severity text is free-form but the specification names these short
+# names, and emitters overwhelmingly use them. The number is the
+# authoritative field; the receiver derives this text from it when the
+# emitter left it unset, so the ladder below always has something to read.
+severity_field: severity_text
+severity_map:
+  trace: 1
+  trace2: 1
+  trace3: 1
+  trace4: 1
+  debug: 1
+  debug2: 1
+  debug3: 1
+  debug4: 1
+  info: 1
+  info2: 1
+  info3: 1
+  info4: 1
+  warn: 3
+  warn2: 3
+  warn3: 3
+  warn4: 3
+  error: 4
+  error2: 4
+  error3: 4
+  error4: 4
+  fatal: 6
+  fatal2: 6
+  fatal3: 6
+  fatal4: 6
+time_field: timestamp
+message_field: body
+constants:
+  source_type: otlp

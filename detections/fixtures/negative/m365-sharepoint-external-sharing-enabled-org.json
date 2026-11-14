@@ -1,0 +1,6 @@
+{
+  "operation": "SharingPolicyChanged",
+  "parameters": {
+    "SharingCapability": "Disabled"
+  }
+}

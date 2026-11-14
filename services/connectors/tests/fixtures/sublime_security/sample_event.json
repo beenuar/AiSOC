@@ -1,0 +1,52 @@
+[
+  {
+    "id": "msg-malicious",
+    "subject": "Invoice overdue — action required",
+    "classification": "malicious",
+    "triggered_rules": [{ "name": "Attachment: known-bad hash" }],
+    "from": { "email": "attacker@evil.test" },
+    "to": "alice@corp.test",
+    "created_at": "2026-06-01T10:00:00Z"
+  },
+  {
+    "id": "msg-suspicious",
+    "subject": "Re: payment confirmation",
+    "verdict": "suspicious",
+    "from": { "email": "unknown-sender@mail.test" },
+    "to": "bob@corp.test",
+    "created_at": "2026-06-01T10:01:00Z"
+  },
+  {
+    "id": "msg-graymail",
+    "subject": "Your weekly newsletter",
+    "classification": "graymail",
+    "from": { "email": "news@marketing.test" },
+    "to": "carol@corp.test",
+    "created_at": "2026-06-01T10:02:00Z"
+  },
+  {
+    "id": "msg-benign",
+    "subject": "Lunch tomorrow?",
+    "classification": "benign",
+    "from": { "email": "colleague@corp.test" },
+    "to": "dave@corp.test",
+    "created_at": "2026-06-01T10:03:00Z"
+  },
+  {
+    "id": "msg-bec-escalation",
+    "subject": "Urgent: update wire instructions",
+    "verdict": "spam",
+    "triggered_rules": [{ "name": "BEC: Wire Transfer Request" }],
+    "from": { "email": "ceo-spoof@evil.test" },
+    "to": "finance@corp.test",
+    "created_at": "2026-06-01T10:04:00Z"
+  },
+  {
+    "message_id": "msg-nested-review",
+    "subject": "Account verification needed",
+    "review": { "classification": "suspicious" },
+    "from_email": "phish@lookalike.test",
+    "recipient": "eve@corp.test",
+    "received_at": "2026-06-01T10:05:00Z"
+  }
+]

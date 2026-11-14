@@ -1,0 +1,25 @@
+id: det-identity-086
+name: Privileged AD Account Set With DONT_EXPIRE_PASSWORD
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Privileged AD Account
+  Set With DONT_EXPIRE_PASSWORD'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: identity
+log_source:
+  product: active-directory
+  service: audit
+detection:
+  condition: |
+    event_id == 4738
+    AND useraccountcontrol_flag_dont_expire == true
+    AND user_priv == true
+false_positives:
+- Service account by design
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

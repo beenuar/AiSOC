@@ -1,0 +1,47 @@
+id: splunk-security-content-dcfd6b40-42f9-469d-a433-2e53f7486664
+name: Detect Prohibited Applications Spawning cmd exe
+description: The following analytic detects executions of cmd.exe spawned by processes
+  that are commonly abused by attackers and do not typically launch cmd.exe. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on process GUID,
+  process name, parent process, and command-line executions. This activity is significant
+  because it may indicate an attempt to execute unauthorized commands or scripts,
+  often a precursor to further malicious actions. If confirmed malicious, this behavior
+  could lead to unauthorized code execution, privilege escalation, or persistence
+  within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count values(Processes.process)\n\
+    as process min(_time) as firstTime max(_time) as lastTime from datamodel=Endpoint.Processes\
+    \ where (Processes.process_name=cmd.exe OR Processes.original_file_name=Cmd.Exe)\n\
+    by Processes.action Processes.dest Processes.original_file_name\n   Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n   Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid Processes.process_hash\n   Processes.process_id\
+    \ Processes.process_integrity_level Processes.process_name Processes.process_path\n\
+    \   Processes.user Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    |search [\n    | inputlookup prohibited_apps_launching_cmd\n    | rename prohibited_applications\
+    \ as parent_process_name\n    | eval parent_process_name=\"*\" . parent_process_name\n\
+    \    | table parent_process_name\n  ]\n| `detect_prohibited_applications_spawning_cmd_exe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dcfd6b40-42f9-469d-a433-2e53f7486664
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_prohibited_applications_spawning_cmd_exe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

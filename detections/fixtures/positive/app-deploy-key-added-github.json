@@ -1,0 +1,5 @@
+{
+  "action": "public_key.create",
+  "actor": "user@corp.com",
+  "repo": "example-org/payments-core"
+}

@@ -1,0 +1,23 @@
+id: det-data-exfil-053
+name: Box Collaboration Role Changed
+description: Raising a collaborator from viewer to editor changes what they can take.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.COLLABORATION_ROLE_CHANGE"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

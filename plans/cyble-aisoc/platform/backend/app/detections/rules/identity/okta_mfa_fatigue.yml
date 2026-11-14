@@ -1,0 +1,27 @@
+title: Okta MFA Fatigue / Push Bombing
+id: aisoc-id-0002-okta-mfa-fatigue
+status: stable
+description: |
+  More than 5 push-MFA denies followed by an accept inside a short
+  window. Classic MFA fatigue / push bombing pattern, e.g. 2022 Uber
+  breach. Aggregation upstream produces `enrich.push_denied_count`.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1621
+  - attack.credential_access
+  - aisoc.identity
+detection:
+  burst:
+    event.module: okta
+    event.action: 'user.authentication.auth_via_mfa'
+    enrich.push_denied_count|gte: 5
+  accept:
+    event.action: 'user.authentication.auth_via_mfa'
+    event.outcome: success
+  condition: burst and accept
+falsepositives:
+  - Users in low-signal regions retrying after timeouts.

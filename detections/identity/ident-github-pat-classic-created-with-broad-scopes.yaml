@@ -1,0 +1,30 @@
+id: det-identity-154
+name: GitHub Classic PAT Created With repo+workflow+admin:org
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'GitHub Classic
+  PAT Created With repo+workflow+admin:org'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    action == "personal_access_token.create"
+    AND scopes CONTAINS_ALL ["repo", "workflow", "admin:org"]
+false_positives:
+- CI bootstrap (must be ticketed)
+playbook: tpl-persistence
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): classic-PAT creation never reaches the org
+  audit log — the documented personal_access_token.* lifecycle covers fine-grained tokens — and no audit
+  entry carries a created token''s scopes: the common `token_scopes` field describes the token that authenticated
+  the API call, not the token being created. Briefly un-retired on the strength of the gate reporting
+  `scopes` resolvable; that field reaches the namespace from llm_usage.py and from no GitHub path at all,
+  which is the blind spot the gate''s product scoping now closes.'
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

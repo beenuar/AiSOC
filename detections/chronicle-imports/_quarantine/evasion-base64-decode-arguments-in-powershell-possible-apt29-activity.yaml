@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-evasion-base64-decode-arguments-in-powershell-possible-apt29-activity
+name: evasion_base64_decode_arguments_in_powershell_possible_apt29_activity
+description: evasion_base64_decode_arguments_in_powershell_possible_apt29_activity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule evasion_base64_decode_arguments_in_powershell_possible_apt29_activity\
+    \ {\n meta:\n    author = \"Roman Ranskyi\"\n    description = \"Powershell command\
+    \ included some specific obfuscation, which may indicate attempts to bypass specific\
+    \ detection logic.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/3p8pj24VPYHD\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Defense Evasion, t1027, Execution, t1086\"\n\n \
+    \ events:\n($selection0.metadata.product_event_type = \"1\" and $selection0.target.process.command_line\
+    \ = \"'FromBase\\\\'+0x40+\\\\'String\\\\'\")\n\n  condition:\n    $selection0\n\
+    }"
+  chronicle_rule_name: evasion_base64_decode_arguments_in_powershell_possible_apt29_activity
+provenance:
+  source: chronicle/detection-rules
+  source_id: evasion_base64_decode_arguments_in_powershell_possible_apt29_activity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/evasion_base64_decode_arguments_in_powershell___possible_apt29_activity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

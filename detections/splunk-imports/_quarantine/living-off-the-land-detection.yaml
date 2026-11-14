@@ -1,0 +1,51 @@
+id: splunk-security-content-1be30d80-3a39-4df9-9102-64a467b24abc
+name: Living Off The Land Detection
+description: The following correlation identifies multiple risk events associated
+  with the "Living Off The Land" analytic story, indicating potentially suspicious
+  behavior. It leverages the Risk data model to aggregate and correlate events tagged
+  under this story, focusing on systems with a high count of distinct sources. This
+  activity is significant as it often involves the use of legitimate tools for malicious
+  purposes, making detection challenging. If confirmed malicious, this behavior could
+  allow attackers to execute code, escalate privileges, or persist within the environment
+  using trusted system utilities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1190
+  - T1059
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/living-off-the-land-threat-research-february-2022-release.html
+- https://research.splunk.com/stories/living_off_the_land/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.analyticstories=\"\
+    Living Off The Land\" All_Risk.risk_object_type=\"system\"\n  BY All_Risk.risk_object\
+    \ All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n|\
+    \ `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 5\n| `living_off_the_land_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1be30d80-3a39-4df9-9102-64a467b24abc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/living_off_the_land_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

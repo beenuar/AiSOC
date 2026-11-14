@@ -1,0 +1,66 @@
+id: splunk-security-content-1d192a47-4bd3-4c06-902d-5dbe2375ec6d
+name: Cisco SD-WAN - Peering Activity
+description: 'This analytic detects Cisco SD-WAN `control-connection-state-change`
+  events where a control connection transitions.
+
+  It extracts and highlights key triage fields including `peer-type`, `peer-system-ip`,
+  `public-ip`, and `public-port`.
+
+  Analysts should manually validate whether the `peer-system-ip` matches the expected
+  SD-WAN addressing schema and
+
+  device inventory, whether the event timing aligns with known operational activity
+  (maintenance, failover, or
+
+  planned changes), and whether the `public-ip` is an expected source for control
+  peering in the environment.
+
+  Treat `peer-type:vmanage` events with higher scrutiny, especially when peer or source
+  IP values are previously
+
+  unseen.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - network
+references:
+- https://www.cisa.gov/news-events/directives/supplemental-direction-ed-26-03-hunt-and-hardening-guidance-cisco-sd-wan-systems
+- https://blog.talosintelligence.com/uat-8616-sd-wan/
+- https://www.cisco.com/c/en/us/td/docs/routers/sdwan/configuration/Monitor-And-Maintain/monitor-maintain-book/m-alarms-events-logs.html
+- https://www.cisco.com/c/en/us/td/docs/routers/sdwan/17-x/systems-interfaces/systems-interfaces-guide-17-x/system-logging.html#config-sys-logging
+- https://sec.cloudapps.cisco.com/security/center/resources/Cisco-Catalyst-SD-WAN-HardeningGuide
+- https://sec.cloudapps.cisco.com/security/center/content/CiscoSecurityAdvisory/cisco-sa-sdwan-rpa-EHchtZk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_sd_wan_syslog`\nTERM(\"*control-connection-state-change*\")\n\
+    TERM(\"*peer-system-ip:*\")\nTERM(\"*public-ip:*\")\nTERM(\"*new-state:up*\")\n\
+    | rex field=_raw \"^(?<event_timestamp>(?:[A-Z][a-z]{2}\\s+\\d{1,2}\\s+\\d{2}:\\\
+    d{2}:\\d{2}(?:\\.\\d{3})?|[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\\
+    .\\d{1,6})?(?:Z|[+-][0-9]{2}:[0-9]{2})))\\s*:?\"\n| rex field=_raw \"^(?:[A-Z][a-z]{2}\\\
+    s+\\d{1,2}\\s+\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{3})?\\s*:?\\s+)(?<prefix_host>[^\\\
+    s:]+)\\s+\\S+(?:\\[\\d+\\])?:\\s+%\"\n| eval dest=coalesce(prefix_host, legacy_host,\
+    \ device_name, host)\n| rex field=_raw \"new-state:(?<new_state>\\S+)\"\n| rex\
+    \ field=_raw \"peer-type:(?<peer_type>\\S+)\"\n| rex field=_raw \"peer-system-ip:(?<peer_system_ip>\\\
+    S+)\"\n| rex field=_raw \"public-ip:(?<public_ip>\\S+)\"\n| rex field=_raw \"\
+    public-port:(?<public_port>\\d+)\"\n\n| where isnotnull(peer_type) AND isnotnull(peer_system_ip)\n\
+    \n| stats count max(event_timestamp) as event_time\n              values(public_ip)\
+    \ as public_ips\n              values(public_port) as public_ports\n  by peer_type\
+    \ peer_system_ip dest new_state\n\n| table event_time dest peer_type peer_system_ip\n\
+    \        public_ips public_ports count\n| `cisco_sd_wan___peering_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1d192a47-4bd3-4c06-902d-5dbe2375ec6d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_sd_wan___peering_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

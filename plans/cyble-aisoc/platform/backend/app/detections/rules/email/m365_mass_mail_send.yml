@@ -1,0 +1,23 @@
+title: M365 User Mass Mail Send Anomaly
+id: aisoc-id-em-0010-mass-send
+status: stable
+description: |
+  M365 user sent abnormally high volume of outbound mail in a short
+  window — strong indicator of compromised account being used for
+  internal phishing or external spam relay.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: m365
+  service: exchange
+tags:
+  - attack.t1566
+  - attack.collection
+  - aisoc.email
+detection:
+  selection:
+    event.module: m365
+    email.direction: 'outbound'
+  spike:
+    enrich.email.outbound_per_hour|gte: 200
+  condition: selection and spike

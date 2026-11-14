@@ -1,0 +1,43 @@
+id: splunk-security-content-313681a2-da8e-11eb-adad-acde48001122
+name: Print Spooler Adding A Printer Driver
+description: The following analytic detects the addition of new printer drivers by
+  monitoring Windows PrintService operational logs, specifically EventCode 316. This
+  detection leverages log data to identify messages indicating the addition or update
+  of printer drivers, such as "kernelbase.dll" and "UNIDRV.DLL." This activity is
+  significant as it may indicate exploitation attempts related to vulnerabilities
+  like CVE-2021-34527 (PrintNightmare). If confirmed malicious, attackers could gain
+  code execution or escalate privileges, potentially compromising the affected system.
+  Immediate isolation and investigation of the endpoint are recommended.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.012
+  categories:
+  - endpoint
+references:
+- https://twitter.com/MalwareJake/status/1410421445608476679?s=20
+- https://www.truesec.com/hub/blog/fix-for-printnightmare-cve-2021-1675-exploit-to-keep-your-print-servers-running-while-a-patch-is-not-available
+- https://www.truesec.com/hub/blog/exploitable-critical-rce-vulnerability-allows-regular-users-to-fully-compromise-active-directory-printnightmare-cve-2021-1675
+- https://www.reddit.com/r/msp/comments/ob6y02/critical_vulnerability_printnightmare_exposes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`printservice` EventCode=316 category = \"Adding a printer driver\"\
+    \ Message = \"*kernelbase.dll,*\" Message = \"*UNIDRV.DLL,*\" Message = \"*.DLL.*\"\
+    \n  | stats  count min(_time) as firstTime max(_time) as lastTime\n    BY OpCode\
+    \ EventCode ComputerName\n       Message\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `print_spooler_adding_a_printer_driver_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 313681a2-da8e-11eb-adad-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/print_spooler_adding_a_printer_driver.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,36 @@
+id: chronicle-detection-rules-draytek-preauth-remote-root-rce
+name: draytek_preauth_remote_root_rce
+description: draytek_preauth_remote_root_rce
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule draytek_preauth_remote_root_rce {\n meta:\n    author = \"\
+    Osman Demir\"\n    description = \"Detects (CVE-2020-8515) Exploit Attempts  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/IUTjrXadriLa\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"webserver\"\n   \
+    \ mitre = \"t1190, initial_access\"\n\n  events:\n($selection_one.network.http.method\
+    \ = \"POST\" and re.regex($selection_one.target.url, `.*/cgi-bin/mainfunction\\\
+    .cgi`) and $selection_one.network.http.response_code = \"200\" and re.regex($selection_one.target.url,\
+    \ `.*action=login&keyPath='/bin/cat${IFS}/etc/passwd'&loginUser=a&loginPwd=a.*`))\n\
+    \n  condition:\n    $selection_one\n}"
+  chronicle_rule_name: draytek_preauth_remote_root_rce
+provenance:
+  source: chronicle/detection-rules
+  source_id: draytek_preauth_remote_root_rce
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/proactive_exploit_detection/webserver/draytek_pre_auth_remote_root_rce.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

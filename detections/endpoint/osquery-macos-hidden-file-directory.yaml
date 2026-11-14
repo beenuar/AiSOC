@@ -1,0 +1,24 @@
+id: det-endpoint-288
+name: macOS Hidden File or Directory Created
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Hidden File
+  or Directory Created'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1564.001
+- tlp.white
+category: endpoint
+log_source:
+  product: osquery
+  service: processes
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ANY ["chflags hidden", "xattr -wx com.apple"]
+false_positives:
+- Developer setting extended attributes for application bundle
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

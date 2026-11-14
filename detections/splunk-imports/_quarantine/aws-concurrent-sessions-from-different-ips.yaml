@@ -1,0 +1,44 @@
+id: splunk-security-content-51c04fdb-2746-465a-b86e-b413a09c9085
+name: AWS Concurrent Sessions From Different Ips
+description: The following analytic identifies an AWS IAM account with concurrent
+  sessions originating from more than one unique IP address within a 5-minute window.
+  It leverages AWS CloudTrail logs, specifically the `DescribeEventAggregates` event,
+  to detect this behavior. This activity is significant as it may indicate a session
+  hijacking attack, where an adversary uses stolen session cookies to access AWS resources
+  from a different location. If confirmed malicious, this could allow unauthorized
+  access to sensitive corporate resources, leading to potential data breaches or further
+  exploitation within the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1185/
+- https://breakdev.org/evilginx-2-next-generation-of-phishing-2fa-tokens/
+- https://github.com/kgretzky/evilginx2
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName = DescribeEventAggregates src_ip!=\"AWS Internal\"\
+    \n  | bin span=5m _time\n  | rename user_name as user\n  | stats min(_time) as\
+    \ firstTime max(_time) as lastTime values(user_agent) as user_agent values(signature)\
+    \ as signature values(src) as src values(dest) as dest dc(src) as distinct_ip_count\n\
+    \    BY _time user vendor_account\n       vendor_region vendor_product\n  | where\
+    \ distinct_ip_count > 1\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_concurrent_sessions_from_different_ips_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 51c04fdb-2746-465a-b86e-b413a09c9085
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_concurrent_sessions_from_different_ips.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

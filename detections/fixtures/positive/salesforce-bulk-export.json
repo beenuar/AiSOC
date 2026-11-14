@@ -1,0 +1,6 @@
+{
+  "actor": "user@corp.com",
+  "actor_in_export_allowlist": false,
+  "event_type": "DataExport",
+  "row_count": 500000
+}

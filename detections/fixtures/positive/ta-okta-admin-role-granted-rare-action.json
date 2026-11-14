@@ -1,0 +1,8 @@
+{
+  "baseline_action_rarity": 0.999,
+  "event_type": "user.account.privilege.grant",
+  "outcome": "SUCCESS",
+  "role": "SUPER_ADMIN",
+  "target_user": "contractor-7@example.com",
+  "user": "ken.o@example.com"
+}

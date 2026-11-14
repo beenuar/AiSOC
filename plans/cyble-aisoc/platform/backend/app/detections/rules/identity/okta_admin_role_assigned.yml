@@ -1,0 +1,27 @@
+title: Okta Super Admin or Org Admin Role Assigned
+id: aisoc-id-id-0017-okta-admin-role
+status: stable
+description: |
+  User granted Okta Super Admin, Org Admin, or App Admin role.
+  Privilege escalation event that needs immediate review for any
+  unexpected assignment.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1098.003
+  - attack.privilege_escalation
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action: 'user.account.privilege.grant'
+  admin_role:
+    okta.target.role|contains:
+      - 'SUPER_ADMIN'
+      - 'ORG_ADMIN'
+      - 'APP_ADMIN'
+      - 'USER_ADMIN'
+  condition: selection and admin_role

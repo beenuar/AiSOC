@@ -1,0 +1,42 @@
+id: splunk-security-content-f8b482f4-6d62-49fa-a905-dfa15698317b
+name: Windows Powershell Cryptography Namespace
+description: The following analytic detects suspicious PowerShell script execution
+  involving the cryptography namespace via EventCode 4104. It leverages PowerShell
+  Script Block Logging to identify scripts using cryptographic functions, excluding
+  common hashes like SHA and MD5. This activity is significant as it is often associated
+  with malware that decrypts or decodes additional malicious payloads. If confirmed
+  malicious, this could allow an attacker to execute further code, escalate privileges,
+  or establish persistence within the environment. Analysts should investigate the
+  parent process, decrypted data, network connections, and the user executing the
+  script.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.asyncrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*System.Security.Cryptography*\"\
+    \ AND NOT(ScriptBlockText IN (\"*SHA*\", \"*MD5*\", \"*DeriveBytes*\"))\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_powershell_cryptography_namespace_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f8b482f4-6d62-49fa-a905-dfa15698317b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_cryptography_namespace.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

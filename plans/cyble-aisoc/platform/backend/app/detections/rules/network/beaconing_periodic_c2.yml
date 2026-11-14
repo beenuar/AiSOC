@@ -1,0 +1,23 @@
+title: Periodic Outbound Beaconing
+id: aisoc-id-nw-0004-beacon
+status: stable
+description: |
+  Repeated outbound connections to the same external destination at
+  regular intervals with low jitter — classic command-and-control
+  beacon (Cobalt Strike, Sliver, Brute Ratel).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1071.001
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'outbound'
+  beacon:
+    enrich.flow.beacon_score|gte: 85
+  condition: selection and beacon

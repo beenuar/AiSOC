@@ -1,0 +1,29 @@
+title: Traffic Crossed IT to OT Boundary Without DMZ Hop
+id: aisoc-vt-mfg-0002-it-ot-dmz-violation
+status: experimental
+description: |
+  Network flow observed from an IT-zone host directly to an OT-zone
+  host (Purdue Level 2 or below) without traversing the DMZ jump
+  proxy. Violates the Purdue reference model boundary and is one of
+  the highest-confidence ICS-pivot indicators.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t0859
+  - attack.lateral_movement
+  - aisoc.vertical.manufacturing
+  - aisoc.ics
+detection:
+  selection:
+    event.module: network.flow
+    source.zone: 'it'
+    destination.zone|in:
+      - 'ot.l2'
+      - 'ot.l1'
+      - 'ot.l0'
+  filter:
+    flow.via_dmz_proxy: true
+  condition: selection and not filter

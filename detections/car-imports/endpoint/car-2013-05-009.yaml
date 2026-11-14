@@ -1,0 +1,67 @@
+id: mitre-car-car-2013-05-009
+name: Running executables with same hash and different names
+description: 'Executables are generally not renamed, thus a given hash of an executable
+  should only have ever one name. Identifying instances where multiple process names
+  share the same hash may find cases where tools are copied by attackers to different
+  folders or hosts to [avoid detection](https://attack.mitre.org/tactics/TA0005).
+
+
+  Although this analytic was initially based on MD5 hashes, it is equally applicable
+  to any hashing convention.
+
+
+  ### Output Description
+
+
+  A list of hashes and the different executables associated with each one'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Basic Query
+    type: splunk
+    code: index=__your_sysmon_index__ EventCode=1|stats dc(Hashes) as Num_Hashes values(Hashes)
+      as "Hashes" by Image|where Num_Hashes > 1
+  - name: Sigma/Sysmon
+    type: Sigma
+    code: ''
+  - name: Sigma (renamed powershell)
+    type: Sigma
+    code: ''
+  - name: Sigma (renamed paexec)
+    type: Sigma
+    code: ''
+  - name: ''
+    type: DNIF
+    code: '_fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 group
+      count_unique $App, $HashMD5 limit 100
+
+      >>_agg count_unique $HashMD5
+
+      >>_checkif int_compare count_unique > 1 include'
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1
+
+      | chart distinct_count(hash) as cnt by image
+
+      | search cnt > 1'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-05-009
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-05-009.yaml
+notes:
+  car_status: needs_implementation

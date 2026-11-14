@@ -1,0 +1,6 @@
+{
+  "operation": "Set-CsTenantFederationConfiguration",
+  "parameters": {
+    "AllowFederatedUsers": "False"
+  }
+}

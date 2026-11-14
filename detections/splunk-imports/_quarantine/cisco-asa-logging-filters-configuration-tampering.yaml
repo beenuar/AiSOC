@@ -1,0 +1,53 @@
+id: splunk-security-content-b87b48a8-6d1a-4280-9cf1-16a950dbf901
+name: Cisco ASA - Logging Filters Configuration Tampering
+description: 'This analytic detects tampering with logging filter configurations on
+  Cisco ASA devices via CLI or ASDM.
+
+  Adversaries may reduce logging levels or disable specific log categories to evade
+  detection, hide their activities, or prevent security monitoring systems from capturing
+  evidence of their actions. By lowering logging verbosity, attackers can operate
+  with reduced visibility to security teams.
+
+  The detection monitors for logging configuration commands (message ID 111008 or
+  111010) that modify logging destinations (asdm, console, history, mail, monitor,
+  trap) without setting them to higher severity levels (5-notifications, 6-informational,
+  7-debugging), which may indicate an attempt to reduce logging verbosity.
+
+  Investigate unauthorized logging configuration changes that reduce verbosity, especially
+  changes performed by non-administrative accounts, during unusual hours, or without
+  corresponding change management approval.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/asa-cli-reference/I-R/asa-command-ref-I-R/m_log-lz.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111008, 111010)\ncommand = \"logging *\"\
+    \ncommand IN (\n  \"*asdm*\",\n  \"*console*\",\n  \"*history*\",\n  \"*mail*\"\
+    ,\n  \"*monitor*\",\n  \"*trap*\"\n)\nNOT command IN (\n  \"*notifications*\"\
+    ,\n  \"*informational*\",\n  \"*debugging*\",\n  \"* 5*\",\n  \"* 6*\",\n  \"\
+    * 7*\"\n)\n| fillnull\n| stats count\n        earliest(_time) as firstTime\n \
+    \       latest(_time) as lastTime\n        values(user) as user\n        values(action)\
+    \ as action\n        values(message_id) as message_id\n        values(command)\
+    \ as command\n        values(src_ip) as src_ip\n        values(process_name) as\
+    \ process_name\n  by host\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_asa___logging_filters_configuration_tampering_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b87b48a8-6d1a-4280-9cf1-16a950dbf901
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___logging_filters_configuration_tampering.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

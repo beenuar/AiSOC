@@ -1,0 +1,26 @@
+id: det-threat-anomaly-011
+name: Conditional Access Policy Changed by a Rare Actor
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'Conditional
+  Access Policy Changed by a Rare Actor'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556.009
+- mitre.attack.t1484.002
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: azure
+  service: entra
+detection:
+  condition: |
+    operation CONTAINS "conditional access policy"
+    AND baseline_action_rarity >= 0.95
+false_positives:
+- A planned policy rollout
+- A delegated owner during a change freeze exception
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

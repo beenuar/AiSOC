@@ -1,0 +1,48 @@
+id: splunk-security-content-178d696d-6dc6-4ee8-9d25-93fee34eaf5b
+name: Azure Automation Runbook Created
+description: The following analytic detects the creation of a new Azure Automation
+  Runbook within an Azure tenant. It leverages Azure Audit events, specifically the
+  Azure Activity log category, to identify when a new Runbook is created or updated.
+  This activity is significant because adversaries with privileged access can use
+  Runbooks to maintain persistence, escalate privileges, or execute malicious code.
+  If confirmed malicious, this could lead to unauthorized actions such as creating
+  Global Administrators, executing code on VMs, and compromising the entire Azure
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/automation/overview
+- https://docs.microsoft.com/en-us/azure/automation/automation-runbook-types
+- https://docs.microsoft.com/en-us/azure/automation/manage-runbooks
+- https://www.inversecos.com/2021/12/how-to-detect-malicious-azure.html
+- https://www.netspi.com/blog/technical/cloud-penetration-testing/maintaining-azure-persistence-via-automation-accounts/
+- https://microsoft.github.io/Azure-Threat-Research-Matrix/Persistence/AZT503/AZT503-3/
+- https://attack.mitre.org/techniques/T1136/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_audit` operationName.value=\"Microsoft.Automation/automationAccounts/runbooks/write\"\
+    \ object!=AzureAutomationTutorial* status.value=Succeeded\n  | dedup object\n\
+    \  | rename claims.ipaddr as src, subscriptionId as vendor_account, operationName.value\
+    \ as operationName\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product object\n       object_path\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_automation_runbook_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 178d696d-6dc6-4ee8-9d25-93fee34eaf5b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_automation_runbook_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

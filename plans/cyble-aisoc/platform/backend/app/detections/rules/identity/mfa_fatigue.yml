@@ -1,0 +1,27 @@
+title: MFA Push Fatigue Pattern
+id: aisoc-id-id-0023-mfa-fatigue
+status: stable
+description: |
+  Repeated MFA push notifications denied by the same user in a
+  short window followed by an eventual approval — consistent
+  with MFA fatigue / push bombing used to bypass MFA after
+  credential compromise.
+author: Cyble AiSOC
+level: critical
+logsource:
+  category: authentication
+tags:
+  - attack.t1621
+  - attack.credential_access
+  - aisoc.identity
+detection:
+  selection:
+    event.action:
+      - 'mfa_challenge'
+      - 'mfa_push'
+      - 'AuthenticationMethod'
+  fatigue:
+    enrich.push_denied_count|gte: 5
+  approval:
+    event.outcome: 'success'
+  condition: selection and fatigue and approval

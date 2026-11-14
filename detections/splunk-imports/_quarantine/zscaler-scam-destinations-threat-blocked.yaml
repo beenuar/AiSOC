@@ -1,0 +1,38 @@
+id: splunk-security-content-a0c21379-f4ba-4bac-a958-897e260f964a
+name: Zscaler Scam Destinations Threat Blocked
+description: The following analytic identifies blocked scam-related activities detected
+  by Zscaler within a network. It leverages web proxy logs to examine actions flagged
+  as scam threats, focusing on data points such as device owner, user, URL category,
+  destination URL, and IP. This detection is significant for SOC as it helps in the
+  early identification and mitigation of scam activities, ensuring network safety.
+  If confirmed malicious, this activity could indicate attempts to deceive users,
+  potentially leading to data theft or financial loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` action=blocked threatname=*scam*\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY action deviceowner user\n      \
+    \ urlcategory url src\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `zscaler_scam_destinations_threat_blocked_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a0c21379-f4ba-4bac-a958-897e260f964a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_scam_destinations_threat_blocked.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

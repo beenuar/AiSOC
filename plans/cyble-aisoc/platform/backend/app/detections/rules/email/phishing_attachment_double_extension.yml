@@ -1,0 +1,23 @@
+title: Email Attachment With Double Extension
+id: aisoc-id-em-0003-double-ext
+status: stable
+description: |
+  Inbound email contains an attachment whose filename uses a double
+  extension (e.g. invoice.pdf.exe) — historic but still effective
+  social-engineering trick to disguise executables.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: email_gateway
+  service: messagetrace
+tags:
+  - attack.t1566.001
+  - attack.initial_access
+  - aisoc.email
+detection:
+  selection:
+    event.category: 'email'
+    email.direction: 'inbound'
+  double_ext:
+    email.attachment.name|re: '\.(pdf|doc|docx|xls|xlsx|jpg|png|txt|zip)\.(exe|scr|js|vbs|hta|bat|cmd|ps1|lnk)$'
+  condition: selection and double_ext

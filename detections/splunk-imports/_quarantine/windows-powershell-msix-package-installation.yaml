@@ -1,0 +1,49 @@
+id: splunk-security-content-d2f77901-dbfa-42d9-8af7-dcd0f1a50a2f
+name: Windows PowerShell MSIX Package Installation
+description: The following analytic detects the execution of PowerShell commands to
+  install unsigned AppX packages using Add-AppxPackage or Add-AppPackage cmdlets with
+  the -AllowUnsigned flag. This detection leverages PowerShell Script Block Logging
+  (EventCode=4104) to capture the full command content. This activity is significant
+  as adversaries may use unsigned AppX packages to install malicious applications,
+  bypass security controls, or establish persistence. If confirmed malicious, this
+  could allow attackers to install unauthorized applications that may contain malware,
+  backdoors, or other malicious components.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1547.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/msix/package/unsigned-package
+- https://learn.microsoft.com/en-us/windows/msix/desktop/powershell-msix-cmdlets
+- https://learn.microsoft.com/en-us/powershell/module/appx/add-appxpackage
+- https://twitter.com/WindowsDocs/status/1620078135080325122
+- https://attack.mitre.org/techniques/T1059/001/
+- https://attack.mitre.org/techniques/T1547/001/
+- https://learn.microsoft.com/en-us/powershell/module/appx/add-appxpackage?view=windowsserver2025-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN(\"*Add-AppPackage *\"\
+    , \"*Add-AppxPackage *\") AND ScriptBlockText IN (\"* -AllowUnsigned*\")\n  |\
+    \ fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n \
+    \   BY dest signature signature_id\n       user_id vendor_product EventID\n  \
+    \     Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powershell_msix_package_installation_filter`\n  | `windows_powershell_msix_package_installation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d2f77901-dbfa-42d9-8af7-dcd0f1a50a2f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_msix_package_installation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

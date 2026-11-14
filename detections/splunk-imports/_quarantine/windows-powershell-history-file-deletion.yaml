@@ -1,0 +1,43 @@
+id: splunk-security-content-f1369394-48e1-4327-bf6d-14377f4b8687
+name: Windows Powershell History File Deletion
+description: The following analytic detects the usage of PowerShell to delete its
+  command history file, which may indicate an attempt to evade detection by removing
+  evidence of executed commands. PowerShell stores command history in ConsoleHost_history.txt
+  under the user’s profile directory. Adversaries or malicious scripts may delete
+  this file using Remove-Item, del, or similar commands. This detection focuses on
+  file deletion events targeting the history file, correlating them with recent PowerShell
+  activity. While legitimate users may occasionally clear history, frequent or automated
+  deletions should be investigated for potential defense evasion or post-exploitation
+  cleanup activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  - T1070.003
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-071a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Remove-Item*\" ScriptBlockText\
+    \ = \"*.HistorySavePath\"\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ Guid\n       Opcode Name Path\n       ProcessID ScriptBlockId ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powershell_history_file_deletion_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f1369394-48e1-4327-bf6d-14377f4b8687
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_history_file_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

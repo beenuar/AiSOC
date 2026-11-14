@@ -1,0 +1,26 @@
+id: pagerduty
+name: PagerDuty (Incidents + Audit)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  PagerDuty on-call platform connector. Pulls incident lifecycle events
+  (triggered / acknowledged / resolved) and tenant audit records (role
+  changes, integration edits, API key issuance) via the REST API. Requires
+  a read-only REST API key.
+author: AiSOC Core Team
+tags: [saas, oncall, paging, incidents, audit, pagerduty]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/pagerduty.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_key]
+  properties:
+    api_key:
+      type: string
+      description: "PagerDuty REST API key (read-only is sufficient)"
+      secret: true
+    subdomain:
+      type: string
+      description: "Optional acme subdomain (used to build clickable incident URLs)"

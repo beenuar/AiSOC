@@ -1,0 +1,38 @@
+id: mitre-car-car-2021-01-004
+name: Unusual Child Process for Spoolsv.Exe or Connhost.Exe
+description: After gaining initial access to a system, threat actors attempt to escalate
+  privileges as they may be operating within a lower privileged process which does
+  not allow them to access protected information or carry out tasks which require
+  higher permissions. A common way of escalating privileges in a system is by externally
+  invoking and exploiting spoolsv or connhost executables, both of which are legitimate
+  Windows applications. This query searches for an invocation of either of these executables
+  by a user, thus alerting us of any potentially malicious activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk search - Unusual Child Process For Spoolsv.exe Or Connhost.exe
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=1) (Image=C:\\Windows\\System32\\spoolsv.exe*
+      OR Image=C:\\Windows\\System32\\conhost.exe) ParentImage = "C:\\Windows\\System32\\cmd.exe"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-004.yaml
+notes:
+  car_status: needs_implementation

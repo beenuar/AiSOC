@@ -1,0 +1,58 @@
+id: splunk-security-content-ada0f478-84a8-4641-a3f1-d82362d6bd71
+name: Common Ransomware Notes
+description: 'The following analytic detects the creation of files with names commonly
+  associated with ransomware notes.
+
+  It leverages file-system activity data from the Endpoint Filesystem data model,
+  typically populated by endpoint detection and response (EDR) tools or Sysmon logs.
+
+  This activity is significant because ransomware notes indicate a potential ransomware
+  attack, which can lead to data encryption and extortion.
+
+  If confirmed malicious, this activity could result in significant data loss, operational
+  disruption, and financial impact due to ransom demands.
+
+  Note that this analytic relies on a lookup table (ransomware_notes_lookup) that
+  contains known ransomware note file names.
+
+  Ensure that this lookup table is regularly updated to include new ransomware note
+  file names as they are identified in the threat landscape.
+
+  Also this analytic leverages a sub-search to enhance performance. sub-searches have
+  limitations on the amount of data they can return. Keep this in mind if you have
+  an extensive list of ransomware note file names.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count\n  min(_time) as\
+    \ firstTime\n  max(_time) as lastTime\n  values(Filesystem.user) as user\n  values(Filesystem.dest)\
+    \ as dest\n  values(Filesystem.file_path) as file_path\nfrom datamodel=Endpoint.Filesystem\n\
+    where [\n  | inputlookup ransomware_notes_lookup\n  | search status=true\n  |\
+    \ fields ransomware_notes\n  | dedup ransomware_notes\n  | rename ransomware_notes\
+    \ as Filesystem.file_name\n]\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\n\
+    \   Filesystem.file_create_time Filesystem.file_hash\n   Filesystem.file_modify_time\
+    \ Filesystem.file_name\n   Filesystem.file_path Filesystem.file_acl Filesystem.file_size\n\
+    \   Filesystem.process_guid Filesystem.process_id Filesystem.user\n   Filesystem.vendor_product\n\
+    | `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `common_ransomware_notes_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ada0f478-84a8-4641-a3f1-d82362d6bd71
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/common_ransomware_notes.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

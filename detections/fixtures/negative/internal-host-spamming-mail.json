@@ -1,0 +1,7 @@
+{
+  "dst_port": 25,
+  "protocol": "TCP",
+  "smtp_count_per_src": 8,
+  "src_host": "marketing-mailer",
+  "time_window_minutes": 60
+}

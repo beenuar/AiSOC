@@ -1,0 +1,23 @@
+title: AWS Console Login Without MFA
+id: aisoc-id-cl-0007-console-no-mfa
+status: stable
+description: |
+  Console login succeeded without MFA. For IAM users this should be
+  treated as a policy violation; for root account it is critical.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1078.004
+  - attack.initial_access
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'signin.amazonaws.com'
+    event.action: 'ConsoleLogin'
+    aws.additional_event_data.MFAUsed: 'No'
+    aws.response_elements.ConsoleLogin: 'Success'
+  condition: selection

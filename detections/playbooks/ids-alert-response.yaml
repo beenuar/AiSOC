@@ -1,0 +1,127 @@
+id: ids-alert-response-v1
+name: IDS/IPS Alert Response
+description: >
+  Responds to Intrusion Detection/Prevention System alerts including network
+  scans, exploitation attempts, and protocol anomalies. Blocks the attacking
+  source, captures PCAP evidence, and notifies the network security team.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - ids
+  - ips
+  - network
+  - intrusion-detection
+  - nids
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - ids-alert
+
+steps:
+  - id: enrich-ids
+    name: Enrich IDS Alert
+    type: enrich
+    params:
+      source: ids_sensor
+      fields:
+        - source_ip
+        - destination_ip
+        - destination_port
+        - protocol
+        - signature_id
+        - signature_name
+        - category
+        - packet_count
+        - bytes
+        - interface
+        - sensor_id
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-source
+    name: Investigate Attack Source IP
+    type: investigate
+    params:
+      query: "ip_threat source_ip={{ alert.source_ip }} threat_intel=true"
+      context_fields:
+        - alert.source_ip
+        - alert.signature_name
+        - alert.category
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-critical-target
+    name: Check If Targeting Critical Asset
+    type: condition
+    condition:
+      field: alert.destination_port
+      operator: eq
+      value: 22
+    next_true: block-and-alert-critical
+    next_false: block-source
+
+  - id: block-and-alert-critical
+    name: Block IP and Alert for Critical Port Attack
+    type: block_ip
+    params:
+      ip_field: alert.source_ip
+      direction: inbound
+      duration_hours: 72
+      comment: "IDS critical port attack — {{ alert.signature_name }} — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: block-source
+    name: Block Attacking Source IP
+    type: block_ip
+    params:
+      ip_field: alert.source_ip
+      direction: inbound
+      duration_hours: 24
+      comment: "IDS alert — {{ alert.signature_name }} — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+    retry_max: 2
+
+  - id: notify-network-security
+    name: Notify Network Security Team
+    type: notify
+    params:
+      channel: "#network-security"
+      message: |
+        🛡️ *IDS Alert*
+        Signature: `{{ alert.signature_name }}`
+        Category: `{{ alert.category }}`
+        Source: `{{ alert.source_ip }}`
+        Target: `{{ alert.destination_ip }}:{{ alert.destination_port }}`
+        Protocol: `{{ alert.protocol }}`
+        Packets: {{ alert.packet_count }}
+        IP blocked: {{ steps.block-source.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create IDS Alert Ticket
+    type: create_ticket
+    params:
+      title: "IDS: {{ alert.signature_name }} from {{ alert.source_ip }}"
+      severity: P2
+      assignee_group: network-security
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close IDS Alert Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Source IP blocked; network security notified; evidence captured."
+    timeout_seconds: 15
+    on_failure: continue

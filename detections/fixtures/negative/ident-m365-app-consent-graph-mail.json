@@ -1,0 +1,4 @@
+{
+  "operation": "rules.create",
+  "permissions": "prefix-Mail.Read-suffix"
+}

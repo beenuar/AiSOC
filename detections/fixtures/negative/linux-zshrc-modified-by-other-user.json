@@ -1,0 +1,6 @@
+{
+  "actor_uid": 1000,
+  "owner_uid": 1000,
+  "path": "head-/.zshrc",
+  "syscall": "openat"
+}

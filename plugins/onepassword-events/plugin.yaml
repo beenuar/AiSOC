@@ -1,0 +1,37 @@
+id: onepassword-events
+name: 1Password Events Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Pulls 1Password Business and Enterprise events (sign-in attempts, item usage,
+  and audit events) via the 1Password Events API. Useful for detecting credential
+  theft, anomalous access patterns, and insider misuse of privileged secrets.
+author: AiSOC Core Team
+tags: [identity, secrets, 1password, events, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/onepassword-events
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_token]
+  properties:
+    api_token:
+      type: string
+      description: "1Password Events API token (mfa or full read-events scope)"
+      secret: true
+    region:
+      type: string
+      enum: [com, ca, eu]
+      default: com
+      description: "1Password regional cluster (com, ca, eu)"
+    feeds:
+      type: array
+      description: "Which event feeds to poll"
+      default: [signinattempts, itemusages, auditevents]
+      items:
+        type: string
+        enum: [signinattempts, itemusages, auditevents]
+    poll_interval_seconds:
+      type: integer
+      default: 60
+      minimum: 30

@@ -1,0 +1,7 @@
+{
+  "baseline_peer_deviation": 0.4,
+  "event_type": "group.user_membership.add",
+  "group": "finance",
+  "outcome": "SUCCESS",
+  "user": "ken.o@example.com"
+}

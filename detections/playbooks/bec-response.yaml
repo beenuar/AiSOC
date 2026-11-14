@@ -1,0 +1,121 @@
+id: bec-response-v1
+name: Business Email Compromise (BEC) Response
+description: >
+  Responds to Business Email Compromise alerts. Identifies spoofed or
+  compromised executive accounts used to initiate fraudulent wire transfers
+  or sensitive data requests. Blocks sender, alerts finance/legal, and
+  coordinates with email gateway.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - bec
+  - email
+  - fraud
+  - executive
+  - financial-fraud
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - bec
+
+steps:
+  - id: enrich-email
+    name: Enrich BEC Email Metadata
+    type: enrich
+    params:
+      source: email_gateway
+      fields:
+        - sender
+        - reply_to
+        - display_name
+        - recipients
+        - subject
+        - body_snippet
+        - spf_result
+        - dkim_result
+        - dmarc_result
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: check-spoof
+    name: Check Email Authentication Failure
+    type: condition
+    condition:
+      field: alert.dmarc_result
+      operator: eq
+      value: fail
+    next_true: block-sender-domain
+    next_false: investigate-account
+
+  - id: block-sender-domain
+    name: Block Spoofed Sender Domain
+    type: block_ip
+    params:
+      ip_field: alert.sender_domain
+      block_type: domain
+      direction: inbound
+      duration_hours: 720
+      comment: "BEC spoofed sender — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-account
+    name: Investigate Potentially Compromised Account
+    type: investigate
+    params:
+      query: "logins user={{ alert.sender }} anomalous=true last_days=14"
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: notify-finance
+    name: Alert Finance Team to Hold Wire Transfers
+    type: notify
+    params:
+      channel: "#finance-alerts"
+      message: |
+        🚨 *BEC Alert — HOLD ALL WIRE TRANSFERS*
+        Suspected fraudulent email from: `{{ alert.sender }}`
+        Display Name: `{{ alert.display_name }}`
+        Subject: `{{ alert.subject }}`
+        Recipients: {{ alert.recipients }}
+        DMARC: {{ alert.dmarc_result }}
+        Contact IR immediately: #ir-critical
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: notify-security
+    name: Notify Security Team
+    type: notify
+    params:
+      channel: "#ir-critical"
+      message: |
+        🎯 *Business Email Compromise Detected*
+        Sender: `{{ alert.sender }}`
+        Reply-To: `{{ alert.reply_to }}`
+        Finance team notified to hold transfers.
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create BEC Incident Ticket
+    type: create_ticket
+    params:
+      title: "BEC: Fraudulent email from {{ alert.sender }} — {{ alert.subject }}"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close BEC Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Sender blocked; finance alerted to hold transfers; IR investigating."
+    timeout_seconds: 15
+    on_failure: continue

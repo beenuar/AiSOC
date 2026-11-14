@@ -1,0 +1,8 @@
+{
+  "baseline_action_rarity": 0.03,
+  "event_type": "user.account.privilege.grant",
+  "outcome": "SUCCESS",
+  "role": "READ_ONLY_ADMIN",
+  "target_user": "newhire-22@example.com",
+  "user": "iam-admin@example.com"
+}

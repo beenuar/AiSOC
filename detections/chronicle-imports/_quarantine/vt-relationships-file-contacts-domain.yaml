@@ -1,0 +1,63 @@
+id: chronicle-detection-rules-vt-relationships-file-contacts-domain
+name: vt_relationships_file_contacts_domain
+description: vt_relationships_file_contacts_domain
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule vt_relationships_file_contacts_domain {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Alert on known Hash querying a known hostname\
+    \ with VT Relationships\"\n    rule_id = \"mr_42ee37ba-cb36-49f2-b784-05ca0bd55b9f\"\
+    \n    rule_name = \"VT Relationships File Contacts Domain\"\n    type = \"alert\"\
+    \n    tags = \"vt\"\n    data_source = \"microsoft sysmon, crowdstrike\"\n   \
+    \ severity = \"High\"\n    priority = \"High\"\n\n  events:\n    $dns.metadata.event_type\
+    \ = \"NETWORK_DNS\"\n    $dns.principal.process.file.sha256 = $file_hash\n   \
+    \ $dns.network.dns.questions.name = $domain\n    strings.coalesce($dns.principal.hostname,\
+    \ $dns.target.user.userid) = $hostname_or_userid\n\n    // Uses VirusTotal integration\
+    \ via entity graph, this section maps to principal process file hash\n    $vt.graph.metadata.entity_type\
+    \ = \"FILE\"\n    $vt.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\n    $vt.graph.metadata.vendor_name\
+    \ = \"VirusTotal\"\n    $vt.graph.metadata.product_name = \"VirusTotal Relationships\"\
+    \n    $vt.graph.entity.file.sha256 = $file_hash\n\n    // Uses VirusTotal integration\
+    \ via entity graph, this section maps the hash to the domain it contacts\n   \
+    \ $vt.graph.relations.entity_type = \"DOMAIN_NAME\"\n    $vt.graph.relations.relationship\
+    \ = \"CONTACTS\"\n    $vt.graph.relations.entity.domain.name = $domain\n\n  match:\n\
+    \    $hostname_or_userid over 5m\n\n  outcome:\n    $risk_score = 85\n    $event_count\
+    \ = count_distinct($dns.metadata.id)\n    $network_dns_questions_name = array_distinct($dns.network.dns.questions.name)\n\
+    \    $network_dns_answers_data = array_distinct($dns.network.dns.answers.data)\n\
+    \    // added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($dns.principal.ip)\n    $target_ip = array_distinct($dns.target.ip)\n\
+    \    $principal_process_pid = array_distinct($dns.principal.process.pid)\n   \
+    \ $principal_process_file_full_path = array_distinct($dns.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($dns.principal.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($dns.principal.user.userid)\n   \
+    \ $principal_process_command_line = array_distinct($dns.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($dns.principal.process.file.sha256)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($dns.principal.process.parent_process.product_specific_process_id)\n\
+    \n  condition:\n    $dns and $vt\n}"
+  chronicle_rule_name: vt_relationships_file_contacts_domain
+provenance:
+  source: chronicle/detection-rules
+  source_id: vt_relationships_file_contacts_domain
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/vt_relationships_file_contacts_domain.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

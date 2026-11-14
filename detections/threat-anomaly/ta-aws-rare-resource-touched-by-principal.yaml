@@ -1,0 +1,25 @@
+id: det-threat-anomaly-005
+name: AWS Resource This Principal Has Never Touched
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'AWS Resource
+  This Principal Has Never Touched'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1580
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    eventName STARTSWITH_ANY ["Delete", "Put", "Modify"]
+    AND baseline_resource_rarity >= 0.95
+false_positives:
+- A project handover
+- An engineer joining a new service team
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

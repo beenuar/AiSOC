@@ -1,0 +1,47 @@
+# Forwarded email template.
+#
+# Used by the /v1/inbox/email route. The handler is fronted by an
+# email-to-HTTP relay (SES, SendGrid Inbound Parse, Postmark, Mailgun,
+# etc.) that normalizes a raw RFC 5322 message into JSON of roughly
+# the shape:
+#   {
+#     "from": "alerts@vendor.com",
+#     "to":   "tenant-abc@inbox.example.com",
+#     "subject": "...",
+#     "text":   "...plain text body...",
+#     "html":   "...html body...",
+#     "headers": {...},
+#     "received_at": "...",
+#     "attachments": [...]
+#   }
+#
+# This template is the catch-all for vendors without a structured
+# email format. The defender-XDR-style structured emails should match
+# microsoft-defender-email instead.
+id: email-forwarded
+vendor_name: Email
+product_name: Forwarded Email
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  subject: finding.title
+  text: finding.description
+  from: source
+  message_id: finding.uid
+  headers.Message-ID: finding.uid
+  headers.Subject: finding.title
+  headers.From: actor.user.email_addr
+  headers.To: target_user.email_addr
+  headers.X-Priority: severity
+  to: target_user.email_addr
+severity_field: priority
+severity_map:
+  low: 2
+  normal: 3
+  high: 4
+  urgent: 5
+time_field: received_at
+message_field: text
+constants:
+  source_type: email-forwarded

@@ -1,0 +1,23 @@
+id: det-application-143
+name: GitHub Audit Log Streaming Disabled
+description: Exporting or disabling the stream both touch the record an investigation reads.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562.008
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.org.audit_log_export"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

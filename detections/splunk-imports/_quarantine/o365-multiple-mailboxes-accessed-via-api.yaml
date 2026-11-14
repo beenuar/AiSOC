@@ -1,0 +1,48 @@
+id: splunk-security-content-7cd853e9-d370-412f-965d-a2bcff2a2908
+name: O365 Multiple Mailboxes Accessed via API
+description: The following analytic detects when a high number of Office 365 Exchange
+  mailboxes are accessed via API (Microsoft Graph API or Exchange Web Services) within
+  a short timeframe. It leverages 'MailItemsAccessed' operations in Exchange, using
+  AppId and regex to identify API interactions. This activity is significant as it
+  may indicate unauthorized mass email access, potentially signaling data exfiltration
+  or account compromise. If confirmed malicious, attackers could gain access to sensitive
+  information, leading to data breaches and further exploitation of compromised accounts.
+  The threshold is set to flag over five unique mailboxes accessed within 10 minutes,
+  but should be tailored to your environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/002/
+- https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in
+- https://learn.microsoft.com/en-us/graph/permissions-reference
+- https://attack.mitre.org/techniques/T1114/002/
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+- https://learn.microsoft.com/en-us/exchange/client-developer/exchange-web-services/ews-applications-and-the-exchange-architecture
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange Operation=MailItemsAccessed\
+    \ AppId=* ClientAppId=*\n  | bucket span=10m _time\n  | eval matchRegex=if(match(ClientInfoString,\"\
+    ^Client=WebServices;ExchangeWebServices\"), 1, 0)\n  | search (AppId=\"00000003-0000-0000-c000-000000000000\"\
+    \ OR matchRegex=1)\n  | fillnull\n  | stats values(ClientIPAddress) as src dc(user)\
+    \ as unique_mailboxes values(user) as user\n    BY _time ClientAppId ClientInfoString\n\
+    \       vendor_account vendor_product dest\n       signature\n  | where unique_mailboxes\
+    \ > 5\n  | `o365_multiple_mailboxes_accessed_via_api_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7cd853e9-d370-412f-965d-a2bcff2a2908
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_mailboxes_accessed_via_api.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

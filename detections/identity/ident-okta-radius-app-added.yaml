@@ -1,0 +1,24 @@
+id: det-identity-116
+name: Okta RADIUS Application Added
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Okta RADIUS Application
+  Added'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1133
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: audit
+detection:
+  condition: |
+    event_type == "application.lifecycle.create"
+    AND app_type == "radius"
+false_positives:
+- Approved network gear
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

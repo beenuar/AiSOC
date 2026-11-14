@@ -1,0 +1,26 @@
+id: det-endpoint-190
+name: yum/dnf Added Repo From Untrusted Domain
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'yum/dnf Added Repo
+  From Untrusted Domain'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1195.002
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "openat"
+    AND path STARTSWITH "/etc/yum.repos.d/"
+    AND value CONTAINS "baseurl=http://"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-supply-chain
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

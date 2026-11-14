@@ -1,0 +1,13 @@
+{
+  "action": "UPDATED",
+  "target_path": "/root/.ssh/authorized_keys",
+  "hostname": "prod-api-02",
+  "node_key": "ssh111bbb",
+  "tenant_id": "acme",
+  "process_name": "bash",
+  "pid": 22341,
+  "ppid": 22340,
+  "username": "root",
+  "sha256": "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
+  "event_time": "2026-05-10T02:47:19Z"
+}

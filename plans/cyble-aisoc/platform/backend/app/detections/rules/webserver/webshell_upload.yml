@@ -1,0 +1,24 @@
+title: Possible Webshell Upload or Access
+id: aisoc-id-ws-0003-webshell
+status: stable
+description: |
+  HTTP request POSTs to or accesses a URI ending in common webshell
+  filenames (cmd.aspx, shell.php, etc.) or matches known shell
+  parameter patterns (cmd=, exec=).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1505.003
+  - attack.persistence
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  shell_uri:
+    url.path|re: '(?i)/(cmd|shell|c99|r57|alfa|wso|china|eval|backdoor|webshell)\.(php|aspx|asp|jsp|jspx|war)$'
+  shell_param:
+    url.query|re: '(?i)(\?|&)(cmd|exec|command|run|do)=([^&]{1,})'
+  condition: selection and (shell_uri or shell_param)

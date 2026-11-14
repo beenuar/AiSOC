@@ -1,0 +1,46 @@
+id: splunk-security-content-ada0f478-84a8-4641-a3f1-d82362d6bd75
+name: AWS Network Access Control List Created with All Open Ports
+description: The following analytic detects the creation of AWS Network Access Control
+  Lists (ACLs) with all ports open to a specified CIDR. It leverages AWS CloudTrail
+  events, specifically monitoring for `CreateNetworkAclEntry` or `ReplaceNetworkAclEntry`
+  actions with rules allowing all traffic. This activity is significant because it
+  can expose the network to unauthorized access, increasing the risk of data breaches
+  and other malicious activities. If confirmed malicious, an attacker could exploit
+  this misconfiguration to gain unrestricted access to the network, potentially leading
+  to data exfiltration, service disruption, or further compromise of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.007
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=CreateNetworkAclEntry OR eventName=ReplaceNetworkAclEntry\
+    \ requestParameters.ruleAction=allow requestParameters.egress=false requestParameters.aclProtocol=-1\n\
+    \  | append [search `cloudtrail` eventName=CreateNetworkAclEntry OR eventName=ReplaceNetworkAclEntry\
+    \ requestParameters.ruleAction=allow requestParameters.egress=false requestParameters.aclProtocol!=-1\n\
+    \  | eval port_range='requestParameters.portRange.to' - 'requestParameters.portRange.from'\n\
+    \  | where port_range>1024]\n  | fillnull\n  | rename user_name as user\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY signature dest\
+    \ user\n       user_agent src vendor_account\n       vendor_region vendor_product\
+    \ requestParameters.ruleAction\n       requestParameters.egress requestParameters.aclProtocol\
+    \ requestParameters.portRange.to\n       requestParameters.portRange.from requestParameters.cidrBlock\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_network_access_control_list_created_with_all_open_ports_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ada0f478-84a8-4641-a3f1-d82362d6bd75
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_network_access_control_list_created_with_all_open_ports.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

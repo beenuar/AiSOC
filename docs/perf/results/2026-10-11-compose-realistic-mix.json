@@ -1,0 +1,174 @@
+{
+  "schema": "aisoc.load_harness/v1",
+  "measured_at": "2026-10-11T06:01:33+00:00",
+  "hardware": {
+    "os": "Darwin 25.5.0",
+    "arch": "arm64",
+    "python": "3.11.15",
+    "cpu_count": 18,
+    "cpu": "Apple M5 Max",
+    "memory_bytes": "137438953472",
+    "container_runtime": "docker 29.5.2",
+    "runtime_cpus": "6",
+    "runtime_memory_bytes": "16732983296"
+  },
+  "deployment": "docker-compose",
+  "not_a_production_slo": true,
+  "slo_disclaimer": "These are measurements of one deployment on the hardware named above, on the date named above. They are not a service-level objective and no support commitment is derived from them. Sustained throughput on other hardware, other storage and other event mixes will differ. The regression floors in perf.yml are set well below the measured values so they fire on a catastrophic regression rather than on runner jitter.",
+  "run": {
+    "run_id": "p91698437",
+    "attempted_events": 6000,
+    "accepted_events": 6000,
+    "alerts_observed": 60,
+    "distinct_events_alerted": 60,
+    "alerting_events_sent": 60,
+    "benign_events_sent": 5940,
+    "benign_events_that_alerted": 0,
+    "alert_every": 100,
+    "missing_events": 0,
+    "duplicate_alert_rows": 0,
+    "push_wall_seconds": 48.954691958,
+    "drain_wall_seconds": 0.08662676811218262,
+    "drain_settled": true,
+    "clock_offset_seconds": -0.22664189338684082,
+    "clock_offset_spread_seconds": 0.0026655197143554688,
+    "producer": {
+      "run_id": "p91698437",
+      "mode": "load",
+      "marker_prefix": "aisoc-load",
+      "benign_marker_prefix": "aisoc-load-benign",
+      "alert_every": 100,
+      "alerting_events_sent": 60,
+      "benign_events_sent": 5940,
+      "ingest_url": "http://localhost:8081/v1/ingest/batch",
+      "tenant": "00000000-0000-0000-0000-000000000001",
+      "started_at": "2026-10-11T06:00:38.013462Z",
+      "ended_at": "2026-10-11T06:01:26.968153958Z",
+      "wall_seconds": 48.954691958,
+      "workers": 6,
+      "batch_size": 25,
+      "target_eps": 0,
+      "requested_events": 6000,
+      "attempted_events": 6000,
+      "accepted_events": 6000,
+      "rejected_events": 0,
+      "refused_events": 0,
+      "transport_error_events": 0,
+      "accepted_eps": 122.56230730953465,
+      "http_status_counts": {
+        "200": 299
+      },
+      "seq_low": 0,
+      "seq_high": 5999
+    },
+    "shape": {
+      "batch_size": 25,
+      "workers": 6,
+      "target_eps": 0,
+      "commit_sha": "6b6370a1b2d1effeddc528e2950daa26920a0f71",
+      "hosts": 1,
+      "fusion_replicas": 1,
+      "kafka_partitions": 3
+    },
+    "total_wall_seconds": 55.91636610031128
+  },
+  "metrics": {
+    "benign_alert_rate": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 5940,
+      "value": 0.0
+    },
+    "consumer_lag_drained": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 0.0
+    },
+    "consumer_lag_in_flight": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 15.0
+    },
+    "dead_letter_rate": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 6000,
+      "value": 0.0
+    },
+    "delivery_ratio": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 60,
+      "value": 1.0
+    },
+    "ingest_accepted_eps": {
+      "unit": "events/s",
+      "measured": true,
+      "samples": 6000,
+      "value": 122.56230730953465
+    },
+    "latency_max_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 60,
+      "value": 1502.7973651885986
+    },
+    "latency_p50_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 60,
+      "value": 946.2060928344727
+    },
+    "latency_p95_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 60,
+      "value": 1195.3771114349365
+    },
+    "latency_p99_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 60,
+      "value": 1502.7973651885986
+    },
+    "pipeline_eps": {
+      "unit": "alerts/s",
+      "measured": true,
+      "samples": 60,
+      "value": 1.2785342195121945
+    }
+  },
+  "resources": [
+    {
+      "at": "2026-10-11T06:01:27+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.21%",
+          "memory": "217.5MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.13%",
+          "memory": "231MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "0.26%",
+          "memory": "86MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "26.2MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "0.72%",
+          "memory": "1.057GiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "0.08%",
+          "memory": "229.4MiB / 15.58GiB"
+        }
+      }
+    }
+  ]
+}

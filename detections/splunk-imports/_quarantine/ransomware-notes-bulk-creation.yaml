@@ -1,0 +1,46 @@
+id: splunk-security-content-eff7919a-8330-11eb-83f8-acde48001122
+name: Ransomware Notes bulk creation
+description: The following analytic identifies the bulk creation of ransomware notes
+  (e.g., .txt, .html, .hta files) on an infected machine. It leverages Sysmon EventCode
+  11 to detect multiple instances of these file types being created within a short
+  time frame. This activity is significant as it often indicates an active ransomware
+  attack, where the attacker is notifying the victim of the encryption. If confirmed
+  malicious, this behavior could lead to widespread data encryption, rendering critical
+  files inaccessible and potentially causing significant operational disruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/fin11-email-campaigns-precursor-for-ransomware-data-theft
+- https://blog.virustotal.com/2020/11/keep-your-friends-close-keep-ransomware.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=11 file_name IN (\"*\\.txt\",\"*\\.html\",\"*\\\
+    .hta\")\n  | bin _time span=10s\n  | stats min(_time) as firstTime max(_time)\
+    \ as lastTime dc(TargetFilename) as unique_readme_path_count values(TargetFilename)\
+    \ as list_of_readme_path values(action) as action values(file_access_time) as\
+    \ file_access_time values(file_create_time) as file_create_time values(file_hash)\
+    \ as file_hash values(file_modify_time) as file_modify_time values(file_path)\
+    \ as file_path values(file_acl) as file_acl values(file_size) as file_size values(process_guid)\
+    \ as process_guid values(process_id) as process_id values(user) as user values(vendor_product)\
+    \ as vendor_product\n    BY dest file_name\n  | where unique_readme_path_count\
+    \ >= 15\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `ransomware_notes_bulk_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eff7919a-8330-11eb-83f8-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/ransomware_notes_bulk_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "sni": "head-argotunnel.com",
+  "src_role": "workstation"
+}

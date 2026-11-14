@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-entra-id-recently-created-user-assigned-entra-id-roles
+name: entra_id_recently_created_user_assigned_entra_id_roles
+description: entra_id_recently_created_user_assigned_entra_id_roles
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_recently_created_user_assigned_entra_id_roles {\n\n  meta:\n \
+    \   author = \"Google Cloud Security\"\n    description = \"Detect users who are\
+    \ newly created and then immediately assigned administrator level roles\"\n  \
+    \  rule_id = \"mr_ab6067cd-b8a0-49f7-9efb-8a9b3b096a49\"\n    rule_name = \"Entra\
+    \ ID Recently Created User Assigned an Entra ID Role\"\n    tactic = \"TA0003\"\
+    \n    technique = \"T1098.003\"\n    assumption = \"The list msgraph_watchlist_roles_guid\
+    \ is popualted with admin role guids, ie 62e90394-69f5-4237-9190-012177145e10\"\
+    \n    reference = \"https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/permissions-reference\"\
+    \n    type = \"alert\"\n    platform = \"azure\"\n    data_source = \"azure ad\"\
+    \n    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    (\n     \
+    \   $create.metadata.event_type = \"USER_CREATION\" and\n        $create.metadata.product_event_type\
+    \ = \"Add user\" and\n        $create.metadata.product_name = \"Azure AD Directory\
+    \ Audit\" and\n        $create.metadata.vendor_name = \"Microsoft\" and\n    \
+    \    $create.security_result.action = \"ALLOW\" and\n        $create.principal.user.userid\
+    \ = $principal_userid and\n        $create.target.user.userid = $target_userid\n\
+    \    )\n    $create.metadata.event_timestamp.seconds < $role.metadata.event_timestamp.seconds\n\
+    \    (\n        $role.metadata.event_type = \"USER_CHANGE_PERMISSIONS\" and\n\
+    \        $role.metadata.product_event_type = \"Add member to role\" and\n    \
+    \    $role.metadata.product_name = \"Azure AD Directory Audit\" and\n        $role.metadata.vendor_name\
+    \ = \"Microsoft\" and\n        $role.security_result.action = \"ALLOW\" and\n\
+    \        //To detect on specific roles, they can be added to a reference list\
+    \ and the following line uncommented\n        //$role.target.resource.attribute.labels[\"\
+    Role.Role.TemplateId\"] in %msgraph_watchlist_roles_guid and\n        $role.principal.user.userid\
+    \ = $principal_userid and\n        re.replace($role.target.user.userid, `@.*$`,\
+    \ \"\") = $target_userid\n    )\n\n  match:\n    $principal_userid, $target_userid\
+    \ over 30m\n\n  outcome:\n    $risk_score = 85\n    $principal_county_region =\
+    \ array_distinct(strings.concat($create.principal.location.city,\" \",$create.principal.location.state,\"\
+    \ \",$create.principal.location.country_or_region))\n    $assigned_role = array_distinct($role.target.user.title)\n\
+    \    $assigned_role_guid = array_distinct($role.target.resource.attribute.labels[\"\
+    Role.TemplateId\"])\n\n  condition:\n    $create and $role\n}"
+  chronicle_rule_name: entra_id_recently_created_user_assigned_entra_id_roles
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_recently_created_user_assigned_entra_id_roles
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_recently_created_user_assigned_azuread_roles.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

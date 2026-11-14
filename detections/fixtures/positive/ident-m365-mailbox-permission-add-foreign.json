@@ -1,0 +1,4 @@
+{
+  "operation": "Add-MailboxPermission",
+  "trustee_external": true
+}

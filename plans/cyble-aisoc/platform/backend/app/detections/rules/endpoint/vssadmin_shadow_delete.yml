@@ -1,0 +1,26 @@
+title: VSSAdmin Used to Delete Shadow Copies
+id: aisoc-id-ep-0017-vssadmin-delete
+status: stable
+description: |
+  vssadmin.exe invoked with "delete shadows" — classic ransomware
+  pre-encryption step to prevent recovery via Windows Volume
+  Shadow Copies.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1490
+  - attack.impact
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'vssadmin.exe'
+  args:
+    process.command_line|contains:
+      - 'delete shadows'
+      - 'resize shadowstorage'
+  condition: selection and args

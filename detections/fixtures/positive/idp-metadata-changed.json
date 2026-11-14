@@ -1,0 +1,4 @@
+{
+  "app": "salesforce",
+  "event_type": "app.idp.update_signing_certificate"
+}

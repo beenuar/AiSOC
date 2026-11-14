@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-agenttesla-rat-detection
+name: agenttesla_rat_detection
+description: agenttesla_rat_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule agenttesla_rat_detection {\n meta:\n    author = \"Emir Erdogan\"\
+    \n    description = \"AgentTesla RAT Detection  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/bwpRaR1KCq8h\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1053, T1081\"\n\n  events:\n($selection.principal.process.file.full_path\
+    \ = \"8cab6413fdc97e9cc90607b3a49175a7.exe\" and (re.regex($selection.target.process.file.full_path,\
+    \ `.*RegSvcs\\.exe`) or $selection.target.process.file.full_path = \"C:\\\\Windows\\\
+    \\System32\\\\schtasks.exe\") and re.regex($selection.target.process.command_line,\
+    \ `.*/Create /TN \\\"Updates\\\\ZwqpnECNvoWf\\\" /XML \\\"C:\\\\Users\\\\admin\\\
+    \\AppData\\\\Local\\\\Temp\\\\tmp6CEB\\.tmp\\\"`))\n\n  condition:\n    $selection\n\
+    }"
+  chronicle_rule_name: agenttesla_rat_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: agenttesla_rat_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/agenttesla_rat_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

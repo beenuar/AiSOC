@@ -1,0 +1,37 @@
+id: splunk-security-content-8fa891f7-a533-4b3c-af85-5aa2e7c1f1eb
+name: Large Volume of DNS ANY Queries
+description: The following analytic identifies a large volume of DNS ANY queries,
+  which may indicate a DNS amplification attack. It leverages the Network_Resolution
+  data model to count DNS queries of type "ANY" directed to specific destinations.
+  This activity is significant because DNS amplification attacks can overwhelm network
+  resources, leading to Denial of Service (DoS) conditions. If confirmed malicious,
+  this activity could disrupt services, degrade network performance, and potentially
+  be part of a larger Distributed Denial of Service (DDoS) attack, impacting the availability
+  of critical infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1498.002
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Network_Resolution\n\
+    \  WHERE nodename=DNS \"DNS.message_type\"=\"QUERY\" \"DNS.record_type\"=\"ANY\"\
+    \n  BY \"DNS.dest\"\n| `drop_dm_object_name(\"DNS\")`\n| where count>200\n| `large_volume_of_dns_any_queries_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8fa891f7-a533-4b3c-af85-5aa2e7c1f1eb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/large_volume_of_dns_any_queries.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

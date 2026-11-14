@@ -1,0 +1,52 @@
+id: splunk-security-content-700c11d1-da09-47b2-81aa-358c143c7986
+name: Windows AD GPO New CSE Addition
+description: This detection identifies when a a new client side extension is added
+  to an Active Directory Group Policy using the Group Policy Management Console.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://wald0.com/?p=179
+- https://learn.microsoft.com/en-gb/archive/blogs/mempson/group-policy-client-side-extension-list
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+- https://github.com/FSecureLABS/SharpGPOAbuse
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 ObjectClass=groupPolicyContainer\
+    \ AttributeLDAPDisplayName=gPCMachineExtensionNames\n  | stats min(_time) as _time\
+    \ values(eval(if(OperationType==\"%%14675\",AttributeValue,null))) as old_value\
+    \ values(eval(if(OperationType==\"%%14674\",AttributeValue,null))) as new_value\
+    \ values(OperationType) as OperationType values(dest) as dest\n    BY ObjectClass\
+    \ ObjectDN OpCorrelationID\n       src_user SubjectLogonId\n  | rex field=old_value\
+    \ max_match=10000 \"(?P<old_values>\\{.*?\\})\"\n  | rex field=new_value max_match=10000\
+    \ \"(?P<new_values>\\{.*?\\})\"\n  | rex field=ObjectDN max_match=10000 \"CN=(?P<policy_guid>\\\
+    {.*?\\})\"\n  | mvexpand new_values\n  | where NOT new_values IN (old_values,\"\
+    {00000000-0000-0000-0000-000000000000}\",policy_guid) AND match(new_values, \"\
+    ^\\{[A-Z\n  | \\d]+\\-[A-Z\n  | \\d]+\\-[A-Z\n  | \\d]+\\-[A-Z\n  | \\d]+\\-[A-Z\n\
+    \  | \\d]+\\}\")\n  | lookup msad_guid_lookup guid as new_values OUTPUTNEW displayName\
+    \ as policyType\n  | eval newPolicy=if(policyType like \"%\",policyType,new_values)\n\
+    \  | join ObjectDN  [\n  | search `admon` objectCategory=\"CN=Group-Policy-Container*\"\
+    \ admonEventType=Update\n  | stats latest(displayName) as displayName\n    BY\
+    \ distinguishedName\n  | eval ObjectDN=upper(distinguishedName)]\n  | stats values(OpCorrelationID)\
+    \ as OpCorrelationID values(src_user) as src_user values(SubjectLogonId) as SubjectLogonId\
+    \ values(newPolicy) as newPolicy values(displayName) as policyName\n    BY ObjectDN\n\
+    \  | `windows_ad_gpo_new_cse_addition_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 700c11d1-da09-47b2-81aa-358c143c7986
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_gpo_new_cse_addition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

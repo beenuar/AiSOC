@@ -1,0 +1,49 @@
+id: splunk-security-content-ea91651a-772a-4b02-ac3d-985b364a5f07
+name: Windows Known Abused DLL Created
+description: The following analytic identifies the creation of Dynamic Link Libraries
+  (DLLs) with a known history of exploitation in atypical locations. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on process and
+  filesystem events. This activity is significant as it may indicate DLL search order
+  hijacking or sideloading, techniques used by attackers to execute arbitrary code,
+  maintain persistence, or escalate privileges. If confirmed malicious, this activity
+  could allow attackers to blend in with legitimate operations, posing a severe threat
+  to system integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1574/002/
+- https://hijacklibs.net/api/
+- https://wietze.github.io/blog/hijacking-dlls-in-windows
+- https://github.com/olafhartong/sysmon-modular/pull/195/files
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Filesystem
+    where Filesystem.file_path IN ("*\\users\\*","*\\Windows\Temp\\*","*\\programdata\\*")
+    Filesystem.file_name="*.dll" by Filesystem.action Filesystem.dest Filesystem.file_access_time
+    Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time Filesystem.file_name
+    Filesystem.file_path Filesystem.file_acl Filesystem.file_size Filesystem.process_guid
+    Filesystem.process_id Filesystem.user Filesystem.vendor_product | `drop_dm_object_name(Filesystem)`
+    | lookup hijacklibs_loaded library AS file_name OUTPUT islibrary, ttp, comment
+    as desc | lookup hijacklibs_loaded library AS file_name excludes as file_path
+    OUTPUT islibrary as excluded | search islibrary = TRUE AND excluded != TRUE |
+    where isnotnull(file_name) | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    |  `windows_known_abused_dll_created_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ea91651a-772a-4b02-ac3d-985b364a5f07
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_known_abused_dll_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

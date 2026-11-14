@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-ursnif-trojan-detection-cmd-obfuscation
+name: ursnif_trojan_detection_cmd_obfuscation
+description: ursnif_trojan_detection_cmd_obfuscation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule ursnif_trojan_detection_cmd_obfuscation {\n meta:\n    author\
+    \ = \"Emir Erdogan\"\n    description = \"Most popular banking trojan which is\
+    \ called as ursnif uses obfuscated command prompt  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/phnp9PkFC7Zm\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1047, T1497, T1080, T1007, T1082, T1071, T1064,\
+    \ T1113, T1091, T1105, T1060, T1012, T1093, T1027, T1036\"\n\n  events:\n($selection.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\System32\\\\Rundll32.exe\" and re.regex($selection.principal.process.file.full_path,\
+    \ `C:\\\\Windows\\\\System32\\\\cmd\\.exe.*`) and re.regex($selection.target.process.command_line,\
+    \ `.*C:\\\\ProgramData\\\\ZyGHisczAWv\\.dll,Dl^lRegi^sterSe^rver.*`))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: ursnif_trojan_detection_cmd_obfuscation
+provenance:
+  source: chronicle/detection-rules
+  source_id: ursnif_trojan_detection_cmd_obfuscation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/ursnif_trojan_detection__cmd_obfuscation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,23 @@
+id: det-application-169
+name: M365 Organisation-Wide Sharing Link Created
+description: Everyone in the tenant, which is broader than the document's own permissions.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: sharepoint
+detection:
+  condition: |
+    operation == "CompanyLinkCreated"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

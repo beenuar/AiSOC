@@ -1,0 +1,43 @@
+id: splunk-security-content-2a048c14-4634-11ec-a618-3e22fbd008af
+name: Remote Process Instantiation via WMI and PowerShell Script Block
+description: The following analytic detects the execution of the `Invoke-WmiMethod`
+  commandlet with parameters used to start a process on a remote endpoint via WMI,
+  leveraging PowerShell Script Block Logging (EventCode=4104). This method identifies
+  specific script block text patterns associated with remote process instantiation.
+  This activity is significant as it may indicate lateral movement or remote code
+  execution attempts by adversaries. If confirmed malicious, this could allow attackers
+  to execute arbitrary code on remote systems, potentially leading to further compromise
+  and persistence within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1047/
+- https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.management/invoke-wmimethod?view=powershell-5.1
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=\"*Invoke-WmiMethod*\"\
+    \ AND (ScriptBlockText=\"*-CN*\" OR ScriptBlockText=\"*-ComputerName*\") AND ScriptBlockText=\"\
+    *-Class Win32_Process*\" AND ScriptBlockText=\"*-Name create*\"\n  | fillnull\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `remote_process_instantiation_via_wmi_and_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a048c14-4634-11ec-a618-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/remote_process_instantiation_via_wmi_and_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

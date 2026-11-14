@@ -1,0 +1,88 @@
+# AiSOC monorepo .dockerignore
+# Keeps the build context small for `flyctl deploy --config infra/fly/web/fly.toml`
+# (run from repo root). The web Dockerfile only needs apps/web, packages/, and
+# a handful of root config files (package.json, pnpm-workspace.yaml, pnpm-lock,
+# turbo.json, tsconfig.base.json). Everything else is dead weight and pushed
+# the context past 1.6GB on uncached deploys.
+#
+# Each service Docker build context is its own service directory (per
+# infra/fly/fly-demo-deploy.sh), so excluding services/ here only affects the
+# web build, which doesn't need them.
+
+# ─── VCS / agent state ────────────────────────────────────────────────────────
+.git
+.github
+.gitignore
+.gitattributes
+.claude
+.vscode
+.idea
+.husky
+agent-transcripts/
+terminals/
+*.log
+
+# ─── Node / build artifacts (will be reinstalled inside the image) ────────────
+**/node_modules
+**/.next
+**/.turbo
+**/dist
+**/build
+**/.nyc_output
+**/coverage-final.json
+**/.cache
+**/.parcel-cache
+**/.eslintcache
+**/.tsbuildinfo
+**/*.tsbuildinfo
+
+# ─── Python (services/*) — excluded from the web build entirely ───────────────
+services/
+# …except the MCP server, which is a member of the root pnpm workspace and so
+# has to build from this context to get a `--frozen-lockfile` install against
+# the root `pnpm-lock.yaml`. Building it from `services/mcp/` would re-resolve
+# its `^` ranges on every build, which is the same commit producing two
+# different images. Costs the web build ~300 KB of TypeScript it ignores.
+!services/mcp
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.venv
+**/venv
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# ─── Other top-level monorepo dirs the web app does not need ──────────────────
+infra/
+detections/
+marketplace/
+plugins/
+docs/
+apps/docs
+ops/
+scripts/
+tests/
+e2e/
+benchmarks/
+
+# ─── Local env / secrets (never bake into images) ─────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# ─── OS / editor cruft ────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── Misc generated assets ────────────────────────────────────────────────────
+*.tar
+*.tar.gz
+*.zip
+tmp/
+temp/

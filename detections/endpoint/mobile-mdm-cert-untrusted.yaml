@@ -1,0 +1,24 @@
+id: det-endpoint-269
+name: Untrusted Root Certificate Installed On Device
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Untrusted Root
+  Certificate Installed On Device'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1553.004
+- tlp.white
+category: endpoint
+log_source:
+  product: mobile
+  service: mdm
+detection:
+  condition: |
+    event_type == "cert_install"
+    AND trust_level == "user_trusted"
+false_positives:
+- Corporate proxy CA install
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

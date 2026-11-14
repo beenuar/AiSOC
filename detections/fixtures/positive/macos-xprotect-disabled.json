@@ -1,0 +1,5 @@
+{
+  "argv": "com.apple.MRT DisableMRTShim",
+  "event_type": "exec",
+  "process_path": "head-/defaults"
+}

@@ -1,0 +1,40 @@
+id: mitre-car-car-2021-05-001
+name: Attempt To Add Certificate To Untrusted Store
+description: Adversaries may add their own root certificate to the certificate store,
+  to cause the web browser to trust that certificate and not display a security warning
+  when it encounters the previously unseen certificate. This action may be the precursor
+  to malicious activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk code
+    type: Splunk
+    code: '| tstats count min(_time) as firstTime values(Processes.process) as process
+      max(_time) as lastTime from datamodel=Endpoint.Processes where Processes.process_name=*certutil*
+      (Processes.process=*-addstore*) by Processes.parent_process Processes.process_name
+      Processes.user'
+  - name: Pseudocode – detect attempts to add a certificate to a certificate store
+    type: Pseudocode
+    code: "processes = search Process:Create\naddstore_commands = filter processes\
+      \ where (\n  exe =”C:\\Windows\\System32\\certutil.exe” AND command_line=\"\
+      *-addstore*” )\noutput addstore_commands\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-001.yaml
+notes:
+  car_status: needs_implementation

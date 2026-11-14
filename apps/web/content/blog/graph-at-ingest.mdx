@@ -1,0 +1,409 @@
+---
+title: "Why agentic SOC needs a graph at ingest"
+slug: "graph-at-ingest"
+date: "2026-05-13"
+author: "Prince Sinha, Senior Director, Innovations at Cyble"
+tags:
+  - architecture
+  - graph
+  - ingest
+description: "The substrate the LLM agent reasons against decides everything downstream. We materialise the graph at ingest time — 17 node labels, 14 relationships, fixed schema, drift-gated in CI. Here is why row-store SIEM doesn't survive contact with an autonomous triage loop."
+og_image: "/blog/graph-at-ingest-og.svg"
+---
+
+The most common architecture mistake in agentic SOC is to build the agent
+first and the data layer second. The order matters. The substrate the
+agent reasons against decides everything downstream — the latency
+budget, the false-positive rate, the tractable scope of an autonomous
+action, and whether the analyst's audit log makes sense after the fact.
+Get the substrate wrong and you spend the next eighteen months tuning
+prompts to compensate.
+
+This post is about the choice we made early in AiSOC: a Neo4j-backed
+**graph materialised at ingest time**, written from the Go ingester at
+`services/ingest/internal/graph/`, with a fixed 17-label, 14-edge
+schema gated in CI. Not a graph query layer over a row store. Not an
+on-demand graph projection. The graph is the canonical model; the row
+stores live alongside it for the things relational stores are good at
+(time-series rollups, full-text grep, audit-log immutability).
+
+I'll work through why graph-at-ingest is the right call for an agentic
+loop, what the schema actually looks like, the substrate-level numbers
+we measure today, and where this architecture pushes back on us.
+
+## The row-store SIEM as an LLM substrate is a poor fit
+
+Most of the SIEMs an agent will inherit from are row-store warehouses.
+They optimise for two access patterns: append fast, scan ranges fast.
+Both are great for analyst workflows that look like _"give me every
+event from this host between 02:00 and 02:15"_. Both are terrible for
+the access pattern an LLM agent actually needs.
+
+The agent's access pattern, when you watch one drive a real
+investigation, is **graph traversal disguised as a sequence of
+questions**:
+
+- Start at an alert (`Alert{id: a-7102}`).
+- Walk to the targeted asset (`Alert)-[:ASSERTS]->(Host{id: h-44}`).
+- Walk to the identity that touched it
+  (`Host<-[:LOGGED_IN_FROM]-(Identity)`).
+- Walk to other assets that identity touched in the last 30 minutes.
+- Walk to the IOCs observed on those assets.
+- Walk to the playbook history for any IOC seen before.
+
+A row-store SIEM answers each of those steps with a fresh query. Six
+steps, six queries, six round trips. Every round trip costs the
+agent budget on two axes: the latency of the query itself, and the
+**context budget of the LLM** that has to read the result and decide
+what to ask next.
+
+In the agent's view of the world, the cheapest unit of evidence is _a
+materialised neighbourhood_, not _a query_. If the model can ask "give
+me the 2-hop neighbourhood around this host, filtered to the last 30
+minutes" and get back a small typed subgraph, the cost of an
+investigation drops by an order of magnitude relative to the query-by-
+query approach. That's why graph-at-ingest matters.
+
+## What "graph at ingest" actually means
+
+The temptation, when you read "graph for SOC", is to bolt a graph
+projection onto the existing pipeline: keep the row store as the
+source of truth, run a streaming job that builds the graph on a delay,
+serve the agent from the graph. We tried it. It doesn't work, for two
+reasons:
+
+1. **The lag kills the loop.** Streaming projections lag the row store
+   by seconds-to-minutes. The agent's investigation is sub-minute. By
+   the time the projection catches up, the alert is closed.
+2. **The schema drifts.** Two write paths means two opinions on what
+   the right node label is, what the right relationship type is, what
+   the right property name is. Schema drift between the row store and
+   the graph projection is a guaranteed source of agent
+   hallucinations: the agent sees the projection's view, the analyst
+   sees the row store's view, and the two diverge.
+
+So we picked the other answer: the **ingester writes the graph
+directly, in the same transaction that writes the row record**. The
+extractor in `services/ingest/internal/graph/extractor.go` reads the
+incoming OCSF event, projects it to a `(node, edge)` set, and the
+writer in `services/ingest/internal/graph/writer.go` upserts it into
+Neo4j with a single `MERGE` per node and per relationship. The
+underlying row store sees the same event in the same transaction.
+There is exactly one source of truth for the schema —
+`schemas/graph-schema.yaml`, mirrored to a Go enum in
+`services/ingest/internal/graph/schema.go`, and gated in CI by
+`scripts/export_graph_schema.py --check`. A schema PR that touches
+one without the other fails the build.
+
+That last point — the CI drift gate — is the part most teams skip.
+Without it, "graph at ingest" decays back into "graph projection" within
+a quarter, because every drift bug looks like a one-off until the
+fifth one in a row.
+
+## The schema, drawn
+
+Seventeen node labels, fourteen relationship types. The schema fits on a
+slide deliberately; an agent that reasons over a graph the size of a
+phonebook is going to make bad decisions. The diagram below is the
+v1.0 schema as of 2026-05-13.
+
+<div className="rounded-2xl border border-white/10 bg-[#0d1320] p-4 md:p-6">
+  <svg viewBox="0 0 720 480" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AiSOC graph schema v1.0 — 17 node labels, 14 relationships">
+    <defs>
+      <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <path d="M0 0L10 5L0 10z" fill="#60a5fa" />
+      </marker>
+      <style>
+        {`.node { fill: #0a0d14; stroke: #60a5fa; stroke-width: 1.2; }
+          .nodeAlert { stroke: #f59e0b; }
+          .nodeAction { stroke: #34d399; }
+          .label { fill: #e2e8f0; font: 11px ui-sans-serif, system-ui; text-anchor: middle; }
+          .edge { stroke: #60a5fa; stroke-width: 1; fill: none; opacity: 0.7; }
+          .edgeLabel { fill: #93c5fd; font: 9px ui-monospace; text-anchor: middle; }
+          .legend { fill: #94a3b8; font: 10px ui-sans-serif; }`}
+      </style>
+    </defs>
+
+    {/* center cluster: Identity / Host */}
+    <ellipse cx="360" cy="240" rx="55" ry="22" className="node" />
+    <text x="360" y="244" className="label">Host</text>
+
+    <ellipse cx="200" cy="240" rx="55" ry="22" className="node" />
+    <text x="200" y="244" className="label">Identity</text>
+
+    {/* upper: User, ServiceAccount, Group, Role */}
+    <ellipse cx="80" cy="160" rx="50" ry="20" className="node" />
+    <text x="80" y="164" className="label">User</text>
+
+    <ellipse cx="80" cy="240" rx="60" ry="20" className="node" />
+    <text x="80" y="244" className="label">ServiceAccount</text>
+
+    <ellipse cx="80" cy="320" rx="40" ry="18" className="node" />
+    <text x="80" y="324" className="label">Group</text>
+
+    <ellipse cx="200" cy="120" rx="40" ry="18" className="node" />
+    <text x="200" y="124" className="label">Role</text>
+
+    <ellipse cx="200" cy="360" rx="55" ry="20" className="node" />
+    <text x="200" y="364" className="label">Permission</text>
+
+    {/* right cluster: Resource / Asset / Process */}
+    <ellipse cx="540" cy="160" rx="50" ry="20" className="node" />
+    <text x="540" y="164" className="label">Process</text>
+
+    <ellipse cx="540" cy="240" rx="55" ry="22" className="node" />
+    <text x="540" y="244" className="label">Resource</text>
+
+    <ellipse cx="540" cy="320" rx="50" ry="20" className="node" />
+    <text x="540" y="324" className="label">File</text>
+
+    <ellipse cx="640" cy="120" rx="50" ry="20" className="node" />
+    <text x="640" y="124" className="label">Network</text>
+
+    <ellipse cx="640" cy="200" rx="40" ry="18" className="node" />
+    <text x="640" y="204" className="label">IP</text>
+
+    <ellipse cx="640" cy="280" rx="50" ry="18" className="node" />
+    <text x="640" y="284" className="label">Domain</text>
+
+    {/* bottom: Alert / Incident / Action */}
+    <ellipse cx="360" cy="360" rx="55" ry="22" className="node nodeAlert" />
+    <text x="360" y="364" className="label">Alert</text>
+
+    <ellipse cx="360" cy="430" rx="55" ry="22" className="node nodeAlert" />
+    <text x="360" y="434" className="label">Incident</text>
+
+    <ellipse cx="540" cy="430" rx="55" ry="22" className="node nodeAction" />
+    <text x="540" y="434" className="label">Action</text>
+
+    <ellipse cx="200" cy="430" rx="55" ry="22" className="node nodeAction" />
+    <text x="200" y="434" className="label">Playbook</text>
+
+    {/* edges */}
+    <line x1="135" y1="160" x2="155" y2="220" className="edge" markerEnd="url(#arr)" />
+    <text x="115" y="200" className="edgeLabel">IS_A</text>
+
+    <line x1="140" y1="240" x2="145" y2="240" className="edge" markerEnd="url(#arr)" />
+    <line x1="120" y1="320" x2="170" y2="260" className="edge" markerEnd="url(#arr)" />
+    <text x="130" y="295" className="edgeLabel">MEMBER_OF</text>
+
+    <line x1="200" y1="140" x2="200" y2="218" className="edge" markerEnd="url(#arr)" />
+    <text x="220" y="180" className="edgeLabel">HAS_ROLE</text>
+
+    <line x1="200" y1="262" x2="200" y2="340" className="edge" markerEnd="url(#arr)" />
+    <text x="240" y="305" className="edgeLabel">HAS_PERMISSION</text>
+
+    <line x1="255" y1="240" x2="305" y2="240" className="edge" markerEnd="url(#arr)" />
+    <text x="280" y="232" className="edgeLabel">LOGGED_IN_FROM</text>
+
+    <line x1="360" y1="262" x2="360" y2="338" className="edge" markerEnd="url(#arr)" />
+    <text x="395" y="305" className="edgeLabel">ASSERTS</text>
+
+    <line x1="360" y1="382" x2="360" y2="408" className="edge" markerEnd="url(#arr)" />
+    <text x="395" y="400" className="edgeLabel">PART_OF</text>
+
+    <line x1="415" y1="240" x2="485" y2="240" className="edge" markerEnd="url(#arr)" />
+    <text x="450" y="232" className="edgeLabel">ACCESSES</text>
+
+    <line x1="540" y1="180" x2="540" y2="218" className="edge" markerEnd="url(#arr)" />
+    <text x="575" y="200" className="edgeLabel">SPAWNED</text>
+
+    <line x1="540" y1="262" x2="540" y2="300" className="edge" markerEnd="url(#arr)" />
+    <text x="580" y="285" className="edgeLabel">CONTAINS</text>
+
+    <line x1="595" y1="160" x2="615" y2="135" className="edge" markerEnd="url(#arr)" />
+    <text x="615" y="160" className="edgeLabel">CONNECTS_TO</text>
+
+    <line x1="640" y1="220" x2="640" y2="262" className="edge" markerEnd="url(#arr)" />
+    <text x="678" y="245" className="edgeLabel">RESOLVES_TO</text>
+
+    <line x1="415" y1="430" x2="485" y2="430" className="edge" markerEnd="url(#arr)" />
+    <text x="450" y="422" className="edgeLabel">EXECUTES</text>
+
+    <line x1="305" y1="430" x2="255" y2="430" className="edge" markerEnd="url(#arr)" />
+    <text x="280" y="422" className="edgeLabel">RUNS</text>
+
+    {/* legend */}
+    <rect x="20" y="450" width="14" height="10" className="node" />
+    <text x="40" y="459" className="legend">17 labels</text>
+    <rect x="100" y="450" width="14" height="10" className="node nodeAlert" />
+    <text x="120" y="459" className="legend">alert plane</text>
+    <rect x="190" y="450" width="14" height="10" className="node nodeAction" />
+    <text x="210" y="459" className="legend">action plane</text>
+    <text x="500" y="459" className="legend">14 relationships · v1.0 · schema-locked in CI</text>
+  </svg>
+</div>
+
+The schema lives in `schemas/graph-schema.yaml` with a one-paragraph
+prose entry per label and per relationship. The contract is:
+
+- **Every label** declares its required and optional properties, the
+  ID convention (`{provider}:{external_id}` for IdP-anchored labels,
+  `{tenant}:{kind}:{uuid}` for tenant-internal ones), and the
+  retention policy.
+- **Every relationship** is either an _event edge_ (carries `ts`,
+  `source_event_id`, `snapshot_id` — written from observed events) or
+  a _structural edge_ (carries `snapshot_id`, `valid_from`, `valid_to`
+  — reconciled from configuration snapshots). The convention is
+  enforced at the schema level so the agent always knows whether a
+  given walk is "what happened" or "what was true at time T".
+- The schema version is in the file (`v1.0`) and is bumped by semver
+  rules: additive change is a minor bump, anything else is a major
+  bump.
+
+That last point matters more than the schema itself. A graph schema
+without a version is a graph schema that drifts every quarter, and an
+agent reasoning over a drifting graph silently regresses. The
+[`/sovereign`](/sovereign) page for AiSOC lists the same drift gate
+under "audit-grade graph"; this is what backs the claim.
+
+## The substrate eval — how we measure the layer beneath the agent
+
+Substrate self-checks are a thing we keep visually distinct from live
+agent benchmarks. The numbers below are from the public eval harness
+running in CI on every PR, against a fixed 200-incident corpus. They
+measure the **substrate** — the in-harness fusion grouper, the
+extractors, the deterministic templates — not the live LLM agent. The
+distinction is on the [public benchmark page](/benchmark) and we
+maintain it religiously: the moment a substrate number gets quoted as
+agent latency, the trust falls off a cliff.
+
+What the substrate eval tells us about the graph layer:
+
+- **Extractor coverage.** 100 % of the 200-incident corpus produces a
+  non-empty `(node, edge)` set on the first ingest pass. The
+  fail-open behaviour we used to have (skip the graph write if any
+  property is missing) was replaced with fail-closed in v1.4: the
+  ingester now refuses to commit the row record if the graph write
+  fails the schema check, because a partial graph is worse than no
+  graph for an agent reasoning over it.
+- **Graph-walk completeness.** For 187 of the 200 incidents (93.5 %),
+  the agent's first canned 2-hop traversal — _alert → asserted asset
+  → identity → other assets touched in the last 30 minutes_ — returns
+  a non-empty result. For the remaining 13, the alert is a
+  cloud-control-plane event with no asset side, and the schema
+  routes the traversal through `Resource` rather than `Host` instead.
+  Both shapes are covered.
+- **Substrate latency.** Median substrate-eval graph build is 0.8 ms
+  per incident on a laptop-class run. Substrate again — this is the
+  in-harness fusion grouper assembling the same `(node, edge)` set
+  the production extractor would emit, not Neo4j round-trip latency.
+  The point is to gate algorithmic regressions in CI, not to claim
+  production performance.
+
+The wet-eval numbers — actual Neo4j p50/p95 round trips for the agent's
+canned traversals — are a different report. We publish them on the
+benchmark page under the wet-eval section, and they're the ones I'd cite
+in a procurement conversation. Substrate numbers are for the engineering
+team; wet numbers are for the operator. Mixing them is the most common
+mistake I see in vendor benchmarks.
+
+## What the graph enables for the agent
+
+Graph-at-ingest pays for itself in three places that an agent loop
+actually feels:
+
+1. **The first context bundle is one query.** The
+   [`ContextBundle` work in T2.1](/blog/latency-budget) — described in
+   the next post in this series — collapses the agent's first
+   "what's around this alert?" question into one Cypher call. On the
+   row-store path that was six. The latency win is not the round-trip
+   savings (those are measured in milliseconds); it's the **context
+   budget** the agent doesn't burn reasoning over six unrelated
+   query results.
+
+2. **Cross-source correlation is free.** When an EDR alert and an IdP
+   sign-in event both reference the same `Identity{id: …}` node, the
+   correlation happens at ingest time, not at query time. The agent
+   that reads `Alert{id: a-7102}` already sees the IdP context as a
+   neighbour edge. No fan-out query, no cross-index join in the
+   warehouse.
+
+3. **The investigation ledger is graph-native.** Every action the
+   agent takes is written as an `Action` node attached to the
+   `Incident` node it acted on. The audit replay — _"show me what the
+   agent considered before it suspended this session"_ — is a single
+   Cypher walk from the action back through the agent's read set.
+   This is what the [L0–L4 maturity model
+   post](/blog/automation-maturity) means by an audit-loggable gate;
+   the auditability is structural, not bolted on.
+
+The fourth, less obvious win is what graph-at-ingest **doesn't** do: it
+doesn't try to be a feature store, a metrics store, a log archive, or a
+search index. Those live in their native systems. The graph is the
+agent's working memory and the audit ledger; everything else is one
+hop away.
+
+## What we got wrong, and what's still open
+
+The honest version of this story includes the wrong turns.
+
+- **We over-modelled at first.** The v0.x schema had 31 labels and
+  44 relationships. The agent's behaviour got worse as the schema
+  grew, because the LLM had to reason about more shape every step.
+  Cutting to 17/14 in v1.0 was a hard pruning: we collapsed
+  `User` and `ServiceAccount` under a shared `Identity` superclass,
+  collapsed `RoleAssignment` into a structural `HAS_ROLE` edge with
+  validity windows, and removed three "future-use" labels that no
+  extractor was writing yet. The agent's investigation completeness
+  on the substrate eval went up, not down, after the cut.
+- **Cross-tenant reasoning isn't there yet.** The graph is
+  tenant-scoped by design — all queries are gated by tenant ID at the
+  driver level. That's the right call for isolation, but it means the
+  agent can't do "have we seen this IOC across other tenants?" today.
+  The work to expose a federated, hashed view of cross-tenant IOC
+  observation is on the v8.0 roadmap and not yet in code.
+- **Snapshot reconciliation is harder than event ingest.** Event-edge
+  writes are easy: take the event, write the edge. Structural-edge
+  writes — the ones that need a `valid_from`/`valid_to` window —
+  require us to diff the latest snapshot against the previous one
+  and emit edge updates only where the diff matters. The diff
+  algorithm is the noisiest part of the pipeline and the most
+  frequent source of regressions. It's documented under "open
+  questions" in the
+  [graph schema reference](/blog/automation-maturity#further-reading).
+
+None of these are deal-breakers; all of them are engineering work,
+not architecture work. The architecture — graph as canonical model,
+written at ingest, with a CI-gated schema — has held up across
+v1, v1.4, and v8.0.
+
+## What I'd tell another team picking the substrate
+
+If you're building an agentic SOC, or any agentic system that has to
+reason over a network-shaped domain, three principles from this work
+generalise:
+
+1. **The substrate decides the agent's latency budget.** A graph
+   substrate buys you sub-second context bundling. A row-store
+   substrate forces multi-query fan-out, and you'll pay for that
+   every investigation, forever.
+
+2. **Pin the schema and gate it in CI.** Whatever schema you pick,
+   write it down, version it, and fail the build on drift. The
+   second-most-common cause of agent hallucination, after model
+   inconsistency, is the agent reading a schema the docs claim
+   exists but the data doesn't follow.
+
+3. **Materialise once at the seam.** Don't run two parallel writes
+   to two parallel stores. Pick the seam — for us, it's the OCSF
+   normalisation step in the ingester — and emit the graph and the
+   row record from the same transaction. Lag and drift are not
+   things you can tune away.
+
+The next post in this series — **[Latency budget for sub-minute
+investigation](/blog/latency-budget)** — picks up where this one ends:
+given the graph is in place, how do you spend the 30-second budget
+between alert and verdict? The third post — **[L0 → L4 SOC automation
+maturity](/blog/automation-maturity)** — builds on both: once the agent
+can reason in 30 seconds, what is it allowed to do at the end?
+
+The schema lives at
+[`schemas/graph-schema.yaml`](https://github.com/beenuar/AiSOC/blob/main/schemas/graph-schema.yaml).
+The Go ingester lives at
+[`services/ingest/internal/graph/`](https://github.com/beenuar/AiSOC/tree/main/services/ingest/internal/graph).
+The drift gate lives at
+[`scripts/export_graph_schema.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/export_graph_schema.py).
+All of it is MIT-licensed; pull requests against the schema are
+welcome, especially from teams running this kind of substrate in
+production.

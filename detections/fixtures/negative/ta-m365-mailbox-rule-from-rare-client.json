@@ -1,0 +1,8 @@
+{
+  "baseline_client_family_rarity": 0.03,
+  "clientAppUsed": "Browser",
+  "operation": "New-InboxRule",
+  "result": "success",
+  "user": "priya.n@example.com",
+  "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0"
+}

@@ -1,0 +1,62 @@
+id: splunk-security-content-395163b8-689b-444b-86c7-9fe9ad624734
+name: PaperCut NG Suspicious Behavior Debug Log
+description: The following analytic identifies potential exploitation attempts on
+  a PaperCut NG server by analyzing its debug log data. It detects unauthorized or
+  suspicious access attempts from public IP addresses and searches for specific URIs
+  associated with known exploits. The detection leverages regex to parse unstructured
+  log data, focusing on admin login activities. This activity is significant as it
+  can indicate an active exploitation attempt on the server. If confirmed malicious,
+  attackers could gain unauthorized access, potentially leading to data breaches or
+  further compromise of the server.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.papercut.com/kb/Main/HowToCollectApplicationServerDebugLogs
+- https://github.com/inodee/threathunting-spl/blob/master/hunt-queries/HAFNIUM.md
+- https://www.cisa.gov/news-events/alerts/2023/05/11/cisa-and-fbi-release-joint-advisory-response-active-exploitation-papercut-vulnerability
+- https://www.papercut.com/kb/Main/PO-1216-and-PO-1219
+- https://www.horizon3.ai/papercut-cve-2023-27350-deep-dive-and-indicators-of-compromise/
+- https://www.bleepingcomputer.com/news/security/hackers-actively-exploit-critical-rce-bug-in-papercut-servers/
+- https://www.huntress.com/blog/critical-vulnerabilities-in-papercut-print-management-software
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`papercutng`
+
+    (loginType=Admin OR userName=admin)
+
+
+    | eval uri_match=if(match(_raw, "(?i)(\/app\?service=page\/SetupCompleted|\/app|\/app\?service=page\/PrinterList|\/app\?service=direct\/1\/PrinterList\/selectPrinter&sp=l1001|\/app\?service=direct\/1\/PrinterDetails\/printerOptionsTab\.tab)"),
+    "URI matches", null())
+
+
+    | eval ip_match=if(match(_raw, "(?i)((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))")
+    AND NOT match(_raw, "(?i)(10\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))|(172\.(1[6-9]|2[0-9]|3[0-1])\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))|(192\.168\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))"),
+    "IP matches", null())
+
+
+    | where  (isnotnull(uri_match) OR isnotnull(ip_match))
+
+    | stats sparkline, count, values(uri_match) AS uri_match, values(ip_match) AS
+    ip_match latest(_raw) BY host, index, sourcetype
+
+    | `papercut_ng_suspicious_behavior_debug_log_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 395163b8-689b-444b-86c7-9fe9ad624734
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/papercut_ng_suspicious_behavior_debug_log.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

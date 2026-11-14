@@ -1,0 +1,62 @@
+id: splunk-security-content-f5f6af30-7aa7-4295-bfe9-07fe87c01a4b
+name: Registry Keys Used For Persistence
+description: The following analytic identifies modifications to registry keys commonly
+  used for persistence mechanisms. It leverages data from endpoint detection sources
+  like Sysmon or Carbon Black, focusing on specific registry paths known to initiate
+  applications or services during system startup. This activity is significant as
+  unauthorized changes to these keys can indicate attempts to maintain persistence
+  or execute malicious actions upon system boot. If confirmed malicious, this could
+  allow attackers to achieve persistent access, execute arbitrary code, or maintain
+  control over compromised systems, posing a severe threat to system integrity and
+  security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.001
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where (Registry.registry_path=*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce
+    OR Registry.registry_path=*\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved\\Run
+    OR Registry.registry_path= "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User
+    Shell Folders\\*" OR Registry.registry_path= "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell
+    Folders\\*" OR Registry.registry_path=*\\currentversion\\run* OR Registry.registry_path=*\\currentVersion\\Windows\\Appinit_Dlls*
+    OR Registry.registry_path=*\\CurrentVersion\\Winlogon\\Shell* OR Registry.registry_path=*\\CurrentVersion\\Winlogon\\Notify*
+    OR Registry.registry_path=*\\CurrentVersion\\Winlogon\\Userinit* OR Registry.registry_path=*\\CurrentVersion\\Winlogon\\VmApplet*
+    OR Registry.registry_path=*\\currentversion\\policies\\explorer\\run* OR Registry.registry_path=*\\currentversion\\runservices*
+    OR Registry.registry_path=*\\SOFTWARE\\Microsoft\\Netsh\\* OR Registry.registry_path=
+    "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\\Common
+    Startup" OR Registry.registry_path= *\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\SharedTaskScheduler
+    OR Registry.registry_path= *\\Classes\\htmlfile\\shell\\open\\command OR (Registry.registry_path="*Microsoft\\Windows
+    NT\\CurrentVersion\\Image File Execution Options*" AND Registry.registry_key_name=Debugger)
+    OR (Registry.registry_path="*\\CurrentControlSet\\Control\\Lsa" AND Registry.registry_key_name="Security
+    Packages") OR (Registry.registry_path="*\\CurrentControlSet\\Control\\Lsa\\OSConfig"
+    AND Registry.registry_key_name="Security Packages") OR (Registry.registry_path="*\\Microsoft\\Windows
+    NT\\CurrentVersion\\SilentProcessExit\\*") OR (Registry.registry_path="*currentVersion\\Windows"
+    AND Registry.registry_key_name="Load") OR (Registry.registry_path="*\\CurrentVersion"
+    AND Registry.registry_key_name="Svchost") OR (Registry.registry_path="*\\CurrentControlSet\Control\Session
+    Manager"AND Registry.registry_key_name="BootExecute") OR (Registry.registry_path="*\\Software\\Run"
+    AND Registry.registry_key_name="auto_update")) by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `registry_keys_used_for_persistence_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: f5f6af30-7aa7-4295-bfe9-07fe87c01a4b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/registry_keys_used_for_persistence.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

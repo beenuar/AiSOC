@@ -1,0 +1,4 @@
+{
+  "aws_region": "ap-northeast-3",
+  "event_name": "RunInstances"
+}

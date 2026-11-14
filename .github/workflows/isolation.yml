@@ -1,0 +1,363 @@
+name: Tenant Isolation
+
+# Phase 1.3: cross-store tenant-isolation gate. The offline layer asserts every
+# datastore read path constructs a tenant scope (a search as tenant A can never
+# include tenant B). The live-container replay lands with Phase 3's integration
+# tier. Table-driven (tests/isolation/stores.py) so a new store cannot ship
+# without an isolation entry.
+#
+# The route-scope job answers the question the store jobs cannot: the stores
+# isolate whichever tenant they are handed, so it still matters where that
+# tenant came from. `/fusion/entity-risk/*` took it from the query string with
+# no auth dependency on the route, on both the API gateway and the fusion
+# service, and key-prefixed Redis storage did nothing to help. That job runs
+# over every service, which is why its path filter is `services/**` rather
+# than the narrow list the store jobs use.
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - "tests/isolation/**"
+      - "services/**"
+      - "scripts/check_route_tenant_scope.py"
+      - "scripts/check_route_auth.py"
+      - "scripts/check_route_authz.py"
+      - "scripts/check_router_principal_binding.py"
+      - "scripts/check_peer_service_token_names.py"
+      - "scripts/check_route_shadowing.py"
+      - "scripts/check_tenant_query_predicates.py"
+      - "scripts/check_text_bind_casts.py"
+      - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
+      - "scripts/check_orphan_tables.py"
+      - "scripts/sync_vendored_tenant_scope.py"
+      # The runtime-DB-role gate reads these, so a change to any of them has
+      # to re-run it. A gate whose inputs are outside its own path filter is
+      # a gate that stops running exactly when somebody edits what it checks.
+      - "scripts/check_runtime_db_role.py"
+      - "scripts/check_rls_policy_shape.py"
+      - "scripts/check_scim_contract.py"
+      - "scripts/check_role_grant_scope.py"
+      - "scripts/check_whitelabel_metering.py"
+      - "docker-compose.yml"
+      - "infra/**"
+      - ".env.example"
+      - ".github/workflows/isolation.yml"
+  pull_request:
+    paths:
+      - "tests/isolation/**"
+      - "services/**"
+      - "scripts/check_route_tenant_scope.py"
+      - "scripts/check_route_auth.py"
+      - "scripts/check_route_authz.py"
+      - "scripts/check_router_principal_binding.py"
+      - "scripts/check_peer_service_token_names.py"
+      - "scripts/check_route_shadowing.py"
+      - "scripts/check_tenant_query_predicates.py"
+      - "scripts/check_text_bind_casts.py"
+      - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
+      - "scripts/check_orphan_tables.py"
+      - "scripts/sync_vendored_tenant_scope.py"
+      # The runtime-DB-role gate reads these, so a change to any of them has
+      # to re-run it. A gate whose inputs are outside its own path filter is
+      # a gate that stops running exactly when somebody edits what it checks.
+      - "scripts/check_runtime_db_role.py"
+      - "scripts/check_rls_policy_shape.py"
+      - "scripts/check_scim_contract.py"
+      - "scripts/check_role_grant_scope.py"
+      - "scripts/check_whitelabel_metering.py"
+      - "docker-compose.yml"
+      - "infra/**"
+      - ".env.example"
+      - ".github/workflows/isolation.yml"
+  # Matching isolation-live.yml, so a maintainer can run the isolation gate on
+  # demand rather than only when a path filter happens to match.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  isolation:
+    name: Cross-store tenant isolation (offline)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: pip install --quiet qdrant-client structlog pytest pytest-asyncio
+
+      - name: Run isolation suite
+        run: >-
+          python -m pytest tests/isolation -v --tb=short
+          --ignore=tests/isolation/test_route_tenant_scope.py
+          --ignore=tests/isolation/test_route_auth_default_deny.py
+
+  route-scope:
+    name: Route tenant scope (no route lets its caller name the tenant)
+    runs-on: ubuntu-latest
+    # A leak here is reachable from any browser, so this gate is not advisory.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # The gate itself is stdlib-only (ast). The suites additionally drive the
+      # real fusion and agents routers over ASGI, which is the point — a
+      # stubbed router would not prove anything about the shipped one — so
+      # their module-level import chains have to resolve here. `aiokafka` and
+      # `asyncpg` arrive through `app.workers.consumer` and the alert/DLQ
+      # sinks; `langchain-core` and `langchain-openai` through `app.llm` and
+      # `app.llm.factory`, which the contextual and copilot routers import at
+      # module level — they are 7 of the 37 routes this suite exists to cover,
+      # so skipping them when the import fails would quietly shrink the gate.
+      # `sqlalchemy[asyncio]` + `aiosqlite` back the seeded two-tenant by-id
+      # read. The extra is what pulls `greenlet`; this list used to name
+      # `greenlet` itself beside a bare `sqlalchemy`, which worked but recorded
+      # the workaround instead of the dependency — and left standing the
+      # impression that a bare `sqlalchemy` suffices, which is the assumption
+      # that reddened `main` when SQLAlchemy 2.1.0 stopped supplying `greenlet`
+      # outside the extra. The heavier ML and
+      # ClickHouse deps do not: `lightgbm`, `scikit-learn`, `numpy` and
+      # `clickhouse-driver` are all imported inside functions, so they stay
+      # out of this job rather than adding minutes to it.
+      - name: Install deps
+        run: >-
+          pip install --quiet
+          pytest pytest-asyncio httpx "fastapi>=0.117,<0.163" pydantic
+          structlog "redis>=5,<6" "pydantic-settings>=2.1,<3"
+          "aiokafka>=0.10,<0.15" "asyncpg>=0.29,<0.31" "cryptography>=46,<51"
+          "sqlalchemy[asyncio]>=2,<3" aiosqlite "langchain-core>=1.2.22,<2" "langchain-openai>=0.2.0,<2"
+
+      # Proves the gate can fail before trusting it to pass. Injects a route
+      # taking a tenant with no auth, one taking a tenant with auth but no
+      # intersection, and strips the verifier a conditional exemption names —
+      # all three must be reported, and the two clean controls must not be.
+      - name: Gate self-test (both directions)
+        run: python scripts/check_route_tenant_scope.py --self-test
+
+      - name: Route inventory
+        run: python scripts/check_route_tenant_scope.py --inventory
+
+      - name: Every tenant-taking route authenticates and intersects
+        run: python scripts/check_route_tenant_scope.py
+
+      - name: Vendored tenant_scope copies are in lockstep
+        run: python scripts/sync_vendored_tenant_scope.py --check
+
+      # Default-deny over every route in the tree. `check_route_tenant_scope`
+      # only looks at routes that take a tenant; 37 agents routes took none
+      # and were reachable with no credential at all, including the one that
+      # executes a response playbook.
+      - name: Route-auth gate self-test (both directions)
+        run: python scripts/check_route_auth.py --self-test
+
+      - name: Route authentication inventory
+        run: python scripts/check_route_auth.py --inventory
+
+      - name: Every route authenticates or records why it is public
+        run: python scripts/check_route_auth.py
+
+      # Authentication is not authorization. Every route in `remediation.py`
+      # passed the gate above and a `viewer` could still raise the tenant's
+      # autonomy tier to L4 and pre-approve a high blast-radius verb
+      # (GHSA-wj5c-88hg-5926). This asks the other question.
+      - name: Route-authz gate self-test (detects a removed permission)
+        run: python scripts/check_route_authz.py --self-test
+
+      - name: Identity-only write-route inventory
+        run: python scripts/check_route_authz.py --inventory
+
+      - name: State-changing routes that authorize do not decrease
+        run: python scripts/check_route_authz.py
+
+      # And authorization is not binding. `services/agents/app/api/playbooks.py`
+      # declared its auth at the router level, which resolves a TenantPrincipal
+      # on every request and discards it because no handler declared one, so the
+      # run store was deployment-global and `GET /runs` returned every tenant's
+      # runs with their alert context (GHSA-27wx-pcv5-pr7q).
+      #
+      # The gate that was supposed to cover this imported the *API* service's
+      # `playbooks` module, which genuinely does bind principals: two modules
+      # share a name and a route list, and it measured the safe one. It had to
+      # — both services name their package `app`, so importing one shadows the
+      # other — hence a path-based AST walk rather than a test in either suite.
+      - name: Router-binding gate self-test (and the pre-fix tree)
+        run: python scripts/check_router_principal_binding.py --self-test
+
+      - name: Unbound-route inventory
+        run: python scripts/check_router_principal_binding.py --report
+
+      - name: A route on an authenticated router binds the principal
+        run: python scripts/check_router_principal_binding.py
+
+      # Carrying a credential is not carrying the right one. The agents service
+      # presented `AISOC_AGENTS_SERVICE_TOKEN` — the token it *accepts* — to an
+      # API that validates `AISOC_API_SERVICE_TOKEN`, so the graph context and
+      # every playbook approval 401'd on every deployment, logged at `debug`.
+      - name: Peer-token gate self-test (both directions)
+        run: python scripts/check_peer_service_token_names.py --self-test
+
+      - name: The credential presented is the one the peer accepts
+        run: python scripts/check_peer_service_token_names.py
+
+      # A route can authenticate perfectly and still never run. `DELETE
+      # /autonomy-policy/grants` sat behind `DELETE /{action}` from the day it
+      # shipped, so an operator could earn an autonomy grant and had no
+      # working path to hand it back. This is the breadth half of that check;
+      # the fidelity half builds the app and sends a request for every
+      # published operation (services/api/tests/test_route_shadowing.py).
+      - name: Route-shadowing gate self-test (the defect, and four near misses)
+        run: python scripts/check_route_shadowing.py --self-test
+
+      - name: No literal route is unreachable behind a parameterised one
+        run: python scripts/check_route_shadowing.py
+
+      # The predicate question, which the parameter gate structurally cannot
+      # ask: a route that matches on an id takes no tenant, which is exactly
+      # why it was missing the filter.
+      - name: Tenant-predicate gate self-test (both directions)
+        run: python scripts/check_tenant_query_predicates.py --self-test
+
+      - name: Tenant-predicate inventory
+        run: python scripts/check_tenant_query_predicates.py --inventory
+
+      - name: Every query on a tenant-scoped table filters on a tenant
+        run: python scripts/check_tenant_query_predicates.py
+
+      # A tenant predicate is worth nothing in a statement that cannot be
+      # built. `:tenant_id::uuid` declares `tenant_i`, so `.bindparams()`
+      # raises before the query is sent and the predicate gate above still
+      # reads the filter it wanted in the source text.
+      - name: Bind-cast gate self-test (the defect, and three near misses)
+        run: python scripts/check_text_bind_casts.py --self-test
+
+      - name: No bind parameter is followed by a `::` cast
+        run: python scripts/check_text_bind_casts.py
+
+      # Two case tables that never synchronised meant every case metric
+      # was blind to every case an analyst created — MTTR could stay null
+      # while a tenant closed cases all week. Nothing errored: both
+      # tables existed and both queries were valid.
+      - name: One case table gate self-test
+        run: python scripts/check_one_case_table.py --self-test
+
+      - name: One case table, and one status vocabulary
+        run: python scripts/check_one_case_table.py
+
+      # The alert half of the same defect, and the worse one: `triaged` was
+      # written by the auto-triage worker and classified by nobody, so every
+      # tile on the dashboard read 0 for a tenant with nine open alerts.
+      - name: Alert-status vocabulary gate self-test (the defect, and two near misses)
+        run: python scripts/check_alert_status_vocabulary.py --self-test
+
+      - name: No worker writes an alert status that no reader classifies
+        run: python scripts/check_alert_status_vocabulary.py
+
+      # Module reachability answers "does anything import this file" and
+      # cannot answer the question stored state turns on: which code path
+      # writes this table. Three tables shipped with a migration that applied
+      # cleanly, a reader that ran perfectly or no reader at all, and every
+      # gate here green — `triage_questions` read on the hot path of every
+      # alert with no writer anywhere, `hunt_source_reports` a pure orphan
+      # whose approval column enforced the property its own migration states,
+      # and migration 142's two tables named in exactly one file repo-wide.
+      - name: Orphan-table self-test (the shape, and the near misses)
+        run: python scripts/check_orphan_tables.py --self-test
+
+      - name: Every table a migration creates is named outside it
+        run: python scripts/check_orphan_tables.py
+
+      # The second layer, which was decoration until 061_runtime_app_role.sql:
+      # every service connected as a superuser, and a superuser ignores RLS
+      # policies even under FORCE ROW LEVEL SECURITY. This is the static half —
+      # the deployment surfaces. integration.yml runs the live half against a
+      # real database, where the role's attributes can be read directly.
+      - name: Runtime-DB-role gate self-test (both directions)
+        run: python scripts/check_runtime_db_role.py --self-test
+
+      - name: No service connects as a role that can bypass RLS
+        run: python scripts/check_runtime_db_role.py
+
+      # The other way the second layer fails: a policy without the
+      # `OR current_tenant_id() IS NULL` arm makes every cross-tenant worker
+      # see zero rows and report success. Silent, and worse than the bypass.
+      - name: Policy-shape gate self-test (both directions)
+        run: python scripts/check_rls_policy_shape.py --self-test
+
+      - name: Every RLS policy admits an unbound session and reads the GUC the tree sets
+        run: python scripts/check_rls_policy_shape.py
+
+      # SCIM is an authentication-adjacent write surface whose client decides
+      # what to attempt by reading a document this service publishes. The
+      # documents, the routes, the audit trail and the group-to-role mapping
+      # therefore have to agree, and the self-test proves the gate still
+      # notices when they stop agreeing.
+      - name: SCIM-contract gate self-test (four injected drifts)
+        run: python scripts/check_scim_contract.py --self-test
+
+      - name: The SCIM surface matches what it advertises, audits and grants
+        run: python scripts/check_scim_contract.py
+
+      # A role string from a request body is an authorization decision the
+      # client made. `POST /tenants/me/users` persisted one with no allow-list
+      # and no grant scope, and because `platform_admin` is declared `["*"]` a
+      # `tenant_admin` could mint total authority (GHSA-pm3f-h6gc-rvgp). Five
+      # sibling routes had the same defect, which is why this gate asks the
+      # question of every handler that binds an authority field rather than of
+      # the one the report named.
+      - name: Role-grant gate self-test (six injected drifts)
+        run: python scripts/check_role_grant_scope.py --self-test
+
+      - name: No route confers authority its caller does not hold
+        run: python scripts/check_role_grant_scope.py
+
+      # An uploaded logo renders in the console and inside PDF reports other
+      # people open, so the SVG allowlist is a security control under steady
+      # pressure to widen. And a meter added later with its tenant formatted
+      # in would count every tenant's rows while its own test passed.
+      - name: White-label and metering gate self-test (four injected drifts)
+        run: python scripts/check_whitelabel_metering.py --self-test
+
+      - name: The SVG allowlist admits nothing executable and every meter binds its tenant
+        run: python scripts/check_whitelabel_metering.py
+
+      - name: Start Redis for the two-tenant route replay
+        run: |
+          docker run -d --name route-iso-redis -p 6379:6379 redis:7-alpine
+          for _ in $(seq 1 30); do
+            if docker exec route-iso-redis redis-cli PING 2>/dev/null | grep -q PONG; then
+              echo "redis up"; exit 0
+            fi
+            sleep 1
+          done
+          echo "redis did not come up" >&2
+          exit 1
+
+      # Seeds tenant A and tenant B through the real EntityRiskEngine, asserts
+      # both genuinely hold rows, then drives the shipped fusion routes and
+      # asserts an anonymous caller, an undeclared service token, and a
+      # console session for B are each refused A's data.
+      - name: Two-tenant replay against the real routes
+        env:
+          AISOC_ISOLATION_REDIS_URL: redis://localhost:6379/9
+        run: python -m pytest tests/isolation/test_route_tenant_scope.py -v --tb=short
+
+      # Anonymous calls against the real agents routers, and a two-tenant
+      # seeded read of a distributed-query result addressed by id. Both
+      # tenants' rows are asserted present before either absence is asserted.
+      - name: Default-deny + by-id replay against the real routes
+        run: python -m pytest tests/isolation/test_route_auth_default_deny.py -v --tb=short
+
+      - name: Stop Redis
+        if: always()
+        run: docker rm -f route-iso-redis || true

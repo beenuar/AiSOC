@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-suspicious-run-key-from-download
+name: suspicious_run_key_from_download
+description: suspicious_run_key_from_download
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_run_key_from_download {\n meta:\n    author =\
+    \ \"Florian Roth\"\n    description = \"Detects the suspicious RUN keys created\
+    \ by software located in Download or temporary Outlook/Internet Explorer directories\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/WmJZ5Utwyr12\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/10/01\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"persistence, t1060\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"13\" and (re.regex($selection.target.process.file.full_path, `.*\\\\Downloads\\\
+    \\.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\Temporary\
+    \ Internet Files\\\\Content\\.Outlook\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\Local Settings\\\\Temporary Internet Files\\\\.*`)) and re.regex($selection.target.registry.registry_key,\
+    \ `.*\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\.*`))\n\n\
+    \  condition:\n    $selection\n}"
+  chronicle_rule_name: suspicious_run_key_from_download
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_run_key_from_download
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/suspicious_run_key_from_download.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

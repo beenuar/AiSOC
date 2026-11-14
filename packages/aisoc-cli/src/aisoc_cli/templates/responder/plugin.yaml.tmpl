@@ -1,0 +1,32 @@
+id: $slug
+name: $name
+version: 0.1.0
+plugin_type: responder
+tier: community
+description: >
+  $name takes a containment / remediation action when fired by a playbook.
+  Examples: disable a user, isolate an endpoint, block an IP at the edge.
+author: "$author"
+tags: [responder]
+license: MIT
+min_aisoc_version: "4.0.0"
+runtime: python
+entry_point: plugin.py
+config_schema:
+  type: object
+  required: []
+  properties:
+    api_key:
+      type: string
+      description: "API token used to call the upstream control plane."
+      secret: true
+    dry_run:
+      type: boolean
+      description: "If true, log the intended action without executing it."
+      default: false
+    timeout_seconds:
+      type: integer
+      description: "Per-action timeout."
+      default: 15
+      minimum: 1
+      maximum: 120

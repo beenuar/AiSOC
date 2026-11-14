@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-rig-ek-delivers-predator-the-thiefbot-ransomware
+name: rig_ek_delivers_predator_the_thiefbot_ransomware
+description: rig_ek_delivers_predator_the_thiefbot_ransomware
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule rig_ek_delivers_predator_the_thiefbot_ransomware {\n meta:\n\
+    \    author = \"Emir Erdogan\"\n    description = \"Rig EK Delivers Predator the\
+    \ thief&Bot Ransomware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/rOXcOaqX6q1R\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/11/24\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1486, T1059\"\n\n  events:\n((((re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\socks111atx\\.exe`) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\radD8D54\\.tmp\\.exe`)) or ($selection1.metadata.product_event_type =\
+    \ \"1\" and re.regex($selection1.target.process.file.full_path, `.*\\\\regsvr32\\\
+    .exe`) and (re.regex($selection1.target.process.command_line, `.*\\\\D5F4\\.tmp\\\
+    .dll`) or re.regex($selection1.target.process.command_line, `.*\\\\CD2D\\.tmp\\\
+    .dll`)))) or (re.regex($selection1.target.process.command_line, `.*ping 127\\\
+    .0\\.0\\.1 && del.*`) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\radD8D54\\.tmp\\.exe`))) and (re.regex($selection1.target.process.file.full_path,\
+    \ `.*\\\\notepad\\.exe`) and re.regex($selection1.target.process.command_line,\
+    \ `.*\\\\FILES ENCRYPTED\\.txt`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: rig_ek_delivers_predator_the_thiefbot_ransomware
+provenance:
+  source: chronicle/detection-rules
+  source_id: rig_ek_delivers_predator_the_thiefbot_ransomware
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/sysmon/rig_ek_delivers_predator_the_thief_bot_ransomware.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

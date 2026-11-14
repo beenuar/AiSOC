@@ -1,0 +1,39 @@
+id: splunk-security-content-1cfab663-9adc-4169-a88c-6bae29ba3c70
+name: Ollama Excessive API Requests
+description: Detects potential Distributed Denial of Service (DDoS) attacks or rate
+  limit abuse against Ollama API endpoints by identifying excessive request volumes
+  from individual client IP addresses. This detection monitors GIN-formatted Ollama
+  server logs to identify clients generating abnormally high request rates within
+  short time windows, which may indicate automated attacks, botnet activity, or resource
+  exhaustion attempts targeting local AI model infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1498
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` | rex field=_raw "\|\s+(?<client_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+\|"
+    | eval src=coalesce(src, client_ip) | eval dest=coalesce(dest, url, uripath, endpoint)
+    | bin _time span=5m | stats count as request_count by _time, src, dest, host |
+    where request_count > 120 | eval severity="high" | eval attack_type="Rate Limit
+    Abuse / DDoS" | stats count by _time, host, src, dest, request_count, severity,
+    attack_type | `ollama_excessive_api_requests_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1cfab663-9adc-4169-a88c-6bae29ba3c70
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_excessive_api_requests.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

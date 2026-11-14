@@ -1,0 +1,46 @@
+id: splunk-security-content-9b62da2c-e442-474f-83ca-fac4dabab1b3
+name: Windows File and Directory Permissions Remove Inheritance
+description: The following analytic detects the removal of permission inheritance
+  using ICACLS. This analytic identifies instances where ICACLS is used to remove
+  permission inheritance from files or directories. The /inheritance:r flag, which
+  strips inherited permissions while optionally preserving or altering explicit permissions,
+  is monitored to detect changes that may restrict access or establish isolated permission
+  configurations. Removing inheritance can be a legitimate administrative action but
+  may also indicate an attempt to conceal malicious activity or bypass inherited security
+  controls.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/-applocker-rules-as-defense-evasion-complete-analysis.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ IN( \"icacls.exe\", \"cacls.exe\", \"xcacls.exe\")\n    AND\n    Processes.process\
+    \ = \"*/inheritance:r*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_file_and_directory_permissions_remove_inheritance_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9b62da2c-e442-474f-83ca-fac4dabab1b3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_file_and_directory_permissions_remove_inheritance.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

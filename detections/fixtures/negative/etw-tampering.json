@@ -1,0 +1,5 @@
+{
+  "command_line": "wevtutil.exe el",
+  "host": "wks-001",
+  "image_basename": "wevtutil.exe"
+}

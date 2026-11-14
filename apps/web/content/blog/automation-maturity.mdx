@@ -1,0 +1,303 @@
+---
+title: "L0 → L4 SOC automation maturity, and where the industry actually is"
+slug: "automation-maturity"
+date: "2026-05-13"
+author: "Prince Sinha, Senior Director, Innovations at Cyble"
+tags:
+  - operations
+  - autonomy
+  - maturity-model
+description: "The L0–L4 SOC automation maturity model defines five tiers by per-action blast radius, not by product capability. The full white paper is in the repo. This post is a working summary plus an opinionated read of where most SOCs actually sit in 2026 — and what it would take to move."
+og_image: "/blog/automation-maturity-og.svg"
+---
+
+The most-asked question after a SOC autonomy demo is the wrong
+question. People ask: _"is this fully autonomous?"_ The answer that
+matters — and the one operators have to defend internally and to
+auditors externally — is: _"which actions, against which targets,
+under which constraints, with which rollback story?"_
+
+The L0–L4 SOC Automation Maturity model is the framework we use, in
+AiSOC, to make that question answerable in five positions instead of a
+binary. The full white paper —
+[`apps/web/content/papers/l0-l4-automation-maturity.md`](https://github.com/beenuar/AiSOC/blob/main/apps/web/content/papers/l0-l4-automation-maturity.md),
+v1.0, MIT-licensed — covers the model in the precision an architect
+needs: the gate decision tree, the worked examples, the migration
+paths, the relation to MITRE D3FEND and OASIS CACAO. This post is
+**not** the white paper. It is a tighter summary plus the part the
+paper deliberately leaves out: a candid read of where the industry
+actually sits in 2026, and what it would take to move.
+
+If you finish this post and want the full story, the white paper is
+the next read. If you want to talk through what tier your SOC is at
+today and what it would take to step up, the
+[architecture-review CTA](#talk-to-us) at the bottom is the right
+door.
+
+## The model in five paragraphs
+
+The L0–L4 model defines five tiers, each by exactly two things: the
+**blast radius** of an action class (`MINIMAL`, `LOW`, `MEDIUM`,
+`HIGH`, `CRITICAL`), and the set of blast radii that are permitted to
+execute autonomously at this tier. Everything outside that set is
+queued for human approval. Every decision — auto, queued, blocked —
+is logged with a structured rationale to a single table that an
+auditor can query.
+
+- **L0 — Observe.** Agent reasons, recommends, drafts. Doesn't
+  execute. Every action is queued. This is the safe-by-default
+  starting tier and the one new tenants land on.
+- **L1 — Notify.** Agent autonomously executes `MINIMAL` actions —
+  Slack/Teams/PagerDuty notifications, ticket creation, ChatOps
+  user verification, read-only SIEM searches. No infrastructure
+  mutation. This is the floor for a real production deployment.
+- **L2 — Contain.** L1 plus `LOW` actions: file quarantine, IOC
+  blocklist, AV scan, forensic capture, notable-event creation. The
+  median AiSOC production tenant operates here. Containment is
+  reversible and the rollback story is documented per action class.
+- **L3 — Remediate.** L2 plus `MEDIUM` actions: block IP/domain,
+  kill process, reset password, force MFA, run a playbook. Human
+  review is retrospective rather than prospective; the analyst's role
+  shifts from "should the agent act?" to "was the agent right?". The
+  recommended path to L3 is per-action overrides, not a global tier
+  bump.
+- **L4 — Automate.** L3 plus `HIGH` actions — host isolation, account
+  disablement, session suspension, remote script execution — but
+  **only** when the (action, target) pair matches an explicit
+  whitelist entry with constraints and an expiry. `CRITICAL` actions
+  are never autonomous, regardless of tier.
+
+The dial moves both ways. A tier _drop_ — for example, dropping back
+to L2 during a financial audit window or after a recent operational
+incident — is one API call and is treated as a normal, lossless
+operation by the gate. The maturity model assumes operators want to
+move both directions, often.
+
+## Why blast radius and not "trust"
+
+The original framing of SOC autonomy was binary — _trust the agent
+or don't_ — and the natural extension was to make the trust setting
+per-product: _"we trust this vendor more than that one"_. Both
+framings break for the same reason: operator trust is granted
+**per action class against per target**, not per product or per
+agent.
+
+A wrong Slack post costs attention. A wrong file quarantine costs an
+analyst's morning. A wrong host isolation costs a developer's day. A
+wrong account disablement costs a meeting and sometimes a contract.
+Each step up that ladder is an order-of-magnitude change in the cost
+of a false positive. A good autonomy model encodes that intuition;
+the L0–L4 tiers are five points along the cost curve, and the
+per-action whitelist at L4 is the fine-grain at the top end.
+
+The other reason blast radius is the unit, and not "trust", is that
+blast radius is **observable**. You can read the action's executor
+code and tell what it does. You can run it in a staging environment
+and measure the side effect. You can write the rollback story for it.
+"Trust" is none of those things.
+
+## How the gate decides
+
+Every action — agent-initiated or human-initiated — runs through one
+function: `evaluate_gate(request, config)` in
+`services/actions/app/services/maturity.py`. The decision tree is
+short enough to read in one breath:
+
+1. Look up the action's blast radius from `ACTION_BLAST_RADIUS`.
+2. Look up the tenant's tier and per-action overrides.
+3. If the action has a `block` override → blocked.
+4. If the action has a `force_auto` override → auto.
+5. If the action is HIGH and the tenant is at L4 → scan the
+   whitelist for a matching `(action_type, target_prefix)` entry.
+   Match → auto. No match → queued.
+6. Otherwise compare blast radius against the tier's allow-set:
+   L0=`{}`, L1=`{MINIMAL}`, L2=`{MINIMAL, LOW}`,
+   L3=`{MINIMAL, LOW, MEDIUM}`, L4=`{MINIMAL, LOW, MEDIUM, HIGH-whitelisted}`.
+7. Write the decision (auto, queued_approval, blocked) with the full
+   rationale to `remediation_gate_log`.
+
+The gate is **fast** — sub-millisecond on warm caches — and it is
+**inspectable**. An auditor can query the gate log for the last 24
+hours, the last quarter, or the lifetime of the tenant, and form a
+verifiable belief about what the agent was permitted to do at any
+point in time. That auditability is the point of the model; without
+it, "L4 capable" is a marketing claim, not an operational one.
+
+The fast-and-inspectable property of the gate matters in the
+[latency budget](/blog/latency-budget#block-4--buffer-10s-everything-else):
+the 30-second p50 budget for an agentic investigation includes the
+gate evaluation, and we measure it as a sub-millisecond consumer of
+the buffer block. The gate's job is to be predictable, not to wait
+for the side effect.
+
+## Where the industry actually is in 2026
+
+The white paper is deliberately neutral on this. The blog post is
+the place to be opinionated, so here it is.
+
+**Most production SOCs are at L0 with an aspirational roadmap to
+L2.** The aspiration is real and the roadmap usually has a date on
+it; what's missing is the operational discipline to graduate without
+the kind of false-positive event that destroys trust faster than any
+feature can rebuild it. The single largest predictor of which SOCs
+make it from L0 to L2 is whether they sample the gate log every week
+during the L1 period. The ones that do, graduate. The ones that
+don't, stall.
+
+**Vendors over-claim and operators under-deliver.** A common pattern:
+the vendor's marketing site claims "fully autonomous SOC", their
+demo runs at L2 against a narrow set of high-confidence detections,
+and the operator's actual deployment runs at L0 because the
+compliance team hasn't approved a single autonomous action. The gap
+is rarely product capability; it's the absence of the audit-grade
+gate log that would let the compliance team approve anything.
+
+**The most credible vendors talk about per-action autonomy.** The
+ones that say "we are L4 on host isolation against quarantine-tagged
+workstations and L2 on the rest, here is the gate log" are
+operationally honest. The ones that say "we are autonomous"
+are usually counting recommendations as actions or describing a
+roadmap. Operators are starting to ask the right follow-up questions
+— _"show me the per-action override table" / "show me the
+whitelist constraints"_ — and the vendors that can't answer are
+losing the deals where the buyer has done the work.
+
+**Auditors are ahead of operators on the maturity model.** This is
+the surprising one. In the last six months we've watched several
+external audit teams ask precisely the L0–L4 question — "for every
+HIGH-radius action your platform fired in the last quarter, show me
+the gate decision, the actor, and the rationale" — and walk away
+when the answer is a screenshot rather than a query. The gate log is
+becoming an audit-grade artefact independent of any maturity claim.
+
+**The hardest tier to graduate to is L3.** Not L4. L4 is the
+whitelist tier; the whitelist is the operator's signed contract that
+a specific (action, target) combination has been de-risked, and
+because the contract is explicit, the trust transfer is clean. L3 is
+where the operator has to accept that **all MEDIUM actions** —
+password resets, MFA forces, IP blocks, process kills — fire
+autonomously by tier default, and that's a wider commitment than
+most teams are ready for as a single step. Our recommended path to
+L3 is per-action overrides on top of an L2 tier, not a global bump.
+The model supports both, and the field tells us only one of them
+works.
+
+## Migration paths, in fewer words than the paper
+
+The white paper covers the migration paths in detail; this is the
+operating-room version.
+
+```text
+L0 → L1
+  Wire one notification connector. Read the gate log after a full
+  alert cycle. Promote.
+
+L1 → L2
+  Run at L1 for one deployment cycle. Sample the gate log; confirm
+  the agent's recommended LOW actions would have been correct. Read
+  and accept rollback semantics for each LOW action class. Promote.
+
+L2 → L3   (recommended: per-action, not global)
+  Pick one MEDIUM action class with high-confidence input
+  (e.g. block_ip when threat-intel confidence > 0.95). Add
+  force_auto override for it. Keep the tier at L2. After several
+  weeks with a clean gate log, add the next. Promote the tier only
+  when most MEDIUM action classes are already auto-approved via
+  overrides.
+
+L3 → L4
+  Pick one closed-loop scenario (action_type, target_prefix). Add a
+  whitelist entry with explicit constraints, expiry, and ChatOps
+  notification on every fire. Run the loop for an incident or a
+  quarterly fire drill. Promote when the whitelist is exercised and
+  reviewed in production.
+```
+
+The single most important thing about this sequence is that **every
+step is reversible in one API call**. No tier change requires a
+service restart. No tier drop drops history. The operator owns the
+trust posture; the platform owns the gate.
+
+## What's still open
+
+The paper closes on five open questions. Two of them are worth
+pulling forward into the operator conversation, because they shape
+what the next 12–24 months of the model look like.
+
+**Per-target trust at L3.** L4 has whitelist-level fine-grain via
+target-prefix constraints. L3 does not. There's a credible case for
+extending whitelist-style constraints down to L3 so an operator can
+say "auto-fire `block_ip` for sources in known-malicious feeds but
+queue auto-fires against private RFC1918 ranges." The cost is a modest
+schema change on `action_overrides`. We're working through what the
+operator UX looks like; it's the kind of feature that's easy to
+ship badly and hard to ship well.
+
+**Tier as a compliance artefact.** Some regulated environments
+(financial services, healthcare, government) need a sworn statement
+of "what could the agent have done autonomously during this incident
+window". `remediation_gate_log` answers most of that today. A more
+auditor-friendly export — tier history, whitelist diff, override
+diff, gate log — would close the loop and is a likely v8.x deliverable.
+
+The biggest industry shift the model anticipates — and it is a
+shift, not a prediction — is the move from "autonomous SOC" as a
+marketing tier to **per-action autonomy** as the default vocabulary.
+The vendor that says "we are L4 on these six action types, L2 on
+the rest, here is the gate log" is more credible than the vendor that
+says "we are autonomous". Operators are catching up; auditors are
+ahead of operators; regulators are starting to ask. The next time you
+sit through an autonomy pitch, ask which tier the platform supports
+**by default**, where the gate log lives, and how to query it. The
+answers separate the operationally honest vendors from the rest.
+
+## Where this fits in the AiSOC architecture
+
+The maturity model isn't a standalone feature; it's a function of two
+choices we made earlier in the stack:
+
+- **The graph at ingest** — covered in
+  [the first post in this series](/blog/graph-at-ingest) — gives the
+  agent a queryable, audit-grade view of "what was around the alert
+  at the moment we acted". The gate log references that view so an
+  auditor can replay the agent's read-set.
+- **The 30-second latency budget** — covered in the
+  [second post in this series](/blog/latency-budget) — includes the
+  gate evaluation as a sub-millisecond consumer of the buffer block.
+  The gate is fast on purpose; the platform takes the time hit on
+  the LLM and the connector side, never on the trust decision.
+
+Together, those three pieces — graph substrate, latency budget,
+maturity gate — are the architecture story for v8.0. None of them
+is novel in isolation; the win is in the integration, and the win
+is what shows up in the gate log every morning.
+
+## <a id="talk-to-us"></a>Talk to us
+
+Two doors:
+
+1. **Read the white paper in full.** It lives in the repo at
+   [`apps/web/content/papers/l0-l4-automation-maturity.md`](https://github.com/beenuar/AiSOC/blob/main/apps/web/content/papers/l0-l4-automation-maturity.md)
+   under MIT licence. The PDF render is being prepared for the
+   `/papers` route; in the meantime the markdown is the canonical
+   version and renders cleanly in any reader.
+
+2. **Book a 1:1 architecture review.** If you want to talk through
+   what tier your SOC is at today, what the gate log would look like
+   on your event stream, and what the migration path costs, send a
+   short pitch (one paragraph; what you're running, what you're
+   stuck on, what success looks like) to
+   [hello@tryaisoc.com](mailto:hello@tryaisoc.com?subject=L0%E2%80%93L4%20architecture%20review).
+   We'll come back inside two business days with a 30-minute
+   working slot. The conversation is technical, not commercial; if
+   the answer is "you're at L0 and you should stay at L0 for the
+   next quarter", that's what we'll say.
+
+The architecture reference for the gate, the action executors, and
+the gate log lives at
+[`services/actions/`](https://github.com/beenuar/AiSOC/tree/main/services/actions).
+The maturity model itself, with the worked examples and the
+references to MITRE D3FEND, OASIS CACAO, SAE J3016, and NIST
+SP 800-61, lives in the white paper above. Pull requests against the
+maturity model — new action types, target-constraint syntax,
+auditor-friendly compliance export — are very welcome.

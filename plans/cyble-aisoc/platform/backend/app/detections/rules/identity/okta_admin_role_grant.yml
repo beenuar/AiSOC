@@ -1,0 +1,23 @@
+title: Okta Super Admin Role Granted
+id: aisoc-id-0005-okta-super-admin-grant
+status: stable
+description: Suspicious assignment of the SUPER_ADMIN role in Okta.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1098
+  - attack.persistence
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action: 'user.account.privilege.grant'
+    okta.target.role:
+      - 'SUPER_ADMIN'
+      - 'ORG_ADMIN'
+  condition: selection
+falsepositives:
+  - Approved tenant migrations / break-glass account setup.

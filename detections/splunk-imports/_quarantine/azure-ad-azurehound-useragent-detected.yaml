@@ -1,0 +1,45 @@
+id: splunk-security-content-d62852db-a1f1-40db-a7fc-c3d56fa8bda3
+name: Azure AD AzureHound UserAgent Detected
+description: This detection identifies the presence of the default AzureHound user-agent
+  string within Microsoft Graph Activity logs and NonInteractive SignIn Logs. AzureHound
+  is a tool used for gathering information about Azure Active Directory environments,
+  often employed by security professionals for legitimate auditing purposes. However,
+  it can also be leveraged by malicious actors to perform reconnaissance activities,
+  mapping out the Azure AD infrastructure to identify potential vulnerabilities and
+  targets for further exploitation. Detecting its usage can help in identifying unauthorized
+  access attempts and preemptively mitigating potential security threats to your Azure
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.004
+  - T1526
+  categories:
+  - cloud
+references:
+- https://github.com/SpecterOps/AzureHound
+- https://splunkbase.splunk.com/app/3110
+- https://splunk.github.io/splunk-add-on-for-microsoft-cloud-services/Install/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category IN (MicrosoftGraphActivityLogs, NonInteractiveUserSignInLogs)\
+    \ properties.userAgent=azurehound*\n  | rename properties.userAgent as user_agent\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product user_agent\n     \
+    \  signature\n  | iplocation src\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `azure_ad_azurehound_useragent_detected_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d62852db-a1f1-40db-a7fc-c3d56fa8bda3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_azurehound_useragent_detected.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

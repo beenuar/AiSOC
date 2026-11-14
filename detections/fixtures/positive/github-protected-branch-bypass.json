@@ -1,0 +1,7 @@
+{
+  "action": "git.push",
+  "actor": "user@corp.com",
+  "actor_role": "developer",
+  "ref": "refs/heads/main",
+  "ref_in_protected_branches": true
+}

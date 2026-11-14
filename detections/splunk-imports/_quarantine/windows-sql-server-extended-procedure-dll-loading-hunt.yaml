@@ -1,0 +1,43 @@
+id: splunk-security-content-182ba99f-2dde-4cdb-8e5c-e3b1e251cb10
+name: Windows SQL Server Extended Procedure DLL Loading Hunt
+description: This analytic detects when SQL Server loads DLLs to execute extended
+  stored procedures. This is particularly important for security monitoring as it
+  indicates the first-time use or version changes of potentially dangerous procedures
+  like xp_cmdshell, sp_OACreate, and others. While this is a legitimate operation,
+  adversaries may abuse these procedures for execution, discovery, or privilege escalation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1505.001
+  - T1059.009
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/general-extended-stored-procedures-transact-sql
+- https://learn.microsoft.com/en-us/previous-versions/sql/sql-server-2008-r2/ms175543(v=sql.105)
+- https://learn.microsoft.com/en-us/sql/relational-databases/extended-stored-procedures-programming/using-extended-stored-procedures
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_application` EventCode=8128\n  | rex field=EventData_Xml\
+    \ \"<Data>(?<dll_name>[^<]+)</Data><Data>(?<dll_version>[^<]+)</Data><Data>(?<procedure_name>[^<]+)</Data>\"\
+    \n  | rename host as dest\n  | eval dll_category=case( dll_name==\"xpstar.dll\"\
+    , \"Extended Procedures\", dll_name==\"odsole70.dll\", \"OLE Automation\", dll_name==\"\
+    xplog70.dll\", \"Logging Procedures\", true(), \"Other\")\n  | stats count as\
+    \ execution_count, values(procedure_name) as procedures_used, latest(_time) as\
+    \ last_seen\n    BY dest dll_name dll_category\n       dll_version\n  | sort -\
+    \ execution_count\n  | `windows_sql_server_extended_procedure_dll_loading_hunt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 182ba99f-2dde-4cdb-8e5c-e3b1e251cb10
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_sql_server_extended_procedure_dll_loading_hunt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

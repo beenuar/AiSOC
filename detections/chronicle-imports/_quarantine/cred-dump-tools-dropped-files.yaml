@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-cred-dump-tools-dropped-files
+name: cred_dump_tools_dropped_files
+description: cred_dump_tools_dropped_files
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule cred_dump_tools_dropped_files {\n\n  meta:\n    author = \"Teymur Kheirkhabarov,\
+    \ oscd.community\"\n    description = \"Files with well-known filenames (parts\
+    \ of credential dump software or files produced by them) creation\"\n    reference\
+    \ = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/file/file_event/file_event_win_cred_dump_tools_dropped_files.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Cred Dump Tools Dropped Files\"\n    sigma_uuid = \"8fbf3271-1ef6-4e94-8210-03c2317947f6\"\
+    \n    sigma_status = \"test\"\n    rule_id = \"mr_1ba84a4c-c6cf-49ee-902d-5e9e6efcaac0\"\
+    \n    tactic = \"TA0006\"\n    technique = \"T1003.001\"\n    type = \"Detection\"\
+    \n    data_source = \"Sysmon\"\n    platform = \"Windows\"\n    severity = \"\
+    High\"\n    priority = \"High\"\n    false_positives = \"Legitimate Administrator\
+    \ using tool for password recovery\"\n\n  events:\n    $file.metadata.event_type\
+    \ = \"FILE_CREATION\"\n    (\n        re.regex($file.target.file.full_path, `\\\
+    \\(fgdump-log|kirbi|pwdump|pwhashes|wce_ccache|wce_krbtkt)`) nocase or\n     \
+    \   re.regex($file.target.file.full_path, `\\\\(cachedump\\.exe|cachedump64\\\
+    .exe|DumpExt\\.dll|DumpSvc\\.exe|Dumpy\\.exe|fgexec\\.exe|lsremora\\.dll|lsremora64\\\
+    .dll|NTDS\\.out|procdump64\\.exe|pstgdump\\.exe|pwdump\\.exe|SAM\\.out|SECURITY\\\
+    .out|servpw\\.exe|servpw64\\.exe|SYSTEM\\.out|test\\.pwd|wceaux\\.dll)$`) nocase\n\
+    \    )\n    $file.principal.hostname = $hostname\n\n  match:\n    $hostname over\
+    \ 5m\n\n  outcome:\n    //example usage of specifying test user and hostname to\
+    \ adjust risk score\n    $risk_score = max(if($file.principal.user.userid = \"\
+    user\" and $file.principal.hostname = \"hostname\", 0, 15))\n    $principal_hostname\
+    \ = array_distinct($file.principal.hostname)\n    $principal_process_pid = array_distinct($file.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($file.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($file.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($file.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($file.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($file.principal.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($file.principal.user.userid)\n  \
+    \  $target_file_sha256 = array_distinct($file.target.file.sha256)\n    $target_file_full_path\
+    \ = array_distinct($file.target.file.full_path)\n\n  condition:\n    $file\n}"
+  chronicle_rule_name: cred_dump_tools_dropped_files
+provenance:
+  source: chronicle/detection-rules
+  source_id: cred_dump_tools_dropped_files
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/cred_dump_tools_dropped_files.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,47 @@
+id: splunk-security-content-b25f6f62-0782-43c1-b403-083231ffd97d
+name: Short Lived Windows Accounts
+description: The following analytic detects the rapid creation and deletion of Windows
+  accounts within a short time frame of 1 hour. It leverages the "Change" data model
+  in Splunk, specifically monitoring events with result IDs 4720 (account creation)
+  and 4726 (account deletion). This behavior is significant as it may indicate an
+  attacker attempting to create and remove accounts quickly to evade detection or
+  gain unauthorized access. If confirmed malicious, this activity could lead to unauthorized
+  access, privilege escalation, or further malicious actions within the environment.
+  Immediate investigation of flagged events is crucial to mitigate potential damage.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.003
+  - T1136.001
+  categories:
+  - endpoint
+references:
+- https://www.youtube.com/watch?v=D4Cd-KK4ctk
+- https://attack.mitre.org/techniques/T1078/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(All_Changes.result_id)\
+    \ as result_id count min(_time) as firstTime max(_time) as lastTime FROM datamodel=Change\n\
+    \  WHERE All_Changes.result_id=4720\n    OR\n    All_Changes.result_id=4726\n\
+    \  BY _time span=1h All_Changes.user\n     All_Changes.dest All_Changes.Account_Management.src\
+    \ All_Changes.Account_Management.src_user\n| `security_content_ctime(lastTime)`\n\
+    | `security_content_ctime(firstTime)`\n| `drop_dm_object_name(\"All_Changes\"\
+    )`\n| `drop_dm_object_name(\"Account_Management\")`\n| transaction user connected=false\
+    \ maxspan=60m\n| eval create_result_id=mvindex(result_id, 0)\n| eval delete_result_id=mvindex(result_id,\
+    \ 1)\n| search create_result_id = 4720 delete_result_id=4726\n| table firstTime\
+    \ lastTime count user src src_user dest create_result_id delete_result_id\n| `short_lived_windows_accounts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b25f6f62-0782-43c1-b403-083231ffd97d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/short_lived_windows_accounts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,2012 @@
+###############################################################################
+# AiSOC - AI Security Operations Center
+# Docker Compose - Full Development Stack
+# AiSOC — open-source under MIT License
+#
+# SECURITY NOTE
+# -------------
+# All host port publishings below are bound to 127.0.0.1 so a default
+# `docker compose up` does NOT expose Postgres / Kafka / OpenSearch /
+# Neo4j / Redis (with their development passwords) to the network the
+# host is attached to. This is intentional: the same passwords ship in
+# every clone of this repo.
+#
+# DEPLOYING ON A HOST THAT IS NOT YOUR LAPTOP
+# -------------------------------------------
+# Loopback is the right default and the wrong one for a server: it makes a
+# single-host install unreachable from anywhere, including from the browser
+# you intended to use it from. Set ONE variable in .env:
+#
+#     AISOC_CONSOLE_BIND_ADDR=0.0.0.0
+#
+# That publishes the console on every interface and leaves everything else —
+# Postgres, Redis, Kafka, Neo4j and their shipped development passwords — on
+# loopback where they belong. One port is enough because the console proxies
+# to every other service over the internal network, so the browser only ever
+# talks to the console's own origin.
+#
+# `AISOC_BIND_ADDR` moves ALL of the bindings, including the datastores. It
+# exists for an isolated network where that is what you want. On anything
+# routable it hands out the passwords in this file, so reach for the console
+# variable first and put a TLS-terminating reverse proxy in front.
+#
+# Per-service overrides still work through a docker-compose.override.yml, and
+# there the list MUST be tagged `!override`:
+#
+#     services:
+#       postgres:
+#         ports: !override
+#           - "0.0.0.0:5432:5432"
+#
+# The tag is not optional. Compose *appends* sequences when it merges, so an
+# override without it publishes both the old binding and the new one — the
+# 127.0.0.1 binding stays, and on a port that was already taken the conflict
+# is still there. It looks like it worked and it did nothing. Use
+# `ports: !reset []` to stop publishing a service on the host entirely.
+#
+# Rotate the password while you're there.
+#
+# TWO DATABASE ROLES
+# ------------------
+# `aisoc`     owner / migrations. Superuser, because POSTGRES_USER is what the
+#             postgres image makes it. Applies the migration chain. NO SERVICE
+#             CONNECTS AS THIS ROLE.
+# `aisoc_app` runtime. SELECT / INSERT / UPDATE / DELETE and nothing else, and
+#             row-level security applies to it. Every service's DATABASE_URL.
+#
+# Until this split, every service ran as `aisoc`, and a superuser ignores RLS
+# policies even under FORCE ROW LEVEL SECURITY — so all 92 policies in the
+# schema filtered nothing. See services/api/migrations/061_runtime_app_role.sql.
+#
+# Every service below runs as the scoped role. Nothing needs a cross-tenant
+# role: the policies are `tenant_id = current_tenant_id() OR current_tenant_id()
+# IS NULL`, so ingest, fusion, the retention purge and the schedulers — none of
+# which bind a tenant — keep seeing every tenant's rows. The per-service
+# reasoning is tabulated in apps/docs/docs/operations/security.md.
+###############################################################################
+
+networks:
+  aisoc:
+    driver: bridge
+
+volumes:
+  # ack-clock bridge dedup/nag state (escalations service)
+  escalation-state:
+  tempo_data:
+  postgres_data:
+  redis_data:
+  kafka_data:
+  zookeeper_data:
+  zookeeper_log:
+  clickhouse_data:
+  opensearch_data:
+  qdrant_data:
+  neo4j_data:
+  neo4j_logs:
+  # ~2 GB of model weights. Named so `make down` keeps them and only
+  # `make clean` re-downloads.
+  ollama_data:
+  # Plugin state lived in the API container's *writable layer*, so every
+  # `docker compose pull && up -d` deleted it. `AISOC_PLUGINS_DIR` defaults to
+  # /opt/aisoc/plugins and plugin_manager.py extracts OCI plugin layers there;
+  # /opt/aisoc/plugin-keys holds the Ed25519 public keys an operator installs
+  # to make signed third-party plugins loadable at all, so losing it turns
+  # every signed plugin into a refusal.
+  #
+  # Two leaf volumes rather than one on the parent /opt/aisoc. A named volume
+  # is seeded from the image only while it is empty, so mounting the parent
+  # would mean a future image that ships something under /opt/aisoc never
+  # delivers it to an existing deployment.
+  aisoc_plugins:
+  aisoc_plugin_keys:
+  # Monitoring state. These three sit behind `profiles: monitoring`, so they
+  # are not the default surface — but an operator who turned the profile on
+  # got no warning that a recreate discards the lot, and Alertmanager's
+  # `--storage.path=/alertmanager` reads like persistence to anyone checking.
+  # Grafana's is the one that hurts: dashboards, users, annotations and
+  # UI-created alert rules are operator work with no other copy, and the
+  # service comes back up with its provisioned dashboards looking fine.
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+
+services:
+
+  # ─── Infrastructure ─────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: aisoc-postgres
+    environment:
+      # The OWNER / migration role. Superuser, because that is what the
+      # postgres image makes POSTGRES_USER, and it is what applies the chain.
+      # No service connects as this role — see the DATABASE_URL entries below.
+      POSTGRES_DB: aisoc
+      POSTGRES_USER: aisoc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aisoc_dev_secret}
+      # The RUNTIME role's credential. `zz_runtime_role_password.sh` applies it
+      # on first boot, after 061_runtime_app_role.sql has created the role with
+      # DML-only grants. Rotate it the same way you rotate POSTGRES_PASSWORD;
+      # the two are deliberately different values because they are different
+      # privilege levels.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # The init hooks: 10_ applies the migration chain, 20_ gives the runtime
+      # role its password. They live in one directory because Docker cannot
+      # create a mountpoint inside a bind mount — binding a single file into a
+      # bound `/docker-entrypoint-initdb.d` fails the container at startup.
+      # Only runs when the data directory is empty; an upgrade in place is
+      # covered by app.scripts.run_migrations instead.
+      - ./infra/postgres/initdb:/docker-entrypoint-initdb.d:ro
+      - ./services/api/migrations:/aisoc/migrations:ro
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aisoc"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: aisoc-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_secret}
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: aisoc-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    # Kafka keeps its cluster id in `kafka_data`, which IS persisted, and
+    # takes the authoritative one from ZooKeeper, which was not. So the
+    # second `up` on a kept volume generated a fresh cluster id and the
+    # broker refused to join it:
+    #
+    #   InconsistentClusterIdException: The Cluster ID <new> doesn't match
+    #   stored clusterId Some(<old>) in meta.properties
+    #
+    # `make down && make up` — documented as "stop the stack, keep the data"
+    # — therefore could not bring Kafka back, and every service that depends
+    # on it stayed in `created`. Only `make clean`, which deletes the data,
+    # recovered. Persisting both halves of the pair is the fix; persisting
+    # neither would also be consistent, but it would discard the event log
+    # on every restart.
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    networks:
+      - aisoc
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: aisoc-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+    networks:
+      - aisoc
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    # Memory caps surface OOMKiller events as a clear container exit instead of
+    # silent broker rebalances. Tune up if you raise KAFKA_HEAP_OPTS.
+    mem_limit: 1536m
+    mem_reservation: 1g
+    healthcheck:
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  kafka-ui:
+    # full profile — Kafka topic browser. A debugging convenience, not a pipeline component.
+    profiles: ["full"]
+    image: provectuslabs/kafka-ui:latest
+    container_name: aisoc-kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8090:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+    networks:
+      - aisoc
+
+  clickhouse:
+    # full profile — Event lake. Backs /lake/sql and the hunt surface; alerting does not read it.
+    profiles: ["full"]
+    image: clickhouse/clickhouse-server:23.8
+    container_name: aisoc-clickhouse
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8123:8123"
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9000:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./services/api/clickhouse:/docker-entrypoint-initdb.d:ro
+    environment:
+      CLICKHOUSE_DB: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    networks:
+      - aisoc
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    mem_limit: 1g
+    mem_reservation: 768m
+
+  opensearch:
+    # full profile — Full-text search over archived events. No CORE code path queries it.
+    profiles: ["full"]
+    image: opensearchproject/opensearch:2.11.0
+    container_name: aisoc-opensearch
+    environment:
+      - cluster.name=aisoc-cluster
+      - node.name=aisoc-node-1
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - opensearch_data:/usr/share/opensearch/data
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9200:9200"
+    networks:
+      - aisoc
+    healthcheck:
+      # Without this the only condition a dependant can express is
+      # `service_started`, which is true the instant the container exists —
+      # including for the ~40s before the node listens, and for a node that
+      # is about to die. threatintel aborts its lifespan when this port does
+      # not answer, so it needs the stronger condition.
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    # A 512m heap is not a 512m process. OpenSearch 2.11 loads ~20 bundled
+    # plugins (knn, ml, security-analytics, performance-analyzer) and settles
+    # at ~1.05GB RSS with this heap — measured, steady-state, single node,
+    # no indices. At `mem_limit: 1g` it was OOM-killed during bootstrap every
+    # time (exit 137, OOMKilled=true, ~10s in), so the full profile shipped a
+    # store that could never start.
+    mem_limit: 2g
+    mem_reservation: 1g
+
+  qdrant:
+    # CORE — the store `services/threatintel` writes collected indicators to,
+    # and the one the console's /threat-intel page is served from. It moved in
+    # with threatintel: see that service's comment for the reasoning.
+    #
+    # Measured: 245 MB image, 79 MiB RSS with the two threat-intel collections
+    # created. It is by a wide margin the cheapest of the four stores — the
+    # next one up, OpenSearch, is 2 GB of image and ~1.05 GB resident — which
+    # is why it is the one CORE takes.
+    image: qdrant/qdrant:v1.7.0
+    container_name: aisoc-qdrant
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    networks:
+      - aisoc
+    healthcheck:
+      # threatintel creates its collections at startup, so it needs the store
+      # answering rather than merely existing. The image ships neither curl nor
+      # wget; `/proc/net/tcp` is what is left, and a listener on 6333 (hex
+      # 18BD) is the thing being asserted.
+      test: ["CMD-SHELL", "grep -q ':18BD' /proc/net/tcp || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  neo4j:
+    # full profile — Entity graph. Backs graph traversals and blast radius, not alert generation.
+    profiles: ["full"]
+    image: neo4j:5.15-community
+    container_name: aisoc-neo4j
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:7474:7474"   # HTTP browser
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:7687:7687"   # Bolt
+    environment:
+      NEO4J_AUTH: neo4j/${NEO4J_PASSWORD:-neo4j_dev_secret}
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_dbms_security_procedures_unrestricted: apoc.*
+      NEO4J_dbms_memory_heap_initial__size: 256m
+      NEO4J_dbms_memory_heap_max__size: 512m
+    volumes:
+      - neo4j_data:/data
+      - neo4j_logs:/logs
+    networks:
+      - aisoc
+    mem_limit: 1g
+    mem_reservation: 768m
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  # ─── Application Services ────────────────────────────────────────────────────
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8000:8000"
+    environment:
+      # Two roles, on purpose. DATABASE_URL is the runtime role: DML only, and
+      # row-level security applies to it. DATABASE_MIGRATION_URL is the owner,
+      # used by `app.scripts.run_migrations` for DDL and nothing else. Running
+      # the service as the owner is what made all 92 RLS policies inert, since
+      # a superuser ignores them even under FORCE ROW LEVEL SECURITY.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the migration runner to (re)apply the runtime role's password
+      # on an existing data volume, where the postgres init hook never fires.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/0
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # The lake client reads these five, not CLICKHOUSE_URL — nothing under
+      # services/api/app reads that name at all. Supplying only the URL left
+      # the settings at their defaults (localhost:9000, user `default`, no
+      # password), so /lake/sql answered every query with
+      # `Connection refused (localhost:9000)` while fusion archived to the
+      # same store perfectly well over the native port.
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: 9000
+      CLICKHOUSE_DATABASE: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}
+      OPENSEARCH_URL: http://opensearch:9200
+      QDRANT_URL: http://qdrant:6333
+      # The API owns the vault write path; the connectors service reads with
+      # the same key. Passing it to one and not the other means a credential
+      # saved in the console can never be decrypted at poll time.
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_dev_secret}
+      # Was a bare literal, so a SECRET_KEY set in .env was ignored and the
+      # JWT signing key silently stayed on the dev default. It also has to
+      # match whatever the connectors service verifies with, or the console
+      # token the API forwards there fails its signature check.
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      # The API mints realtime tickets and calls realtime's /internal/* routes,
+      # so it needs the same two secrets the realtime container reads. Neither
+      # was passed to either side before, which is why both guards there were
+      # running on a published constant or not running at all.
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:-}
+      # Both are required for the API to boot now that ENVIRONMENT defaults
+      # to production, and neither was interpolated here — so a value in .env
+      # could not reach the container, which is the same shape that once left
+      # AISOC_SERVICE_TOKEN unreachable to this one service.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      JWT_SECRET: ${JWT_SECRET:-}
+      # Enterprise SSO (feature-flagged). Values come from .env; the repo
+      # never carries an issuer, client id or secret literal.
+      SSO_ENABLED: ${SSO_ENABLED:-false}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URI: ${OIDC_REDIRECT_URI:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-openid email profile groups}
+      SSO_GROUPS_CLAIM: ${SSO_GROUPS_CLAIM:-}
+      SSO_LOGIN_LABEL: ${SSO_LOGIN_LABEL:-Continue with SSO}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+      # Depth 5.2. Where a pending approval is offered besides the console.
+      # Both are empty by default: an unset URL means that channel reports
+      # `skipped` with the setting that would turn it on, which is the
+      # difference between "we chose not to" and "it broke".
+      AISOC_SLACK_BOT_URL: ${AISOC_SLACK_BOT_URL:-}
+      AISOC_TEAMS_BOT_URL: ${AISOC_TEAMS_BOT_URL:-}
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      # The one-click approval email. No relay means the email channel
+      # reports `skipped`; the approval is still durable and still in the
+      # console and the responder app.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+      AISOC_APPROVAL_TOKEN_SECRET: ${AISOC_APPROVAL_TOKEN_SECRET:-}
+      # The credential this service presents when it proxies the connector
+      # catalog and "Test connection" to the connectors service.
+      # `_service_token()` in app/api/v1/endpoints/connectors.py reads
+      # AISOC_CONNECTORS_SERVICE_TOKEN then AISOC_SERVICE_TOKEN — and compose
+      # interpolated the shared token into connectors, ueba, honeytokens and
+      # purple-team but not into the one service that has to *send* it. There
+      # is no `env_file` here either, so a value in .env could not reach it by
+      # any route. The catalog call was answered 401 on every request and fell
+      # back to the bundled copy; the fix that made the proxy read the right
+      # variable shipped against a variable nothing ever set.
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_API_SERVICE_TOKEN: ${AISOC_API_SERVICE_TOKEN:-}
+      AISOC_CONNECTORS_SERVICE_TOKEN: ${AISOC_CONNECTORS_SERVICE_TOKEN:-}
+      # The SSRF guard runs in this process too: connector create/update and
+      # webhook destinations are validated here before anything is stored or
+      # delivered. The relax knobs therefore have to reach this container or
+      # an operator setting them in .env changes nothing — exactly how
+      # AISOC_SSRF_ALLOW_PRIVATE shipped reaching only the agents service
+      # while the enforcement that needed it had moved here and to
+      # connectors. ALLOW_HOSTS admits exact hostnames (no wildcards, no
+      # CIDR); neither knob can admit the cloud-metadata endpoints.
+      AISOC_SSRF_ALLOW_PRIVATE: ${AISOC_SSRF_ALLOW_PRIVATE:-}
+      AISOC_SSRF_ALLOW_HOSTS: ${AISOC_SSRF_ALLOW_HOSTS:-}
+      AISOC_SSRF_EXTRA_BLOCKED_HOSTS: ${AISOC_SSRF_EXTRA_BLOCKED_HOSTS:-}
+      # The agents service's credential, on the verifying side. `alert_writeback
+      # .service_token_valid` reads this and only this — it does NOT fall back
+      # to AISOC_SERVICE_TOKEN — so the internal context routes the agents
+      # service calls (`/feedback/context-statements`,
+      # `/tenant-skills/resolved/active`, `/kb/runbooks/for-triage`,
+      # `/feedback/recent-dispositions`, `/graph/identity-context`, the MCP
+      # registry and `/alerts/{id}/source-writeback`) refuse every caller until
+      # it is set. Must match the value on `agents`.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:-}
+      CONNECTORS_SERVICE_URL: ${CONNECTORS_SERVICE_URL:-http://connectors:8003}
+      # Where GET /api/v1/threat-intel/indicators is served from. The console
+      # has called that path since the IOC inbox shipped and nothing answered
+      # it; threatintel is in CORE now and this is the wire.
+      THREATINTEL_SERVICE_URL: ${THREATINTEL_SERVICE_URL:-http://threatintel:8005}
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
+      # Printed by `make bootstrap` as the sign-in address and used as the
+      # console's public origin. Read from os.environ by
+      # app/scripts/bootstrap_admin.py, which no compose service set — so any
+      # deployment that is not a laptop printed the wrong address.
+      AISOC_CONSOLE_URL: ${AISOC_CONSOLE_URL:-http://localhost:3000}
+      # Was a bare literal, so `.env`'s documented ENVIRONMENT was ignored and
+      # `production` changed nothing — including the dev auth bypass in
+      # app/api/v1/dev_auth.py, which could not be switched off from .env at all.
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Issue #478 — LiteLLM gateway. This service's live LLM endpoints
+      # (translation, hunts, KB, phishing, NL-detection) route here by default:
+      # `app.services.model_aliases.resolve_base_url` reads LLM_GATEWAY_URL for
+      # any aisoc-<role> alias. It was previously read by nothing, so the
+      # variable was set, documented, and dead — every alias went to the
+      # provider default and 404'd. OPENAI_BASE_URL still overrides it.
+      LLM_GATEWAY_URL: http://litellm:4000/v1
+      # The bearer that pairs with the URL above. Without it AiSOC would send a
+      # provider key to the gateway, which rejects it as an invalid proxy token.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # services/actions — where an approved response action is executed.
+      # The API had no pointer to it at all: the one endpoint that called it
+      # read the URL from os.environ and fell back to `aisoc-actions`, which
+      # is the container_name, not the DNS name on this network.
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:-}
+      # Retro-hunt sweeps. `main.py` starts the consumer only when this is
+      # true, and compose passes only the variables it names -- so while this
+      # was absent, setting it in the host environment did nothing and the
+      # consumer could not start on any compose deployment.
+      #
+      # Off by default and deliberately: a sweep reads back over a tenant's
+      # history, which is a cost and a privacy decision, so it waits for both
+      # the operator here and the tenant in `retro_hunt_settings`.
+      RETRO_HUNT_ENABLED: "${RETRO_HUNT_ENABLED:-false}"
+      # File analysis and the air-gap posture. Compose passes only the
+      # variables it names, so while these were absent an operator with a
+      # CAPEv2 appliance had no way to point the product at it, and an
+      # air-gapped deployment had no way to tell the API -- which reads
+      # AISOC_AIRGAPPED in nine modules including the sandbox registry, the
+      # STIX publisher and three query runners.
+      #
+      # Unset means the registry serves the mock provider, which knows
+      # nothing and now says so rather than returning an empty result a
+      # reader takes for a clean verdict.
+      AISOC_AIRGAPPED: "${AISOC_AIRGAPPED:-false}"
+      AISOC_CAPEV2_BASE_URL: "${AISOC_CAPEV2_BASE_URL:-}"
+      AISOC_CAPEV2_API_TOKEN: "${AISOC_CAPEV2_API_TOKEN:-}"
+      MALWAREANALYZER_BASE_URL: "${MALWAREANALYZER_BASE_URL:-}"
+      MALWAREANALYZER_API_KEY: "${MALWAREANALYZER_API_KEY:-}"
+    # Phase 2.6 — use /readyz, not /health, so the orchestrator
+    # only routes traffic once the lifespan has finished wiring
+    # Postgres, Redis, Kafka, Qdrant, and Neo4j. (Not OpenSearch: this
+    # service constructs no OpenSearch client. `services/threatintel` is
+    # the only consumer of that store.)
+    # /livez is what the restart policy looks at via `pgrep`-style
+    # checks; we don't need a separate compose healthcheck for it
+    # because the process being up implies it's alive.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8000/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    volumes:
+      # Installed plugins and the keys that make signed ones loadable. Both
+      # paths were in the container's writable layer, so every image pull
+      # deleted them — see the `aisoc_plugins` note in the volumes block.
+      - aisoc_plugins:/opt/aisoc/plugins
+      - aisoc_plugin_keys:/opt/aisoc/plugin-keys
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ingest-worker:
+    build:
+      context: ./services/ingest
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ingest:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-ingest
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8081:8080"
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9090:9090"
+    environment:
+      # Interpolated, not a literal. `.env.example` tells an operator that
+      # setting ENVIRONMENT=production is enough, and for every other service
+      # it is. This one pinned `development`, and `envmode.Current()` reads
+      # ENV *before* ENVIRONMENT — so ingest stayed dev-mode however the
+      # operator set it, and `JWT_SECRET must be set in non-development
+      # environments` never fired on the one service taking events off the
+      # network.
+      ENV: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      HTTP_PORT: 8080
+      METRICS_PORT: 9090
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/1
+      # The inbox webhook routes (/v1/inbox/*) mount only when this is set,
+      # and no compose file set it, so the documented "push events straight
+      # from your SIEM" path was unreachable on every local and CI stack.
+      # This is a pgx DSN and is deliberately distinct from the SQLAlchemy
+      # DATABASE_URL the Python services use.
+      # sslmode=disable is correct *here* and nowhere else: the bundled
+      # Postgres serves no certificate, so requiring TLS would break the
+      # documented first run on a machine where there is nothing to fix.
+      # A production deployment that leaves this is reported at boot by
+      # warn_if_insecure_defaults, which also reports an *unset* sslmode —
+      # libpq reads that as `prefer`, which downgrades to cleartext without
+      # a log line, and is therefore worse than the honest `disable` below.
+      DATABASE_DSN: postgres://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc?sslmode=disable
+      LOG_LEVEL: info
+      # A bare literal, and a published one: `dev_secret_key_change_in_production`
+      # is in INSECURE_SECRET_KEY_DEFAULTS, so anyone who read this repository
+      # held the key this service verified with. Interpolated now, and `make
+      # env` generates it.
+      JWT_SECRET: ${JWT_SECRET:-}
+      # /v1/ingest requires a credential. Two shapes are accepted: a
+      # per-tenant push token minted with `make ingest-token` (resolved
+      # through DATABASE_DSN above), and this shared service token, which
+      # `connectors` presents when it polls on behalf of many tenants.
+      # Empty by default — with it unset the connector-poll path is refused
+      # and only minted tokens work. The same variable must be set on the
+      # `connectors` service. See apps/docs/docs/operations/ingest-authentication.md.
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      # Graph-at-ingest needs Neo4j, which is a `full`-profile service. It is
+      # off in CORE and switched on by the `full` overlay. It used to be
+      # hardcoded "true" with a hard `depends_on: neo4j`, which is why the
+      # minimal stack could not start without the graph database.
+      AISOC_GRAPH_ENABLED: "${AISOC_GRAPH_ENABLED:-false}"
+      AISOC_NEO4J_URI: bolt://neo4j:7687
+      AISOC_NEO4J_USER: neo4j
+      AISOC_NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_dev_secret}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  enrichment:
+    # full profile — Fuse-time threat-intel and vulnerability enrichment. Alerts fire without it.
+    profiles: ["full"]
+    build:
+      context: ./services/enrichment
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-enrichment:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-enrichment
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8080:8082"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/2
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+      ABUSEIPDB_API_KEY: ${ABUSEIPDB_API_KEY:-}
+      GREYNOISE_API_KEY: ${GREYNOISE_API_KEY:-}
+      SHODAN_API_KEY: ${SHODAN_API_KEY:-}
+      URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
+      IPINFO_API_KEY: ${IPINFO_API_KEY:-}
+      THREATINTEL_SERVICE_URL: ${THREATINTEL_SERVICE_URL:-http://threatintel:8005}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # /enrich and /enrich/bulk authenticate their callers
+      # (GHSA-qf6m-hgwv-65f9): SECRET_KEY verifies console sessions, the
+      # service token above authenticates fusion/agents, and the dev-bypass
+      # trio matches what fusion, connectors and threatintel already carry.
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It binds
+      # 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_BIND_ADDR:-127.0.0.1}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  fusion:
+    build:
+      context: ./services/fusion
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-fusion:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-fusion
+    depends_on:
+      # Postgres was missing here, so during a cold boot fusion tried to write
+      # alerts before the database accepted connections and logged the failure
+      # exactly once.
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8003:8003"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/3
+      # `tenant_scope` refuses outright when neither a console secret nor a
+      # service token is configured and dev mode is off, and this service
+      # received none of the three — the same trio `connectors` and
+      # `threatintel` already carry.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # The ClickHouse event lake is a `full`-profile capability: it backs
+      # /lake/sql and the hunt surface, not alerting. CORE runs without it and
+      # the writer disables itself.
+      AISOC_LAKE_WRITER_ENABLED: "${AISOC_LAKE_WRITER_ENABLED:-false}"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "9000"
+      CLICKHOUSE_DATABASE: aisoc
+      CLICKHOUSE_USER: aisoc
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}
+      # Fusion defaulted to http://localhost:8082, which inside its own
+      # container is fusion itself — so fuse-time enrichment always failed and
+      # the failure was swallowed at DEBUG. `enrichment` is a `full`-profile
+      # service; in CORE this resolves to nothing and enrichment is skipped,
+      # which is the same outcome as before but now deliberate.
+      ENRICHMENT_SERVICE_URL: ${ENRICHMENT_SERVICE_URL:-http://enrichment:8082}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  agents:
+    build:
+      context: ./services/agents
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-agents:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-agents
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8001:8084"
+    environment:
+      REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
+      AISOC_INVESTIGATION_MAX_SECONDS: ${AISOC_INVESTIGATION_MAX_SECONDS:-120}
+      # The agents :15002/metrics gate compares against this token exactly as
+      # the api service's does; without it in this environment every scrape
+      # answered 401 outside development and the triage counters were
+      # unreachable on a default deployment (#1822).
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/4
+      CORE_API_URL: http://api:8000
+      # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
+      # read-only triage, no response dispatch). Degrades to deterministic
+      # triage when no LLM key is set.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_TOPIC_ALERTS_FUSED: aisoc.alerts.fused
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_dev_secret}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # BYOK / "explain this alert" only — never a task role. A task role asks
+      # `app.llm.model_pins` for its aisoc-<role> alias, and this leaking into
+      # that path is what replaced `aisoc-triage` with a model the gateway does
+      # not define. Defaults to the summary alias so the explain path resolves
+      # at the gateway too; set a concrete model only for direct-to-provider.
+      OPENAI_MODEL: ${OPENAI_MODEL:-aisoc-summary}
+      # Issue #478 — the LiteLLM gateway (below) is the single entry point for
+      # live LLM calls. `app.llm.factory.resolve_base_url` reads this for any
+      # aisoc-<role> alias, so the default deployment reaches the gateway with
+      # no further configuration; OPENAI_BASE_URL still overrides it, and a
+      # concrete AISOC_MODEL_PIN_<ROLE> is left pointing at its provider.
+      LLM_GATEWAY_URL: http://litellm:4000/v1
+      # The bearer that pairs with the URL above — see the api service.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      # Where to post an approval card when triage raises one. Unset means
+      # no ChatOps notification; the approval is still durable and visible in
+      # the console and the responder app. slack-bot is a `chatops`-profile
+      # service, so this only resolves when that profile is up.
+      AISOC_SLACK_BOT_URL: ${AISOC_SLACK_BOT_URL:-}
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      # Bearer for realtime's /internal/* fan-out. `app/playbook/engine.py`
+      # reads it to publish step progress; unset, realtime refuses the call
+      # and a running playbook is invisible in the console.
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+      # The three below are the same trio `connectors` and `threatintel`
+      # already carry, and this service had none of them. `tenant_scope`
+      # refuses outright when neither a console secret nor a service token is
+      # configured *and* dev mode is off — which is what every tenant-scoped
+      # route here answered: 503, with no credential material to verify
+      # against and nothing in the image supplying any.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_API_SERVICE_TOKEN: ${AISOC_API_SERVICE_TOKEN:-}
+      # Air-gap posture and the SSRF guard, both off by default.
+      #
+      # Passed through because an operator could not set them at all before:
+      # the MCP client reads all three and compose delivered none, so an
+      # internal MCP server was unreachable with no way to permit it. Note
+      # that ALLOW_PRIVATE permits RFC1918 and never loopback, so a sidecar
+      # on 127.0.0.1 stays refused by design.
+      AISOC_AIRGAPPED: ${AISOC_AIRGAPPED:-}
+      AISOC_AIRGAP_ALLOWLIST: ${AISOC_AIRGAP_ALLOWLIST:-}
+      AISOC_SSRF_ALLOW_PRIVATE: ${AISOC_SSRF_ALLOW_PRIVATE:-}
+      # The exact-host companion to ALLOW_PRIVATE, and the deny-harder list.
+      # One .env value reaches every service that runs the guard (api,
+      # connectors, and here) so the three processes cannot disagree about
+      # what an operator admitted.
+      AISOC_SSRF_ALLOW_HOSTS: ${AISOC_SSRF_ALLOW_HOSTS:-}
+      AISOC_SSRF_EXTRA_BLOCKED_HOSTS: ${AISOC_SSRF_EXTRA_BLOCKED_HOSTS:-}
+      # The agents service's own service credential, used in both directions:
+      # presented as `X-AiSOC-Service-Token` on the API's internal context
+      # routes, and verified by `app.security.tenant_scope` when the API calls
+      # back (it resolves `AISOC_AGENTS_SERVICE_TOKEN` before the shared one).
+      #
+      # Eight modules in this service read it and nothing produced it, so on a
+      # default install organisation memory, tenant skills, recent
+      # dispositions, identity context, knowledge-base runbooks, the MCP
+      # toolset, the playbook action bridge and SIEM writeback were all off —
+      # each logging its own `no_service_token` warning and returning empty.
+      # `make env` generates it; it must match the value on `api` below.
+      AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:-}
+      # The hunting agent reads the ClickHouse lake, and this block named
+      # none of it -- so in the `full` profile the agent had a driver-less
+      # image and no address to point it at. Mirrors the api service above,
+      # because both read the same lake and a second set of defaults is a
+      # second thing to drift.
+      CLICKHOUSE_HOST: "${CLICKHOUSE_HOST:-clickhouse}"
+      CLICKHOUSE_PORT: "${CLICKHOUSE_PORT:-9000}"
+      CLICKHOUSE_DATABASE: "${CLICKHOUSE_DATABASE:-aisoc}"
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:-aisoc}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-aisoc_dev_secret}"
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── LLM gateway (LiteLLM) — issue #478 ─────────────────────────────────────
+  # Single entry point for every live LLM call. AiSOC requests a logical task
+  # alias (aisoc-triage, aisoc-investigation, …); the mapping alias → real model
+  # lives entirely in infra/litellm/config.yaml, so operators swap local/hosted
+  # models without touching AiSOC. Per-task latency/tokens/cost/errors are
+  # exported on /metrics (scraped as job `aisoc-litellm`). Lightweight and inert
+  # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
+  # `agents` service above.
+  ollama:
+    # CORE — the model behind the gateway.
+    #
+    # The gateway shipped in CORE and the models it pointed at did not: every
+    # alias resolved to a hosted provider, so the default install could route a
+    # key it did not have and otherwise did no AI at all. This closes that: a
+    # clone with no account produces a real triage verdict, from a real model,
+    # with real token counts.
+    #
+    # Promoted from infra/compose/docker-compose.airgap.yml, where this exact
+    # pairing has been proven end to end. The model is pinned rather than
+    # floating on `latest` for the same reason every other image here is.
+    #
+    # Measured: 6.92 GB image — by some distance the largest thing in CORE —
+    # 2.02 GB of weights in the volume, and 9.6 MiB resident when idle.
+    #
+    # Quoting the idle figure alone would be the misleading half of the truth:
+    # the model is mapped in on first inference and the container measured
+    # 2.96 GiB while serving. That is what moved the README's memory figure to
+    # 8 GB, not the idle number.
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:11434:11434"
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ollama-pull:
+    # One-shot: pull the pinned model, then exit. A cache hit is a no-op, so
+    # this costs one `ollama show` on every `up` after the first.
+    #
+    # aisoc: model-pull-is-not-fatal
+    #
+    # This container exits 0 whether or not the model arrives, and that is the
+    # whole point of the block below. It used to be `entrypoint: ["ollama",
+    # "pull", "<model>"]` with litellm waiting on
+    # `service_completed_successfully`, and the consequence was measured on a
+    # clean worktree: a host with TLS interception made the pull fail, compose
+    # aborted the entire `up` after 62 seconds, and **10 of 16 CORE services
+    # were left in `Created` and never started** — api, web, fusion, ingest,
+    # agents, connectors, actions, realtime, threatintel. No console, no API,
+    # no pipeline, no administrator account, because a 2 GB model did not
+    # download.
+    #
+    # Every environmental cause lands here, not just that one: no outbound
+    # network, a proxy, a registry rate limit, a full Docker disk, or an
+    # upstream tag deletion — which has happened to this stack before and is
+    # recorded in the litellm comment below.
+    #
+    # A missing model is a degraded capability. AI triage falls back to the
+    # deterministic path and everything else is untouched, so representing it
+    # as a dead container was wrong twice over: it stopped the stack, and
+    # `_wait` in the Makefile treats `exited` with a non-zero code as broken,
+    # so even with the dependency gone a non-zero exit here would still fail
+    # `make up` over something that is working as designed.
+    #
+    # The state is therefore reported where it is *used* rather than inferred
+    # from this container's exit code: `make doctor` asks Ollama whether the
+    # model is present, which is the thing it names.
+    image: ollama/ollama:0.6.7
+    container_name: aisoc-ollama-pull
+    depends_on:
+      ollama:
+        # `service_started`, not `service_healthy`. A health condition that
+        # never passes aborts `up` for every service compose has not started
+        # yet — the same failure one layer up — so the wait is done inside the
+        # script below, where timing out is a message rather than an abort.
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -u
+        model="$$AISOC_LLM_LOCAL_MODEL"
+
+        # Wait for the server rather than for compose to certify it healthy.
+        i=0
+        while [ "$$i" -lt 90 ]; do
+          ollama list >/dev/null 2>&1 && break
+          i=$$((i + 1))
+          sleep 2
+        done
+
+        if ollama show "$$model" >/dev/null 2>&1; then
+          echo "aisoc: $$model is already present; nothing to pull."
+          exit 0
+        fi
+
+        attempt=1
+        while [ "$$attempt" -le 3 ]; do
+          echo "aisoc: pulling $$model (attempt $$attempt/3)..."
+          if ollama pull "$$model"; then
+            echo "aisoc: $$model is ready. AI triage will use it."
+            exit 0
+          fi
+          attempt=$$((attempt + 1))
+          sleep 5
+        done
+
+        echo ""
+        echo "==================================================================="
+        echo "AiSOC: the local model could not be downloaded."
+        echo ""
+        echo "  model: $$model"
+        echo ""
+        echo "The rest of AiSOC is unaffected and is starting normally: ingest,"
+        echo "fusion, detection, alerting and the console all work. What is"
+        echo "degraded is AI triage, which falls back to the deterministic path."
+        echo ""
+        echo "Usual causes: no outbound network, a proxy or TLS interception on"
+        echo "this host, a registry rate limit, or a full Docker disk."
+        echo ""
+        echo "To retry later, with the stack still running:"
+        echo ""
+        echo "    docker compose run --rm ollama-pull"
+        echo ""
+        echo "Or use a model you already have, or a hosted provider:"
+        echo ""
+        echo "    make up-host-llm                          # your own Ollama"
+        echo "    Console -> Settings -> Deployment and AI  # a hosted provider"
+        echo ""
+        echo "'make doctor' reports this state and repeats these options."
+        echo "==================================================================="
+        echo ""
+        exit 0
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      AISOC_LLM_LOCAL_MODEL: ${AISOC_LLM_LOCAL_MODEL:-llama3.2:3b-instruct-q4_K_M}
+    networks:
+      - aisoc
+    restart: "no"
+
+  litellm:
+    # CORE, deliberately — see docs/decisions/0006-llm-gateway-in-core.md.
+    #
+    # This was `profiles: ["full"]` on the reasoning that the gateway is "only
+    # needed when a provider key is configured". The reasoning skipped a step:
+    # a CORE deployment *with* a key could not use it either, because every
+    # `aisoc-<role>` alias resolves nowhere except here. So the documented
+    # default install — what `make up` starts and what the quickstart walks a
+    # new evaluator through — could not do AI triage at all, and the profile
+    # table said it did "triage".
+    #
+    # With no key it boots, serves its seven aliases and answers /health;
+    # AiSOC's deterministic path is unchanged and still honest. Measured cost:
+    # a 1.67 GB image idling at ~451 MiB, which is why the RAM figure in the
+    # README moved rather than staying put.
+    #
+    # It is also the only party that can say what a call cost — the real
+    # figure comes off its response headers — so leaving it out of CORE left
+    # the default install's cost dashboard permanently unmeasurable.
+    #
+    # Pinned to the exact version this stack was measured against. The tag
+    # here was `main-stable` until upstream deleted it (every pull then failed
+    # with `manifest unknown`, which is how the nightly cold-cache smoke
+    # caught it); v1.102.1 is the version `main-stable` served at the time of
+    # the measurements recorded in docs/decisions/0006-llm-gateway-in-core.md
+    # and the agents test fixtures. Keep this and the Helm chart's
+    # `llmGateway.image.tag` in lockstep when bumping.
+    image: ghcr.io/berriai/litellm:v1.102.1
+    container_name: aisoc-litellm
+    command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+    volumes:
+      - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
+    #
+    # Deliberately no `depends_on`. This used to read
+    #
+    #     depends_on:
+    #       ollama-pull:
+    #         condition: service_completed_successfully
+    #
+    # on the reasoning that a gateway up before the weights exist answers the
+    # first triage request with "model not found". That reasoning was about
+    # one request; the cost was the whole product. Compose aborts the entire
+    # `up` when a `service_completed_successfully` dependency exits non-zero,
+    # and it collects every service it has not started yet — so a failed model
+    # download left 10 of 16 CORE services in `Created`, none of which has any
+    # relationship to the model. There is no ordering edge that is worth that,
+    # which is why this is an absence with a comment rather than a weaker
+    # condition.
+    #
+    # The ordering concern is addressed where it belongs: `ollama-pull` waits
+    # for the server itself, and a model that is not there is reported by
+    # `make doctor` and by the console's model panel rather than discovered on
+    # the first triage.
+    environment:
+      # Clients authenticate to the gateway with this key (AiSOC sends it as its
+      # OPENAI_API_KEY when OPENAI_BASE_URL points here). Override in .env.
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-aisoc-local}
+      # Which backend every alias resolves to. infra/litellm/config.yaml reads
+      # these through `os.environ/...` instead of naming a model inline, so the
+      # local→hosted upgrade is three variables in .env rather than an edit to a
+      # mounted config file.
+      #
+      # The defaults are the bundled local model, which is what makes AI triage
+      # work in a default `make up` with no account and no key. Set
+      # OPENAI_API_KEY plus these two to openai/gpt-4o-mini and openai/gpt-4o —
+      # and clear AISOC_LLM_API_BASE — to route to a hosted provider instead.
+      AISOC_LLM_MODEL_FAST: ${AISOC_LLM_MODEL_FAST:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
+      AISOC_LLM_MODEL_DEEP: ${AISOC_LLM_MODEL_DEEP:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
+      # `-` and not `:-`, deliberately: an operator moving to a hosted provider
+      # sets AISOC_LLM_API_BASE= (empty) in .env, and `:-` would helpfully undo
+      # that by substituting the Ollama address back in.
+      AISOC_LLM_API_BASE: ${AISOC_LLM_API_BASE-http://ollama:11434}
+      # Upstream provider keys the aliases resolve against (os.environ/... in the
+      # config). Empty is fine — the local model answers instead.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # How long the gateway waits on one generation before giving up, in
+      # seconds. 60 was a bare literal inside the mounted config, so a
+      # deployment whose model needs longer — CPU-only inference on a larger
+      # prompt is the case — timed out on every call and could only be fixed by
+      # editing a tracked file and restarting (issue #1241). The default is
+      # unchanged; the knob is new. Raise it with
+      # AISOC_LITELLM_REQUEST_TIMEOUT=300 in .env.
+      #
+      # The `:-60` default is load-bearing, not cosmetic: the gateway resolves
+      # this key with `get_secret`, which yields None for an unset variable,
+      # and a gateway in that state serves /health/liveliness 200 while failing
+      # every completion. `test_litellm_config.py` fails if the default is
+      # removed.
+      AISOC_LITELLM_REQUEST_TIMEOUT: ${AISOC_LITELLM_REQUEST_TIMEOUT:-60}
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:4000:4000"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  osquery-tls:
+    build:
+      context: ./services/osquery-tls
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-osquery-tls:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-osquery-tls
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Host port 8007 was previously colliding with the `ueba` service's
+    # 127.0.0.1:8007 binding; remapped to 8091 here. UEBA still owns 8007.
+    #
+    # The container side was 8007 too, and nothing has ever listened there:
+    # this service's Dockerfile runs uvicorn on 9001 and EXPOSEs 9001. The
+    # published port therefore resolved to a closed socket, and because the
+    # service had no healthcheck either, the container still read as
+    # `running`. Found by adding the healthcheck below and watching it sit
+    # at `starting` against a port with no server on it.
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8091:9001"
+    profiles:
+      - osquery
+    environment:
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+      AISOC_OSQUERY_TLS_ENROLL_SECRET: ${AISOC_OSQUERY_TLS_ENROLL_SECRET:-change-me-in-production}
+      # `tenant_scope` refuses outright when neither a console secret nor a
+      # service token is configured and dev mode is off, and this service
+      # received none of the three — the same trio `connectors` and
+      # `threatintel` already carry.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      SECRET_KEY: ${SECRET_KEY:-}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # The ingest service is registered as `ingest-worker` in this compose
+      # file; the previous `http://ingest:8080` would not resolve via DNS.
+      AISOC_INGEST_BASE_URL: http://ingest-worker:8080
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:9001/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  actions:
+    # Response execution, and the only service that holds the read-only vendor
+    # verbs an investigation pivots through.
+    #
+    # This was `profiles: ["full", "chatops"]` on the reasoning that nothing in
+    # CORE dispatches to it. Two things were wrong with that. The `api` service
+    # in CORE already sets AISOC_ACTIONS_BASE_URL to this hostname, so the
+    # live-actions surface was enabled and pointed at a name that does not
+    # resolve; and the investigation agent's vendor read tools dispatch here,
+    # so on the default profile the agent had no way to reach a customer's EDR
+    # or IdP at all. Measured cost of moving it: 48.3 MiB resident, 539 MB of
+    # image. See docs/decisions/0007-connectors-and-actions-in-core.md.
+    #
+    # No `profiles:` key rather than a longer list: a service in no profile is
+    # included in every profile run, so `chatops` still gets it and
+    # slack-bot's dependency still renders.
+    build:
+      context: ./services/actions
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-actions:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-actions
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8002:8085"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/5
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      # Must match AISOC_ACTIONS_SERVICE_TOKEN on the api and slack-bot
+      # services. Unset in dev, where AISOC_DEV_MODE relaxes the check;
+      # require_service_auth returns 503 on every mutating route without it
+      # in any other environment, which is the intended failure.
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_ACTIONS_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  connectors:
+    # Scheduled vendor polling, the 84-connector registry, and the fan-out
+    # target for federated SIEM search.
+    #
+    # This was `profiles: ["full"]` on the reasoning that CORE accepts events
+    # over the ingest HTTP API instead. That is true of ingest and says nothing
+    # about the other two jobs: `api` in CORE sets CONNECTORS_SERVICE_URL to
+    # this hostname and AISOC_FEATURE_FED_SEARCH defaults on, so federated
+    # search fanned out to a name that does not resolve. Measured cost of
+    # moving it: 76.5 MiB resident, 586 MB of image. See
+    # docs/decisions/0007-connectors-and-actions-in-core.md.
+    #
+    # The poll scheduler is per-instance, so a fresh install schedules nothing
+    # until an operator saves a connector.
+    build:
+      context: ./services/connectors
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-connectors:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-connectors
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8088:8003"
+    environment:
+      # app/scripts/serve.py binds PORT, defaulting to 8087. The mapping above
+      # publishes container port 8003, so leaving PORT unset put the listener
+      # on a port nothing forwards to: `connectors:8003` was refused from
+      # inside the network and the published host port answered nothing.
+      PORT: 8003
+      # Without one of these the tenant-scope dependency fails closed and
+      # every route answers 503, including the catalog the API proxies — so
+      # the console silently fell back to the 26-entry catalog bundled in the
+      # API image instead of the 84 connectors the registry actually has.
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # The third way this service answered 503 to everything. `SECRET_KEY`'s
+      # compose default is one of INSECURE_SECRET_DEFAULTS, so
+      # `resolve_console_secret()` returns "" for it; with AISOC_SERVICE_TOKEN
+      # also blank, `require_console_or_service_auth` has no credential
+      # material at all and fails closed — correctly. The dev-mode escape that
+      # exists for exactly this case was set on actions, ueba, honeytokens,
+      # purple-team and slack-bot, and not on connectors. Dev mode only applies
+      # when nothing is configured, so once `make env` generates a real
+      # AISOC_SERVICE_TOKEN this flag stops having any effect.
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
+      # Every connector egress path — the stateless test route, resource
+      # reads and scheduled polls — goes through the SSRF guard in this
+      # process (GHSA-cq4g-g6wp-4m2w). An on-prem SIEM on a private range or
+      # a named internal host is re-admitted with these, set once in .env;
+      # without them here the documented knobs reached only the agents
+      # service and a private-range connector was refused with no way to
+      # permit it. The cloud-metadata blocklist holds regardless.
+      AISOC_SSRF_ALLOW_PRIVATE: ${AISOC_SSRF_ALLOW_PRIVATE:-}
+      AISOC_SSRF_ALLOW_HOSTS: ${AISOC_SSRF_ALLOW_HOSTS:-}
+      AISOC_SSRF_EXTRA_BLOCKED_HOSTS: ${AISOC_SSRF_EXTRA_BLOCKED_HOSTS:-}
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/6
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      CORE_API_URL: http://api:8000
+      # The scheduler decrypts stored connector credentials through the vault
+      # and refuses to start without this key. .env.example documents it as
+      # one of the three required values, but no compose service forwarded it,
+      # so setting it had no effect and every deployment lost the scheduler to
+      # `connector.scheduler.start_failed` — while the container still
+      # reported itself started.
+      AISOC_CREDENTIAL_KEY: ${AISOC_CREDENTIAL_KEY:-}
+      AISOC_CREDENTIAL_KEY_ROTATION_FROM: ${AISOC_CREDENTIAL_KEY_ROTATION_FROM:-}
+      CROWDSTRIKE_CLIENT_ID: ${CROWDSTRIKE_CLIENT_ID:-}
+      CROWDSTRIKE_CLIENT_SECRET: ${CROWDSTRIKE_CLIENT_SECRET:-}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  threatintel:
+    # CORE — the only thing in the default install that puts *real*, externally
+    # sourced security data in front of a new user on day one.
+    #
+    # `app/clients/cisa_kev.py` fetches the CISA Known Exploited Vulnerabilities
+    # catalog: authoritative, public, and needing no API key. It has been wired
+    # as a scheduled handler the whole time and sat in a profile nobody starting
+    # out runs. Meanwhile the console shipped a /threat-intel page calling
+    # `/api/v1/threat-intel/indicators`, which had nothing behind it in CORE and
+    # was for a while filled with five invented IOCs. The missing feed and the
+    # fabrication were the same hole: there was no real data to show, so
+    # something invented some.
+    #
+    # Measured: 1.4 GB image, 219 MiB RSS steady state.
+    build:
+      context: ./services/threatintel
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-threatintel:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-threatintel
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    # OpenSearch is deliberately NOT a dependency any more. It was one because
+    # the lifespan called os_store.initialize() without a try/except, so an
+    # unreachable node killed the container — which made a `full`-profile store
+    # a hard requirement of a CORE service. Both that call and the pipeline's
+    # bulk index are best-effort now: with OpenSearch present you additionally
+    # get full-text IOC search, and without it the feeds still write to Qdrant,
+    # which is what the console reads. `make up-full` starts it and this
+    # service picks it up on its next restart.
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8005:8005"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/7
+      # This service reads OPENSEARCH_HOST/PORT. It was given OPENSEARCH_URL,
+      # which its Settings has no field for and `extra="ignore"` discards, so
+      # the connection worked only because the defaults happened to match the
+      # compose service name. Set what is actually read.
+      OPENSEARCH_HOST: opensearch
+      OPENSEARCH_PORT: 9200
+      QDRANT_URL: http://qdrant:6333
+      NEO4J_URI: bolt://neo4j:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-neo4j_dev_secret}
+      # Same credential the API presents when it proxies /threat-intel/indicators.
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+      MISP_URL: ${MISP_URL:-}
+      MISP_API_KEY: ${MISP_API_KEY:-}
+      OTX_API_KEY: ${OTX_API_KEY:-}
+      TAXII_URL: ${TAXII_URL:-}
+      TAXII_USERNAME: ${TAXII_USERNAME:-}
+      TAXII_PASSWORD: ${TAXII_PASSWORD:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  ueba:
+    # full profile — Behavioural baselining. Consumes its own topic; see docs/audit/REPOSITORY_REALITY.md.
+    profiles: ["full"]
+    build:
+      context: ./services/ueba
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-ueba:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-ueba
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8007:8004"
+    environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/8
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CLICKHOUSE_URL: http://aisoc:${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}@clickhouse:8123/aisoc
+      CORE_API_URL: http://api:8000
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8004/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  honeytokens:
+    # Opt in with `--profile extras`, and deliberately so. The note that used
+    # to sit here justified the profile with "image isn't published to GHCR
+    # yet" and then contradicted itself three lines later; the image is
+    # published, multi-arch (linux/amd64 and linux/arm64) at `latest` and at
+    # every version tag, so `--profile extras` pulls like every other service
+    # rather than spending ten minutes building one.
+    #
+    # GHSA-9q6p-m345-h3hj (F57) named this profile alongside an alerting
+    # defect. The alerting half is fixed and is where the security content
+    # was: a trip now defaults into the ingest spine and becomes an alert
+    # with no configuration at all (app/services/delivery.py), so an operator
+    # who turns this on gets the signal. What remains is a placement
+    # decision, taken on the grounds the ADR-0006 / ADR-0007 series uses:
+    #
+    #   * It is a leaf. Nothing `depends_on` it and no other service calls
+    #     it, unlike `connectors` and `actions`, which ADR-0007 moved into
+    #     CORE because the agent's tool surface could not reach them there.
+    #   * Nothing seeds a token, in this file or in the service, so on a
+    #     fresh CORE install it would be a capability pointed at nothing —
+    #     the failure ADR-0007 set out to avoid — until an operator plants
+    #     one, by which point they are configuring deliberately anyway.
+    #   * It is not hidden. `/honeytokens` renders the CapabilityUnavailable
+    #     panel naming this profile and the command, so an analyst reads an
+    #     absent capability rather than a clean zero.
+    #   * infra/helm ships the same posture (`honeytokens.enabled: false`),
+    #     so both deployment paths agree on the default.
+    #
+    # Cost is deliberately not the argument: the image is 86 MB on disk,
+    # which would no more move the 8 GB CORE figure than the 124.8 MiB
+    # ADR-0007 measured did. Moving it in would change all three published
+    # counts — core 16 to 17, full 22 to 23 and prod:full 21 to 22, because
+    # `extras` sits outside `full` as well — and every figure registered in
+    # scripts/check_profile_service_counts.py.
+    profiles: ["extras"]
+    build:
+      context: ./services/honeytokens
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-honeytokens:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-honeytokens
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8008:8005"
+    environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/9
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      CORE_API_URL: http://api:8000
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8005/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  purple-team:
+    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
+    # `aisoc serve` skips it by default. Opt in with `--profile extras`.
+    # `pull_policy: build` used to be the only thing that worked here,
+    # because the image this names had never been published; it is in the
+    # publish matrix now, so `--profile extras` pulls like every other
+    # service instead of spending ten minutes building one.
+    profiles: ["extras"]
+    build:
+      context: ./services/purple-team
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-purple-team:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-purple-team
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8006:8006"
+    environment:
+      # Tracing is quiet by default (issue #1848): the exporter used to point
+      # at localhost:4317 — this container itself — so the batch processor
+      # retried a refused connection every few seconds. Set
+      # OTEL_EXPORTER=otlp alongside `--profile monitoring` to trace.
+      OTEL_EXPORTER: ${OTEL_EXPORTER:-none}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      # Two roles, the same split the api service uses. This service manages
+      # its own schema through alembic, so it needs the owner to apply DDL and
+      # must not serve requests as it. The marker on the second line below is
+      # what tells scripts/check_runtime_db_role.py the owner is deliberate.
+      DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      # aisoc-db-role: owner — alembic applies this service's chain; the runtime role holds no DDL
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:${POSTGRES_PASSWORD:-aisoc_dev_secret}@postgres:5432/aisoc
+      # Read by the postgres init hook on a fresh volume and by the api
+      # migration runner otherwise. Passed here too so this service's own
+      # DATABASE_URL and the role's actual credential come from one value.
+      AISOC_APP_DB_PASSWORD: ${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/10
+      CORE_API_URL: http://api:8000
+      ATTCK_DATA_PATH: /app/data/enterprise-attack.json
+      AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    # A detached consumer used to read as `running`. /readyz answers 503 when
+    # the subscription is gone or the schema is not at head, so `docker compose
+    # ps` and `make _wait` now see the difference.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8006/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  realtime:
+    build:
+      context: ./services/realtime
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-realtime:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-realtime
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8086:4000"
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-redis_dev_secret}
+      PORT: 4000
+      # Both are generated by `make up`. Neither was passed to this container
+      # before, which is what made the ticket verifier fall back to a constant
+      # published in this repository and the /internal/* guard treat every
+      # caller as authorized.
+      AISOC_REALTIME_JWT_SECRET: ${AISOC_REALTIME_JWT_SECRET:-}
+      REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ChatOps adapter. Holds no state — forwards `/aisoc …` slash commands and
+  # approval-card button clicks to services/api and services/actions. Runs
+  # under the `chatops` profile so a default `docker compose up` doesn't fail
+  # when the operator has not yet provisioned a Slack app or service tokens.
+  slack-bot:
+    build:
+      context: ./services/slack-bot
+      dockerfile: Dockerfile
+    image: ghcr.io/beenuar/aisoc-slack-bot:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-slack-bot
+    depends_on:
+      - api
+      - actions
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8009:8089"
+    profiles:
+      - chatops
+    environment:
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN:-}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET:-}
+      AISOC_API_BASE_URL: http://api:8000
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_API_SERVICE_TOKEN: ${AISOC_SLACK_API_TOKEN:-}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_SLACK_ACTIONS_TOKEN:-}
+      AISOC_DEFAULT_TENANT_ID: ${AISOC_DEFAULT_TENANT_ID:-00000000-0000-0000-0000-000000000000}
+      AISOC_WEB_BASE_URL: ${AISOC_WEB_BASE_URL:-http://localhost:3000}
+      AISOC_SLACK_BOT_PORT: 8089
+      AISOC_HTTP_TIMEOUT_SECONDS: 10
+      # Proactive approval cards. Empty channel disables posting, which is
+      # the right default: a bot that posts into a channel nobody chose is
+      # worse than one that posts nowhere.
+      SLACK_APPROVALS_CHANNEL: ${SLACK_APPROVALS_CHANNEL:-}
+      # Shared with the agents service, which calls /internal/approval-card.
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
+      # What this deployment published, so the service can refuse the
+      # anonymous auth shim on an address someone else can reach. It
+      # binds 0.0.0.0 inside the container and cannot tell otherwise.
+      AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # Depth 5.2. The Teams bot held the Adaptive Card builder and the signed
+  # callback handler and was in no compose file, so nothing could post a
+  # card and nothing could receive a decision. Same `chatops` profile as
+  # slack-bot: a default `docker compose up` must not fail because an
+  # operator has not provisioned a Teams channel.
+  teams-bot:
+    build:
+      context: ./services/teams-bot
+      dockerfile: Dockerfile
+    # Built locally and deliberately not given an `image:` tag yet. The
+    # publish matrix now carries teams-bot, so the package exists from the
+    # next release — and until that release has actually run, naming a
+    # `ghcr.io/beenuar/aisoc-teams-bot` tag here would tell an operator to
+    # pull something that has never been published.
+    # `scripts/check_published_images.py` is what catches that, and it
+    # caught exactly this.
+    container_name: aisoc-teams-bot
+    depends_on:
+      - api
+      - actions
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8010:8090"
+    profiles:
+      - chatops
+    volumes:
+      # Upstream v20.2.1 packaging gap: teams-bot hmac_signer cross-loads
+      # slack-bot source at /slack-bot, but neither the image nor compose
+      # provides that path, so fresh deploys crash-loop with ModuleNotFoundError.
+      - ./services/slack-bot:/slack-bot:ro
+    environment:
+      AISOC_API_BASE_URL: http://api:8000
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_API_SERVICE_TOKEN: ${AISOC_TEAMS_API_TOKEN:-}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_TEAMS_ACTIONS_TOKEN:-}
+      AISOC_WEB_BASE_URL: ${AISOC_WEB_BASE_URL:-http://localhost:3000}
+      # Signs the card's Approve / Deny buttons and is re-verified by the
+      # callback handler. Unset means the bot refuses to post rather than
+      # posting a card whose buttons the handler will reject.
+      AISOC_TEAMS_CALLBACK_SECRET: ${AISOC_TEAMS_CALLBACK_SECRET:-}
+      # Empty disables posting, which is the right default: a bot that
+      # posts into a channel nobody chose is worse than one posting nowhere.
+      TEAMS_APPROVALS_WEBHOOK_URL: ${TEAMS_APPROVALS_WEBHOOK_URL:-}
+      # Shared with the API, which calls /internal/approval-card.
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # Depth 9.1 (parity 6.6). The MCP server was stdio-only and deployed by
+  # nothing, so the only way to reach it was to let an MCP host start it as a
+  # child process with one operator's API key in the host's config file.
+  #
+  # Its own profile rather than CORE or full. Two reasons, and the second is
+  # the one that matters: it is a standing read path into a tenant's alerts
+  # and event lake, so an operator should have to say yes to it; and a service
+  # nobody asked for does not belong in the smallest deployment the project
+  # tells people to start with.
+  #
+  # Built locally with no `image:` tag, the way teams-bot is, because no
+  # `ghcr.io/beenuar/aisoc-mcp` package has been published yet and naming one
+  # here would tell an operator to pull something that does not exist.
+  # `scripts/check_published_images.py` is what catches that.
+  # Ack-clock escalator: Teams cards for unacknowledged CRITICAL cases and a
+  # daily HIGH digest. Opt-in profile — the native outbound-webhook emitters
+  # (services/api enqueue_event) have no production callers yet, so this
+  # service is the interim escalation transport. Enable with
+  #   docker compose --profile escalations up -d
+  # and set AISOC_ESCALATION_TEAMS_URL in .env (a Power Automate Teams webhook).
+  escalations:
+    build:
+      context: ./services/escalations
+    container_name: aisoc-escalations
+    profiles:
+      - escalations
+    environment:
+      # Plain postgresql:// scheme: this service uses psycopg (sync), not asyncpg.
+      DATABASE_URL: postgresql://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      AISOC_ESCALATION_TEAMS_URL: ${AISOC_ESCALATION_TEAMS_URL:-}
+      AISOC_CONSOLE_URL: ${AISOC_CONSOLE_URL:-http://localhost:3000}
+      ESC_TICK_SECONDS: 900
+      ESC_CRITICAL_GRACE_MINUTES: 30
+      ESC_CRITICAL_NAG_HOURS: 4
+      ESC_CRITICAL_MAX_NAGS: 3
+      ESC_DIGEST_HOUR_UTC: 8
+    volumes:
+      - escalation-state:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  mcp:
+    build:
+      context: .
+      dockerfile: services/mcp/Dockerfile
+    container_name: aisoc-mcp
+    depends_on:
+      - api
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8096:8096"
+    profiles:
+      - mcp
+    environment:
+      # Where to send every tool call and every authorize request.
+      AISOC_URL: http://api:8000
+      # Deliberately NOT AISOC_API_KEY. Over HTTP the credential arrives in
+      # the request and the tenant is derived from it; a key here would be a
+      # fallback that answers one tenant's question with another's access.
+      # `scripts/check_mcp_over_http.py` fails if src/http.ts ever reads one.
+      AISOC_MCP_HTTP: "1"
+      AISOC_MCP_HTTP_HOST: 0.0.0.0
+      AISOC_MCP_HTTP_PORT: "8096"
+      AISOC_TIMEOUT_MS: ${AISOC_MCP_TIMEOUT_MS:-20000}
+      AISOC_MCP_VERBOSE: ${AISOC_MCP_VERBOSE:-0}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/beenuar/aisoc-web:${AISOC_VERSION:-latest}
+    pull_policy: ${AISOC_PULL_POLICY:-missing}
+    container_name: aisoc-web
+    depends_on:
+      - api
+      - realtime
+    ports:
+      # The console has its own bind address because it is the only port a
+      # browser needs. Everything it talks to — the API, the agents service,
+      # the realtime gateway — is reached through this server's same-origin
+      # proxy on the internal network, so exposing AiSOC to a single host's
+      # LAN means publishing one port, not fourteen.
+      #
+      #   AISOC_CONSOLE_BIND_ADDR=0.0.0.0   # reachable at http://<host>:3000
+      #
+      # Falls back to AISOC_BIND_ADDR and then to loopback, so the default
+      # install is still reachable only from the machine it runs on. Put it
+      # behind a reverse proxy with TLS before anything hostile can route to
+      # it; see apps/docs/docs/deployment/single-host.md.
+      - "${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}}:3000:3000"
+    environment:
+      # Where this server proxies to. These are read at container start by
+      # apps/web/docker-entrypoint.sh, which re-points the compiled rewrite
+      # table at them — so unlike the NEXT_PUBLIC_* pair that used to sit
+      # here, they take effect on a pulled image.
+      API_URL: ${AISOC_API_URL:-http://api:8000}
+      AGENTS_URL: ${AISOC_AGENTS_URL:-http://agents:8084}
+      REALTIME_URL: ${AISOC_REALTIME_URL:-http://realtime:4000}
+      # NOTE: do not add NEXT_PUBLIC_* here. Next inlines those into the
+      # JavaScript bundle at `next build` time, so on the pulled image this
+      # service runs they are read by nothing. NEXT_PUBLIC_API_URL and
+      # NEXT_PUBLIC_WS_URL were set here and did exactly nothing; an operator
+      # pointing the console at their own host edited them, saw no change,
+      # and had no way to tell the setting was inert. The browser needs no
+      # absolute URL at all — the bundle calls same-origin paths and this
+      # server proxies them onward.
+      AISOC_DEMO_MODE: ${AISOC_DEMO_MODE:-false}
+      NODE_ENV: production
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # ─── Observability ────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.48.0
+    container_name: aisoc-prometheus
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9091:9090"
+    volumes:
+      - ./infra/docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Phase 2.4 — alert rules mounted as a directory so adding a
+      # new rule file under `infra/docker/alerts/` is picked up on
+      # next `docker compose restart prometheus` (or a SIGHUP).
+      - ./infra/docker/alerts:/etc/prometheus/alerts:ro
+      # All metrics history. Without this a recreate starts an empty TSDB,
+      # so every before-and-after an operator was keeping is gone.
+      - prometheus_data:/prometheus
+    # Phase 2.4 — Prometheus needs to reach the Alertmanager service
+    # before it can forward alerts. The `depends_on` keeps `docker
+    # compose up monitoring` healthy on cold boot — without it,
+    # Prometheus logs "level=warn ... alertmanager_url=... err=lookup"
+    # for the first ~30s of every restart.
+    depends_on:
+      - alertmanager
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  # Phase 2.4 — in-cluster Alertmanager. Receives firing alerts
+  # from Prometheus, groups + deduplicates them per
+  # `infra/docker/alertmanager.yml`, and forwards them to the
+  # configured receivers. The dev stack ships with a no-op webhook
+  # receiver that points at the API's `/internal/alerts/sink`
+  # endpoint (which logs the payload); production operators replace
+  # the receiver block with PagerDuty / Slack / Opsgenie. The
+  # `monitoring` profile keeps it out of `docker compose up`'s
+  # default surface so a stock `aisoc serve` doesn't fail when the
+  # operator hasn't provisioned downstream alerting.
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: aisoc-alertmanager
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:9094:9093"
+    volumes:
+      - ./infra/docker/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      # Silences. `--storage.path=/alertmanager` below names the directory
+      # and nothing kept it, so a deliberately muted alert came back firing
+      # after a recreate — most likely mid-incident, which is when silences
+      # get set.
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      # External URL is what Alertmanager uses to render deep-links
+      # in notification templates (e.g. "Silence in Alertmanager").
+      # Port 9094 here matches the host-side mapping so the link
+      # works from a browser on the operator's laptop.
+      - '--web.external-url=http://localhost:9094'
+    # NOTE: The Alertmanager binary does NOT substitute shell-style
+    # env vars in `alertmanager.yml`. To change receivers per
+    # environment, mount a different config file (production
+    # deployments do this through Helm values templating).
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  # ── Tracing ────────────────────────────────────────────────────────────────
+  # The services default OTEL_EXPORTER_OTLP_ENDPOINT to
+  # http://otel-collector:4317 and no collector shipped in any compose file,
+  # so out of the box every span went into a connection error. That is worse
+  # than having no tracing at all: the code looks instrumented, the logs fill
+  # with export failures, and nobody can tell whether a missing trace means a
+  # missing span or a missing collector.
+  #
+  # Scope, stated because the docs previously overstated it: api, agents,
+  # ueba and honeytokens are instrumented. ingest (Go) and realtime
+  # (TypeScript) are not, and they are the two ends of the Kafka spine.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.109.0
+    container_name: aisoc-otel-collector
+    command: ["--config=/etc/otel/collector.yaml"]
+    depends_on:
+      - tempo
+    volumes:
+      - ./infra/docker/otel/collector.yaml:/etc/otel/collector.yaml:ro
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:4317:4317"
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:4318:4318"
+    healthcheck:
+      test: ["CMD", "/otelcol-contrib", "--version"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    container_name: aisoc-tempo
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    user: "0:0"
+    volumes:
+      - ./infra/docker/otel/tempo.yaml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:3200:3200"
+    networks:
+      - aisoc
+    profiles:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: aisoc-grafana
+    depends_on:
+      - prometheus
+      - tempo
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:3001:3000"
+    # Default admin password is intentionally weak for the dev compose stack;
+    # the 127.0.0.1 binding above keeps the dashboard off the LAN. Override
+    # GF_SECURITY_ADMIN_PASSWORD in production deployments (helm/terraform).
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./infra/docker/grafana:/etc/grafana/provisioning:ro
+      # Dashboards built in the UI, users, annotations and UI-created alert
+      # rules. The provisioning mount above is read-only config that comes
+      # back from the image; this is the operator's own work, which does not.
+      # The loss was silent: Grafana returns with its provisioned dashboards
+      # intact and nothing saying the rest ever existed.
+      - grafana_data:/var/lib/grafana
+    networks:
+      - aisoc
+    profiles:
+      - monitoring

@@ -1,0 +1,56 @@
+id: mitre-car-car-2013-01-003
+name: SMB Events Monitoring
+description: '[Server Message Block](https://en.wikipedia.org/wiki/Server_Message
+  Block) (SMB) is used by Windows to allow for file, pipe, and printer sharing over
+  port 445/tcp. It allows for enumerating, and reading from and writing to file shares
+  for a remote computer. Although it is heavily used by Windows servers for legitimate
+  purposes and by users for file and printer sharing, many adversaries also use SMB
+  to achieve [Lateral Movement](https://attack.mitre.org/tactics/TA0008). Looking
+  at this activity more closely to obtain an adequate sense of situational awareness
+  may make it possible to detect adversaries moving between hosts in a way that deviates
+  from normal activity. Because SMB traffic is heavy in many environments, this analytic
+  may be difficult to turn into something that can be used to quickly detect an APT.
+  In some cases, it may make more sense to run this analytic in a forensic fashion.
+  Looking through and filtering its output after an intrusion has been discovered
+  may be helpful in identifying the scope of compromise.
+
+
+  ### Output Description
+
+
+  The source, destination, content, and time of each event.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1039
+  - T1021
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: PCAP
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'flow = search Flow:Message
+
+      smb_events = filter flow where (dest_port == "445" and protocol == "smb")
+
+      smb_events.file_name = smb_events.proto_info.file_name
+
+      output smb_write
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-01-003
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-01-003.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,24 @@
+id: det-endpoint-036
+name: Browser Extension Installed Outside Allowlist
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Browser Extension
+  Installed Outside Allowlist'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1176
+- tlp.white
+category: endpoint
+log_source:
+  product: edr
+  service: process-create
+detection:
+  condition: |
+    image_basename IN ["chrome.exe", "msedge.exe", "firefox.exe"]
+    AND command_line CONTAINS "--load-extension"
+false_positives:
+- Developer dev-tools workflow
+playbook: tpl-account-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

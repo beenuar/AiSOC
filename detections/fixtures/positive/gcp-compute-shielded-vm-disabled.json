@@ -1,0 +1,4 @@
+{
+  "method_name": "head-instances.update",
+  "shielded_instance_config": false
+}

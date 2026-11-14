@@ -1,0 +1,43 @@
+id: splunk-security-content-21432e40-04f4-11ec-b7e6-acde48001122
+name: Get ADUser with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-AdUser` PowerShell
+  cmdlet, which is used to enumerate all domain users. It leverages PowerShell Script
+  Block Logging (EventCode=4104) to identify instances where this command is executed
+  with a filter. This activity is significant as it may indicate an attempt by adversaries
+  or Red Teams to gather information about domain users for situational awareness
+  and Active Directory discovery. If confirmed malicious, this behavior could lead
+  to further reconnaissance and potential exploitation of user accounts within the
+  domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://www.blackhillsinfosec.com/red-blue-purple/
+- https://attack.mitre.org/techniques/T1087/002/
+- https://docs.microsoft.com/en-us/powershell/module/activedirectory/get-aduser?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*get-aduser*\" ScriptBlockText\
+    \ = \"*-filter*\"\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `get_aduser_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 21432e40-04f4-11ec-b7e6-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/get_aduser_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

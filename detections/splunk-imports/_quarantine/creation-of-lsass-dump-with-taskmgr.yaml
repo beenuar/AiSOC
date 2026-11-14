@@ -1,0 +1,41 @@
+id: splunk-security-content-b2fbe95a-9c62-4c12-8a29-24b97e84c0cd
+name: Creation of lsass Dump with Taskmgr
+description: The following analytic detects the creation of an lsass.exe process dump
+  using Windows Task Manager. It leverages Sysmon EventID 11 to identify file creation
+  events where the target filename matches *lsass*.dmp. This activity is significant
+  because creating an lsass dump can be a precursor to credential theft, as the dump
+  file contains sensitive information such as user passwords. If confirmed malicious,
+  an attacker could use the lsass dump to extract credentials and escalate privileges,
+  potentially compromising the entire network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.001
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1003.001/T1003.001.md#atomic-test-5---dump-lsassexe-memory-using-windows-task-manager
+- https://attack.mitre.org/techniques/T1003/001/
+- https://2017.zeronights.org/wp-content/uploads/materials/ZN17_Kheirkhabarov_Hunting_for_Credentials_Dumping_in_Windows_Environment.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventID=11 process_name=taskmgr.exe TargetFilename=*lsass*.dmp\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY action\
+    \ dest file_name\n       file_path process_guid process_id\n       user_id vendor_product\
+    \ process_name\n       TargetFilename\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `creation_of_lsass_dump_with_taskmgr_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b2fbe95a-9c62-4c12-8a29-24b97e84c0cd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/creation_of_lsass_dump_with_taskmgr.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

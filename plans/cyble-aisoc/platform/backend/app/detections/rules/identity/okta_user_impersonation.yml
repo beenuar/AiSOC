@@ -1,0 +1,24 @@
+title: Okta Admin Impersonates User
+id: aisoc-id-id-0018-okta-impersonate
+status: experimental
+description: |
+  Okta admin uses "impersonate" / "assume identity" feature to
+  sign in as another user. Legitimate for support, but heavily
+  abused by compromised admins to access target accounts without
+  triggering MFA on the target.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1078.004
+  - attack.privilege_escalation
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action:
+      - 'user.session.impersonation.initiate'
+      - 'user.session.impersonation.grant'
+  condition: selection

@@ -1,0 +1,6 @@
+{
+  "operation": "Set-CsTenantFederationConfiguration",
+  "parameters": {
+    "AllowedDomains": "attacker.com"
+  }
+}

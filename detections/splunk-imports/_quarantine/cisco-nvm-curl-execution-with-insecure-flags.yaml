@@ -1,0 +1,64 @@
+id: splunk-security-content-cc695238-3117-4e60-aa83-4beac2a42c69
+name: Cisco NVM - Curl Execution With Insecure Flags
+description: 'This analytic detects the use of `curl.exe` with insecure flags such
+  as `-k`, `--insecure`, `--proxy-insecure`, or `--doh-insecure`
+
+  which disable TLS certificate validation.
+
+  It leverages Cisco Network Visibility Module (NVM) flow data and process arguments
+
+  to identify outbound connections initiated by curl where TLS checks were explicitly
+  disabled.
+
+  This behavior may indicate an attempt to bypass certificate validation to connect
+  to potentially untrusted or malicious endpoints,
+
+  a common tactic in red team operations, malware staging, or data exfiltration over
+  HTTPS.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1197
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2025/05/19/another-confluence-bites-the-dust-falling-to-elpaco-team-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_network_visibility_module_flowdata`\nprocess_name = \"curl.exe\"\
+    \nNOT dest IN (\n        \"10.0.0.0/8\", \"172.16.0.0/12\", \"192.168.0.0/16\"\
+    , \"100.64.0.0/10\",\n        \"127.0.0.0/8\", \"169.254.0.0/16\", \"192.0.0.0/24\"\
+    , \"192.0.0.0/29\", \"192.0.0.8/32\",\n        \"192.0.0.9/32\", \"192.0.0.10/32\"\
+    , \"192.0.0.170/32\", \"192.0.0.171/32\", \"192.0.2.0/24\",\n        \"192.31.196.0/24\"\
+    , \"192.52.193.0/24\", \"192.88.99.0/24\", \"224.0.0.0/4\", \"192.175.48.0/24\"\
+    ,\n        \"198.18.0.0/15\", \"198.51.100.0/24\", \"203.0.113.0/24\", \"240.0.0.0/4\"\
+    , \"::1\"\n        )\n| regex process_arguments=\"(?i)(?<!\\w)-(?:[a-z]*k[a-z]*|-(insecure|proxy-insecure|doh-insecure))\"\
+    \n| stats count min(_time) as firstTime max(_time) as lastTime\n        values(parent_process_arguments)\
+    \ as parent_process_arguments\n        values(process_arguments) as process_arguments\n\
+    \        values(parent_process_hash) as parent_process_hash\n        values(process_hash)\
+    \ as process_hash\n        values(module_name_list) as module_name_list\n    \
+    \    values(module_hash_list) as module_hash_list\n        values(dest_port) as\
+    \ dest_port\n        values(aliul) as additional_logged_in_users_list\n      \
+    \  values(dest_hostname) as dest_hostname\n        by src dest parent_process_path\
+    \ parent_process_integrity_level process_path process_name process_integrity_level\
+    \ process_id transport\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table\n  parent_process_integrity_level parent_process_path parent_process_arguments\
+    \ parent_process_hash\n  process_integrity_level process_path process_name process_arguments\
+    \ process_hash process_id\n  additional_logged_in_users_list module_name_list\
+    \ module_hash_list\n  src dest_hostname dest dest_port transport firstTime lastTime\n\
+    | `cisco_nvm___curl_execution_with_insecure_flags_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: cc695238-3117-4e60-aa83-4beac2a42c69
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cisco_nvm___curl_execution_with_insecure_flags.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

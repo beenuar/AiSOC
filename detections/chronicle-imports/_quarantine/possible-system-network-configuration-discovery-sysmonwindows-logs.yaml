@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-possible-system-network-configuration-discovery-sysmonwindows-logs
+name: possible_system_network_configuration_discovery_sysmonwindows_logs
+description: possible_system_network_configuration_discovery_sysmonwindows_logs
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule possible_system_network_configuration_discovery_sysmonwindows_logs\
+    \ {\n meta:\n    author = \"Roman Ranskyi\"\n    description = \"Adversaries will\
+    \ likely look for details about the network configuration and settings of systems\
+    \ they access or through information discovery of remote systems.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/SZku7bXNyF1M\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"\"\n    mitre = \"Discovery, t1016\"\n\n  events:\n(($selection1.target.process.file.full_path\
+    \ = \"net.exe\" and $selection1.target.process.command_line = \"net config\")\
+    \ or (($selection1.target.process.file.full_path = \"ipconfig.exe\" or $selection1.target.process.file.full_path\
+    \ = \"netsh.exe\" or $selection1.target.process.file.full_path = \"arp.exe\" or\
+    \ $selection1.target.process.file.full_path = \"nbtstat.exe\" or $selection1.target.process.file.full_path\
+    \ = \"systeminfo.exe\") and not ($selection1.metadata.product_event_type = \"\
+    7\")))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: possible_system_network_configuration_discovery_sysmonwindows_logs
+provenance:
+  source: chronicle/detection-rules
+  source_id: possible_system_network_configuration_discovery_sysmonwindows_logs
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/possible_system_network_configuration_discovery__sysmon_windows_logs.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

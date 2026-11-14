@@ -1,0 +1,105 @@
+{{- if .Values.mcp.enabled }}
+---
+# Depth 9.1 (parity 6.6). The MCP server over streamable HTTP.
+#
+# `enabled: false` by default, like every other optional component in this
+# chart, and for a stronger reason than most: this is a standing read path
+# into a tenant's alerts, cases and event lake, so switching it on is a
+# decision an operator should take deliberately rather than inherit.
+#
+# No image tag is published yet, so `image.repository` has no default that
+# would resolve. `scripts/check_published_images.py` only resolves references
+# it can see, and the chart's own guard is that the component is off: an
+# install that does not enable it never asks the registry for anything. The
+# day `ghcr.io/beenuar/aisoc-mcp` is published, `values.yaml` gains the
+# repository and this comment goes.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisoc.fullname" . }}-mcp
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp
+spec:
+  replicas: {{ .Values.mcp.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: mcp
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: mcp
+    spec:
+      # The MCP server talks to the AiSOC API, never the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mcp
+          image: "{{ required "mcp.image.repository must be set to install the MCP server; no image is published for it yet" .Values.mcp.image.repository }}:{{ .Values.mcp.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.mcp.image.pullPolicy | default "IfNotPresent" }}
+          ports:
+            - name: http
+              containerPort: 8096
+              protocol: TCP
+          env:
+            # The API this server reads through. Defaulted to the chart's own
+            # core-api Service rather than left empty, because an empty value
+            # would silently fall back to localhost and every tool call would
+            # answer "connection refused" from inside the pod.
+            - name: AISOC_URL
+              value: {{ .Values.mcp.aisocUrl | default (printf "http://%s-core-api:8000" (include "aisoc.fullname" .)) | quote }}
+            # There is deliberately no AISOC_API_KEY here. Over HTTP the
+            # credential arrives per request and the tenant is derived from
+            # it; a key in the pod's environment would be a fallback that
+            # answers one tenant's question with another tenant's access.
+            - name: AISOC_MCP_HTTP
+              value: "1"
+            - name: AISOC_MCP_HTTP_HOST
+              value: "0.0.0.0"
+            - name: AISOC_MCP_HTTP_PORT
+              value: "8096"
+            - name: AISOC_TIMEOUT_MS
+              value: {{ .Values.mcp.timeoutMs | default 20000 | quote }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml (.Values.mcp.resources | default (dict "requests" (dict "cpu" "50m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "512Mi"))) | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-mcp
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8096
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp
+{{- end }}

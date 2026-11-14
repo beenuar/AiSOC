@@ -1,0 +1,56 @@
+id: chronicle-detection-rules-google-workspace-multiple-files-deleted-from-google-drive
+name: google_workspace_multiple_files_deleted_from_google_drive
+description: google_workspace_multiple_files_deleted_from_google_drive
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_workspace_multiple_files_deleted_from_google_drive {\n\n  meta:\n\
+    \    author = \"Google Cloud Security\"\n    description = \"Identifies when a\
+    \ user deletes multiple files from Google Drive, which may indicate data destruction.\"\
+    \n    rule_id = \"mr_efa7bd41-506c-49b9-85a0-d799f0345ecf\"\n    rule_name = \"\
+    Google Workspace Multiple Files Deleted From Google Drive\"\n    mitre_attack_tactic\
+    \ = \"Impact\"\n    mitre_attack_technique = \"Data Destruction\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1485/\"\n    mitre_attack_version =\
+    \ \"v13.1\"\n    type = \"Alert\"\n    data_source = \"Workspace Activity\"\n\
+    \    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    $ws.metadata.vendor_name\
+    \ = \"Google Workspace\"\n    $ws.metadata.product_name = \"drive\"\n    (\n \
+    \       $ws.metadata.product_event_type = \"trash\" or\n        $ws.metadata.product_event_type\
+    \ = \"delete\"\n    )\n    $ws.principal.user.userid = $user_id\n\n  match:\n\
+    \    $user_id over 1h\n\n  outcome:\n    $risk_score = max(75)\n    $mitre_attack_tactic\
+    \ = \"Impact\"\n    $mitre_attack_technique = \"Data Destruction\"\n    $mitre_attack_technique_id\
+    \ = \"T1567\"\n    $event_count = count_distinct($ws.metadata.id)\n    $product_event_type\
+    \ = array_distinct($ws.metadata.product_event_type)\n    $userid = array_distinct($ws.principal.user.userid)\n\
+    \    $doc_type = array_distinct($ws.src.resource.attribute.labels[\"doc_type\"\
+    ])\n    $owner = array_distinct($ws.target.resource.attribute.labels[\"owner\"\
+    ])\n    $doc_name = array_distinct($ws.target.resource.name)\n    $doc_id = array_distinct($ws.target.resource.product_object_id)\n\
+    \    $count_docs = count_distinct($ws.target.resource.product_object_id)\n\n \
+    \ condition:\n    // Customize the value of $count_docs to set the alerting threshold\
+    \ for your environment\n    $ws and $count_docs > 10\n}"
+  chronicle_rule_name: google_workspace_multiple_files_deleted_from_google_drive
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_workspace_multiple_files_deleted_from_google_drive
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/google_workspace_multiple_files_deleted_from_google_drive.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

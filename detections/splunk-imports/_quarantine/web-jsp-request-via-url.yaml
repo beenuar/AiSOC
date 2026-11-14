@@ -1,0 +1,44 @@
+id: splunk-security-content-2850c734-2d44-4431-8139-1a56f6f54c01
+name: Web JSP Request via URL
+description: The following analytic identifies URL requests associated with CVE-2022-22965
+  (Spring4Shell) exploitation attempts, specifically targeting webshell access on
+  a remote webserver. It detects HTTP GET requests with URLs containing ".jsp?cmd="
+  or "j&cmd=" patterns. This activity is significant as it indicates potential webshell
+  deployment, which can lead to unauthorized remote command execution. If confirmed
+  malicious, attackers could gain control over the webserver, execute arbitrary commands,
+  and potentially escalate privileges, leading to severe data breaches and system
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1133
+  - T1190
+  - T1505.003
+  categories:
+  - application
+references:
+- https://www.microsoft.com/security/blog/2022/04/04/springshell-rce-vulnerability-guidance-for-protecting-against-and-detecting-cve-2022-22965/
+- https://github.com/TheGejr/SpringShell
+- https://www.tenable.com/blog/spring4shell-faq-spring-framework-remote-code-execution-vulnerability
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats count FROM datamodel=Web\n  WHERE Web.http_method IN (\"GET\"\
+    ) Web.url IN (\"*.jsp?cmd=*\",\"*j&cmd=*\")\n  BY Web.http_user_agent Web.http_method,\
+    \ Web.url,Web.url_length\n     Web.src, Web.dest sourcetype\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `web_jsp_request_via_url_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2850c734-2d44-4431-8139-1a56f6f54c01
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/web_jsp_request_via_url.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

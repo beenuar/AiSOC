@@ -1,0 +1,39 @@
+id: mitre-car-car-2021-01-002
+name: Unusually Long Command Line Strings
+description: Often, after a threat actor gains access to a system, they will attempt
+  to run some kind of malware to further infect the victim machine. These malware
+  often have long command line strings, which could be a possible indicator of attack.
+  Here, we use sysmon and Splunk to first find the average command string length and
+  search for command strings that stretch over multiple lines, thus identifying anomalies
+  and possibly malicious commands.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Splunk search - Identifying possible malware activity via unusually long
+      command line strings
+    type: Splunk
+    code: 'index=* sourcetype="xmlwineventlog" EventCode=4688  |eval cmd_len=len(CommandLine)
+      | eventstats avg(cmd_len) as avg by host| stats max(cmd_len) as maxlen, values(avg)
+      as avgperhost by host, CommandLine | where maxlen > 10*avgperhost
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-002.yaml
+notes:
+  car_status: needs_implementation

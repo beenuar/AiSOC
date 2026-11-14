@@ -1,0 +1,4 @@
+{
+  "operation_name": "vaults/accessPolicies/write-x",
+  "permissions": "prefix-all-suffix"
+}

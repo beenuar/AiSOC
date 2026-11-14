@@ -1,0 +1,25 @@
+id: det-endpoint-154
+name: iptables -F Used To Flush Rules
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'iptables -F Used
+  To Flush Rules'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562.004
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/iptables"
+    AND argv CONTAINS_ANY ["-F", "--flush"]
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

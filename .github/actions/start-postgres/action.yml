@@ -1,0 +1,113 @@
+name: Start PostgreSQL with registry fallback
+description: Pull and start the official PostgreSQL image without making one registry a CI single point of failure.
+
+inputs:
+  tag:
+    description: Official PostgreSQL image tag.
+    required: false
+    default: 16-alpine
+  postgres_user:
+    description: Initial PostgreSQL superuser. The name is also read by the runtime-role CI gate.
+    required: false
+    default: aisoc
+  password:
+    description: Initial PostgreSQL password.
+    required: true
+  database:
+    description: Initial PostgreSQL database.
+    required: false
+    default: aisoc
+  port:
+    description: Host port published as PostgreSQL port 5432.
+    required: false
+    default: "5432"
+
+outputs:
+  image:
+    description: Registry-qualified image that was successfully pulled.
+    value: ${{ steps.start.outputs.image }}
+
+runs:
+  using: composite
+  steps:
+    - id: start
+      shell: bash
+      env:
+        POSTGRES_TAG: ${{ inputs.tag }}
+        POSTGRES_USER: ${{ inputs.postgres_user }}
+        POSTGRES_PASSWORD: ${{ inputs.password }}
+        POSTGRES_DB: ${{ inputs.database }}
+        POSTGRES_PORT: ${{ inputs.port }}
+      run: |
+        set -euo pipefail
+
+        if [[ ! "$POSTGRES_TAG" =~ ^[A-Za-z0-9._-]+$ ]] \
+          || [[ ! "$POSTGRES_USER" =~ ^[A-Za-z0-9_]+$ ]] \
+          || [[ ! "$POSTGRES_DB" =~ ^[A-Za-z0-9_]+$ ]] \
+          || [[ ! "$POSTGRES_PORT" =~ ^[0-9]+$ ]]; then
+          echo "::error::Invalid PostgreSQL action input"
+          exit 1
+        fi
+
+        ecr="public.ecr.aws/docker/library/postgres:${POSTGRES_TAG}"
+        hub="docker.io/library/postgres:${POSTGRES_TAG}"
+
+        # Spread first attempts across both mirrors instead of sending every
+        # concurrent job to the same anonymous quota. Each round still tries
+        # both, so either registry may be unavailable without taking out CI.
+        if (( ${GITHUB_RUN_ID:-0} % 2 )); then
+          candidates=("$ecr" "$hub")
+        else
+          candidates=("$hub" "$ecr")
+        fi
+
+        image=""
+        for round in 1 2 3; do
+          for candidate in "${candidates[@]}"; do
+            echo "Pulling $candidate (round $round/3; 60-second limit)"
+            # A registry that accepts the connection but stops responding must
+            # not prevent the alternate registry from being attempted.
+            if timeout --kill-after=10s 60s docker pull "$candidate"; then
+              image="$candidate"
+              break 2
+            fi
+            echo "::warning::Could not pull $candidate; trying the other official mirror"
+          done
+          sleep $((round * 5))
+        done
+
+        if [[ -z "$image" ]]; then
+          echo "::error::PostgreSQL could not be pulled from ECR Public or Docker Hub"
+          exit 1
+        fi
+
+        docker rm -f aisoc-ci-postgres >/dev/null 2>&1 || true
+        docker run --detach --name aisoc-ci-postgres \
+          --env POSTGRES_USER \
+          --env POSTGRES_PASSWORD \
+          --env POSTGRES_DB \
+          --publish "${POSTGRES_PORT}:5432" \
+          --health-cmd "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}" \
+          --health-interval 5s \
+          --health-timeout 5s \
+          --health-retries 20 \
+          "$image"
+
+        for _ in $(seq 1 40); do
+          health="$(docker inspect --format '{{.State.Health.Status}}' aisoc-ci-postgres)"
+          if [[ "$health" == healthy ]]; then
+            echo "PostgreSQL is ready from $image"
+            echo "image=$image" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "$health" == unhealthy ]]; then
+            docker logs aisoc-ci-postgres
+            echo "::error::PostgreSQL became unhealthy"
+            exit 1
+          fi
+          sleep 3
+        done
+
+        docker logs aisoc-ci-postgres
+        echo "::error::PostgreSQL did not become healthy within 120 seconds"
+        exit 1

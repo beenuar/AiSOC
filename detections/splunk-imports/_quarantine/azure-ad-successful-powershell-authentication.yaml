@@ -1,0 +1,45 @@
+id: splunk-security-content-62f10052-d7b3-4e48-b57b-56f8e3ac7ceb
+name: Azure AD Successful PowerShell Authentication
+description: The following analytic identifies a successful authentication event against
+  an Azure AD tenant using PowerShell cmdlets. This detection leverages Azure AD SignInLogs
+  to identify successful logins where the appDisplayName is "Microsoft Azure PowerShell."
+  This activity is significant because it is uncommon for regular, non-administrative
+  users to authenticate using PowerShell, and it may indicate enumeration and discovery
+  techniques by an attacker. If confirmed malicious, this activity could allow attackers
+  to perform extensive reconnaissance, potentially leading to privilege escalation
+  or further exploitation within the Azure environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/004/
+- https://docs.microsoft.com/en-us/powershell/module/azuread/connect-azuread?view=azureadps-2.0
+- https://securitycafe.ro/2022/04/29/pentesting-azure-recon-techniques/
+- https://github.com/swisskyrepo/PayloadsAllTheThings/blob/master/Methodology%20and%20Resources/Cloud%20-%20Azure%20Pentest.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs properties.authenticationDetails{}.succeeded=true\
+    \ properties.appDisplayName=\"Microsoft Azure PowerShell\"\n  | rename properties.*\
+    \ as *\n  | rename userAgent as user_agent\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product user_agent\n       signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_successful_powershell_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 62f10052-d7b3-4e48-b57b-56f8e3ac7ceb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_successful_powershell_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

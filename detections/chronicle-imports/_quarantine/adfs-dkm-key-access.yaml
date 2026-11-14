@@ -1,0 +1,57 @@
+id: chronicle-detection-rules-adfs-dkm-key-access
+name: adfs_dkm_key_access
+description: adfs_dkm_key_access
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule adfs_dkm_key_access {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects access to the AD contact object to read the AD FS\
+    \ DKM (distributed key manager) master key value\"\n    rule_id = \"mr_2517eaa0-0915-4a9e-8ca2-abce955eb635\"\
+    \n    rule_name = \"ADFS DKM Key Access\"\n    reference = \"https://github.com/OTRF/BHEU22-ADFS/blob/main/Slide-Deck.pdf\"\
+    \n    type = \"alert\"\n    tactic = \"TA0006\"\n    technique = \"T1552.004\"\
+    \n    platform = \"Windows\"\n    data_source = \"windows security events\"\n\
+    \    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    $object.metadata.event_type\
+    \ = \"USER_RESOURCE_ACCESS\"\n    $object.metadata.product_name = \"Microsoft-Windows-Security-Auditing\"\
+    \n    $object.metadata.vendor_name = \"Microsoft\"\n    $object.metadata.product_event_type\
+    \ = \"4662\"\n    any $object.security_result.detection_fields.value = \"properties:{8d3bca50-1d7e-11d0-a081-00aa006c33ed}\"\
+    \n    $object.principal.labels[\"SubjectLogonId\"] = $subject\n\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $login.metadata.product_name = \"Microsoft-Windows-Security-Auditing\"\
+    \n    $login.metadata.vendor_name = \"Microsoft\"\n    $login.metadata.product_event_type\
+    \ = \"4624\"\n    $login.target.labels[\"TargetLogonId\"] = $subject\n    $login.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 5m\n\n  outcome:\n    $risk_score\
+    \ = 85\n    //added to populate alert graph with additional context\n    //Commented\
+    \ out because it is the same as the match variable, if match variable changes,\
+    \ uncomment to use\n    //$principal_hostname = array_distinct($logon.principal.hostname)\n\
+    \    $object_principal_process_pid = array_distinct($object.principal.process.pid)\n\
+    \    $object_principal_user_userid = array_distinct($object.principal.user.userid)\n\
+    \    //$principal_user_windows_sid = array_distinct($object.principal.user.windows_sid)\n\
+    \    $object_target_resource_name = array_distinct($object.target.resource.name)\n\
+    \n  condition:\n    $object and $login\n}"
+  chronicle_rule_name: adfs_dkm_key_access
+provenance:
+  source: chronicle/detection-rules
+  source_id: adfs_dkm_key_access
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/adfs/adfs_dkm_key_access.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

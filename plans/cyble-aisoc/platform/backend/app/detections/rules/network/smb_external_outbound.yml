@@ -1,0 +1,24 @@
+title: SMB Traffic to External Destination
+id: aisoc-id-nw-0007-smb-egress
+status: stable
+description: |
+  Outbound SMB (TCP 445) connection to a destination outside the
+  corporate network. Used in NTLM-relay and credential theft attacks
+  (e.g. PetitPotam, hash leak via UNC paths).
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1187
+  - attack.credential_access
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'outbound'
+    destination.port: 445
+  external:
+    enrich.flow.dst_external: true
+  condition: selection and external

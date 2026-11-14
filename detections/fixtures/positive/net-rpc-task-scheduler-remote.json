@@ -1,0 +1,5 @@
+{
+  "event_type": "rpc_call",
+  "interface": "atsvc",
+  "src_role": "workstation"
+}

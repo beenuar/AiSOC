@@ -1,0 +1,42 @@
+id: mitre-car-car-2014-03-001
+name: SMB Write Request - NamedPipes
+description: 'An SMB write can be an indicator of lateral movement, especially when
+  combined with other information such as execution of that written file. Named pipes
+  are a subset of SMB write requests. Named pipes such as msftewds may not be alarming;
+  however others, such as lsarpc, may.
+
+
+  Monitoring SMB write requests still creates some noise, particulary with named pipes.
+  As a result, SMB is now split between writing named pipes and writing other files.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1570
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process,Netflow
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'flow = search Flow:Message
+
+      smb_write = filter flow where (dest_port == "445" and protocol == "smb.write_pipe")
+
+      smb_write.pipe_name = smb_write.proto_info.pipe_name
+
+      output smb_write'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-03-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-03-001.yaml
+notes:
+  car_status: needs_implementation

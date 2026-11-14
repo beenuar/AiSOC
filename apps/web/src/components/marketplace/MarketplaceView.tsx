@@ -1,0 +1,1322 @@
+'use client';
+
+import { useCallback, useMemo, useState } from 'react';
+import useSWR from 'swr';
+import clsx from 'clsx';
+import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { formatTagLabel } from './tagLabel';
+import { apiFetch, AUTH_TOKEN_KEY } from '@/lib/api';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+
+export interface MarketplaceItem {
+  id: string;
+  type: 'playbook' | 'detection' | 'plugin';
+  name: string;
+  description: string;
+  version: string;
+  author: string;
+  tags: string[];
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+  // community stats (populated when the install API is wired up)
+  install_count?: number;
+  rating?: number;
+  rating_count?: number;
+  // provenance
+  verified?: boolean;
+  source?:
+    | 'core'
+    | 'community'
+    | 'sigmahq'
+    | 'mitre-car'
+    | 'splunk-security-content'
+    | 'chronicle-detection-rules'
+    | string;
+  tier?: 'stable' | 'beta' | 'imported' | 'community';
+  enabled?: boolean;
+  /**
+   * Whether the detection engine loads this rule — the only thing that
+   * decides whether it can fire, and deliberately **not** `enabled`.
+   *
+   * `enabled` is the YAML's own flag OR-ed with the directory, and 1,724
+   * rules carry `enabled: false` while the engine loads every one of them:
+   * the Sigma compiler began translating rules in place without rewriting
+   * the flag. Reading `enabled` here would mark those 1,724 working rules
+   * unusable. Absent on playbooks and plugins, which are not engine rules.
+   */
+  executable?: boolean;
+  quarantine_reason?: string;
+  provenance?: {
+    source?: string | null;
+    /**
+     * The person who wrote the rule upstream, which is not the same fact as
+     * `source` and cannot be substituted by it. DRL-1.1, which the whole
+     * imported SigmaHQ corpus is licensed under, requires author
+     * identification to travel with a shared copy — and this field was absent
+     * from the type and from the data on all 3,132 imported rules, while the
+     * item-level `author` below read `AiSOC`. Issue #1680.
+     */
+    author?: string | null;
+    source_id?: string | null;
+    source_commit?: string | null;
+    license?: string | null;
+    license_url?: string | null;
+    imported_at?: string | null;
+    upstream_path?: string | null;
+  };
+  path?: string;
+  // playbook-specific
+  trigger?: string;
+  steps?: number;
+  // detection-specific
+  category?: string;
+  log_source?: string;
+  playbook?: string;
+  // plugin-specific
+  plugin_type?: string;
+  license?: string;
+  homepage?: string;
+  min_aisoc_version?: string;
+  sdks?: string[];
+  // shared
+  mitre_techniques?: string[];
+}
+
+interface MitreCoverage {
+  techniques: Record<string, number>;
+  unique_techniques: number;
+  total_with_mitre: number;
+  by_tier?: Record<string, Record<string, number>>;
+}
+
+interface MarketplaceStats {
+  total: number;
+  playbooks: number;
+  detections: number;
+  plugins: number;
+  verified: number;
+  community: number;
+  by_tier?: Record<string, number>;
+  detections_by_tier?: Record<string, number>;
+  /** Entries the engine loads. Partitions the catalogue with `quarantined`. */
+  executable?: number;
+  /** Entries the engine does not load, so they cannot fire. */
+  quarantined?: number;
+}
+
+interface MarketplaceIndex {
+  version: string;
+  generated: string;
+  items: MarketplaceItem[];
+  stats?: MarketplaceStats;
+  mitre_coverage?: MitreCoverage;
+}
+
+interface InstalledRecord {
+  id: string;
+  type: 'detection' | 'playbook' | 'plugin';
+  name: string;
+  version: string;
+  content_sha256: string;
+  installed_at: string;
+  installed_by: string;
+}
+
+interface InstalledResponse {
+  total: number;
+  items: InstalledRecord[];
+}
+
+// Composite key for the installed-items set: "<type>:<id>"
+function installedKey(type: string, id: string): string {
+  return `${type}:${id}`;
+}
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const SEVERITY_COLORS: Record<string, string> = {
+  critical: 'bg-red-900/40 text-red-300 border-red-700/60',
+  high:     'bg-orange-900/40 text-orange-300 border-orange-700/60',
+  medium:   'bg-yellow-900/40 text-yellow-300 border-yellow-700/60',
+  low:      'bg-blue-900/40 text-blue-300 border-blue-700/60',
+  info:     'bg-slate-900/40 text-slate-300 border-slate-700/60',
+};
+
+const TYPE_COLORS: Record<string, string> = {
+  playbook:  'bg-purple-900/40 text-purple-300 border-purple-700/60',
+  detection: 'bg-cyan-900/40 text-cyan-300 border-cyan-700/60',
+  plugin:    'bg-emerald-900/40 text-emerald-300 border-emerald-700/60',
+};
+
+const fetcher = async (url: string) => {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const text = await r.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Invalid JSON');
+  }
+};
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SeverityBadge({ severity }: { severity?: string }) {
+  if (!severity) return null;
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center rounded border px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide',
+        SEVERITY_COLORS[severity] ?? 'bg-zinc-700 text-zinc-300 border-zinc-600'
+      )}
+    >
+      {severity}
+    </span>
+  );
+}
+
+function TypeBadge({ type }: { type: string }) {
+  return (
+    <span
+      className={clsx(
+        'inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-xs font-medium',
+        TYPE_COLORS[type] ?? 'bg-zinc-700 text-zinc-300 border-zinc-600'
+      )}
+    >
+      {type.charAt(0).toUpperCase() + type.slice(1)}
+    </span>
+  );
+}
+
+function VerifiedBadge() {
+  return (
+    <span
+      title="Verified by AiSOC team"
+      className="inline-flex items-center gap-0.5 rounded border border-emerald-700/60 bg-emerald-900/30 px-1.5 py-0.5 text-xs font-medium text-emerald-300"
+    >
+      Verified
+    </span>
+  );
+}
+
+function CommunityBadge() {
+  return (
+    <span
+      title="Community contribution"
+      className="inline-flex items-center gap-0.5 rounded border border-blue-700/60 bg-blue-900/30 px-1.5 py-0.5 text-xs font-medium text-blue-300"
+    >
+      Community
+    </span>
+  );
+}
+
+/**
+ * The catalogue's load-bearing distinction, and the one it did not make.
+ *
+ * 4,388 of 7,155 entries — 61% — are rules the engine does not load. They were
+ * disclosed only by the *absence* of a green "Verified" badge, listed beside
+ * executable content, sorted together, and offered the same Install button.
+ * A reader had no way to tell a rule that fires from one that cannot.
+ */
+function ReferenceOnlyBadge({ reason }: { reason?: string }) {
+  return (
+    <span
+      title={reason || 'The engine does not load this rule, so it cannot fire.'}
+      className="inline-flex items-center gap-1 rounded border border-amber-600/70 bg-amber-900/30 px-1.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-amber-300"
+    >
+      Reference only
+    </span>
+  );
+}
+
+function StarRating({ rating, count }: { rating: number; count: number }) {
+  const full = Math.floor(rating);
+  const half = rating - full >= 0.5;
+
+  return (
+    <span className="inline-flex items-center gap-1 text-xs text-zinc-400">
+      <span className="text-yellow-400">
+        {'★'.repeat(full)}
+        {half ? '½' : ''}
+        {'☆'.repeat(5 - full - (half ? 1 : 0))}
+      </span>
+      <span className="text-zinc-500">
+        {rating.toFixed(1)} ({count})
+      </span>
+    </span>
+  );
+}
+
+function MitreTechniquesRow({ ids }: { ids: string[] }) {
+  if (!ids || ids.length === 0) return null;
+  const head = ids.slice(0, 3);
+  const rest = ids.length - head.length;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1"
+      title={`Maps to MITRE ATT&CK techniques: ${ids.join(', ')}`}
+    >
+      <span className="text-[10px] uppercase tracking-wide text-zinc-500">
+        ATT&amp;CK
+      </span>
+      {head.map((tid) => (
+        <a
+          key={tid}
+          href={`https://attack.mitre.org/techniques/${tid.replace('.', '/')}/`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded border border-rose-700/60 bg-rose-900/30 px-1.5 py-0.5 text-[11px] font-mono font-medium text-rose-200 hover:bg-rose-900/50"
+        >
+          {tid}
+        </a>
+      ))}
+      {rest > 0 && (
+        <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[11px] text-zinc-400">
+          +{rest}
+        </span>
+      )}
+    </div>
+  );
+}
+
+interface InstallButtonProps {
+  item: MarketplaceItem;
+  installed: boolean;
+  busy: boolean;
+  onInstall: (item: MarketplaceItem) => void | Promise<void>;
+  onUninstall: (item: MarketplaceItem) => void | Promise<void>;
+}
+
+function InstallButton({ item, installed, busy, onInstall, onUninstall }: InstallButtonProps) {
+  // Installing a rule the engine does not load is a no-op wearing the costume
+  // of an action: the per-tenant flag flips and nothing can ever match. The
+  // control says what it is instead.
+  if (item.executable === false) {
+    return (
+      <span
+        title={item.quarantine_reason || 'The engine does not load this rule, so installing it would enable nothing.'}
+        className="cursor-not-allowed rounded border border-zinc-700 px-2 py-1 text-xs font-medium text-zinc-500"
+      >
+        Cannot install
+      </span>
+    );
+  }
+
+  if (installed) {
+    // Allow operators to back out of an install; visible affordance, not destructive
+    // since marketplace items are already on disk – we just clear the per-tenant flag.
+    return (
+      <div className="flex items-center gap-1">
+        <span
+          className="rounded bg-emerald-900/40 px-2 py-1 text-xs font-medium text-emerald-300"
+          title="Enabled for this tenant"
+        >
+          Installed
+        </span>
+        <button
+          onClick={() => onUninstall(item)}
+          disabled={busy}
+          title="Remove from this tenant"
+          className="rounded px-1.5 py-1 text-xs text-zinc-400 hover:text-rose-300 disabled:opacity-50"
+        >
+          {busy ? '…' : '×'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => onInstall(item)}
+      disabled={busy}
+      className="rounded bg-zinc-700 px-2 py-1 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-600 disabled:opacity-60"
+    >
+      {busy ? '…' : 'Install'}
+    </button>
+  );
+}
+
+function SdkChips({ sdks }: { sdks?: string[] }) {
+  if (!sdks || sdks.length === 0) return null;
+  return (
+    <span
+      className="inline-flex items-center gap-1"
+      title={`Reference implementations available: ${sdks.join(', ')}`}
+    >
+      {sdks.includes('python') && (
+        <span className="rounded border border-yellow-700/60 bg-yellow-900/30 px-1.5 py-0.5 text-[10px] font-mono uppercase text-yellow-300">
+          Py
+        </span>
+      )}
+      {sdks.includes('go') && (
+        <span className="rounded border border-sky-700/60 bg-sky-900/30 px-1.5 py-0.5 text-[10px] font-mono uppercase text-sky-300">
+          Go
+        </span>
+      )}
+    </span>
+  );
+}
+
+interface ItemCardProps {
+  item: MarketplaceItem;
+  installed: boolean;
+  busy: boolean;
+  onInstall: (item: MarketplaceItem) => void | Promise<void>;
+  onUninstall: (item: MarketplaceItem) => void | Promise<void>;
+}
+
+/**
+ * The upstream credit on an imported rule, rendered on the card itself.
+ *
+ * DRL-1.1 asks a shared copy to carry author identification, a link to the
+ * rule and the licence. All three were in the catalogue data except the one
+ * that names a person, so the console showed a rule written by Tim Shelton
+ * with `author: AiSOC` and no mention of him anywhere. This renders what the
+ * licence asks for in the place a reader actually looks.
+ *
+ * Built from what the provenance block holds rather than from a template with
+ * blanks: a rule whose upstream credits nobody gets a shorter line, never an
+ * author called "".
+ */
+function UpstreamAttribution({ provenance }: { provenance: NonNullable<MarketplaceItem['provenance']> }) {
+  const author = (provenance.author ?? '').trim();
+  const source = (provenance.source ?? '').trim();
+  if (!author && !source) return null;
+
+  const path = (provenance.upstream_path ?? '').trim();
+  const commit = (provenance.source_commit ?? '').trim();
+  // The rule as it stood at the commit we imported, not as master holds it
+  // today — a link to a moving target does not identify what we shipped.
+  const ruleUrl = source && path ? `https://github.com/${source}/blob/${commit || 'master'}/${path}` : null;
+  const licence = (provenance.license ?? '').trim();
+  const licenceUrl = (provenance.license_url ?? '').trim();
+
+  return (
+    <p className="text-xs leading-relaxed text-zinc-500">
+      {author ? (
+        <>
+          Written by <span className="text-zinc-300">{author}</span>
+        </>
+      ) : (
+        <>No upstream author recorded</>
+      )}
+      {source && (
+        <>
+          {' '}
+          for{' '}
+          {ruleUrl ? (
+            <a
+              href={ruleUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-200"
+            >
+              {source}
+            </a>
+          ) : (
+            source
+          )}
+        </>
+      )}
+      {licence && (
+        <>
+          , licensed under{' '}
+          {licenceUrl ? (
+            <a
+              href={licenceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-200"
+            >
+              {licence}
+            </a>
+          ) : (
+            licence
+          )}
+        </>
+      )}
+      .
+    </p>
+  );
+}
+
+function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardProps) {
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 hover:border-zinc-600 transition-colors">
+      {/* Header */}
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold text-zinc-100 leading-snug line-clamp-2">
+          {item.name}
+        </h3>
+        <div className="flex shrink-0 flex-wrap gap-1 justify-end">
+          <TypeBadge type={item.type} />
+          {item.executable === false && <ReferenceOnlyBadge reason={item.quarantine_reason} />}
+          {item.source === 'community' ? <CommunityBadge /> : item.verified && <VerifiedBadge />}
+        </div>
+      </div>
+
+      {/* Why it cannot fire, in the card rather than in a tooltip. A reader
+          scanning the grid should not have to hover to find out that most of
+          what they are looking at does not run. */}
+      {item.executable === false && (
+        <p className="rounded border border-amber-700/40 bg-amber-950/30 px-2 py-1.5 text-xs leading-relaxed text-amber-200/90">
+          Not loaded by the detection engine — it cannot fire.{' '}
+          <span className="text-amber-200/70">{item.quarantine_reason}</span>
+        </p>
+      )}
+
+      {/* Description */}
+      <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
+        {item.description}
+      </p>
+
+      {/* Upstream credit. Deliberately above the fold rather than in a detail
+          panel: the licence asks the attribution to travel with the copy, and
+          a card is the copy most readers ever see. */}
+      {item.provenance && <UpstreamAttribution provenance={item.provenance} />}
+
+      {/* MITRE techniques (detections + playbooks) */}
+      {item.mitre_techniques && item.mitre_techniques.length > 0 && (
+        <MitreTechniquesRow ids={item.mitre_techniques} />
+      )}
+
+      {/* Rating + install count */}
+      {(item.rating || item.install_count) && (
+        <div className="flex items-center justify-between gap-2">
+          {item.rating !== undefined && item.rating > 0 ? (
+            <StarRating rating={item.rating} count={item.rating_count ?? 0} />
+          ) : (
+            <span className="text-xs text-zinc-600">No ratings yet</span>
+          )}
+          {item.install_count !== undefined && (
+            <span className="text-xs text-zinc-500">
+              {item.install_count.toLocaleString()} installs
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Metadata row */}
+      <div className="flex flex-wrap items-center gap-2 mt-auto pt-2 border-t border-zinc-700/40">
+        {item.severity && <SeverityBadge severity={item.severity} />}
+
+        {item.type === 'playbook' && item.trigger && (
+          <span className="text-xs text-zinc-500">
+            trigger: <span className="text-zinc-300">{item.trigger}</span>
+          </span>
+        )}
+        {item.type === 'playbook' && item.steps !== undefined && (
+          <span className="text-xs text-zinc-500">{item.steps} steps</span>
+        )}
+        {item.type === 'detection' && item.category && (
+          <span className="text-xs text-zinc-500">{item.category}</span>
+        )}
+        {item.type === 'detection' && item.log_source && (
+          <span className="text-xs text-zinc-500">via {item.log_source}</span>
+        )}
+        {item.type === 'plugin' && item.plugin_type && (
+          <span className="text-xs text-zinc-500">{item.plugin_type}</span>
+        )}
+        {item.type === 'plugin' && <SdkChips sdks={item.sdks} />}
+
+        <span className="text-xs text-zinc-600">v{item.version}</span>
+        <div className="ml-auto">
+          <InstallButton
+            item={item}
+            installed={installed}
+            busy={busy}
+            onInstall={onInstall}
+            onUninstall={onUninstall}
+          />
+        </div>
+      </div>
+
+      {/* Tags. The builder flattens the importers' structured tag block into
+          dotted keys for downstream code; `formatTagLabel` is what turns that
+          encoding back into something a person reads. */}
+      {item.tags && item.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {item.tags.slice(0, 4).map((tag) => {
+            const { label, title } = formatTagLabel(tag);
+            return (
+              <span
+                key={tag}
+                title={title}
+                className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-400"
+              >
+                {label}
+              </span>
+            );
+          })}
+          {item.tags.length > 4 && (
+            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-xs text-zinc-500">
+              +{item.tags.length - 4}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────────────────
+
+type SortOption = 'name' | 'install_count' | 'rating' | 'newest';
+type SourceFilter = 'all' | 'core' | 'community';
+type SdkFilter = 'all' | 'python' | 'go' | 'both';
+// stable = native AiSOC content, hand-authored with fixture tests
+// beta   = working but not fully covered (e.g. Tier-2 plugin stubs)
+// imported = upstream content (SigmaHQ, Splunk Security Content, Chronicle, MITRE CAR)
+//            parsed and provenance-tagged but not fixture-tested per AiSOC's bar
+// community = third-party contributions
+type TierFilter = 'all' | 'stable' | 'beta' | 'imported' | 'community';
+// Whether the engine loads the entry. Orthogonal to `tier`, which says where
+// the content came from — 1,770 of the imported Sigma rules are compiled and
+// proven to fire, and plenty of native rules ship disabled, so neither answers
+// the other's question. Defaults to `all` so the catalogue is never silently
+// smaller than it is; the stat cards and the per-card banner carry the split.
+type RunsFilter = 'all' | 'executable' | 'reference';
+
+/**
+ * The bearer token the rest of the console authenticates with.
+ *
+ * These three calls sent `credentials: 'include'` and nothing else. The API
+ * authenticates a `Authorization: Bearer` JWT held in localStorage, not a
+ * cookie, so every one of them was anonymous: install answered 401, the
+ * installed-set answered 401, and neither said so.
+ */
+function authHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Whether this browser holds a session at all. */
+function signedIn(): boolean {
+  return Boolean(authHeaders().Authorization);
+}
+
+/** The API's `detail`, when it sent one, so a refusal can say why. */
+async function failureDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as { detail?: unknown };
+    if (typeof body.detail === 'string' && body.detail) return body.detail;
+  } catch {
+    /* not JSON */
+  }
+  return `HTTP ${res.status}`;
+}
+
+/**
+ * Fetch the installed-set. A 401 with no session is "nobody is signed in",
+ * which is the static-preview case and not an error; a 401 *with* a session
+ * is a real failure and must not be flattened into an empty list.
+ */
+async function fetchInstalled(url: string): Promise<InstalledResponse | null> {
+  const hasSession = signedIn();
+  const res = await apiFetch(url, {
+    baseUrl: '',
+    credentials: 'include',
+    headers: authHeaders(),
+    skipAuthRefresh: !hasSession,
+  });
+  if (res.status === 404) return null;
+  if (res.status === 401 && !hasSession) return null;
+  if (!res.ok) throw new Error(`installed: ${await failureDetail(res)}`);
+  return (await res.json()) as InstalledResponse;
+}
+
+export function MarketplaceView() {
+  const { data, error, isLoading } = useSWR<MarketplaceIndex>(
+    '/marketplace/index.json',
+    fetcher,
+    {
+      shouldRetryOnError: false,
+      errorRetryCount: 1,
+      revalidateOnFocus: false,
+    }
+  );
+
+  const {
+    data: installedData,
+    mutate: refreshInstalled,
+  } = useSWR<InstalledResponse | null>(
+    '/api/v1/marketplace/installed',
+    fetchInstalled,
+    {
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    }
+  );
+
+  // Locally-tracked install state; the SWR data above is the source of truth
+  // when the API is reachable, but optimistic toggles live here for snappier UX.
+  const [localInstalled, setLocalInstalled] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState<Set<string>>(new Set());
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const installedSet = useMemo(() => {
+    const set = new Set<string>(localInstalled);
+    if (installedData?.items) {
+      for (const r of installedData.items) {
+        set.add(installedKey(r.type, r.id));
+      }
+    }
+    return set;
+  }, [installedData, localInstalled]);
+
+  const setBusyKey = useCallback((key: string, on: boolean) => {
+    setBusy((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+  }, []);
+
+  const handleInstall = useCallback(
+    async (item: MarketplaceItem) => {
+      const key = installedKey(item.type, item.id);
+      setActionError(null);
+      setBusyKey(key, true);
+      // Optimistic mark so the UI flips immediately even when API is offline.
+      setLocalInstalled((prev) => {
+        const next = new Set(prev);
+        next.add(key);
+        return next;
+      });
+      try {
+        const res = await apiFetch('/api/v1/marketplace/install', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders() },
+          credentials: 'include',
+          body: JSON.stringify({ type: item.type, id: item.id }),
+        });
+        // 401 and 404 used to be swallowed here, and the optimistic flag was
+        // never rolled back — so against a real API the button answered 401,
+        // the card said "Installed", the header counted it, and nothing had
+        // been installed. A control that reports success it did not achieve
+        // is worse than one that is greyed out.
+        if (!res.ok) throw new Error(await failureDetail(res));
+        await refreshInstalled();
+      } catch (err) {
+        // Roll the optimistic flag back; surface a one-line toast.
+        setLocalInstalled((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+        setActionError(
+          err instanceof Error
+            ? `Could not install ${item.id}: ${err.message}`
+            : `Could not install ${item.id}.`,
+        );
+      } finally {
+        setBusyKey(key, false);
+      }
+    },
+    [refreshInstalled, setBusyKey],
+  );
+
+  const handleUninstall = useCallback(
+    async (item: MarketplaceItem) => {
+      const key = installedKey(item.type, item.id);
+      setActionError(null);
+      setBusyKey(key, true);
+      setLocalInstalled((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      try {
+        const url = `/api/v1/marketplace/install?type=${encodeURIComponent(
+          item.type,
+        )}&id=${encodeURIComponent(item.id)}`;
+        const res = await apiFetch(url, {
+          baseUrl: '',
+          method: 'DELETE',
+          credentials: 'include',
+          headers: authHeaders(),
+        });
+        if (!res.ok) throw new Error(await failureDetail(res));
+        await refreshInstalled();
+      } catch (err) {
+        setLocalInstalled((prev) => {
+          const next = new Set(prev);
+          next.add(key);
+          return next;
+        });
+        setActionError(
+          err instanceof Error
+            ? `Could not uninstall ${item.id}: ${err.message}`
+            : `Could not uninstall ${item.id}.`,
+        );
+      } finally {
+        setBusyKey(key, false);
+      }
+    },
+    [refreshInstalled, setBusyKey],
+  );
+
+  /**
+   * One entry per `type:id` — the identity the grid keys its children on, and
+   * the identity `POST /v1/marketplace/install` resolves by first match.
+   *
+   * The shipped index carried two collisions between the v1 playbook pack and
+   * the standalone response playbooks, and React does not simply warn about a
+   * repeated key: reconciliation maps the old fibers by key, a second fiber
+   * with the same key overwrites the first in that map, and the overwritten
+   * one is never handed to `deleteChild`. It stayed mounted through every
+   * later render, so two installable playbooks survived into the
+   * `Reference only` view — which by definition holds nothing installable —
+   * and the grid rendered more children than the header beneath it counted.
+   *
+   * `scripts/build_marketplace.py` now refuses to emit a colliding index, but
+   * this file is served from `public/` and a deployment can serve its own, so
+   * the console settles it at the boundary rather than trusting the feed.
+   * First match wins, which is the entry the install API would have resolved.
+   */
+  const { catalogue, duplicateCount } = useMemo(() => {
+    const source = data?.items ?? [];
+    const seen = new Set<string>();
+    const unique: MarketplaceItem[] = [];
+    for (const item of source) {
+      const key = installedKey(item.type, item.id);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      unique.push(item);
+    }
+    return { catalogue: unique, duplicateCount: source.length - unique.length };
+  }, [data]);
+
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'playbook' | 'detection' | 'plugin'>('all');
+  const [severityFilter, setSeverityFilter] = useState<string>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [sdkFilter, setSdkFilter] = useState<SdkFilter>('all');
+  // Default to stable so that a working `cloudflare-waf` doesn't look identical
+  // to the six-thousand-rule imported corpus. Users opt in to imported content
+  // explicitly via the chip. The tier says where a rule came from and not
+  // whether it runs: 1,770 of the imported Sigma rules are compiled, proven to
+  // fire and loaded by the engine, so this filter is about provenance.
+  const [tierFilter, setTierFilter] = useState<TierFilter>('stable');
+  const [runsFilter, setRunsFilter] = useState<RunsFilter>('all');
+  const [mitreFilter, setMitreFilter] = useState<string>('all');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+
+  // Build distinct, sorted MITRE technique list (with item counts) for the filter.
+  const mitreOptions = useMemo(() => {
+    if (catalogue.length === 0) return [] as { id: string; count: number }[];
+    const byId = new Map<string, number>();
+    for (const it of catalogue) {
+      for (const tid of it.mitre_techniques ?? []) {
+        byId.set(tid, (byId.get(tid) ?? 0) + 1);
+      }
+    }
+    return Array.from(byId.entries())
+      .map(([id, count]) => ({ id, count }))
+      .sort((a, b) => a.id.localeCompare(b.id));
+  }, [catalogue]);
+
+  // Distinct content categories (detection.category + playbook.category) for filter.
+  const categoryOptions = useMemo(() => {
+    if (catalogue.length === 0) return [] as string[];
+    const set = new Set<string>();
+    for (const it of catalogue) {
+      if (it.category) set.add(it.category);
+    }
+    return Array.from(set).sort();
+  }, [catalogue]);
+
+  // Counts per tier so chips can show "Stable (865)" etc. — helps users
+  // understand at a glance that imported content dwarfs native content.
+  const tierCounts = useMemo(() => {
+    const counts: Record<TierFilter, number> = {
+      all: 0,
+      stable: 0,
+      beta: 0,
+      imported: 0,
+      community: 0,
+    };
+    if (catalogue.length === 0) return counts;
+    counts.all = catalogue.length;
+    for (const it of catalogue) {
+      const tier = (it.tier ?? 'stable') as TierFilter;
+      if (tier in counts) counts[tier]++;
+    }
+    return counts;
+  }, [catalogue]);
+
+  const items = useMemo(() => {
+    if (catalogue.length === 0) return [];
+
+    const filtered = catalogue.filter((item) => {
+      if (typeFilter !== 'all' && item.type !== typeFilter) return false;
+      if (severityFilter !== 'all' && item.severity !== severityFilter) return false;
+      if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+      if (sourceFilter !== 'all' && (item.source ?? 'core') !== sourceFilter) return false;
+      if (tierFilter !== 'all') {
+        // Items with no explicit tier are treated as `stable` so existing
+        // hand-curated content (Cloudflare WAF, native detection rules)
+        // surfaces by default without requiring a backfill of every entry.
+        const itemTier = item.tier ?? 'stable';
+        if (itemTier !== tierFilter) return false;
+      }
+      if (runsFilter === 'executable' && item.executable === false) return false;
+      if (runsFilter === 'reference' && item.executable !== false) return false;
+      if (mitreFilter !== 'all' && !(item.mitre_techniques ?? []).includes(mitreFilter)) return false;
+      if (sdkFilter !== 'all') {
+        if (item.type !== 'plugin') return false;
+        const sdks = item.sdks ?? [];
+        if (sdkFilter === 'both' && !(sdks.includes('python') && sdks.includes('go'))) {
+          return false;
+        }
+        if ((sdkFilter === 'python' || sdkFilter === 'go') && !sdks.includes(sdkFilter)) {
+          return false;
+        }
+      }
+      if (search) {
+        const q = search.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(q) ||
+          item.description.toLowerCase().includes(q) ||
+          (item.tags ?? []).some((t) => t.toLowerCase().includes(q)) ||
+          (item.mitre_techniques ?? []).some((m) => m.toLowerCase().includes(q)) ||
+          item.id.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+
+    filtered.sort((a, b) => {
+      let va: number | string = 0;
+      let vb: number | string = 0;
+      if (sortBy === 'name') {
+        va = a.name.toLowerCase();
+        vb = b.name.toLowerCase();
+      } else if (sortBy === 'install_count') {
+        va = a.install_count ?? 0;
+        vb = b.install_count ?? 0;
+      } else if (sortBy === 'rating') {
+        va = a.rating ?? 0;
+        vb = b.rating ?? 0;
+      }
+      if (va < vb) return sortOrder === 'asc' ? -1 : 1;
+      if (va > vb) return sortOrder === 'asc' ? 1 : -1;
+      // Stable secondary sort by id
+      const ida = a.id.toLowerCase();
+      const idb = b.id.toLowerCase();
+      if (ida < idb) return -1;
+      if (ida > idb) return 1;
+      return 0;
+    });
+
+    return filtered;
+  }, [
+    catalogue,
+    search,
+    typeFilter,
+    severityFilter,
+    categoryFilter,
+    sourceFilter,
+    sdkFilter,
+    tierFilter,
+    runsFilter,
+    mitreFilter,
+    sortBy,
+    sortOrder,
+  ]);
+
+  // Counted from the items rather than read from `stats`, so the headline
+  // cannot disagree with the grid underneath it. `stats.quarantined` used to
+  // count rows carrying a `quarantine_reason` — 4,213 against the 4,388 the
+  // engine does not load — so the published figure and the truth table's
+  // were two numbers nothing compared.
+  const installableCount = useMemo(
+    () => catalogue.filter((i) => i.executable !== false).length,
+    [catalogue],
+  );
+  const referenceOnlyCount = useMemo(
+    () => catalogue.filter((i) => i.executable === false).length,
+    [catalogue],
+  );
+
+  const stats = useMemo(() => {
+    if (!data?.items) return null;
+    if (data.stats) return data.stats;
+    return {
+      total:      catalogue.length,
+      playbooks:  catalogue.filter((i) => i.type === 'playbook').length,
+      detections: catalogue.filter((i) => i.type === 'detection').length,
+      plugins:    catalogue.filter((i) => i.type === 'plugin').length,
+      verified:   catalogue.filter((i) => i.verified).length,
+      community:  catalogue.filter((i) => i.source === 'community').length,
+    };
+  }, [data, catalogue]);
+
+  const toggleSort = (field: SortOption) => {
+    if (sortBy === field) {
+      setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(field);
+      setSortOrder(field === 'name' ? 'asc' : 'desc');
+    }
+  };
+
+  const clearFilters = () => {
+    setSearch('');
+    setTypeFilter('all');
+    setSeverityFilter('all');
+    setCategoryFilter('all');
+    setSourceFilter('all');
+    setSdkFilter('all');
+    // Reset tier to its default (`stable`) rather than `all` so users land
+    // back on the curated view, not on 6,000+ rules.
+    setTierFilter('stable');
+    setRunsFilter('all');
+    setMitreFilter('all');
+  };
+
+  return (
+    <div className="flex h-full flex-col gap-6 p-6">
+      {/* Page Header */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-[280px] flex-1">
+          <h1 className="text-2xl font-bold text-zinc-100">Marketplace</h1>
+          <p className="mt-1 text-sm text-zinc-400">
+            Browse and install detection rules, response playbooks, and plugins shipped with AiSOC. Every entry is generated directly from the
+            repo&rsquo;s <code className="text-zinc-300">detections/</code>,{' '}
+            <code className="text-zinc-300">playbooks/</code> and{' '}
+            <code className="text-zinc-300">plugins/</code> trees, so what you see here is what your AiSOC instance has on disk.
+          </p>
+          <p className="mt-2 text-sm text-zinc-400">
+            <span className="font-medium text-amber-300">On disk is not the same as running.</span>{' '}
+            Much of this catalogue is imported upstream content the detection engine does not load —
+            kept for provenance and for porting, marked{' '}
+            <span className="font-semibold uppercase tracking-wide text-amber-300">reference only</span>, and
+            not installable. The counts below say how many of each.
+          </p>
+        </div>
+        {installedSet.size > 0 && (
+          <span
+            className="self-start rounded-full bg-emerald-900/40 px-3 py-1 text-xs font-medium text-emerald-300"
+            title="Items enabled for the current tenant"
+          >
+            {installedSet.size} installed
+          </span>
+        )}
+      </div>
+
+      {actionError && (
+        <div
+          role="alert"
+          className="flex items-start justify-between gap-3 rounded-lg border border-rose-700/40 bg-rose-900/20 px-4 py-2 text-sm text-rose-200"
+        >
+          <span>{actionError}</span>
+          <button
+            onClick={() => setActionError(null)}
+            className="text-rose-400 hover:text-rose-200"
+            aria-label="Dismiss"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
+      {/* A collapsed collision is the sort of thing that should cost a
+          sentence rather than happen quietly: the catalogue a reader is
+          looking at is smaller than the file behind it, and they are entitled
+          to know which way the console resolved it. */}
+      {duplicateCount > 0 && (
+        <p className="rounded-lg border border-amber-700/40 bg-amber-950/30 px-4 py-2 text-sm text-amber-200/90">
+          {duplicateCount === 1
+            ? 'One entry in this index repeats a type and id that another entry already uses, so it is not listed.'
+            : `${duplicateCount} entries in this index repeat a type and id that another entry already uses, so they are not listed.`}{' '}
+          Install resolves the first match, so the listing is what an install would act on. Regenerate with{' '}
+          <code className="text-amber-200">pnpm marketplace:sync</code>.
+        </p>
+      )}
+
+      {/* Stats.
+          `Installable` and `Reference only` lead, and they partition the
+          catalogue: every entry is one or the other and the two sum to
+          `Total`. `Total` alone was the headline for a long time, over a
+          catalogue where 85% of the entries cannot fire.
+
+          The left card says `Installable`, not `Executable`, and the
+          distinction is not pedantry. It counts every entry the engine loads
+          *plus* the playbooks and plugins, which are shipped installable
+          content but are not engine rules and carry no `executable` field.
+          Labelled `Executable` it read 2,767 under a tooltip saying "loaded
+          by the detection engine" — false for the 164 that are not rules, and
+          164 above the 2,603 the truth table and the README publish for
+          exactly that claim. Two live surfaces disagreeing about the same
+          word is the tell; `Detections` below carries the rule figure. */}
+      {stats && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+          {[
+            { label: 'Installable',    value: installableCount,   color: 'text-emerald-400', title: 'Detection rules the engine loads, plus every playbook and plugin — everything here can be installed — these can fire.' },
+            { label: 'Reference only', value: referenceOnlyCount, color: 'text-amber-400',   title: 'Present on disk and not loaded by the engine. They cannot fire; they are here for provenance and for porting.' },
+            { label: 'Total',          value: stats.total,        color: 'text-zinc-100',    title: 'Every entry in the catalogue, executable or not.' },
+            { label: 'Playbooks',      value: stats.playbooks,    color: 'text-purple-300' },
+            { label: 'Detections',     value: stats.detections,   color: 'text-cyan-300' },
+            { label: 'Plugins',        value: stats.plugins,      color: 'text-emerald-300' },
+          ].map(({ label, value, color, title }) => (
+            <div
+              key={label}
+              title={title}
+              className="rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 text-center"
+            >
+              <p className={clsx('text-3xl font-bold tabular-nums', color)}>{value}</p>
+              <p className="mt-1 text-xs text-zinc-500">{label}</p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Search + primary filter chips */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by name, description, tag, MITRE ID, or item ID…"
+          className="flex-1 min-w-[240px] rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:border-zinc-500 focus:outline-none"
+        />
+
+        {/* Type filter */}
+        <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1">
+          {(['all', 'playbook', 'detection', 'plugin'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTypeFilter(t)}
+              className={clsx(
+                'rounded px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
+                typeFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+              )}
+            >
+              {t === 'all' ? 'All' : `${t.charAt(0).toUpperCase() + t.slice(1)}s`}
+            </button>
+          ))}
+        </div>
+
+        {/* Source filter (core vs community) */}
+        <div className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1">
+          {(['all', 'core', 'community'] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => setSourceFilter(s)}
+              className={clsx(
+                'rounded px-2.5 py-1.5 text-xs font-medium transition-colors capitalize',
+                sourceFilter === s ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+              )}
+            >
+              {s === 'all' ? 'All sources' : s}
+            </button>
+          ))}
+        </div>
+
+        {/* Does it run? The question the catalogue could not answer.
+            Separate from the tier chips below: tier is provenance, this is
+            capability, and the two disagree in both directions. */}
+        <div
+          className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
+          title="Installable = every entry you can install: the detection rules the engine loads, plus the playbooks and plugins, which are not rules. Reference only = present on disk and not loaded by the engine, so it cannot fire."
+        >
+          {([
+            ['all', 'All', undefined],
+            ['executable', 'Installable', installableCount],
+            ['reference', 'Reference only', referenceOnlyCount],
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              onClick={() => setRunsFilter(value)}
+              className={clsx(
+                'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+                runsFilter === value ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200',
+              )}
+            >
+              {label}
+              {count !== undefined && <span className="ml-1 text-zinc-500">({count})</span>}
+            </button>
+          ))}
+        </div>
+
+        {/* Tier filter — defaults to `stable` so working integrations and
+            hand-authored detections don't get drowned in imported Sigma
+            content. Users opt into imported/beta/community explicitly. */}
+        <div
+          className="flex gap-1 rounded-lg border border-zinc-700 bg-zinc-800 p-1"
+          title="Stable = native AiSOC content. Imported = upstream rules (SigmaHQ, Splunk, Chronicle, CAR), parseable but not fixture-tested. Beta = working but partial. Community = third-party."
+        >
+          {(['all', 'stable', 'beta', 'imported', 'community'] as const).map((t) => {
+            const count = tierCounts[t];
+            const label = t === 'all' ? 'All tiers' : t.charAt(0).toUpperCase() + t.slice(1);
+            return (
+              <button
+                key={t}
+                onClick={() => setTierFilter(t)}
+                className={clsx(
+                  'rounded px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  tierFilter === t ? 'bg-zinc-600 text-zinc-100' : 'text-zinc-400 hover:text-zinc-200'
+                )}
+              >
+                {label}
+                {count > 0 && <span className="ml-1 text-zinc-500">({count})</span>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Secondary filters: severity, category, MITRE, SDK */}
+      <div className="flex flex-wrap items-center gap-3 -mt-3">
+        <select
+          value={severityFilter}
+          onChange={(e) => setSeverityFilter(e.target.value)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+        >
+          <option value="all">All severities</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+
+        {categoryOptions.length > 0 && (
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+          >
+            <option value="all">All categories</option>
+            {categoryOptions.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        )}
+
+        {/* MITRE technique filter - the headline new filter the plan asks for */}
+        {mitreOptions.length > 0 && (
+          <select
+            value={mitreFilter}
+            onChange={(e) => setMitreFilter(e.target.value)}
+            className="rounded-lg border border-rose-800/60 bg-rose-900/20 px-3 py-2 text-sm text-rose-200 focus:border-rose-600 focus:outline-none"
+            title="Filter by MITRE ATT&CK technique"
+          >
+            <option value="all">
+              MITRE ATT&amp;CK ({mitreOptions.length} techniques)
+            </option>
+            {mitreOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.id} ({m.count})
+              </option>
+            ))}
+          </select>
+        )}
+
+        {/* SDK filter (only meaningful when type=plugin or all) */}
+        <select
+          value={sdkFilter}
+          onChange={(e) => setSdkFilter(e.target.value as SdkFilter)}
+          className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-300 focus:border-zinc-500 focus:outline-none"
+          title="Filter plugins by SDK availability"
+        >
+          <option value="all">Any SDK</option>
+          <option value="both">Plugins: Python + Go</option>
+          <option value="python">Plugins: Python only</option>
+          <option value="go">Plugins: Go only</option>
+        </select>
+
+        <a
+          href="https://github.com/beenuar/AiSOC/blob/main/CONTRIBUTING.md#community-marketplace"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="ml-auto rounded-lg border border-blue-700/60 bg-blue-900/20 px-3 py-1.5 text-xs font-medium text-blue-300 hover:bg-blue-900/40"
+        >
+          + Contribute to the marketplace
+        </a>
+      </div>
+
+      {/* Sort bar */}
+      <div className="flex items-center gap-2 -mt-3">
+        <span className="text-xs text-zinc-500">Sort by:</span>
+        {(['name', 'install_count', 'rating'] as SortOption[]).map((field) => (
+          <button
+            key={field}
+            onClick={() => toggleSort(field)}
+            className={clsx(
+              'text-xs px-2 py-1 rounded transition-colors',
+              sortBy === field ? 'text-zinc-100 bg-zinc-700' : 'text-zinc-400 hover:text-zinc-200'
+            )}
+          >
+            {field === 'install_count' ? 'Installs' : field === 'rating' ? 'Rating' : 'Name'}
+            {sortBy === field && (sortOrder === 'desc' ? ' ↓' : ' ↑')}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-zinc-500">
+          Showing {items.length} of {catalogue.length}
+        </span>
+      </div>
+
+      {/* Grid */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-20 text-zinc-500">
+          Loading marketplace…
+        </div>
+      )}
+
+      {error && (
+        <ErrorState
+          title="Couldn't load marketplace"
+          description="Make sure /marketplace/index.json is served as a static file. Run `pnpm marketplace:build` to regenerate it."
+          error={error}
+        />
+      )}
+
+      {!isLoading && !error && items.length === 0 && (
+        // WS-F5 — marketplace ships with a non-empty index by default, so
+        // the only realistic empty state here is a filter-miss.
+        <EmptyState
+          icon={EmptyStateIcons.search}
+          title="No marketplace items match your filters"
+          description="Try a different category or clear your filters to see all 50+ playbooks, detections, and plugins."
+          action={
+            <button
+              onClick={clearFilters}
+              className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
+            >
+              Clear filters
+            </button>
+          }
+          className="bg-transparent py-12"
+        />
+      )}
+
+      {!isLoading && !error && items.length > 0 && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 pb-6">
+          {items.map((item) => {
+            const key = installedKey(item.type, item.id);
+            return (
+              <ItemCard
+                key={key}
+                item={item}
+                installed={installedSet.has(key)}
+                busy={busy.has(key)}
+                onInstall={handleInstall}
+                onUninstall={handleUninstall}
+              />
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

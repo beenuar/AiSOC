@@ -1,0 +1,5 @@
+{
+  "object_namespace": "prod",
+  "object_resource": "pods/exec",
+  "verb": "create"
+}

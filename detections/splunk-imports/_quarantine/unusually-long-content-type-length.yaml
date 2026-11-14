@@ -1,0 +1,40 @@
+id: splunk-security-content-57a0a2bf-353f-40c1-84dc-29293f3c35b7
+name: Unusually Long Content-Type Length
+description: The following analytic identifies unusually long strings in the Content-Type
+  HTTP header sent by the client to the server. It uses data from the Stream:HTTP
+  source, specifically evaluating the length of the `cs_content_type` field. This
+  activity is significant because excessively long Content-Type headers can indicate
+  attempts to exploit vulnerabilities or evade detection mechanisms. If confirmed
+  malicious, this behavior could allow attackers to execute code, manipulate data,
+  or bypass security controls, potentially leading to unauthorized access or data
+  breaches.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Web by Web.src Web.dest Web.url Web.http_user_agent
+    Web.http_content_type | `drop_dm_object_name("Web")`  | eval http_content_type_length
+    = len(http_content_type)  | where http_content_type_length > 100 | table firstTime
+    lastTime src dest http_content_type_length http_content_type url http_user_agent
+    | `security_content_ctime(firstTime)`  | `security_content_ctime(lastTime)`  |
+    `unusually_long_content_type_length_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 57a0a2bf-353f-40c1-84dc-29293f3c35b7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/unusually_long_content_type_length.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

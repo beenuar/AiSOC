@@ -1,0 +1,24 @@
+id: okta-connector
+name: Okta Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Okta Identity Cloud connector. Looks up users, lists active sessions,
+  suspends/unsuspends accounts, clears MFA factors, and logs out all
+  active sessions for a given user — all via the Okta Management API.
+author: AiSOC Core Team
+tags: [identity, okta, iam, sso]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/okta-connector
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [okta_domain, api_token]
+  properties:
+    okta_domain:
+      type: string
+      description: "Your Okta domain, e.g. acme.okta.com"
+    api_token:
+      type: string
+      description: "Okta API token (SSWS token)"
+      secret: true

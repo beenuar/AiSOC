@@ -1,0 +1,41 @@
+id: splunk-security-content-9c5e3d62-f743-11ee-9f6e-acde48001124
+name: AWS Bedrock Delete Model Invocation Logging Configuration
+description: The following analytic identifies attempts to delete AWS Bedrock model
+  invocation logging configurations. It leverages AWS CloudTrail logs to detect when
+  a user or service calls the DeleteModelInvocationLogging API. This activity is significant
+  as it may indicate an adversary attempting to remove audit trails of model interactions
+  after compromising credentials. Deleting model invocation logs could allow attackers
+  to interact with AI models without leaving traces, potentially enabling them to
+  conduct data exfiltration, prompt injection attacks, or other malicious activities
+  without detection. If confirmed malicious, this could represent a deliberate attempt
+  to hide unauthorized model usage and evade detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://www.sumologic.com/blog/defenders-guide-to-aws-bedrock/
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cloudtrail` eventSource=bedrock.amazonaws.com eventName=DeleteModelInvocationLoggingConfiguration
+    | rename user_name as user | stats count min(_time) as firstTime max(_time) as
+    lastTime by src user user_agent vendor_account vendor_product dest signature vendor_region
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `aws_bedrock_delete_model_invocation_logging_configuration_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 9c5e3d62-f743-11ee-9f6e-acde48001124
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_bedrock_delete_model_invocation_logging_configuration.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

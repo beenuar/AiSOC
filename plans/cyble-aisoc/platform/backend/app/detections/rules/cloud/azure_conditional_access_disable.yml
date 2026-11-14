@@ -1,0 +1,26 @@
+title: Azure AD Conditional Access Policy Disabled or Removed
+id: aisoc-id-cl-0012-ca-disable
+status: stable
+description: |
+  Conditional Access policy disabled, deleted, or modified to weaken
+  enforcement — a high-impact defense-evasion step often preceding
+  illicit sign-ins.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azure
+  service: auditlogs
+tags:
+  - attack.t1562.007
+  - attack.defense_evasion
+  - aisoc.cloud
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azure
+    azure.category: 'Policy'
+    azure.operation_name|contains:
+      - 'Delete conditional access policy'
+      - 'Update conditional access policy'
+      - 'Disable conditional access policy'
+  condition: selection

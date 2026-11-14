@@ -1,0 +1,125 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# AiSOC Demo - API service (FastAPI)
+#
+# NOT DEPLOYED. The app was reclaimed for non-payment and
+# aisoc-demo-api.fly.dev was NXDOMAIN when last measured (2026-09-28); the
+# public domain below answers HTTP 525, the edge without its origin.
+# infra/fly/README.md records the status and what must be true first.
+#
+# App URL when it exists:  https://aisoc-demo-api.fly.dev
+# Public domain:  https://api.tryaisoc.com  (CNAME → aisoc-demo-api.fly.dev)
+# Internal name:  aisoc-demo-api.internal:8000
+#
+# Reads:  Postgres (Fly managed), Redis (Upstash via Fly), demo tenant
+# Writes: Postgres (cases, alerts, runs, events)
+# ──────────────────────────────────────────────────────────────────────────────
+
+app = "aisoc-demo-api"
+primary_region = "iad"          # us-east, lowest latency to tryaisoc.com
+kill_signal    = "SIGINT"
+kill_timeout   = "5s"
+
+# No [build] override: flyctl resolves `dockerfile` relative to *fly.toml's*
+# location, not the build context. Since this fly.toml lives at
+# infra/fly/api/fly.toml but the Dockerfile lives at services/api/Dockerfile,
+# any literal "Dockerfile" entry would resolve to infra/fly/api/Dockerfile and
+# fail. Omitting [build] makes flyctl fall back to `<cwd>/Dockerfile`, and the
+# deploy script cd's into services/api/ before invoking `flyctl deploy`, so
+# the right Dockerfile gets picked up automatically.
+
+# Run SQL migrations and re-seed the demo dataset on every deploy.
+# The release_command runs in a temporary VM with all production env vars
+# (Postgres URL, Redis URL, secrets) before any app machine accepts traffic,
+# which is exactly what we want for demo-tenant data lifecycle:
+#   1. `python -m app.scripts.run_migrations` applies the raw-SQL files under
+#      services/api/migrations/ and tracks them in aisoc_schema_migrations, so
+#      the schema stays in step with the image. On success it touches
+#      `/tmp/aisoc-migrations-ok`. (This service does not use Alembic —
+#      no alembic.ini / env.py exist here; the package is listed in
+#      pyproject only for integration tests.)
+#   2. `python -m app.scripts.seed_demo` is idempotent — it short-circuits
+#      when the canonical INC-RT-* case_numbers already exist, so it's safe
+#      to run on every deploy. First-run boot creates all 15 incidents
+#      including the in-flight LockBit 3.0 ransomware investigation
+#      (INC-RT-001) that the web app's "Try the demo" CTA deeplinks to.
+#
+# Why the shell wrapper instead of a plain `&&`:
+#   With AISOC_MIGRATIONS_REQUIRED=0 (demo policy below), the migration
+#   runner exits 0 even if it can't reach Postgres after the retry budget
+#   — that keeps the API code deploy from being held hostage by a Fly
+#   Postgres outage. But on that path `seed_demo` would just hit the
+#   same connect failure through SQLAlchemy and crash the deploy anyway.
+#   The wrapper uses the migrations-OK sentinel file to skip `seed_demo`
+#   in that scenario. A *hard* migration failure (Postgres reachable, SQL
+#   failed) still propagates a non-zero exit and aborts the deploy.
+[deploy]
+  release_command = "/bin/sh -c 'rm -f /tmp/aisoc-migrations-ok && python -m app.scripts.run_migrations && { [ -f /tmp/aisoc-migrations-ok ] && python -m app.scripts.seed_demo || echo \"[release_command] migrations soft-failed (DB unreachable) — seed_demo skipped, API code deploy proceeds\"; }'"
+
+[env]
+  ENVIRONMENT      = "demo"
+  LOG_LEVEL        = "info"
+  PORT             = "8000"
+  # Demo gates: write actions return 403, mutating endpoints become read-only
+  AISOC_DEMO_MODE  = "true"
+  # Tenant rotation runs daily; the seeder writes the canonical INC-RT-001 case
+  AISOC_DEMO_TENANT = "demo"
+  # Demo policy: don't hold an API code deploy hostage on a Postgres outage.
+  # Migrations still RUN — they retry on transient connect errors, log every
+  # attempt, and crash on any SQL-level failure — but if Postgres is fully
+  # unreachable through the entire retry budget, the migration runner exits
+  # 0 instead of 1 and the release_command wrapper skips `seed_demo`. The
+  # last-good schema and seeded dataset stay live; an operator gets a loud
+  # "MIGRATION SKIPPED" line in the deploy log to investigate. Flip this
+  # back to "1" if you want demo deploys to fail-closed on DB outages.
+  AISOC_MIGRATIONS_REQUIRED = "0"
+  # Disable optional integrations (no Kafka/ClickHouse/graph/vector on demo).
+  # There is no AISOC_DISABLE_OPENSEARCH: this service holds no OpenSearch
+  # client, so the flag disabled nothing and only implied it did.
+  AISOC_DISABLE_KAFKA      = "true"
+  AISOC_DISABLE_CLICKHOUSE = "true"
+  AISOC_DISABLE_NEO4J      = "true"
+  AISOC_DISABLE_QDRANT     = "true"
+  # Seeding runs automatically on deploy via [deploy].release_command above.
+  # A daily cron machine (provisioned separately) re-runs the same seeder
+  # to refresh demo-tenant data at 00:00 UTC. CORE_API_URL points at
+  # localhost so investigation kickoffs from the seeder hit the in-process
+  # API, and AGENTS_API_URL crosses to the agents app over Fly's internal
+  # 6PN DNS (.internal:port).
+  CORE_API_URL    = "http://localhost:8000"
+  AGENTS_API_URL  = "http://aisoc-demo-agents.internal:8084"
+  # Cross-origin allowlist for the browser. The Next.js app at tryaisoc.com
+  # calls api.tryaisoc.com directly (see infra/fly/web/fly.toml's build args),
+  # and we keep the .fly.dev hosts whitelisted as a fallback for direct
+  # debugging without DNS. Comma-separated; parsed by Settings.parse_cors.
+  CORS_ORIGINS    = "https://tryaisoc.com,https://api.tryaisoc.com,https://aisoc-demo-web.fly.dev,https://aisoc-demo-api.fly.dev"
+  # Realtime base used by the API for /api/v1/push/* fan-out. Internal-only.
+  REALTIME_BASE_URL = "http://aisoc-demo-realtime.internal:4000"
+  # WebAuthn / passkey config. RP_ID is the eTLD+1 of the user-facing UI;
+  # RP_ORIGINS must be the exact scheme+host the browser presents.
+  PASSKEY_RP_ID      = "tryaisoc.com"
+  PASSKEY_RP_NAME    = "AiSOC"
+  PASSKEY_RP_ORIGINS = "https://tryaisoc.com"
+
+[http_service]
+  internal_port       = 8000
+  force_https         = true
+  # Never auto-stop: the web app proxies /api/v1/* over 6PN
+  # (aisoc-demo-api.internal:8000), and 6PN connections do NOT trigger Fly's
+  # auto-start. A stopped machine therefore 500s the dashboard's metrics calls
+  # even though the public api.tryaisoc.com edge would auto-start it. Keeping
+  # the single demo machine warm 24/7 makes the internal proxy reliable.
+  auto_stop_machines  = "off"
+  auto_start_machines = true
+  min_machines_running = 1       # keep one warm for sub-60s TTFI
+  processes           = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval     = "15s"
+    method       = "GET"
+    timeout      = "5s"
+    path         = "/health"
+
+[[vm]]
+  size      = "shared-cpu-1x"
+  memory_mb = 1024

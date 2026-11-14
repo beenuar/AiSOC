@@ -1,0 +1,5 @@
+{
+  "event_type": "http_response",
+  "header_access_control_allow_credentials": "true",
+  "header_access_control_allow_origin": "*"
+}

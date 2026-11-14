@@ -1,0 +1,24 @@
+id: det-identity-007
+name: Authentication Attempt Against Disabled Account
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Authentication
+  Attempt Against Disabled Account'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND user_state IN ["DISABLED", "DEPROVISIONED"]
+false_positives:
+- Lingering background jobs after offboarding (rare; transient)
+playbook: tpl-account-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

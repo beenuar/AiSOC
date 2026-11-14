@@ -1,0 +1,7 @@
+{
+  "dst_ip": "203.0.113.7",
+  "dst_ip_class": "internet",
+  "dst_port": 3389,
+  "src_host": "wks-001",
+  "src_role": "workstation"
+}

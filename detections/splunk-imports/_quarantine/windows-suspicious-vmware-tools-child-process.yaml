@@ -1,0 +1,49 @@
+id: splunk-security-content-1f77661a-0fe3-4b8d-a62c-7dff06906d26
+name: Windows Suspicious VMWare Tools Child Process
+description: The following analytic identifies child processes spawned by vmtoolsd.exe,
+  the VMWare Tools service in Windows, which typically runs with SYSTEM privileges.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process and parent process relationships. Monitoring this activity is
+  crucial as it can indicate exploitation attempts, such as CVE-2023-20867. If confirmed
+  malicious, attackers could gain SYSTEM-level access, allowing them to execute arbitrary
+  code, escalate privileges, and potentially compromise the entire system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://cloud.google.com/blog/topics/threat-intelligence/vmware-esxi-zero-day-bypass/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=vmtoolsd.exe\n\
+    \    AND\n    Processes.process_name IN (\"powershell.exe\",\"cmd.exe\", \"msbuild.exe\"\
+    , \"microsoft.workflow.compiler.exe\", \"searchprotocolhost.exe\", \"scrcons.exe\"\
+    , \"cscript.exe\", \"wscript.exe\",\"bitsadmin.exe\", \"rundll32.exe\", \"wmic.exe\"\
+    , \"mshta.exe\", \"certutil.exe\", \"schtasks.exe\")\n    AND NOT\n    (Processes.process_name=\"\
+    cmd.exe\" AND Processes.process IN (\"*\\\\VMware Tools\\\\poweroff-vm-default.bat*\"\
+    ,\"*\\\\VMware Tools\\\\poweron-vm-default.bat*\"))\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_suspicious_vmware_tools_child_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1f77661a-0fe3-4b8d-a62c-7dff06906d26
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_suspicious_vmware_tools_child_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

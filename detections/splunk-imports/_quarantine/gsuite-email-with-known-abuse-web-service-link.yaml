@@ -1,0 +1,43 @@
+id: splunk-security-content-8630aa22-042b-11ec-af39-acde48001122
+name: Gsuite Email With Known Abuse Web Service Link
+description: The following analytic detects emails in Gsuite containing links to known
+  abuse web services such as Pastebin, Telegram, and Discord. It leverages Gsuite
+  Gmail logs to identify emails with these specific domains in their links. This activity
+  is significant because these services are commonly used by attackers to deliver
+  malicious payloads. If confirmed malicious, this could lead to the delivery of malware,
+  phishing attacks, or other harmful activities, potentially compromising sensitive
+  information or systems within the organization.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - cloud
+references:
+- https://news.sophos.com/en-us/2021/07/22/malware-increasingly-targets-discord-for-abuse/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_gmail` \"link_domain{}\" IN (\"*pastebin.com*\", \"*discord*\"\
+    , \"*telegram*\",\"t.me\")\n  | rex field=source.from_header_address \"[^@]+@(?<source_domain>[^@]+)\"\
+    \n  | rex field=destination{}.address \"[^@]+@(?<dest_domain>[^@]+)\"\n  | where\
+    \ not source_domain=\"internal_test_email.com\" and dest_domain=\"internal_test_email.com\"\
+    \n  | eval phase=\"plan\"\n  | eval severity=\"low\"\n  | stats values(link_domain{})\
+    \ as link_domains min(_time) as firstTime max(_time) as lastTime count\n    BY\
+    \ is_spam source.address source.from_header_address\n       subject destination{}.address\
+    \ phase\n       severity\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `gsuite_email_with_known_abuse_web_service_link_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8630aa22-042b-11ec-af39-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gsuite_email_with_known_abuse_web_service_link.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

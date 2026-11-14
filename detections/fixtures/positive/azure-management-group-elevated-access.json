@@ -1,0 +1,4 @@
+{
+  "operation_name": "Microsoft.Authorization/elevateAccess/action",
+  "caller": "user@corp.com"
+}

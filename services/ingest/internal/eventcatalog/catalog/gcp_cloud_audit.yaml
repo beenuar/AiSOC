@@ -1,0 +1,27 @@
+# GCP Cloud Audit Logs. Event types are the `methodName` on the proto
+# payload: either a bare admin method or the fully-qualified service method.
+source: gcp_cloud_audit
+event_type_path: methodName
+fixture_files:
+  - services/connectors/tests/test_gcp_connectors.py
+events:
+  SetIamPolicy:
+    # Rewrites who can do what on a resource, which is the single call an
+    # escalation most often ends with.
+    action: set.iam.policy
+    sensitivity: high
+    attack: [T1098.003]
+  google.compute.v1.instances.start:
+    action: compute.instances.start
+    sensitivity: low
+  google.compute.v1.instances.detachDisk:
+    # Detaching a disk is how a volume is moved to an instance the
+    # attacker controls, and it is otherwise rare.
+    action: compute.instances.detach.disk
+    sensitivity: medium
+    attack: [T1530]
+  google.storage.buckets.list:
+    action: storage.buckets.list
+    sensitivity: info
+    attack: [T1580]
+unclassified: {}

@@ -1,0 +1,5 @@
+{
+  "event_type": "label_namespace",
+  "label_key": "pod-security.kubernetes.io/enforce",
+  "label_value": "privileged"
+}

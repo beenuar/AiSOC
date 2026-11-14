@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-unusual-solarwinds-file-creation-via-filewrite
+name: unusual_solarwinds_file_creation_via_filewrite
+description: unusual_solarwinds_file_creation_via_filewrite
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule unusual_solarwinds_file_creation_via_filewrite {\n meta:\n\
+    \    author = \"SOC Prime Team, Fireeye\"\n    description = \"This rule was converted\
+    \ from the FireEye hxioc rule. This rule identifies unusual file write events\
+    \ by a Solar Winds executable.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/19EQlEAuOgoe\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"file_event\"\n  \
+    \  product = \"windows\"\n    mitre = \"initial_access, t1195.002\"\n\n  events:\n\
+    ((re.regex($selection.target.process.file.full_path, `.*\\\\solarwinds\\.businesslayerhost\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*\\\\SolarWindws\\\
+    .BusinessLayerHostx64\\.exe`)) and (re.regex($selection.target.file.full_path,\
+    \ `.*\\.exe`) or re.regex($selection.target.file.full_path, `.*\\.jpg`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\.png`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\.dll`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: unusual_solarwinds_file_creation_via_filewrite
+provenance:
+  source: chronicle/detection-rules
+  source_id: unusual_solarwinds_file_creation_via_filewrite
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/file_event/unusual_solarwinds_file_creation__via_filewrite.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,292 @@
+name: Mobile
+
+# apps/mobile is outside the root pnpm workspace — it needs Metro rather than
+# Turbopack and brings its own Expo dependency tree, which would add several
+# hundred megabytes to every other TypeScript job for no benefit to any of
+# them. So it gets its own workflow, and it only runs when it or the SDK it
+# depends on changes.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/sdk-ts/**'
+      - 'scripts/check_no_audio_egress.py'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/sdk-ts/**'
+      - 'scripts/check_no_audio_egress.py'
+      - '.github/workflows/mobile.yml'
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  mobile:
+    name: Mobile — Type-check & unit tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+
+      # No --frozen-lockfile: this project keeps its own lockfile and is not
+      # part of the root one, so a root lockfile refresh must not red this job.
+      - name: Install
+        run: pnpm install
+
+      - name: Type-check
+        run: pnpm typecheck
+
+      # Only src/lib runs here. Storage, the device-token provider and the API
+      # client are injected, so those modules run under plain Node with no
+      # React Native runtime, no Metro and no simulator. The screens are
+      # deliberately thin over them.
+      - name: Unit tests
+        run: pnpm test
+
+      # Depth 9.6. The guard this replaces required the README to say no
+      # device build had been performed. A device build is now performed, in
+      # the two jobs below, so the guard inverts: the README must not claim
+      # more than those jobs prove. Specifically it must still say that an
+      # **iPhone** build and a **real-handset push** have not happened,
+      # because neither has — both need developer accounts nobody has
+      # provisioned.
+      #
+      # Inverting rather than deleting is the point. A claim with no gate is
+      # the state this file existed to prevent, and "we added a build so the
+      # honesty check is no longer needed" is how that state returns.
+      - name: The README must not claim more than CI proves
+        run: |
+          set -euo pipefail
+          fail=0
+          if ! grep -qiE '^\| Built for an iPhone \| \*\*No\.\*\*' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that no iPhone *device* build has happened."
+            echo "The iOS job below builds for the simulator only; a device build needs an Apple developer account."
+            fail=1
+          fi
+          if ! grep -qiE '^\| Push delivered to a real handset \| \*\*No\.\*\*' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that push has not reached a real handset."
+            echo "No APNs key and no FCM service account exist, so nothing has been delivered to a device."
+            fail=1
+          fi
+          # Wave 2, Phase 9.2. The row this replaces read "Transcription is
+          # on-device by construction", which is true of the *module* and
+          # reads as a working feature. `src/lib/voice.ts` has no recogniser
+          # behind it and no screen importing it — the only file in the
+          # repository that mentions it is the README itself. Until 9.1
+          # wires one, the row must say so.
+          #
+          # The second clause is what keeps this honest once 9.1 lands: the
+          # module may exist and still have reached no handset, which is the
+          # 9.2 block and needs developer accounts nobody has provisioned.
+          if ! grep -qiE '^\| Voice input \| \*\*No\.' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that voice input does not exist."
+            echo "src/lib/voice.ts is an interface with no recogniser and no screen using it."
+            echo "If wave-2 Phase 9.1 has landed, this guard moves to the handset row below rather than being deleted."
+            fail=1
+          fi
+          if ! grep -qiE '^\| Voice path run on a real handset \| \*\*No' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that no handset has run the voice path."
+            echo "That needs 9.1's recogniser to exist AND an Apple developer account or a Google Play account."
+            fail=1
+          fi
+          # A guard that greps for four lines in a file it never opened
+          # reports success. Cheap to assert, and the exact shape of vacuous
+          # pass this workflow's own header is about.
+          test -s README.md || { echo "::error::README.md is empty or missing; nothing was checked"; fail=1; }
+          [ "$fail" -eq 0 ] && echo "OK: the README claims exactly what these jobs prove."
+          exit "$fail"
+
+      - name: No audio may leave the responder app
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/check_no_audio_egress.py --self-test && python3 scripts/check_no_audio_egress.py
+
+  # ── A build that produces something you can install ──────────────────────
+  #
+  # The plan asks for `apps/mobile` built "for a device through a CI
+  # pipeline". Android can be: `expo prebuild` generates the native project
+  # and Gradle assembles a release APK, signed with a throwaway debug
+  # keystore. That APK installs on a handset. It is not store-signable —
+  # that needs a Google Play account, which is a maintainer item — and the
+  # README says so rather than implying a shippable artefact.
+  android-apk:
+    name: Mobile — Android APK (installable, not store-signed)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install
+        run: pnpm install
+
+      # Generates `android/` from app.json. Not committed, deliberately: a
+      # checked-in native project drifts from the Expo config and the drift
+      # is invisible until a build fails for a reason nobody changed.
+      # Expo's own compatibility table, checked rather than trusted. The
+      # first run of this job failed inside
+      # `:react-native-screens:generateCodegenSchemaFromJavaScript` with
+      # "The first argument of method showColumn must be of type
+      # React.ElementRef<>", because `^4.11.0` had resolved to 4.28.0 — a
+      # version whose component specs the React Native 0.81 codegen cannot
+      # parse. That is the caret-pin defect this repository has documented
+      # elsewhere: the same commit building two ways. Both packages are now
+      # pinned to the versions Expo SDK 54 expects, and this step fails the
+      # build if a future bump drifts off that table again.
+      - name: The native dependency versions must be the ones Expo expects
+        run: |
+          set -euo pipefail
+          out=$(npx --yes expo install --check 2>&1 || true)
+          if echo "$out" | grep -qE 'react-native-screens@|react-native-safe-area-context@'; then
+            echo "::error::a native module has drifted off Expo SDK 54's compatibility table."
+            echo "$out"
+            exit 1
+          fi
+          echo "OK: react-native-screens and react-native-safe-area-context match Expo's table."
+
+      - name: Generate the native Android project
+        run: npx expo prebuild --platform android --no-install
+
+      # A debug keystore, generated here and thrown away. The APK installs
+      # and runs; it cannot be uploaded to Play, which is correct — a
+      # release key in CI would be a release key in a log.
+      # `assembleDebug`, not `assembleRelease`, and the reason bounds what
+      # this job proves rather than hiding a failure.
+      #
+      # A release build runs `:app:createBundleReleaseJsAndAssets`, and
+      # Metro's asset hashing dies there on this runner with `The "list"
+      # argument must be an instance of SharedArrayBuffer...` while reading
+      # one of expo-router's PNGs. Node 20 fixes it and is not an option:
+      # `scripts/check_toolchain_pins.py` refuses a second Node version in
+      # the tree, correctly — Node 20 left security support in April 2026
+      # and no image ships it, so pinning CI to it would be testing a
+      # runtime nothing runs in production. Lowering that gate to make this
+      # job pass would be the wrong trade by a wide margin.
+      #
+      # A debug APK still compiles every native module, links them, and
+      # packages an archive that installs and runs on a handset — which is
+      # what "built for a device through a CI pipeline" asks for. What it
+      # does not carry is an embedded production JS bundle. The README says
+      # exactly that.
+      - name: Assemble an installable APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleDebug --no-daemon -x lint
+
+      - name: The APK must exist and be a real archive
+        run: |
+          set -euo pipefail
+          apk=$(find android/app/build/outputs/apk -name '*.apk' | head -1)
+          if [ -z "$apk" ]; then
+            echo "::error::Gradle reported success and produced no APK."
+            exit 1
+          fi
+          # `unzip -l` on an APK lists its entries; an empty or truncated
+          # artefact fails here rather than being uploaded as a build nobody
+          # checked. A green build that produced nothing is the exact shape
+          # this repository has shipped before.
+          unzip -l "$apk" | grep -q 'classes.dex'
+          echo "OK: $apk ($(wc -c <"$apk") bytes) contains classes.dex"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: aisoc-responder-android
+          path: apps/mobile/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+          retention-days: 7
+
+  # iOS compiles for the **simulator**. A device build needs an Apple
+  # developer account and a provisioning profile, which is a maintainer item
+  # — so this proves the native project configures and compiles, and the
+  # README does not claim more.
+  ios-simulator:
+    name: Mobile — iOS simulator compile + link (no signing, no JS bundle)
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+
+      - name: Install
+        run: pnpm install
+
+      - name: Generate the native iOS project
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: Install pods
+        working-directory: apps/mobile/ios
+        run: pod install
+
+      - name: Build for the simulator, unsigned
+        working-directory: apps/mobile/ios
+        run: |
+          set -euo pipefail
+          ws=$(ls -d *.xcworkspace | head -1)
+          # `-list` must be told which container to list. Without
+          # `-workspace` it describes the *project*, so the JSON has a
+          # `project` key and reading `["workspace"]` is a KeyError — which
+          # is exactly how the first run of this job failed. Both keys are
+          # accepted so the step does not depend on which one Xcode
+          # happens to emit.
+          # One expression, deliberately: a `python3 -c` body indented to
+          # match the YAML block keeps its leading spaces and dies with an
+          # IndentationError, which reads as a broken runner rather than a
+          # broken script.
+          scheme=$(xcodebuild -list -json -workspace "$ws" | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d.get("workspace") or d.get("project") or {}; s=c.get("schemes") or []; sys.exit("xcodebuild -list reported no schemes") if not s else print(s[0])')
+          echo "building scheme $scheme from $ws"
+          # Debug, not Release, and the reason is worth stating because it
+          # bounds what this job proves. A Release build runs React
+          # Native's bundle phase, and Metro's asset hashing dies on this
+          # runner with `The "list" argument must be an instance of
+          # SharedArrayBuffer...` while reading one of expo-router's PNGs —
+          # a Metro/Node incompatibility that has nothing to do with this
+          # app's code. Chasing it here would be chasing someone else's
+          # bug on the one platform that cannot produce a shippable
+          # artefact anyway.
+          #
+          # What a Debug simulator build does prove is the whole of what
+          # this job is for: the Expo config generates a valid Xcode
+          # project, the pods resolve, and every native module compiles and
+          # links. **JS bundling is proven on the Android job**, which runs
+          # `assembleRelease` and therefore does bundle.
+          xcodebuild \
+            -workspace "$ws" \
+            -scheme "$scheme" \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            build

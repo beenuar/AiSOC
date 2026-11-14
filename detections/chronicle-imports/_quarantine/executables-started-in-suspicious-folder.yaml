@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-executables-started-in-suspicious-folder
+name: executables_started_in_suspicious_folder
+description: executables_started_in_suspicious_folder
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule executables_started_in_suspicious_folder {\n meta:\n    author\
+    \ = \"Florian Roth\"\n    description = \"Detects process starts of binaries from\
+    \ a suspicious folder  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/N6BOqcTesDDt\"\n    version\
+    \ = \"0.01\"\n    created = \"2017/10/14\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"defense_evasion, t1036\"\n\n  events:\n\
+    ((re.regex($selection.target.process.file.full_path, `C:\\\\PerfLogs\\\\.*`) or\
+    \ re.regex($selection.target.process.file.full_path, `C:\\\\$Recycle\\.bin\\\\\
+    .*`) or re.regex($selection.target.process.file.full_path, `C:\\\\Intel\\\\Logs\\\
+    \\.*`) or re.regex($selection.target.process.file.full_path, `C:\\\\Users\\\\\
+    Default\\\\.*`) or re.regex($selection.target.process.file.full_path, `C:\\\\\
+    Users\\\\Public\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Users\\\\NetworkService\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Fonts\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Debug\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Media\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Help\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\addins\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\repair\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\security\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\RSA\\\\MachineKeys\\\\.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\system32\\\\config\\\\systemprofile\\\\.*`)) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: executables_started_in_suspicious_folder
+provenance:
+  source: chronicle/detection-rules
+  source_id: executables_started_in_suspicious_folder
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/executables_started_in_suspicious_folder.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

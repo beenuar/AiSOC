@@ -1,0 +1,49 @@
+id: mitre-car-car-2020-11-010
+name: CMSTP
+description: 'CMSTP.exe is the Microsoft Connection Manager Profile Installer, which
+  can be leveraged to setup listeners that will receive and install malware from remote
+  sources in trusted fashion.
+
+  When CMSTP.exe is seen in combination with an external connection, it is a good
+  indication of this TTP.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - CMSTP
+    type: Pseudocode
+    code: "processes = search Process:Create\ntarget_processes = filter processes\
+      \ where (\n  exe=\"C:\\Windows\\System32\\CMSTP.exe\" AND\n  src_ip NOT IN [10.0.0.0/8,192.168.0.0/16,\
+      \ 172.16.0.0/12] )\noutput target_processes\n"
+  - name: Splunk Search - CMSTP
+    type: Splunk
+    code: '(index=__your_sysmon_index__ EventCode=3) Image="C:\\Windows\\System32\\CMSTP.exe"
+      | where ((!cidrmatch("10.0.0.0/8", SourceIp) AND !cidrmatch("192.168.0.0/16",
+      SourceIp) AND !cidrmatch("172.16.0.0/12", SourceIp))
+
+      '
+  - name: LogPoint Search - CMSTP
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=3 image="C:\Windows\System32\CMSTP.exe"
+      -source_address IN HOMENET
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2020-11-010
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2020-11-010.yaml
+notes:
+  car_status: needs_implementation

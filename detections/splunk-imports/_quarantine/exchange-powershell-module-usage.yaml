@@ -1,0 +1,51 @@
+id: splunk-security-content-2d10095e-05ae-11ec-8fdf-acde48001122
+name: Exchange PowerShell Module Usage
+description: The following analytic detects the usage of specific Exchange PowerShell
+  modules, such as New-MailboxExportRequest, New-ManagementRoleAssignment, New-MailboxSearch,
+  and Get-Recipient. It leverages PowerShell Script Block Logging (EventCode 4104)
+  to identify these commands. This activity is significant because these modules can
+  be exploited by adversaries who have gained access via ProxyShell or ProxyNotShell
+  vulnerabilities. If confirmed malicious, attackers could export mailbox contents,
+  assign management roles, conduct mailbox searches, or view recipient objects, potentially
+  leading to data exfiltration, privilege escalation, or unauthorized access to sensitive
+  information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/powershell/module/exchange/new-mailboxexportrequest?view=exchange-ps
+- https://docs.microsoft.com/en-us/powershell/module/exchange/new-managementroleassignment?view=exchange-ps
+- https://blog.orange.tw/2021/08/proxyshell-a-new-attack-surface-on-ms-exchange-part-3.html
+- https://www.zerodayinitiative.com/blog/2021/8/17/from-pwn2own-2021-a-new-attack-surface-on-microsoft-exchange-proxyshell
+- https://thedfirreport.com/2021/11/15/exchange-exploit-leads-to-domain-wide-ransomware/
+- https://www.cisa.gov/uscert/ncas/alerts/aa22-264a
+- https://learn.microsoft.com/en-us/powershell/module/exchange/new-mailboxsearch?view=exchange-ps
+- https://learn.microsoft.com/en-us/powershell/module/exchange/get-recipient?view=exchange-ps
+- https://thedfirreport.com/2022/03/21/apt35-automates-initial-access-using-proxyshell/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*New-MailboxExportRequest*\"\
+    , \"*New-ManagementRoleAssignment*\", \"*New-MailboxSearch*\", \"*Get-Recipient*\"\
+    , \"Search-Mailbox\")\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `exchange_powershell_module_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2d10095e-05ae-11ec-8fdf-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/exchange_powershell_module_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

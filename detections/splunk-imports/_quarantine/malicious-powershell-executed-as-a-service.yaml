@@ -1,0 +1,44 @@
+id: splunk-security-content-8e204dfd-cae0-4ea8-a61d-e972a1ff2ff8
+name: Malicious Powershell Executed As A Service
+description: The following analytic identifies the execution of malicious PowerShell
+  commands or payloads via the Windows SC.exe utility. It detects this activity by
+  analyzing Windows System logs (EventCode 7045) and filtering for specific PowerShell-related
+  patterns in the ImagePath field. This behavior is significant because it indicates
+  potential abuse of the Windows Service Control Manager to run unauthorized or harmful
+  scripts, which could lead to system compromise. If confirmed malicious, this activity
+  could allow attackers to execute arbitrary code, escalate privileges, or maintain
+  persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.fireeye.com/content/dam/fireeye-www/blog/pdfs/dosfuscation-report.pdf
+- http://az4n6.blogspot.com/2017/
+- https://www.danielbohannon.com/blog-1/2017/3/12/powershell-execution-argument-obfuscation-how-it-can-make-detection-easier
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system`\nEventCode=7045\n| eval l_ImagePath=lower(ImagePath)\n\
+    | regex l_ImagePath=\"powershell[.\\s]|powershell_ise[.\\s]|pwsh[.\\s]|psexec[.\\\
+    s]\"\n| regex l_ImagePath=\"-nop[rofile\\s]+|-w[indowstyle]*\\s+hid[den]*|-noe[xit\\\
+    s]+|-enc[odedcommand\\s]+\"\n| stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    by EventCode ImagePath ServiceName StartType\n       ServiceType\
+    \ AccountName UserID dest\n| rename UserID as user\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `malicious_powershell_executed_as_a_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8e204dfd-cae0-4ea8-a61d-e972a1ff2ff8
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/malicious_powershell_executed_as_a_service.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

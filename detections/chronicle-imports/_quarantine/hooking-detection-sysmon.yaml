@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-hooking-detection-sysmon
+name: hooking_detection_sysmon
+description: hooking_detection_sysmon
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule hooking_detection_sysmon {\n meta:\n    author = \"Roman\
+    \ Ranskyi\"\n    description = \"Similar to Process Injection, adversaries may\
+    \ use hooking to load and execute malicious code within the context of another\
+    \ process, masking the execution while also allowing access to the process's memory\
+    \ and possibly elevated privileges. Installing hooking mechanisms may also provide\
+    \ Persistence via continuous invocation when the functions are called through\
+    \ normal use.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/e1wE1JpXqpHg\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Credential Access, t1179\"\n\n  events:\n($selection0.metadata.product_event_type\
+    \ = \"1\" and $selection0.target.process.command_line = \"/INJECTRUNNING\" and\
+    \ $selection0.target.process.file.full_path = \"mavinject.exe\")\n\n  condition:\n\
+    \    $selection0\n}"
+  chronicle_rule_name: hooking_detection_sysmon
+provenance:
+  source: chronicle/detection-rules
+  source_id: hooking_detection_sysmon
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/hooking_detection__sysmon.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

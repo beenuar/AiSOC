@@ -1,0 +1,34 @@
+id: chronicle-detection-rules-backup-catalog-deleted
+name: backup_catalog_deleted
+description: backup_catalog_deleted
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule backup_catalog_deleted {\n meta:\n    author = \"Florian\
+    \ Roth (rule), Tom U. @c_APT_ure (collection)\"\n    description = \"Detects backup\
+    \ catalog deletions  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\
+    \ @c_APT_ure (collection).\"\n    reference = \"https://tdm.socprime.com/tdm/info/xYQ2JRWcDe0l\"\
+    \n    version = \"0.01\"\n    created = \"2017/05/12\"\n    product = \"windows\"\
+    \n    service = \"application\"\n    mitre = \"defense_evasion, t1107, t1070.004\"\
+    \n\n  events:\n($selection.metadata.product_event_type = \"524\" and $selection.principal.application\
+    \ = \"Microsoft-Windows-Backup\")\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: backup_catalog_deleted
+provenance:
+  source: chronicle/detection-rules
+  source_id: backup_catalog_deleted
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/backup_catalog_deleted.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

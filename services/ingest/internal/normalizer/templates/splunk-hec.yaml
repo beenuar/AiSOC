@@ -1,0 +1,59 @@
+# Splunk HTTP Event Collector (HEC) template.
+#
+# Used by the /v1/inbox/hec route, which speaks the Splunk HEC wire
+# protocol so that any tool with "send to Splunk HEC" can ship events
+# to AiSOC unchanged. The HEC envelope is:
+#   {"time": 169..., "host": "...", "source": "...", "sourcetype": "...",
+#    "index": "...", "event": {...}}
+#
+# We treat the inner `event` payload as the security finding body and
+# pull host/source/sourcetype as metadata. If the event is a string we
+# treat it as the message.
+#
+# Reference:
+#   https://docs.splunk.com/Documentation/Splunk/latest/Data/FormateventsforHTTPEventCollector
+id: splunk-hec
+vendor_name: Splunk
+product_name: Splunk HEC
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  event.title: finding.title
+  event.description: finding.description
+  event.message: message
+  event.signature: finding.related_events.id
+  event.id: finding.uid
+  event.alert_id: finding.uid
+  event.url: url
+  event.src_ip: src_endpoint.ip
+  event.dst_ip: dst_endpoint.ip
+  event.user: actor.user.name
+  event.process: finding.evidence.process
+  event.action: activity_name
+  host: src_endpoint.hostname
+  source: source
+  sourcetype: metadata.product.feature.name
+  index: metadata.product.name
+severity_field: event.severity
+severity_map:
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  notice: 3
+  warning: 3
+  high: 4
+  error: 4
+  critical: 5
+  fatal: 6
+  "1": 1
+  "2": 2
+  "3": 3
+  "4": 4
+  "5": 5
+time_field: time
+message_field: event.message
+constants:
+  source_type: splunk-hec
+  metadata.product.vendor_name: Splunk

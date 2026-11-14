@@ -1,0 +1,26 @@
+id: det-network-025
+name: Outbound FTP Bulk Transfer From Non-Allowlisted Host
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound FTP Bulk
+  Transfer From Non-Allowlisted Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1048.003
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "TCP"
+    AND dst_port IN [21, 990]
+    AND bytes_out > 50000000
+    AND src_in_allowlist == false
+false_positives:
+- Approved B2B file-exchange hosts (allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

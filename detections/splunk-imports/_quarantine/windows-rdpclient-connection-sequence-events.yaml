@@ -1,0 +1,42 @@
+id: splunk-security-content-67340df1-3f1d-4470-93c8-9ac7249d11b0
+name: Windows RDPClient Connection Sequence Events
+description: This analytic monitors Windows RDP client connection sequence events
+  (EventCode 1024) from the Microsoft-Windows-TerminalServices-RDPClient/Operational
+  log. These events track when RDP ClientActiveX initiates connection attempts to
+  remote servers. The connection sequence is a critical phase of RDP where the client
+  and server exchange settings and establish common parameters for the session. Monitoring
+  these events can help identify unusual RDP connection patterns, potential lateral
+  movement attempts, unauthorized remote access activity, and RDP connection chains
+  that may indicate compromised systems. NOTE the analytic was written for Multi-Line
+  as XML was not properly parsed out.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/acd5dcbf1d4fb705b77f0a48e772eefc
+- https://www.microsoft.com/en-us/security/blog/2024/10/29/midnight-blizzard-conducts-large-scale-spear-phishing-campaign-using-rdp-files/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_rdp` EventCode=1024\n  | rename host as dest\n  | stats\
+    \ count as \"Event Count\", min(_time) as firstTime, max(_time) as lastTime, values(Message)\
+    \ as messages\n    BY dest, source, LogName,\n       EventCode, category\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_rdpclient_connection_sequence_events_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 67340df1-3f1d-4470-93c8-9ac7249d11b0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdpclient_connection_sequence_events.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

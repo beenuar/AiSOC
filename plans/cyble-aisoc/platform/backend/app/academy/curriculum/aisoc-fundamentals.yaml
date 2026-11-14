@@ -1,0 +1,140 @@
+id: aisoc-fundamentals
+title: Cyble AiSOC Fundamentals
+version: "1.0.0"
+audience: Tier-1 SOC analysts moving from a SIEM-only workflow to an agentic SOC.
+description: |
+  An introduction to the AiSOC mental model — cases, agents, HITL,
+  and the difference between an alert-centric and a case-centric
+  console. Learners finish this course able to triage their own
+  alerts in the AiSOC console and decide an HITL approval with
+  confidence.
+
+# Time-on-task estimate. Used by the catalog UI to set expectations.
+estimated_minutes: 90
+# Pass threshold across required quizzes. 0.7 = average score >= 70%.
+passing_score: 0.7
+
+modules:
+  - id: m1-mental-model
+    title: From alert-centric to case-centric
+    lessons:
+      - id: l1-alert-vs-case
+        title: Why cases beat alerts
+        kind: reading
+        estimated_minutes: 8
+        body: |
+          A SIEM gives you 300 raw alerts a day. AiSOC gives you the
+          30 cases that are *actually* worth attention. This lesson
+          covers the case lifecycle and why the agent mesh aggregates
+          before a human ever sees the queue.
+      - id: l2-agent-mesh
+        title: The agent mesh in 5 minutes
+        kind: reading
+        estimated_minutes: 6
+        body: |
+          Triager → Investigator → Responder → Reporter. Plus the
+          proactive agents (Hunter, Threat-Actor Profiler,
+          Supply-Chain Risk Fusion). What runs when, and why.
+      - id: l3-quiz-mental-model
+        title: Quiz — the AiSOC mental model
+        kind: quiz
+        passing_score: 0.7
+        questions:
+          - id: q1
+            prompt: |
+              Which agent is responsible for the FINAL decision on
+              whether to isolate a host?
+            choices:
+              - id: a
+                label: Triager
+              - id: b
+                label: Investigator
+              - id: c
+                label: Responder
+              - id: d
+                label: Reporter
+            answer: c
+          - id: q2
+            prompt: |
+              In AiSOC, what is the *primary* unit an analyst works on?
+            choices:
+              - id: a
+                label: A raw SIEM alert
+              - id: b
+                label: A case that aggregates one or more alerts
+              - id: c
+                label: A SOAR playbook step
+              - id: d
+                label: A vendor ticket
+            answer: b
+          - id: q3
+            prompt: |
+              Which agent runs proactively (without waiting for an
+              alert)?
+            choices:
+              - id: a
+                label: Triager
+              - id: b
+                label: Hunter
+              - id: c
+                label: Responder
+              - id: d
+                label: Reporter
+            answer: b
+
+  - id: m2-hitl-confidence
+    title: Deciding HITL requests with confidence
+    lessons:
+      - id: l4-blast-radius
+        title: Reading the blast-radius panel
+        kind: reading
+        estimated_minutes: 10
+        body: |
+          The HITL panel shows the predicted impact of an action
+          before you approve it: dependent assets, severity, and
+          reversibility. This lesson walks through the panel and
+          how to interpret each section.
+      - id: l5-counterfactuals
+        title: Why-not facts and dissenting hypotheses
+        kind: reading
+        estimated_minutes: 8
+        body: |
+          Every closed case carries counterfactual "why-not" facts —
+          actions that were considered and rejected. Use them to
+          calibrate your trust in the agent's verdict, especially
+          for the first few cases on a new tenant.
+      - id: l6-quiz-hitl
+        title: Quiz — HITL decision-making
+        kind: quiz
+        passing_score: 0.7
+        questions:
+          - id: q1
+            prompt: |
+              An HITL request is for ``edr.isolate_host`` with
+              severity HIGH and reversibility=reversible-quick. The
+              blast-radius panel shows 0 dependent users. What's
+              the safest action?
+            choices:
+              - id: a
+                label: Deny — host isolation is always too risky
+              - id: b
+                label: Approve — reversible quick + 0 dependents is low blast radius
+              - id: c
+                label: Escalate to a Tier-3 analyst regardless
+              - id: d
+                label: Open a ticket and wait for the on-call
+            answer: b
+          - id: q2
+            prompt: |
+              Which counterfactual fact would most increase your
+              trust in a true-positive verdict?
+            choices:
+              - id: a
+                label: The agent considered isolating + chose to enrich the IOC first
+              - id: b
+                label: The agent skipped CTI lookup
+              - id: c
+                label: The agent escalated immediately without enrichment
+              - id: d
+                label: The agent ran no tools at all
+            answer: a

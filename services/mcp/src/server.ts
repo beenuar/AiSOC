@@ -1,0 +1,327 @@
+/**
+ * MCP server wiring.
+ *
+ * Bridges the AiSOC tool registry (`./tools/index.ts`) to the
+ * `@modelcontextprotocol/sdk` server, exposing two request handlers:
+ *
+ *   - `tools/list`  → advertise every tool's name + JSON Schema.
+ *   - `tools/call`  → validate args with the tool's zod schema, dispatch
+ *                     to the handler, and wrap the result in MCP's
+ *                     `CallToolResult` shape (text content + isError).
+ *
+ * Why we wrap manually instead of using the high-level `McpServer` helper:
+ *
+ *   1. The high-level helper insists on declaring tool metadata as the
+ *      tools register; we already keep that metadata next to each tool
+ *      handler in `./tools/`. Wrapping the low-level `Server` keeps a
+ *      single source of truth.
+ *   2. We want first-class control over how tool errors are surfaced —
+ *      `formatErrorForTool` produces a stable, audit-friendly message
+ *      that the agent can act on (auth failures suggest scope fixes,
+ *      transport errors mention the URL, etc.).
+ *   3. The arg validation step uses the tool's exact zod schema so failures
+ *      report which fields were wrong, not "schema mismatch".
+ *
+ * Stdio discipline: the SDK already wires JSON-RPC to stdout via
+ * `StdioServerTransport`; we never log to stdout from our code.
+ */
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
+
+import { AisocClient } from "./client.js";
+import { type ServerConfig, type Logger, packageVersion } from "./config.js";
+import {
+  ApiError,
+  InvalidArgumentsError,
+  MissingApiKeyError,
+  TransportError,
+  formatErrorForTool,
+} from "./errors.js";
+import { ALL_TOOLS, TOOL_BY_NAME } from "./tools/index.js";
+import { ToolCallTelemetry, argumentKeys } from "./telemetry.js";
+import type { ToolResult } from "./tools/types.js";
+
+/** Server instructions surfaced to MCP hosts during initialisation. */
+const SERVER_INSTRUCTIONS = `\
+AiSOC exposes alerts, cases, detection rules, and the agent decision ledger
+through this MCP server. Typical workflows:
+
+  1. Triage:       aisoc_list_alerts → aisoc_get_alert
+  2. Investigate:  aisoc_list_cases  → aisoc_run_investigation → aisoc_replay_decision
+  3. Audit a step: aisoc_explain_step (returns the prompt, response, and tools used)
+  4. Tune rules:   aisoc_query_detections → aisoc_get_detection_rule
+
+Every agent decision in AiSOC is logged to a persistent ledger; \
+\`aisoc_replay_decision\` and \`aisoc_explain_step\` are the auditable surface.`;
+
+/**
+ * A decision taken before a tool runs, and the report after it.
+ *
+ * Over stdio there is nothing to decide: the server holds the operator's own
+ * key and a tool call can do only what that person could already do. Over
+ * HTTP the credential arrives per request and several tenants share the
+ * process, so `src/http.ts` supplies these two and the API decides. Optional
+ * here so the stdio path is byte-for-byte the behaviour it always had.
+ */
+export interface CallHooks {
+  /**
+   * Called before dispatch. Returning `{ allowed: false }` refuses the call
+   * with `reason` surfaced to the agent, and the tool never runs.
+   */
+  before(toolName: string, args: unknown): Promise<{ allowed: boolean; reason?: string; callId?: string }>;
+  /** Called on every exit path, including the refusals. */
+  after(
+    callId: string | undefined,
+    outcome: "success" | "error" | "invalid_arguments" | "unknown_tool" | "denied",
+    latencyMs: number,
+    errorKind?: string,
+  ): void;
+}
+
+/**
+ * Build (but don't start) an MCP server bound to the AiSOC tool registry.
+ *
+ * Exported separately from the start helper so tests can drive request
+ * handlers without spinning up a real stdio transport.
+ */
+export function buildServer(cfg: ServerConfig, log: Logger, hooks?: CallHooks): Server {
+  const client = new AisocClient(cfg, log);
+  // This server is a standing read path into a customer's alerts, cases and
+  // event lake, and until now nothing recorded what it read. Off unless
+  // AISOC_MCP_TELEMETRY_URL is set.
+  const telemetry = new ToolCallTelemetry(log);
+  const server = new Server(
+    { name: "@aisoc/mcp", version: packageVersion() },
+    {
+      capabilities: { tools: {} },
+      instructions: SERVER_INSTRUCTIONS,
+    },
+  );
+
+  server.setRequestHandler(ListToolsRequestSchema, async () => {
+    return {
+      tools: ALL_TOOLS.map((t) => ({
+        name: t.metadata.name,
+        description: t.metadata.description,
+        inputSchema: t.metadata.inputSchema as { type: "object" } & Record<
+          string,
+          unknown
+        >,
+        // Advertised because a client that takes annotations seriously
+        // cannot tell "read-only" from "nobody said" without them, and the
+        // safe reading of silence is "not read-only".
+        annotations: t.metadata.annotations,
+      })),
+    };
+  });
+
+  server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    const name = request.params.name;
+    // Every exit path below records, including the failures. A tool call that
+    // was refused is as much a part of the account of what this key did as one
+    // that succeeded.
+    const startedAt = Date.now();
+    const keys = argumentKeys(request.params.arguments);
+    const tool = TOOL_BY_NAME[name];
+    if (!tool) {
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "unknown_tool",
+        latency_ms: Date.now() - startedAt,
+      });
+      hooks?.after(undefined, "unknown_tool", Date.now() - startedAt);
+      // Unknown tool. Return as a tool-failure rather than throwing so the
+      // agent gets a clear human message instead of a transport error.
+      return toErrorResult(
+        `Unknown tool: ${name}. Call tools/list to see what's available.`,
+      );
+    }
+
+    // Authorization, when a transport supplied one. Before validation on
+    // purpose: a call that is not allowed must not have its arguments
+    // inspected and reported on, and the refusal has to be recorded whether
+    // or not the arguments were well-formed.
+    let callId: string | undefined;
+    if (hooks) {
+      let verdict: { allowed: boolean; reason?: string; callId?: string };
+      try {
+        verdict = await hooks.before(name, request.params.arguments);
+      } catch (err) {
+        // Fail closed. The gate module raises when it could not reach a
+        // decision, and "could not decide" is not "allowed".
+        log.error(`authorization failed for ${name}`, err);
+        telemetry.record({
+          tool_name: name,
+          argument_keys: keys,
+          outcome: "error",
+          latency_ms: Date.now() - startedAt,
+          error_kind: err instanceof Error ? err.constructor.name : "unknown",
+        });
+        return toErrorResult(err instanceof Error ? err.message : String(err));
+      }
+      callId = verdict.callId;
+      if (!verdict.allowed) {
+        telemetry.record({
+          tool_name: name,
+          argument_keys: keys,
+          outcome: "error",
+          latency_ms: Date.now() - startedAt,
+          error_kind: "NotAuthorized",
+        });
+        hooks.after(callId, "denied", Date.now() - startedAt);
+        return toErrorResult(verdict.reason ?? `${name} is not permitted for this credential.`);
+      }
+    }
+
+    // Validate via zod. Failed validation gives precise per-field issues.
+    const parse = tool.schema.safeParse(request.params.arguments ?? {});
+    if (!parse.success) {
+      const issues = parse.error.issues.map(
+        (i) => `${i.path.join(".") || "<root>"}: ${i.message}`,
+      );
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "invalid_arguments",
+        latency_ms: Date.now() - startedAt,
+      });
+      hooks?.after(callId, "invalid_arguments", Date.now() - startedAt);
+      return toErrorResult(
+        formatErrorForTool(new InvalidArgumentsError(name, issues)),
+      );
+    }
+
+    try {
+      const result = await tool.handle({ client, log }, parse.data);
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "success",
+        latency_ms: Date.now() - startedAt,
+      });
+      hooks?.after(callId, "success", Date.now() - startedAt);
+      return toSuccessResult(result);
+    } catch (err) {
+      telemetry.record({
+        tool_name: name,
+        argument_keys: keys,
+        outcome: "error",
+        latency_ms: Date.now() - startedAt,
+        error_kind: err instanceof Error ? err.constructor.name : "unknown",
+      });
+      hooks?.after(
+        callId,
+        "error",
+        Date.now() - startedAt,
+        err instanceof Error ? err.constructor.name : "unknown",
+      );
+      // Log full error to stderr for debugging; surface a sanitised message
+      // to the agent. We deliberately don't include stack traces in the
+      // MCP response (PII / secrets risk).
+      log.error(`tool ${name} failed`, err);
+
+      // Auth failures surface a hint about scopes via formatErrorForTool.
+      if (
+        err instanceof MissingApiKeyError ||
+        err instanceof TransportError ||
+        err instanceof ApiError ||
+        err instanceof InvalidArgumentsError
+      ) {
+        return toErrorResult(formatErrorForTool(err));
+      }
+      return toErrorResult(formatErrorForTool(err));
+    }
+  });
+
+  return server;
+}
+
+/**
+ * Boot the server on stdio. Resolves once the transport closes (process
+ * shutdown) so callers can `await` for the lifecycle.
+ */
+export async function runServer(cfg: ServerConfig, log: Logger): Promise<void> {
+  const server = buildServer(cfg, log);
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+  log.info(`aisoc-mcp ${packageVersion()} ready on stdio (target ${cfg.aisocUrl})`);
+  // The SDK keeps Node alive while stdin is open; we just need to wait for
+  // close. Setting up a manual promise here also lets us surface SIGINT
+  // cleanly.
+  await new Promise<void>((resolve) => {
+    transport.onclose = () => {
+      log.info("transport closed; shutting down");
+      resolve();
+    };
+    const onSignal = (sig: string) => {
+      log.info(`received ${sig}, closing transport`);
+      transport.close().catch(() => {
+        /* swallow — we're exiting anyway */
+      });
+    };
+    process.once("SIGINT", () => onSignal("SIGINT"));
+    process.once("SIGTERM", () => onSignal("SIGTERM"));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Result envelope helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * structuredContent must be a JSON object (MCP spec), and the SDK client
+ * rejects the whole result otherwise. `typeof [] === "object"`, so the old
+ * guard let arrays through and every tool returning a list
+ * (aisoc_list_investigations) failed with "-32602 Invalid tools/call result".
+ * Arrays still reach the host in full as the fenced JSON text content.
+ */
+function asStructuredContent(data: unknown): Record<string, unknown> | undefined {
+  return typeof data === "object" && data !== null && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : undefined;
+}
+
+/**
+ * Convert a `ToolResult` into the MCP `CallToolResult` shape. JSON results
+ * become a fenced JSON code block so MCP hosts that render Markdown still
+ * show structured data; text results pass through verbatim. We also include
+ * `structuredContent` (the raw JSON) when present, so MCP-aware hosts that
+ * support the field can render it natively.
+ */
+function toSuccessResult(result: ToolResult): {
+  content: Array<{ type: "text"; text: string }>;
+  structuredContent?: unknown;
+  isError?: false;
+} {
+  if (result.kind === "json") {
+    const text = renderJson(result.data);
+    return {
+      content: [{ type: "text", text }],
+      structuredContent: asStructuredContent(result.data),
+    };
+  }
+  return {
+    content: [{ type: "text", text: result.text }],
+    structuredContent: asStructuredContent(result.data),
+  };
+}
+
+function toErrorResult(text: string): {
+  content: Array<{ type: "text"; text: string }>;
+  isError: true;
+} {
+  return { content: [{ type: "text", text }], isError: true };
+}
+
+function renderJson(data: unknown): string {
+  // Pretty-print with a 2-space indent. We don't truncate here — each tool
+  // is responsible for shaping its output to fit MCP context budgets — but
+  // we wrap in a fenced block so hosts render it as code.
+  const body = JSON.stringify(data, null, 2);
+  return "```json\n" + body + "\n```";
+}

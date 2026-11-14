@@ -1,0 +1,44 @@
+id: splunk-security-content-bf7a06ec-f703-11ea-adc1-0242ac120002
+name: Detect Zerologon via Zeek
+description: 'The following analytic detects attempts to exploit the Zerologon CVE-2020-1472
+  vulnerability via Zeek RPC. It leverages Zeek DCE-RPC data to identify specific
+  operations: NetrServerPasswordSet2, NetrServerReqChallenge, and NetrServerAuthenticate3.
+  This activity is significant because it indicates an attempt to gain unauthorized
+  access to a domain controller, potentially leading to a complete takeover of an
+  organization''s IT infrastructure. If confirmed malicious, the impact could be severe,
+  including data theft, ransomware deployment, or other devastating outcomes. Immediate
+  investigation of the identified IP addresses and RPC operations is crucial.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - network
+references:
+- https://www.secura.com/blog/zero-logon
+- https://github.com/SecuraBV/CVE-2020-1472
+- https://msrc.microsoft.com/en-US/security-guidance/advisory/CVE-2020-1472
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-319a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zeek_rpc` operation IN (NetrServerPasswordSet2,NetrServerReqChallenge,NetrServerAuthenticate3)\n\
+    \  | bin span=5m _time\n  | stats values(operation) dc(operation) as opscount\
+    \ count(eval(operation==\"NetrServerReqChallenge\")) as challenge count(eval(operation==\"\
+    NetrServerAuthenticate3\")) as authcount count(eval(operation==\"NetrServerPasswordSet2\"\
+    )) as passcount count as totalcount\n    BY _time,src_ip,dest_ip\n  | search opscount=3\
+    \ authcount>4 passcount>0\n  | search `detect_zerologon_via_zeek_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bf7a06ec-f703-11ea-adc1-0242ac120002
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_zerologon_via_zeek.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

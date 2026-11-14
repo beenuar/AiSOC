@@ -1,0 +1,33 @@
+title: VIP/Flagged Patient Record Accessed Outside Care Team
+id: aisoc-vt-hlth-0002-vip-patient-snooping
+status: experimental
+description: |
+  A patient record flagged as VIP, employee, or sensitive (psych,
+  substance abuse, HIV) was accessed by a user not on the documented
+  care team and without a break-glass justification recorded. Direct
+  HIPAA minimum-necessary violation.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: ehr
+  service: audit
+tags:
+  - attack.t1087
+  - attack.discovery
+  - aisoc.vertical.healthcare
+  - aisoc.compliance.hipaa
+detection:
+  selection:
+    event.module|in:
+      - 'epic.audit'
+      - 'cerner.audit'
+    event.action: 'chart.viewed'
+    patient.flag|contains:
+      - 'vip'
+      - 'employee'
+      - 'sensitive'
+  filter:
+    actor.on_care_team: true
+  filter_breakglass:
+    breakglass.justification|exists: true
+  condition: selection and not (filter or filter_breakglass)

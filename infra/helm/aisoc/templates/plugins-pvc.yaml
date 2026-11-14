@@ -1,0 +1,45 @@
+{{- range $name, $svc := .Values.services }}
+{{- if and $svc.plugins $svc.plugins.persistence $svc.plugins.persistence.enabled }}
+{{- /*
+  Somewhere for installed plugins to live.
+
+  `AISOC_PLUGINS_DIR` defaults to /opt/aisoc/plugins and
+  `plugin_manager.py` extracts OCI plugin layers there; nothing in this
+  chart mounted it, so a `helm upgrade` replaced the pod and took every
+  installed plugin with it. On this chart it was worse than ephemeral: the
+  container runs with `readOnlyRootFilesystem: true`, so the extraction
+  could not write in the first place.
+
+  /opt/aisoc/plugin-keys gets the same treatment. It holds the Ed25519
+  public keys an operator installs so that signed third-party plugins are
+  trusted at all, so losing it turns every signed plugin into a refusal
+  rather than into an absence — a failure that reads as a signature problem
+  with the plugin.
+
+  The claim is deliberately NOT deleted with the release. A plugin set is
+  operator-installed state, and `helm uninstall` is how someone moves a
+  release between namespaces.
+*/}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "aisoc.fullname" $ }}-{{ $name }}-plugins
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $name }}-plugins
+  annotations:
+    "helm.sh/resource-policy": keep
+spec:
+  accessModes:
+    - {{ $svc.plugins.persistence.accessMode | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ $svc.plugins.persistence.size | default "5Gi" }}
+  {{- $class := $svc.plugins.persistence.storageClass | default $.Values.global.storageClass }}
+  {{- if $class }}
+  storageClassName: {{ $class | quote }}
+  {{- end }}
+{{- end }}
+{{- end }}

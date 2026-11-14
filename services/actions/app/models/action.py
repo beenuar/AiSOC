@@ -1,0 +1,308 @@
+"""
+Action models for the Action Execution Service.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from enum import Enum
+from typing import Any
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
+
+
+class ActionType(str, Enum):
+    BLOCK_IP = "block_ip"
+    BLOCK_DOMAIN = "block_domain"
+    ISOLATE_HOST = "isolate_host"
+    DISABLE_USER = "disable_user"
+    RESET_PASSWORD = "reset_password"
+    KILL_PROCESS = "kill_process"
+    QUARANTINE_FILE = "quarantine_file"
+    CAPTURE_FORENSICS = "capture_forensics"
+    NOTIFY_SLACK = "notify_slack"
+    CREATE_TICKET = "create_ticket"
+    # `add_ioc_to_blocklist` and `run_playbook` were here and had no executor
+    # behind either of them, so the API accepted both and answered "No
+    # executor found for action type" — which reads as a broken deployment
+    # rather than a verb nobody built. Neither was a missing implementation:
+    #
+    #   add_ioc_to_blocklist  a second name for `block_ioc`, which has a
+    #                         Defender arm, a contract, an adapter and a place
+    #                         in the vocabulary. Two names for one verb means
+    #                         half the callers reach the dead one.
+    #   run_playbook          playbook execution lives in services/agents and
+    #                         always has. It is also the wrong shape for this
+    #                         registry: the contract belongs to the verb, and
+    #                         "run an arbitrary bundle of verbs" has no
+    #                         verb-level impact, reversal or probe. Approving
+    #                         it once would execute whatever steps it contains
+    #                         without each one meeting its own contract, which
+    #                         is precisely what the per-capability contract
+    #                         exists to prevent. Playbooks dispatch step by
+    #                         step through this service instead, so every step
+    #                         is graded on the way past — via
+    #                         `services/agents/app/playbook/action_bridge.py`
+    #                         and `POST /api/v1/playbook-steps/dispatch`.
+    #
+    #                         That last sentence was not true when it was
+    #                         written. `_handle_block_ip` and
+    #                         `_handle_isolate_host` returned
+    #                         `{"simulated": True}` from inside the engine and
+    #                         reached no executor, and twelve further step
+    #                         types had no handler at all. The bridge named
+    #                         above is what made it true; the named modules
+    #                         are here so the claim can be checked rather than
+    #                         taken on trust.
+    # ChatOps user verification: outbound interactive Slack/Teams prompt
+    # asking the affected user to confirm or deny an event ("Was this you?").
+    # The response is HMAC-validated and routed back into the case timeline.
+    CHATOPS_VERIFY = "chatops_verify"
+    # WS-E: Live vendor integration action types
+    # CrowdStrike Falcon RTR
+    RUN_SCRIPT = "run_script"
+    # AWS Security Groups / Network
+    ALLOW_IP = "allow_ip"
+    # Microsoft Defender for Endpoint
+    BLOCK_IOC = "block_ioc"
+    RUN_AV_SCAN = "run_av_scan"
+    # Okta identity response
+    SUSPEND_SESSION = "suspend_session"
+    FORCE_MFA = "force_mfa"
+    # SIEM actions (Splunk + Elastic)
+    SEARCH_SIEM = "search_siem"
+    CREATE_NOTABLE_EVENT = "create_notable_event"
+    SYNC_DETECTION_RULE = "sync_detection_rule"
+    UPDATE_WATCHER = "update_watcher"
+    # Phase 3.3 — alert lifecycle dispatch. Both verbs are SIEM/EDR
+    # agnostic; the executor picks Splunk / Elastic / MDE based on
+    # which credentials are present in the request.
+    ACK_ALERT = "ack_alert"
+    SUPPRESS_ALERT = "suppress_alert"
+    # Two-way SIEM loop: project an AiSOC verdict onto the vendor finding that
+    # raised the alert. Distinct from ack/suppress because the disposition —
+    # not the caller — decides whether the finding is closed or escalated.
+    UPDATE_ALERT_DISPOSITION = "update_alert_disposition"
+    # Depth 7.1 — mailbox remediation for reported phish. Present here, and
+    # not only in the capability vocabulary, because the post-action verifier
+    # is keyed by ActionType: a verb absent from this enum can declare a
+    # probe and never have it reached, which the contract gate now refuses.
+    # `purge_email` is the one verb in the product whose blast radius is a
+    # property of the dispatch rather than of the verb, so the entry in
+    # ACTION_BLAST_RADIUS below is its single-mailbox floor and
+    # `capability_contracts.scaled_impact` raises it per campaign.
+    #
+    # `search_mailboxes` is deliberately absent: it is read-only, declares no
+    # verification probe, and so needs nothing this enum provides. Adding it
+    # anyway would put a read on the ungoverned `POST /actions` surface for
+    # no gain. Its arms are native read executors in `investigation_reads`.
+    PURGE_EMAIL = "purge_email"
+    RESTORE_EMAIL = "restore_email"
+    BLOCK_SENDER = "block_sender"
+    UNBLOCK_SENDER = "unblock_sender"
+
+
+class ActionStatus(str, Enum):
+    PENDING = "pending"
+    AWAITING_APPROVAL = "awaiting_approval"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    #: Claimed for execution. Written to the durable store *before* the vendor
+    #: is contacted and never only afterwards, so a replica that dies
+    #: mid-dispatch leaves a record that cannot be mistaken for one nobody
+    #: started. The member always existed; nothing wrote it.
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    #: The dispatch did not come back clean and the vendor could not be read
+    #: back, so whether the estate changed is genuinely unknown.
+    #:
+    #: Its absence was the defect. A containment the EDR had accepted, whose
+    #: response was then lost, was recorded as ``failed`` — the reading whose
+    #: obvious remedy is to run it again. Nothing here may be re-approved;
+    #: ``POST /actions/{id}/reconcile`` resolves it by asking the vendor.
+    #:
+    #: Not a terminal success: `services/api`'s usage meter counts `completed`
+    #: as the one status meaning a vendor was touched, and that stays true.
+    RECONCILIATION_REQUIRED = "reconciliation_required"
+    ROLLED_BACK = "rolled_back"
+
+
+class BlastRadius(str, Enum):
+    MINIMAL = "minimal"  # Notification-only, no infra changes
+    LOW = "low"  # Reversible, limited scope
+    MEDIUM = "medium"  # Affects single resource, reversible
+    HIGH = "high"  # Affects multiple resources or users
+    CRITICAL = "critical"  # Broad impact, potential service disruption
+
+
+# Map action types to their blast radius levels
+ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
+    ActionType.BLOCK_IP: BlastRadius.MEDIUM,
+    ActionType.BLOCK_DOMAIN: BlastRadius.MEDIUM,
+    ActionType.ISOLATE_HOST: BlastRadius.HIGH,
+    ActionType.DISABLE_USER: BlastRadius.HIGH,
+    ActionType.RESET_PASSWORD: BlastRadius.MEDIUM,
+    ActionType.KILL_PROCESS: BlastRadius.MEDIUM,
+    ActionType.QUARANTINE_FILE: BlastRadius.LOW,
+    ActionType.CAPTURE_FORENSICS: BlastRadius.LOW,
+    ActionType.NOTIFY_SLACK: BlastRadius.MINIMAL,
+    ActionType.CREATE_TICKET: BlastRadius.MINIMAL,
+    ActionType.CHATOPS_VERIFY: BlastRadius.MINIMAL,
+    # WS-E live vendor action blast radii
+    ActionType.RUN_SCRIPT: BlastRadius.HIGH,
+    ActionType.ALLOW_IP: BlastRadius.MEDIUM,
+    ActionType.BLOCK_IOC: BlastRadius.MEDIUM,
+    ActionType.RUN_AV_SCAN: BlastRadius.LOW,
+    ActionType.SUSPEND_SESSION: BlastRadius.HIGH,
+    ActionType.FORCE_MFA: BlastRadius.MEDIUM,
+    ActionType.SEARCH_SIEM: BlastRadius.MINIMAL,
+    ActionType.CREATE_NOTABLE_EVENT: BlastRadius.LOW,
+    ActionType.SYNC_DETECTION_RULE: BlastRadius.MEDIUM,
+    ActionType.UPDATE_WATCHER: BlastRadius.MEDIUM,
+    # Phase 3.3 — ack is just a status flip on a triage queue,
+    # suppress is more impactful because it removes the alert from
+    # an analyst's view. We rate suppression as LOW (not MEDIUM)
+    # because there's a documented unsuppress path in every vendor.
+    ActionType.ACK_ALERT: BlastRadius.MINIMAL,
+    ActionType.SUPPRESS_ALERT: BlastRadius.LOW,
+    # The one member that had no entry, which meant it had no single blast
+    # radius: four call sites read this table with two different fallbacks,
+    # `blast_radius.py` to MEDIUM and the three tier gates to HIGH. So the
+    # legacy door auto-executed the writeback while the registry door held it
+    # for a whitelist it could never match — the same verb, two grades,
+    # decided by a default nobody chose. LOW is what its own contract asks
+    # for: "classified the same as create_notable_event ... it changes a
+    # queue item, not an estate", and create_notable_event is LOW.
+    ActionType.UPDATE_ALERT_DISPOSITION: BlastRadius.LOW,
+    # Depth 7.1 — mailbox remediation. The purge entry is the floor for one
+    # mailbox; `BlastRadiusGate` reads this table and cannot see a recipient
+    # count, so the campaign-scaled grading happens in the capability
+    # contract where the parameters are in scope. MEDIUM is already above
+    # `_AUTO_EXECUTE_LIMIT`'s sibling tiers for the legacy door's purposes
+    # and `APPROVAL_REQUIRED_ACTIONS` below makes the point unconditional.
+    ActionType.PURGE_EMAIL: BlastRadius.MEDIUM,
+    ActionType.RESTORE_EMAIL: BlastRadius.LOW,
+    ActionType.BLOCK_SENDER: BlastRadius.LOW,
+    ActionType.UNBLOCK_SENDER: BlastRadius.LOW,
+}
+
+# Actions that require explicit human approval
+APPROVAL_REQUIRED_ACTIONS = {
+    ActionType.ISOLATE_HOST,
+    ActionType.DISABLE_USER,
+    ActionType.RESET_PASSWORD,
+    ActionType.KILL_PROCESS,
+    ActionType.RUN_SCRIPT,
+    ActionType.SUSPEND_SESSION,
+    ActionType.BLOCK_IOC,
+    ActionType.SYNC_DETECTION_RULE,
+    # Removing somebody's mail is never automatic, whatever the autonomy
+    # tier. The capability contract says the same thing through the matrix;
+    # this is the legacy door saying it too, because the two doors
+    # disagreeing about one verb is the defect `test_approval_doors_agree`
+    # exists to catch.
+    ActionType.PURGE_EMAIL,
+    ActionType.BLOCK_SENDER,
+}
+
+
+# Wave 4 (W4.2) — least-privilege permission required to EXECUTE each action,
+# derived from its blast radius. A principal must hold this permission (or a
+# broader one — see `authz.has_action_permission`). MINIMAL/LOW → :low,
+# MEDIUM → :medium, HIGH/CRITICAL → :high.
+def _perm_for_blast(blast: BlastRadius) -> str:
+    if blast in (BlastRadius.HIGH, BlastRadius.CRITICAL):
+        return "actions:execute:high"
+    if blast == BlastRadius.MEDIUM:
+        return "actions:execute:medium"
+    return "actions:execute:low"
+
+
+ACTION_REQUIRED_PERMISSION: dict[ActionType, str] = {action: _perm_for_blast(blast) for action, blast in ACTION_BLAST_RADIUS.items()}
+
+
+class ActionPrincipal(BaseModel):
+    """The authenticated identity on whose behalf an action runs (W4.1).
+
+    Propagated from the API's authenticated user into the actions service so
+    execution + approval can be scoped to that user's real permissions —
+    replacing the free-text ``requested_by`` string as the authorization basis.
+    """
+
+    user_id: str
+    tenant_id: UUID | None = None
+    email: str | None = None
+    roles: list[str] = Field(default_factory=list)
+    permissions: list[str] = Field(default_factory=list)
+
+
+class ChatOpsApprover(BaseModel):
+    """A platform identity a bot has already verified (T3.6).
+
+    Carries identity and deliberately **not** permissions. The bot proves who
+    clicked — Slack signs the interaction payload, Teams payloads are
+    HMAC-signed — but it has no knowledge of what that person may do in AiSOC,
+    and a bot permitted to assert its own permissions could grant itself
+    anything. The actions service maps this onto a principal.
+    """
+
+    platform: str
+    platform_user_id: str
+    display_name: str | None = None
+
+
+class ActionRequest(BaseModel):
+    """Request to execute an action."""
+
+    id: UUID = Field(default_factory=uuid4)
+    incident_id: UUID
+    tenant_id: UUID
+    action_type: ActionType
+    target: str
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    requested_by: str = "system"
+    # W4.1 — structured invoking identity. Optional for back-compat with the
+    # legacy `requested_by` string + system-initiated calls.
+    principal: ActionPrincipal | None = None
+    #: Who originally asked for this action, when that is not the caller.
+    #:
+    #: Three identities meet on an approved action and collapsing any two
+    #: breaks a control. `principal` is the *invoking* identity whose
+    #: permissions gate the submit; the approver arrives separately on the
+    #: approve call; and this is the originator, read only for separation of
+    #: duties and provenance, never for authorization.
+    #:
+    #: It exists because `services/api` had nowhere to put the originator and
+    #: sent the deciding console user as `principal`, which became
+    #: `requested_by_user_id`. Separation of duties then compared the approver
+    #: against itself and refused: every approval raised in the responder app
+    #: was answered 403 upstream and surfaced as a 502. The free-text
+    #: `requested_by` beside this is a label and is deliberately not used for
+    #: the comparison — it is caller-supplied and trusting it would make the
+    #: control forgeable in the other direction.
+    requester: ActionPrincipal | None = None
+    rationale: str = ""
+    auto_rollback: bool = False
+    rollback_after_seconds: int | None = None
+    #: How sure the finding behind this action is, 0.0-1.0.
+    #:
+    #: The second axis of the approval matrix. ``None`` is the lowest band,
+    #: not a free pass — a caller that omits it gets the most restrictive
+    #: treatment, because the alternative is that a scoring bug becomes an
+    #: autonomous containment.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+
+class ActionResult(BaseModel):
+    """Result of an executed action."""
+
+    action_id: UUID
+    status: ActionStatus
+    blast_radius: BlastRadius
+    output: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    rollback_data: dict[str, Any] = Field(default_factory=dict)
+    executed_at: datetime = Field(default_factory=datetime.utcnow)
+    completed_at: datetime | None = None

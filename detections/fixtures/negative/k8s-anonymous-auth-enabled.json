@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "flag_anonymous_auth": true
+}

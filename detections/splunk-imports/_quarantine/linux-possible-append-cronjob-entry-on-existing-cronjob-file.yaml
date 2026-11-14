@@ -1,0 +1,47 @@
+id: splunk-security-content-b5b91200-5f27-11ec-bb4e-acde48001122
+name: Linux Possible Append Cronjob Entry on Existing Cronjob File
+description: The following analytic detects potential tampering with cronjob files
+  on a Linux system by identifying 'echo' commands that append code to existing cronjob
+  files. It leverages logs from Endpoint Detection and Response (EDR) agents, focusing
+  on process names, parent processes, and command-line executions. This activity is
+  significant because adversaries often use it for persistence or privilege escalation.
+  If confirmed malicious, this could allow attackers to execute unauthorized code
+  automatically, leading to system compromises and unauthorized data access, thereby
+  impacting business operations and data integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1053/003/
+- https://blog.aquasec.com/threat-alert-kinsing-malware-container-vulnerability
+- https://www.intezer.com/blog/research/kaiji-new-chinese-linux-malware-turning-to-golang/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process = \"*echo*\"\n    AND\n    Processes.process IN(\"\
+    */etc/cron*\", \"*/var/spool/cron/*\", \"*/etc/anacrontab*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_possible_append_cronjob_entry_on_existing_cronjob_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b5b91200-5f27-11ec-bb4e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_possible_append_cronjob_entry_on_existing_cronjob_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

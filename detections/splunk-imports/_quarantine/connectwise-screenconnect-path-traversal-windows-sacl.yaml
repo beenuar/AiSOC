@@ -1,0 +1,44 @@
+id: splunk-security-content-4e127857-1fc9-4c95-9d69-ba24c91d52d7
+name: ConnectWise ScreenConnect Path Traversal Windows SACL
+description: The following analytic detects attempts to exploit the ConnectWise ScreenConnect
+  CVE-2024-1708 vulnerability using Windows SACL EventCode 4663. It identifies path
+  traversal attacks by monitoring file system events related to the ScreenConnect
+  service. This activity is significant as it allows unauthorized access to sensitive
+  files and directories, potentially leading to data exfiltration or arbitrary code
+  execution. If confirmed malicious, attackers could gain unauthorized access to critical
+  data or execute harmful code, compromising the integrity and security of the affected
+  system. Immediate remediation by updating to version 23.9.8 or above is recommended.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4663
+- https://www.huntress.com/blog/a-catastrophe-for-control-understanding-the-screenconnect-authentication-bypass
+- https://www.huntress.com/blog/detection-guidance-for-connectwise-cwe-288-2
+- https://www.connectwise.com/company/trust/security-bulletins/connectwise-screenconnect-23.9.8
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`wineventlog_security` EventCode=4663  ProcessName=*\\ScreenConnect.Service.exe
+    file_path IN ("*\\ScreenConnect\\App_Extensions\\*") file_name IN ("*.aspx","*.ashx")
+    | stats count min(_time) as firstTime max(_time) as lastTime by  ObjectName ObjectType
+    ProcessName AccessMask process_id EventCode Computer Caller_User_Name | rename
+    Computer as dest Caller_User_Name as user ProcessName as process_name |  `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `connectwise_screenconnect_path_traversal_windows_sacl_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 4e127857-1fc9-4c95-9d69-ba24c91d52d7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/connectwise_screenconnect_path_traversal_windows_sacl.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

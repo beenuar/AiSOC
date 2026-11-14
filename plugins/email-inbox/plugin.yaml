@@ -1,0 +1,44 @@
+id: email-inbox
+name: Email Inbox (IMAP)
+version: "1.0.0"
+plugin_type: connector
+description: >
+  Polls a mailbox over IMAP and ingests each forwarded alert email as an event.
+  Last-resort path for vendors that can't push to /v1/inbox/email but can email
+  alerts to a dedicated mailbox. Pairs with the email-forwarded ingest template.
+author: AiSOC Core Team
+tags: [email, imap, inbox, universal-capture, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/email-inbox
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [host, username, password]
+  properties:
+    host:
+      type: string
+      description: "IMAP host (e.g., imap.gmail.com)"
+    port:
+      type: integer
+      default: 993
+      description: "IMAP port — defaults to 993 (IMAPS)"
+    username:
+      type: string
+      description: "Mailbox login (e.g., aisoc-alerts@example.com)"
+    password:
+      type: string
+      description: "App-specific password — never the primary account password"
+      secret: true
+    mailbox:
+      type: string
+      default: INBOX
+      description: "Folder to poll for unseen messages"
+    max_messages:
+      type: integer
+      default: 50
+      minimum: 1
+      description: "Max messages to fetch per poll cycle"
+    use_ssl:
+      type: boolean
+      default: true
+      description: "Use IMAPS (true) or plain IMAP (false)"

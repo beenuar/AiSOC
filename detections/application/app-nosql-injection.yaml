@@ -1,0 +1,24 @@
+id: det-application-033
+name: NoSQL Injection Operator In Request
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'NoSQL Injection
+  Operator In Request'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    event_type == "http_request"
+    AND body CONTAINS_ANY ["$ne":", "$gt":", "$where":", "$regex":"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

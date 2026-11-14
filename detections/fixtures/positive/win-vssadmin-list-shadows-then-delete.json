@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "process_command_line": "delete shadows",
+  "process_name": "head-vssadmin.exe"
+}

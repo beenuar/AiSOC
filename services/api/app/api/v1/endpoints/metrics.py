@@ -1,0 +1,1452 @@
+"""Dashboard metrics endpoint — aggregated counts for the frontend KPI tiles.
+
+Tier 1.4 (SOC metrics dashboard) — exposes:
+  * MTTD (mean time to detect): alert.created_at → alert.first_seen_at
+  * MTTR (mean time to respond): case.created_at → case.closed_at, sharing its
+    window and expression with the MSSP portfolio via
+    ``app.services.resolution_time`` so the two surfaces cannot quote
+    different MTTRs for the same tenant
+  * MTTC (mean time to contain): alert.created_at → alert.resolved_at for
+    alerts with disposition='true_positive' (proxy for confirmed-contained)
+  * False-positive rate (FPR): disposition='false_positive' / total resolved
+  * Escalation rate: RemediationGateLog.decision in {'escalate','review'} /
+    total decisions
+  * Analyst overrides 7d: alerts with disposition set in last 7 days
+  * Confidence calibration over time: reliability curve buckets — actual
+    true-positive rate within each predicted-confidence bin
+  * ATT&CK heatmap: tactic × technique counts
+
+v1.5 (SOC Console parity) adds:
+  * /metrics/funnel — live tenant funnel (events → correlations → alerts →
+    analyst queue) with period support (1h|24h|7d|30d) and period-over-period
+    deltas. Powers the new Funnel KPI bar + Efficiency Report on the
+    dashboard.
+"""
+
+import logging
+from datetime import UTC, datetime, timedelta
+
+from fastapi import APIRouter, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import and_, func, select, text
+
+from app.api.v1.deps import AuthUser, DBSession
+from app.core.config import settings
+from app.models.alert import Alert
+from app.models.case import Case
+from app.models.connector import Connector
+from app.models.detection_rule import DetectionRule
+from app.models.remediation import RemediationGateLog
+from app.models.sla import AlertSLAEvent
+from app.services import case_status
+from app.services.alert_disposition import decided_filter
+from app.services.alert_status import resolved_filter, unresolved_filter
+from app.services.resolution_time import (
+    MTTR_WINDOW,
+    tenant_case_mttr_minutes,
+    tenant_cases_closed,
+)
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/metrics", tags=["metrics"])
+
+
+class AlertMetrics(BaseModel):
+    total: int
+    new: int
+    critical: int
+    high: int
+    medium: int
+    low: int
+    resolvedToday: int
+    #: Alerts in a terminal state. `total` above is now **open work only**,
+    #: so without this the closed count would have disappeared from the
+    #: dashboard entirely when the active tile was corrected.
+    resolved: int = 0
+    # Mean time to resolve in **hours**, from the same closed cases and the
+    # same window as `/metrics/soc`'s `mttr_hours` and the MSSP portfolio's
+    # `mttr_minutes`. It used to average `alerts.resolved_at`, so the
+    # dashboard's own two MTTR tiles read from different tables; and the
+    # console rendered this hours value with an `m` suffix, so a 1.5-hour
+    # MTTR would have displayed as "1.5m" had it ever been non-zero.
+    mttr: float
+    mttr_sample_count: int = 0
+
+
+class CaseMetrics(BaseModel):
+    open: int
+    inProgress: int
+    resolvedThisWeek: int
+
+
+class SourceStat(BaseModel):
+    name: str
+    count: int
+    status: str
+
+
+class MitreTactic(BaseModel):
+    tactic: str
+    count: int
+
+
+class TrendPoint(BaseModel):
+    timestamp: str
+    count: int
+    severity: str
+
+
+class SourceThreat(BaseModel):
+    source: str
+    count: int
+
+
+class DashboardMetrics(BaseModel):
+    # Echo of the window volume metrics were scoped to, so the console can
+    # label panels from the payload instead of its own guess.
+    period: str = "24h"
+    alerts: AlertMetrics
+    cases: CaseMetrics
+    sources: list[SourceStat]
+    topMitre: list[MitreTactic]
+    alertsTrend: list[TrendPoint]
+    threatsBySource: list[SourceThreat]
+
+
+# ───────────────────────────── v1.5 Funnel models ─────────────────────────────
+#
+# These models back the new /metrics/funnel endpoint exposed by the SOC
+# Console (v1.5 — Tier 6, W1 + W9). The endpoint is read by:
+#   * apps/web — <FunnelKpiBar /> on /dashboard
+#   * apps/web — <EfficiencyReport /> tile
+#   * apps/web — <NoiseRatio /> tile (replaces synthetic signal:noise)
+#
+# Shape is contract-frozen against the v1.5 SOC Console parity plan; do not
+# rename fields without bumping the apps/web TS types in lockstep.
+
+
+class MitreCoverage(BaseModel):
+    """Slice of the MITRE ATT&CK landscape we have observable coverage for.
+
+    ``covered`` counts the distinct techniques observed via either:
+      * a tenant alert in the selected window (``Alert.mitre_techniques``), or
+      * an enabled tenant/platform detection rule
+        (``DetectionRule.mitre_techniques`` where ``status == 'enabled'``).
+
+    ``total`` is configurable via ``AISOC_FUNNEL_MITRE_TOTAL`` and defaults to
+    the MITRE ATT&CK Enterprise v17 technique count (201) so the ratio is
+    interpretable as "% of ATT&CK we're watching for". The ratio is clamped to
+    ``[0.0, 1.0]`` even if operators downsize the universe.
+    """
+
+    covered: int
+    total: int
+    ratio: float
+
+
+class FunnelDeltas(BaseModel):
+    """Period-over-period percentage deltas for the funnel KPI bar.
+
+    ``None`` means the previous window was empty — no baseline exists, and
+    the UI renders that as "no baseline" instead of a misleading 0%.
+    """
+
+    events_of_interest: float | None = None
+    correlation_instances: float | None = None
+    alerts_generated: float | None = None
+    signal_to_noise: float | None = None
+    mttd_seconds: float | None = None
+    analyst_queue_depth: float | None = None
+
+
+class FunnelMetrics(BaseModel):
+    """Tenant funnel + efficiency for the selected period.
+
+    All counts are absolute for ``period``. ``signal_to_noise`` is the
+    fraction of *decided* verdicts that ended in disposition
+    ``true_positive`` (i.e. signal / (signal + noise)); alerts the agent
+    abstained on with ``needs_review`` are in neither half, because scoring
+    an agent on questions it refused to answer is not an accuracy figure.
+    ``mttd_seconds`` mirrors /metrics/soc's MTTD definition
+    (Alert.created_at → Alert.first_seen_at) but expressed in seconds for
+    funnel-level precision. Each of those two travels with the count of rows
+    it was computed over -- read them as a pair. ``deltas`` compares this
+    period to the immediately preceding period of the same length.
+    """
+
+    period: str
+    events_of_interest: int
+    correlation_instances: int
+    alerts_generated: int
+    signal_to_noise: float
+    mttd_seconds: float
+    # How many rows each figure above was computed over.
+    #
+    # `signal_to_noise` is `x / n if n else 0.0` and `mttd_seconds` was
+    # `float(None or 0.0)` — the two shapes that publish an undefined value
+    # as a confident zero. Both rendered on the console ("Signal / Noise
+    # 0%", "MTTD 0s") directly above a SOC card correctly reading "MTTD —
+    # not measured · no closures in 7d". The honest treatment had been
+    # applied to `FunnelDeltas`, whose fields are `float | None` for exactly
+    # this reason, and not to the values the deltas describe.
+    #
+    # Additive rather than making the two nullable, which is a breaking
+    # response change for every existing client — the same decision
+    # `SOCKpis` took with `mttd_sample_count`. A client that ignores these
+    # sees exactly what it saw before.
+    signal_to_noise_sample_count: int = 0
+    mttd_sample_count: int = 0
+    analyst_queue_depth: int
+    correlation_efficiency: float
+    alert_yield: float
+    mitre_coverage: MitreCoverage
+    deltas: FunnelDeltas
+    generated_at: datetime
+    # Wave 1 (close the loop): measured count of repeat alerts auto-suppressed
+    # from prior outcome memory in this window (compounding alert reduction).
+    # ``repeat_suppression_rate`` = suppressed / (alerts_generated + suppressed).
+    repeat_alerts_suppressed: int = 0
+    repeat_suppression_rate: float = 0.0
+    # v9 (trust surface): how often the agent declines to decide, and how well
+    # its reasoning was supported by the evidence it was given.
+    #
+    # These exist because they are the questions a buyer evaluating an AI-SOC
+    # actually asks, and because a system that never abstains is not
+    # calibrated — it is guessing with confidence. Publishing the rate inverts
+    # the usual incentive to report only automation percentage.
+    #
+    # ``abstention_rate`` = needs_review / triaged. ``mean_groundedness`` is
+    # averaged over scored verdicts only; verdicts from the deterministic path
+    # are never scored and are excluded rather than counted as zero.
+    # ``ungrounded_demotions`` is the subset where the agent had a confident
+    # auto-closing answer that its evidence did not support.
+    triaged_alerts: int = 0
+    abstentions: int = 0
+    abstention_rate: float = 0.0
+    ungrounded_demotions: int = 0
+    mean_groundedness: float | None = None
+    scored_verdicts: int = 0
+
+
+# ────────────────────────── v1.5 Pipeline-health models ───────────────────────
+#
+# Backs GET /health/pipeline. Surfaces a stage-by-stage health summary for the
+# ingest → normalize → fuse → correlate → alert pipeline, which the SOC
+# Console renders as the Pipeline Health strip on /dashboard.
+
+
+class PipelineStage(BaseModel):
+    """One row in the pipeline health strip.
+
+    ``status`` follows the green/yellow/red/unknown ladder used by
+    ``app.services.connector_freshness``. ``backlog`` is the number of items
+    currently waiting at this stage (e.g. enabled-but-stale connectors for
+    ``ingest``, unacked alerts for ``alert``). ``p95_latency_ms`` is the 95th
+    percentile end-to-end latency for items that traversed this stage in the
+    last hour. ``error_rate`` is errors / processed in the same window.
+    """
+
+    stage: str
+    backlog: int
+    p95_latency_ms: float
+    error_rate: float
+    status: str
+    #: What this stage *did* observe, when the observation is not a backlog.
+    #:
+    #: `correlate` reported `backlog = <alerts that absorbed exactly one
+    #: event>` and the console rendered it as "Backlog 7", telling an
+    #: operator seven items were queued when nothing was. That count is a
+    #: correlation *outcome*, not a queue depth, and fusion emits no
+    #: per-correlation queue depth at all -- so `backlog` is now named in
+    #: `unmeasured` and the real observation travels here under its own
+    #: description.
+    detail: str | None = None
+    #: Names of the numeric fields above this stage could not measure. Those
+    #: fields still carry ``0`` for compatibility, and ``0`` is the most
+    #: reassuring number a pipeline panel can show — an operator reads
+    #: "0 backlog, <1 ms, 0% errors" as healthy, not as uninstrumented. The
+    #: console renders anything named here as "n/a" instead. Four of the five
+    #: stages have at least one such field, so without this the strip was
+    #: mostly confident zeros about things nothing measures.
+    unmeasured: list[str] = Field(default_factory=list)
+
+
+class PipelineHealth(BaseModel):
+    """Top-level response for ``GET /health/pipeline``."""
+
+    overall_status: str
+    stages: list[PipelineStage]
+    generated_at: datetime
+
+
+#: The windows the console's time-window selector offers, and the only ones
+#: any metrics route accepts. One map rather than one per endpoint: the
+#: selector is global, so two endpoints disagreeing about what `7d` means
+#: would show a dashboard whose tiles describe different weeks.
+_FUNNEL_PERIOD_MAP: dict[str, timedelta] = {
+    "1h": timedelta(hours=1),
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
+
+#: `Query(...)` declaration shared by every route that takes a window, so the
+#: accepted set cannot drift between them or from `TIME_WINDOWS` in
+#: `apps/web/src/lib/timeWindow.ts`.
+_PERIOD_QUERY = Query("24h", pattern=r"^(1h|24h|7d|30d)$", description="Time window for this view.")
+
+
+async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
+    """Alert counts for the dashboard tiles, split by whether work remains.
+
+    Every severity count here is scoped to **unresolved** alerts, because the
+    console labels them "Active Alerts" and "Critical — Require immediate
+    action". They were not scoped at all: the tiles counted the tenant's whole
+    historical intake, never went down, and a tenant who had resolved
+    everything still saw a red critical tile demanding immediate action on
+    work finished months ago.
+
+    The predicate is `app.services.alert_status`'s rather than a fifth
+    hand-written copy. Four other sites already had it right -- `alerts.py`'s
+    critical queue, the funnel query below, and `health.py` twice -- and the
+    tile being the odd one out is exactly how one rule written five times
+    drifts: each site looks locally correct.
+
+    Centralising it was necessary and not sufficient: the shared tuple was an
+    *inclusion* list of three states, so `triaged` -- written by the
+    auto-triage worker on every alert it looks at -- landed in neither bucket
+    and every tile here read 0 on a nine-alert queue. The predicate is now
+    `unresolved_filter`, i.e. "not terminal", which is the same rule
+    `is_unresolved()` applies and the reason a status nobody declared still
+    counts as work.
+
+    `resolved` is returned alongside rather than dropped. Narrowing the active
+    tile must not lose the number, because "how much did we close" is a real
+    question.
+    """
+    unresolved = unresolved_filter(Alert.status)
+    scope = Alert.tenant_id == tenant_id
+
+    async def _n(*predicates) -> int:
+        return await db.scalar(select(func.count()).where(and_(scope, *predicates))) or 0
+
+    return {
+        "open": await _n(unresolved),
+        "resolved": await _n(resolved_filter(Alert.status)),
+        "new": await _n(Alert.status == "new"),
+        "critical": await _n(unresolved, Alert.severity == "critical"),
+        "high": await _n(unresolved, Alert.severity == "high"),
+        "medium": await _n(unresolved, Alert.severity == "medium"),
+        "low": await _n(unresolved, Alert.severity == "low"),
+    }
+
+
+@router.get("/dashboard", response_model=DashboardMetrics)
+async def get_dashboard_metrics(
+    user: AuthUser,
+    db: DBSession,
+    period: str = _PERIOD_QUERY,
+) -> DashboardMetrics:
+    """Return aggregated KPI metrics for the dashboard overview tiles.
+
+    `period` drives every windowed figure below. It did not exist: the console
+    shipped a global time-window selector whose only consumer was itself, so
+    changing it re-rendered a header and fetched nothing. The trend chart and
+    the "closed this week" tile were fixed at 7 days whatever the control
+    said.
+
+    Counts of *current state* -- open alerts by severity -- are deliberately
+    not windowed. "How many criticals are open" is a question about now, and
+    answering it for the last hour would hide the backlog rather than scope
+    it.
+    """
+    tenant_id = user.tenant_id
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    window = _FUNNEL_PERIOD_MAP[period]
+    week_start = now - window
+
+    _period_map: dict[str, tuple[timedelta, str]] = {
+        "1h": (timedelta(hours=1), "minute"),
+        "24h": (timedelta(hours=24), "hour"),
+        "7d": (timedelta(days=7), "day"),
+        "30d": (timedelta(days=30), "day"),
+    }
+    window_delta, trend_trunc = _period_map[period]
+    window_start = now - window_delta
+    # One window predicate for every windowed count below, so no tile can
+    # silently answer for a different period than the selector says.
+    _in_window = Alert.created_at >= window_start
+
+    # ── Alert counts ──────────────────────────────────────────────────────────
+    # Unresolved only. See `_count_alerts_by_status`: these tiles are labelled
+    # "Active" and "Require immediate action", and counting the historical
+    # backlog made both permanently wrong and permanently rising.
+    counts = await _count_alerts_by_status(db, tenant_id)
+    total_q = counts["open"]
+    new_q = counts["new"]
+    critical_q = counts["critical"]
+    high_q = counts["high"]
+    medium_q = counts["medium"]
+    low_q = counts["low"]
+    resolved_today_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status == "resolved",
+                Alert.updated_at >= today_start,
+            )
+        )
+    )
+
+    # MTTR for the dashboard tile — the shared definition, so this tile and the
+    # SOC Performance panel below it cannot report different numbers.
+    mttr_dashboard_minutes = await tenant_case_mttr_minutes(db, tenant_id)
+    mttr_dashboard_q = (mttr_dashboard_minutes / 60.0) if mttr_dashboard_minutes is not None else 0.0
+    mttr_dashboard_samples = await tenant_cases_closed(db, tenant_id, now - MTTR_WINDOW)
+
+    alert_metrics = AlertMetrics(
+        total=total_q or 0,
+        new=new_q or 0,
+        critical=critical_q or 0,
+        high=high_q or 0,
+        medium=medium_q or 0,
+        low=low_q or 0,
+        resolvedToday=resolved_today_q or 0,
+        # Reported rather than dropped: narrowing the active tile must not
+        # lose the number, because "how much have we closed" is a real
+        # question and the dashboard is where it is asked.
+        resolved=counts["resolved"],
+        mttr=round(float(mttr_dashboard_q or 0.0), 2),
+        mttr_sample_count=mttr_dashboard_samples,
+    )
+
+    # ── Case counts ───────────────────────────────────────────────────────────
+    # These filtered `"open"` and `"in_progress"`, neither of which the
+    # console's state machine can produce, so both counters were
+    # structurally zero rather than merely empty. The vocabulary now comes
+    # from one place.
+    open_cases_q = await db.scalar(
+        select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status.in_(case_status.OPEN_STATUSES)))
+    )
+    in_progress_q = await db.scalar(
+        select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status.in_(case_status.WORKING_STATUSES)))
+    )
+    # Closed, not resolved, and clocked off `closed_at` rather than
+    # `updated_at`. `resolved` is an intermediate state — a resolved case
+    # is still on a queue — and `updated_at` moves whenever anyone edits
+    # the case, so the old pair counted the wrong rows at the wrong time.
+    resolved_week_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Case.tenant_id == tenant_id,
+                Case.status.in_(case_status.CLOSED_STATUSES),
+                Case.closed_at.isnot(None),
+                Case.closed_at >= week_start,
+            )
+        )
+    )
+
+    case_metrics = CaseMetrics(
+        open=open_cases_q or 0,
+        inProgress=in_progress_q or 0,
+        resolvedThisWeek=resolved_week_q or 0,
+    )
+
+    # ── Sources (connectors) ──────────────────────────────────────────────────
+    connectors_rows = (
+        await db.execute(select(Connector.name, Connector.connector_type, Connector.health_status).where(Connector.tenant_id == tenant_id))
+    ).all()
+
+    # Count alerts per connector_type
+    source_counts_rows = (
+        await db.execute(
+            select(Alert.connector_type, func.count().label("cnt"))
+            .where(and_(Alert.tenant_id == tenant_id, _in_window))
+            .group_by(Alert.connector_type)
+        )
+    ).all()
+    source_count_map: dict[str, int] = {row.connector_type: row.cnt for row in source_counts_rows if row.connector_type}
+
+    sources: list[SourceStat] = []
+    seen: set[str] = set()
+    for row in connectors_rows:
+        key = row.connector_type or row.name
+        if key in seen:
+            continue
+        seen.add(key)
+        sources.append(
+            SourceStat(
+                name=row.name,
+                count=source_count_map.get(row.connector_type or "", 0),
+                status=row.health_status or "active",
+            )
+        )
+
+    # `source_count_map` used to be built and then only ever *looked up*, so a
+    # tenant pushing events through `POST /v1/ingest/batch` or an inbox
+    # webhook — neither of which creates a connector instance — saw "Connected
+    # Sources 0" above an empty panel while hundreds of their alerts sat in
+    # the queue.
+    #
+    # Nothing is invented here: an entry exists only because alerts carrying
+    # that `connector_type` landed inside the selected window, which is the
+    # same evidence the count itself rests on. The status is `ingesting`
+    # rather than `active` because `active` is a health value the poller
+    # reports and nothing is polling these.
+    for connector_type, count in sorted(source_count_map.items()):
+        if connector_type in seen:
+            continue
+        seen.add(connector_type)
+        sources.append(SourceStat(name=connector_type, count=count, status="ingesting"))
+
+    # ── Top MITRE tactics ─────────────────────────────────────────────────────
+    # Python-side aggregation: avoids set-returning-function-in-SELECT pitfalls
+    # across Postgres versions and gives identical results for our scale
+    # (typically <10k alerts/tenant). Driver tests proved a SQL-level
+    # jsonb_array_elements_text + GROUP BY in the same SELECT 500s on some
+    # Postgres builds.
+    tactic_rows = (
+        await db.execute(select(Alert.mitre_tactics).where(and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None), _in_window)))
+    ).all()
+
+    tactic_counts: dict[str, int] = {}
+    for (tactics,) in tactic_rows:
+        if not tactics:
+            continue
+        for t in tactics:
+            if isinstance(t, str) and t:
+                tactic_counts[t] = tactic_counts.get(t, 0) + 1
+
+    top_mitre = [
+        MitreTactic(tactic=tactic, count=count) for tactic, count in sorted(tactic_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+    ]
+
+    # ── trend over the selected period ────────────────────────────────────────
+    # Bucket by hour inside a day-scale window; `1h` still buckets by hour.
+    trend_start = window_start
+    trend_rows = (
+        await db.execute(
+            select(
+                func.date_trunc(trend_trunc, Alert.created_at).label("bucket"),
+                Alert.severity,
+                func.count().label("cnt"),
+            )
+            .where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= trend_start,
+                )
+            )
+            .group_by("bucket", Alert.severity)
+            .order_by("bucket")
+        )
+    ).all()
+
+    alerts_trend = [
+        TrendPoint(
+            timestamp=r.bucket.isoformat() if r.bucket else now.isoformat(),
+            count=r.cnt,
+            severity=r.severity,
+        )
+        for r in trend_rows
+    ]
+
+    # ── Threats by source ─────────────────────────────────────────────────────
+    threats_by_source = [SourceThreat(source=k, count=v) for k, v in source_count_map.items()]
+
+    return DashboardMetrics(
+        period=period,
+        alerts=alert_metrics,
+        cases=case_metrics,
+        sources=sources,
+        topMitre=top_mitre,
+        alertsTrend=alerts_trend,
+        threatsBySource=threats_by_source,
+    )
+
+
+class SOCKpis(BaseModel):
+    mttd_hours: float
+    mttr_hours: float
+    mttc_hours: float
+    false_positive_rate: float
+    escalation_rate: float
+    alert_volume_7d: int
+    cases_opened_7d: int
+    cases_closed_7d: int
+    #: Alerts a **human** dispositioned in the window, counted from the
+    #: lifecycle events that carry an actor id. It used to count every alert
+    #: with a disposition, which the auto-triage worker writes on everything
+    #: it looks at -- so the console read "Analyst Overrides (7d) 9" on a
+    #: deployment where nobody had clicked anything. An override is a human
+    #: disagreeing with the agent; the agent agreeing with itself is not one.
+    analyst_overrides_7d: int
+    #: The agent's own dispositions over the same window. Reported rather
+    #: than dropped: narrowing the tile above must not lose the number, and
+    #: "how much did the agent decide" is a real question with its own
+    #: answer.
+    ai_dispositions_7d: int = 0
+    # How many rows each mean was averaged over.
+    #
+    # An average over zero rows is not zero, it is unmeasured, and these three
+    # tiles could not tell the difference: `float(None or 0.0)` published "we
+    # respond in 0.0 hours" for a tenant that had resolved nothing. Rather
+    # than make the means nullable — a breaking response change for every
+    # existing client — the sample count travels alongside so the console can
+    # render "not measured" when it is zero. Additive and back-compatible: a
+    # client that ignores these fields sees exactly what it saw before.
+    mttd_sample_count: int = 0
+    mttr_sample_count: int = 0
+    mttc_sample_count: int = 0
+    # The two rates have the same defect as the means had, one step removed:
+    # `x / n if n > 0 else 0.0` renders an undefined ratio as a confident
+    # zero. "0% false positives" and "0% escalated" are the two best numbers
+    # on the page, and a tenant that has resolved nothing and gated nothing
+    # scored both. The denominator travels with each rate for the same reason
+    # and in the same shape as the sample counts above.
+    false_positive_rate_sample_count: int = 0
+    escalation_rate_sample_count: int = 0
+
+
+class AttackHeatmapCell(BaseModel):
+    tactic: str
+    technique: str
+    count: int
+
+
+class CalibrationBucket(BaseModel):
+    """One bucket of the agent confidence reliability curve.
+
+    `predicted_lower` and `predicted_upper` define the AI-confidence range
+    (e.g., 0.8–1.0). `actual_tp_rate` is the observed true-positive rate
+    among analyst-dispositioned alerts whose ai_score landed in that bucket
+    — i.e., the empirical hit-rate the model claimed.
+    """
+
+    predicted_lower: float
+    predicted_upper: float
+    sample_count: int
+    actual_tp_rate: float
+
+
+class SOCMetrics(BaseModel):
+    kpis: SOCKpis
+    attack_heatmap: list[AttackHeatmapCell]
+    calibration_curve: list[CalibrationBucket]
+
+
+async def _soc_disposition_counts(db, tenant_id, window_start: datetime) -> dict[str, int]:
+    """Who decided what, split by whether a human was involved.
+
+    Three figures that were all computed from ``disposition IS NOT NULL``:
+
+    ``decided``
+        Alerts somebody reached a conclusion about. The denominator of the
+        false-positive rate. ``needs_review`` is excluded because it is the
+        agent declining to decide, and a rate that counts abstentions scores
+        the agent on questions it refused to answer. The same predicate
+        ``/metrics/funnel`` has always used, imported rather than re-typed so
+        the two cannot answer differently again.
+
+    ``analyst_overrides``
+        Alerts a **human** dispositioned. Read from ``alert_sla_events``,
+        which is the only place in the schema that records *who* acted: the
+        alert row carries a disposition and no author, so "an analyst
+        disagreed" and "the worker wrote a verdict" are indistinguishable on
+        it. Both analyst paths write one of these with the acting user's id
+        -- claiming an alert and overriding a verdict -- and the backfilled
+        ``detected`` row carries no actor, so it is not mistaken for one.
+
+    ``ai_dispositions``
+        The remainder: dispositioned, with no human lifecycle event.
+    """
+    dispositioned = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.disposition.isnot(None),
+        Alert.updated_at >= window_start,
+    )
+
+    decided = int(
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    decided_filter(Alert.disposition),
+                    Alert.created_at >= window_start,
+                )
+            )
+        )
+        or 0
+    )
+
+    human_alerts = select(AlertSLAEvent.alert_id).where(
+        and_(
+            AlertSLAEvent.tenant_id == tenant_id,
+            AlertSLAEvent.actor_id.isnot(None),
+            AlertSLAEvent.occurred_at >= window_start,
+        )
+    )
+    analyst_overrides = int(await db.scalar(select(func.count()).where(and_(dispositioned, Alert.id.in_(human_alerts)))) or 0)
+    dispositioned_total = int(await db.scalar(select(func.count()).where(dispositioned)) or 0)
+
+    return {
+        "decided": decided,
+        "analyst_overrides": analyst_overrides,
+        "ai_dispositions": dispositioned_total - analyst_overrides,
+    }
+
+
+@router.get("/soc", response_model=SOCMetrics)
+async def get_soc_metrics(
+    user: AuthUser,
+    db: DBSession,
+    period: str = _PERIOD_QUERY,
+) -> SOCMetrics:
+    """Return SOC-level KPIs, ATT&CK heatmap, and confidence calibration curve.
+
+    Tier 1.4 metrics:
+      - MTTD, MTTR, MTTC, FPR, escalation rate, analyst overrides
+      - ATT&CK technique × tactic heatmap
+      - Confidence calibration over time (reliability curve)
+    """
+    tenant_id = user.tenant_id
+    now = datetime.now(UTC)
+    # Windowed by the caller's selection. Was a hardcoded 7 days, so the SOC
+    # panel described a different period from whatever the selector showed.
+    week_start = now - _FUNNEL_PERIOD_MAP[period]
+
+    # ── MTTD ──────────────────────────────────────────────────────────────────
+    # Mean time from alert creation to first analyst view (first_seen_at). This
+    # one genuinely is an alert property — detection latency has nothing to do
+    # with cases — so it stays on the alerts table.
+    mttd_filters = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.first_seen_at.isnot(None),
+        Alert.created_at >= week_start,
+    )
+    mttd_q = await db.scalar(select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)).where(mttd_filters))
+    mttd_samples = int(await db.scalar(select(func.count()).where(mttd_filters)) or 0)
+    # `None`, not `0.0`, when nothing in the window was acknowledged. The
+    # sample count below already told a careful reader the figure was empty,
+    # but the value itself read as instant acknowledgement to everyone else.
+    # 0.0 here is explicitly *not* a measurement: `mttd_sample_count`
+    # below carries the denominator, and the console renders 'not
+    # measured' when it is zero. See the comment on that field for why
+    # the mean is not nullable.
+    mttd_hours = float(mttd_q) if mttd_q is not None and mttd_samples else 0.0
+
+    # ── MTTR ──────────────────────────────────────────────────────────────────
+    # Mean time from case open to case close, over the shared window — the same
+    # rows and the same expression the MSSP portfolio reports, so the two
+    # surfaces cannot quote different MTTRs for one tenant again. This tile
+    # used to average `alerts.resolved_at - alerts.created_at`, which measures
+    # a different lifecycle on a different table; see `resolution_time` for
+    # why that read 0.0 while the portfolio read 1.5h from the same estate.
+    mttr_minutes = await tenant_case_mttr_minutes(db, tenant_id)
+    mttr_hours = (mttr_minutes / 60.0) if mttr_minutes is not None else 0.0
+    mttr_samples = await tenant_cases_closed(db, tenant_id, now - MTTR_WINDOW)
+
+    # ── MTTC (Mean Time to Contain) ───────────────────────────────────────────
+    # For confirmed true-positive alerts only — proxy for "incident contained".
+    # Uses resolved_at since we don't track a separate contained_at.
+    mttc_filters = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.resolved_at.isnot(None),
+        Alert.disposition == "true_positive",
+        Alert.created_at >= week_start,
+    )
+    mttc_q = await db.scalar(select(func.avg(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600)).where(mttc_filters))
+    mttc_samples = int(await db.scalar(select(func.count()).where(mttc_filters)) or 0)
+    mttc_hours = float(mttc_q or 0.0)
+
+    # ── FPR ───────────────────────────────────────────────────────────────────
+    # False-positive dispositions / alerts somebody reached a conclusion
+    # about. The denominator was `disposition IS NOT NULL`, which includes
+    # `needs_review` -- the agent saying it could not tell -- so a tenant
+    # whose nine alerts were all abstained on got "0.0% over 5 resolved
+    # alerts" while `/metrics/funnel` computed the same ratio over zero.
+    decided_counts = await _soc_disposition_counts(db, tenant_id, week_start)
+    total_resolved = decided_counts["decided"]
+    fp_count = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.disposition == "false_positive",
+                    Alert.created_at >= week_start,
+                )
+            )
+        )
+        or 0
+    )
+    fpr = (fp_count / total_resolved) if total_resolved > 0 else 0.0
+
+    # ── Escalation rate ───────────────────────────────────────────────────────
+    # Fraction of remediation gate decisions that escaped autonomous handling.
+    escalation_decisions = {"escalate", "review"}
+    total_decisions = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    RemediationGateLog.tenant_id == tenant_id,
+                    RemediationGateLog.created_at >= week_start,
+                )
+            )
+        )
+        or 0
+    )
+    escalated_count = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    RemediationGateLog.tenant_id == tenant_id,
+                    RemediationGateLog.created_at >= week_start,
+                    RemediationGateLog.decision.in_(escalation_decisions),
+                )
+            )
+        )
+        or 0
+    )
+    escalation_rate = escalated_count / total_decisions if total_decisions > 0 else 0.0
+
+    # ── Volume / case counts ──────────────────────────────────────────────────
+    alert_vol = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start))) or 0
+    cases_opened = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.created_at >= week_start))) or 0
+    # Counted on `closed_at`, not on `status = 'resolved' AND updated_at`.
+    # `resolved` is an intermediate state and `closed` is the terminal one, so
+    # the old filter reported 0 for a tenant that had closed two cases; and
+    # `updated_at` moves whenever anyone edits the case, which is not when it
+    # was finished.
+    cases_closed = await tenant_cases_closed(db, tenant_id, week_start)
+
+    # ── Analyst overrides (7d) ────────────────────────────────────────────────
+    # Computed in `_soc_disposition_counts` above, from the lifecycle events
+    # that carry an actor. The filter here used to be "any alert with a
+    # disposition", which the auto-triage worker sets on every alert it
+    # looks at -- so a deployment on which no human had clicked anything
+    # reported nine analyst overrides.
+    overrides_q = decided_counts["analyst_overrides"]
+
+    kpis = SOCKpis(
+        mttd_hours=round(mttd_hours, 2),
+        mttr_hours=round(mttr_hours, 2),
+        mttc_hours=round(mttc_hours, 2),
+        false_positive_rate=round(fpr, 4),
+        escalation_rate=round(escalation_rate, 4),
+        alert_volume_7d=alert_vol,
+        cases_opened_7d=cases_opened,
+        cases_closed_7d=cases_closed,
+        analyst_overrides_7d=overrides_q,
+        ai_dispositions_7d=decided_counts["ai_dispositions"],
+        mttd_sample_count=mttd_samples,
+        mttr_sample_count=mttr_samples,
+        mttc_sample_count=mttc_samples,
+        false_positive_rate_sample_count=total_resolved,
+        escalation_rate_sample_count=total_decisions,
+    )
+
+    # ── ATT&CK heatmap ────────────────────────────────────────────────────────
+    # Python-side aggregation. Combining two set-returning functions with
+    # GROUP BY + aggregate in the same SELECT raises on modern Postgres
+    # ("set-returning functions are not allowed in GROUP BY") and was the
+    # root cause of /metrics/soc returning 500. For each alert we pair every
+    # (tactic, technique) Cartesian-style, then aggregate in Python.
+    heatmap_src_rows = (
+        await db.execute(
+            select(Alert.mitre_tactics, Alert.mitre_techniques).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.mitre_tactics.isnot(None),
+                    Alert.mitre_techniques.isnot(None),
+                )
+            )
+        )
+    ).all()
+
+    pair_counts: dict[tuple[str, str], int] = {}
+    for tactics, techniques in heatmap_src_rows:
+        if not tactics or not techniques:
+            continue
+        for tactic in tactics:
+            if not isinstance(tactic, str) or not tactic:
+                continue
+            for technique in techniques:
+                if not isinstance(technique, str) or not technique:
+                    continue
+                key = (tactic, technique)
+                pair_counts[key] = pair_counts.get(key, 0) + 1
+
+    heatmap = [
+        AttackHeatmapCell(tactic=tactic, technique=technique, count=count)
+        for (tactic, technique), count in sorted(pair_counts.items(), key=lambda x: x[1], reverse=True)[:50]
+    ]
+
+    # ── Confidence calibration curve ──────────────────────────────────────────
+    # 5 buckets across [0, 1]. For each bucket, count alerts with ai_score in
+    # range AND a non-null disposition, plus the fraction that were
+    # 'true_positive' (i.e., the model was correct to be confident).
+    bucket_edges = [(0.0, 0.2), (0.2, 0.4), (0.4, 0.6), (0.6, 0.8), (0.8, 1.0001)]
+    calibration_curve: list[CalibrationBucket] = []
+    for lower, upper in bucket_edges:
+        # Total dispositioned alerts in this bucket
+        bucket_total_q = await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.ai_score.isnot(None),
+                    Alert.ai_score >= lower,
+                    Alert.ai_score < upper,
+                    Alert.disposition.isnot(None),
+                    Alert.created_at >= now - timedelta(days=30),
+                )
+            )
+        )
+        bucket_total = int(bucket_total_q or 0)
+
+        # True-positives in this bucket
+        bucket_tp_q = await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.ai_score.isnot(None),
+                    Alert.ai_score >= lower,
+                    Alert.ai_score < upper,
+                    Alert.disposition == "true_positive",
+                    Alert.created_at >= now - timedelta(days=30),
+                )
+            )
+        )
+        bucket_tp = int(bucket_tp_q or 0)
+
+        actual_tp_rate = (bucket_tp / bucket_total) if bucket_total > 0 else 0.0
+        calibration_curve.append(
+            CalibrationBucket(
+                predicted_lower=round(lower, 2),
+                predicted_upper=round(min(upper, 1.0), 2),
+                sample_count=bucket_total,
+                actual_tp_rate=round(actual_tp_rate, 4),
+            )
+        )
+
+    return SOCMetrics(
+        kpis=kpis,
+        attack_heatmap=heatmap,
+        calibration_curve=calibration_curve,
+    )
+
+
+@router.get("/alerts/trend")
+async def get_alert_trend(
+    user: AuthUser,
+    db: DBSession,
+    period: str = "24h",
+) -> dict:
+    """Return alert count trend data bucketed by time period."""
+    now = datetime.now(UTC)
+    period_map = {
+        "1h": (timedelta(hours=1), "minute"),
+        "24h": (timedelta(hours=24), "hour"),
+        "7d": (timedelta(days=7), "day"),
+        "30d": (timedelta(days=30), "day"),
+    }
+    delta, trunc = period_map.get(period, (timedelta(hours=24), "hour"))
+    start = now - delta
+
+    rows = (
+        await db.execute(
+            select(
+                func.date_trunc(trunc, Alert.created_at).label("bucket"),
+                func.count().label("cnt"),
+            )
+            .where(
+                and_(
+                    Alert.tenant_id == user.tenant_id,
+                    Alert.created_at >= start,
+                )
+            )
+            .group_by("bucket")
+            .order_by("bucket")
+        )
+    ).all()
+
+    return {
+        "data": [
+            {
+                "timestamp": r.bucket.isoformat() if r.bucket else now.isoformat(),
+                "count": r.cnt,
+            }
+            for r in rows
+        ]
+    }
+
+
+# ──────────────────────────── v1.5 funnel endpoint ────────────────────────────
+
+
+def _pct_delta(current: float, previous: float) -> float | None:
+    """Compute period-over-period percentage change.
+
+    Returns ``None`` when the previous window was empty: there is no
+    baseline, and rendering `0.0` would claim "flat" where the honest
+    answer is "unknown". The UI renders None as "no baseline". Otherwise:
+
+        ((current - previous) / previous) * 100, rounded to 2 decimals.
+    """
+    if previous == 0:
+        return None
+    return round(((current - previous) / previous) * 100.0, 2)
+
+
+def _events_of_interest_sql(start, end) -> str:
+    """The lake count query for events that arrived in ``[start, end)``.
+
+    Filters on ``ingest_time`` — when the event *landed in the lake*
+    (``DEFAULT now64()`` in ``clickhouse/001_init.sql``), which is the
+    question an intake funnel asks: of the events that arrived in this
+    window, how many advanced. ``event_time`` is when the event *occurred*,
+    which late or backfilled data pushes outside the window, so it is the
+    wrong clock for an arrival funnel — and it is the column
+    ``usage_metering`` already counts arrivals by.
+
+    There is no ``ingested_at`` column: naming it made this query fail with
+    ClickHouse ``Code: 47, Missing columns: 'ingested_at'`` on every call, so
+    the funnel silently served the Postgres fallback on every deployment with
+    a reachable lake (reported in discussion #1568). A pure builder so the
+    column can be checked against the schema in a test without a live
+    ClickHouse.
+    """
+    return (
+        "SELECT count() AS cnt "
+        "FROM aisoc.raw_events "
+        f"WHERE ingest_time >= toDateTime('{start.strftime('%Y-%m-%d %H:%M:%S')}') "
+        f"AND ingest_time < toDateTime('{end.strftime('%Y-%m-%d %H:%M:%S')}')"
+    )
+
+
+async def _events_of_interest(db, tenant_id, start, end) -> int:
+    """Count tenant raw events that landed in the analytical lake.
+
+    Primary source is ``aisoc.raw_events`` in ClickHouse — the same table the
+    fusion correlator reads — which is the source-of-truth for "events of
+    interest" (i.e. anything an ingest connector emitted after enrichment but
+    before alerting).
+
+    Falls back to a PostgreSQL-derived count (sum of distinct
+    ``source_event_ids`` across alerts in the window) when ClickHouse is
+    disabled via ``AISOC_DISABLE_CLICKHOUSE`` or unreachable. This keeps the
+    endpoint usable in air-gapped / Postgres-only deployments and in tests.
+    """
+    if getattr(settings, "AISOC_DISABLE_CLICKHOUSE", False):
+        return await _events_of_interest_from_alerts(db, tenant_id, start, end)
+
+    try:
+        from app.db.clickhouse import (
+            LakeQueryError,
+            LakeQueryNotConfiguredError,
+            execute_lake_query,
+        )
+        from app.services.lake_sql import rewrite_for_tenant
+    except Exception:  # pragma: no cover — defensive
+        return await _events_of_interest_from_alerts(db, tenant_id, start, end)
+
+    sql = _events_of_interest_sql(start, end)
+
+    try:
+        rewrite = rewrite_for_tenant(sql, tenant_id, row_cap=1)
+        result = await execute_lake_query(rewrite.sql, timeout_seconds=5.0)
+    except LakeQueryNotConfiguredError:
+        return await _events_of_interest_from_alerts(db, tenant_id, start, end)
+    except LakeQueryError as exc:
+        logger.warning("events_of_interest ClickHouse fallback: %s", exc)
+        return await _events_of_interest_from_alerts(db, tenant_id, start, end)
+    except Exception as exc:  # pragma: no cover — defensive
+        logger.warning("events_of_interest unexpected error: %s", exc)
+        return await _events_of_interest_from_alerts(db, tenant_id, start, end)
+
+    if not result.rows:
+        return 0
+    try:
+        return int(result.rows[0][0] or 0)
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
+async def _events_of_interest_from_alerts(db, tenant_id, start, end) -> int:
+    """Fallback EOI: sum of ``jsonb_array_length(source_event_ids)`` across
+    alerts in the window. Conservative — only counts events that already
+    correlated into an alert — but never lies in air-gapped deployments.
+    """
+    val = await db.scalar(
+        select(func.coalesce(func.sum(func.jsonb_array_length(Alert.source_event_ids)), 0)).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.created_at >= start,
+                Alert.created_at < end,
+            )
+        )
+    )
+    return int(val or 0)
+
+
+async def _repeat_alerts_suppressed(db, tenant_id, start, end) -> int:
+    """Measured count of repeat alerts auto-suppressed from prior outcome memory
+    in [start, end). Tenant-scoped at the query layer. Returns 0 when the table
+    doesn't exist yet (pre-migration) rather than failing the funnel."""
+    try:
+        result = await db.scalar(
+            text(
+                """
+                SELECT count(*) FROM aisoc_outcome_suppressions
+                 WHERE tenant_id = :tid AND created_at >= :start AND created_at < :end
+                """
+            ),
+            {"tid": tenant_id, "start": start, "end": end},
+        )
+        return int(result or 0)
+    except Exception:  # noqa: BLE001 — analytics table optional; never break the funnel
+        return 0
+
+
+async def _triage_quality(db, tenant_id, start, end) -> dict[str, object]:
+    """Abstention and groundedness over auto-triaged alerts in [start, end).
+
+    Tenant-scoped at the query layer. Returns zeros when the columns do not
+    exist yet (pre-migration) rather than failing the funnel, matching
+    ``_repeat_alerts_suppressed``.
+
+    ``mean_groundedness`` averages only scored verdicts. The deterministic
+    triage path never assesses groundedness, so counting its verdicts as 0.0
+    would report a platform-wide collapse in reasoning quality every time the
+    LLM path was unavailable.
+    """
+    empty = {
+        "triaged_alerts": 0,
+        "abstentions": 0,
+        "abstention_rate": 0.0,
+        "ungrounded_demotions": 0,
+        "mean_groundedness": None,
+        "scored_verdicts": 0,
+    }
+    try:
+        row = (
+            await db.execute(
+                text(
+                    """
+                    SELECT
+                      count(*) FILTER (WHERE disposition IS NOT NULL)              AS triaged,
+                      count(*) FILTER (WHERE disposition = 'needs_review')         AS abstentions,
+                      count(*) FILTER (WHERE triage_ungrounded IS TRUE)            AS ungrounded,
+                      count(*) FILTER (WHERE triage_groundedness IS NOT NULL)      AS scored,
+                      avg(triage_groundedness)                                     AS mean_groundedness
+                      FROM alerts
+                     WHERE tenant_id = :tid AND created_at >= :start AND created_at < :end
+                    """
+                ),
+                {"tid": tenant_id, "start": start, "end": end},
+            )
+        ).first()
+    except Exception:  # noqa: BLE001 — analytics columns optional; never break the funnel
+        return empty
+
+    if row is None:
+        return empty
+
+    triaged = int(row[0] or 0)
+    abstentions = int(row[1] or 0)
+    scored = int(row[3] or 0)
+    return {
+        "triaged_alerts": triaged,
+        "abstentions": abstentions,
+        "abstention_rate": round(abstentions / triaged, 4) if triaged else 0.0,
+        "ungrounded_demotions": int(row[2] or 0),
+        "mean_groundedness": round(float(row[4]), 4) if row[4] is not None else None,
+        "scored_verdicts": scored,
+    }
+
+
+async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict:
+    """Compute the funnel for a single [start, end) window."""
+    events_of_interest = await _events_of_interest(db, tenant_id, start, end)
+
+    # Correlation instances = alerts whose source_event_ids has >= 2 events
+    # (i.e. multiple raw events fused into a single alert). Single-event
+    # alerts are excluded so the ratio stays meaningful when one detection
+    # rule fires repeatedly.
+    #
+    # The predicate was always right and was unsatisfiable until issue #1244:
+    # the only pipeline writer appended one id *before* the insert, and a
+    # deduplicated event's insert is filtered out by the sink's
+    # `WHERE NOT EXISTS`, so no row could ever reach two. The tile read 0 by
+    # construction on a pipeline that was deduplicating the whole time.
+    # `AlertSink._record_deduplicated_event` is what feeds this now; a zero
+    # here means no event deduplicated in the window, not that nobody looked.
+    correlation_instances = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    func.jsonb_array_length(Alert.source_event_ids) >= 2,
+                )
+            )
+        )
+        or 0
+    )
+
+    alerts_generated = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                )
+            )
+        )
+        or 0
+    )
+
+    # Signal-to-noise: of the alerts in the window that someone reached a
+    # conclusion about, what fraction ended in disposition='true_positive'?
+    # Alerts with no disposition, and alerts the agent explicitly abstained
+    # on, are excluded from both numerator and denominator so the ratio
+    # reflects judgement rather than lifecycle state. The predicate is
+    # `alert_disposition`'s rather than a local tuple -- /metrics/soc and
+    # /dashboards/soc-insights both asked this question with
+    # `disposition IS NOT NULL` and got a different answer from this one.
+    sig_total = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    decided_filter(Alert.disposition),
+                )
+            )
+        )
+        or 0
+    )
+    sig_tp = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                    Alert.disposition == "true_positive",
+                )
+            )
+        )
+        or 0
+    )
+    # 0.0 here is explicitly *not* a measurement. `signal_to_noise_sample_count`
+    # below carries the denominator and the console renders "not measured"
+    # when it is zero, which is what /metrics/soc already did and this
+    # surface did not: the two sat on one screen, one saying "MTTD — not
+    # measured · no closures in 7d" and the other "Signal / Noise 0%".
+    signal_to_noise = round((sig_tp / sig_total), 4) if sig_total else 0.0
+
+    # MTTD in seconds for alerts created in this window that have been seen.
+    #
+    # Nothing in the pipeline writes `first_seen_at`: its only writers are
+    # analyst actions, so this is structurally 0.0 until somebody
+    # acknowledges an alert. `float(None or 0.0)` published that as
+    # instant detection; the sample count beside it is how a reader tells
+    # "we detect in 0 seconds" from "nobody has looked yet".
+    mttd_filters = and_(
+        Alert.tenant_id == tenant_id,
+        Alert.first_seen_at.isnot(None),
+        Alert.created_at >= start,
+        Alert.created_at < end,
+    )
+    mttd_seconds_raw = await db.scalar(select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at))).where(mttd_filters))
+    mttd_samples = int(await db.scalar(select(func.count()).where(mttd_filters)) or 0)
+    mttd_seconds = round(float(mttd_seconds_raw), 2) if mttd_seconds_raw is not None and mttd_samples else 0.0
+
+    # Analyst queue depth = open alerts (snapshot, not window-bound) that an
+    # analyst would see in their queue right now: not in a terminal state and
+    # no disposition. The predicate is the shared one rather than a fourth
+    # hand-written copy -- this site named three states and missed `triaged`,
+    # which is what let the funnel and the dashboard tile disagree about the
+    # same rows on one screen.
+    analyst_queue_depth = (
+        await db.scalar(
+            select(func.count()).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    unresolved_filter(Alert.status),
+                    Alert.disposition.is_(None),
+                )
+            )
+        )
+        or 0
+    )
+
+    # Correlation efficiency = correlation_instances / events_of_interest.
+    # "What share of raw events did the fusion engine collapse into a
+    # correlated incident?" Capped at 1.0 in case EOI is under-counted by the
+    # PostgreSQL fallback.
+    if events_of_interest > 0:
+        correlation_efficiency = round(min(correlation_instances / events_of_interest, 1.0), 4)
+    else:
+        correlation_efficiency = 0.0
+
+    # Alert yield = alerts_generated / events_of_interest. "How many of the
+    # raw events that landed in the lake became analyst-visible alerts?"
+    if events_of_interest > 0:
+        alert_yield = round(min(alerts_generated / events_of_interest, 1.0), 4)
+    else:
+        alert_yield = 0.0
+
+    # MITRE coverage: union of distinct techniques across (a) alerts in the
+    # window and (b) enabled detection rules visible to the tenant (platform
+    # rules + tenant rules).
+    covered = await _mitre_covered(db, tenant_id, start, end)
+    ratio = round(min(covered / mitre_total, 1.0), 4) if mitre_total > 0 else 0.0
+    coverage = MitreCoverage(covered=covered, total=mitre_total, ratio=ratio)
+
+    suppressed = await _repeat_alerts_suppressed(db, tenant_id, start, end)
+    quality = await _triage_quality(db, tenant_id, start, end)
+    # Compounding reduction: of everything the loop *could* have queued
+    # (generated + suppressed), what share did prior outcomes suppress?
+    denom = alerts_generated + suppressed
+    suppression_rate = round(suppressed / denom, 4) if denom else 0.0
+
+    return {
+        "events_of_interest": int(events_of_interest),
+        "correlation_instances": int(correlation_instances),
+        "alerts_generated": int(alerts_generated),
+        "signal_to_noise": signal_to_noise,
+        "signal_to_noise_sample_count": int(sig_total),
+        "mttd_seconds": mttd_seconds,
+        "mttd_sample_count": mttd_samples,
+        "analyst_queue_depth": int(analyst_queue_depth),
+        "correlation_efficiency": correlation_efficiency,
+        "alert_yield": alert_yield,
+        "mitre_coverage": coverage,
+        "repeat_alerts_suppressed": int(suppressed),
+        "repeat_suppression_rate": suppression_rate,
+        **quality,
+    }
+
+
+async def _mitre_covered(db, tenant_id, start, end) -> int:
+    """Count distinct MITRE techniques visible to this tenant.
+
+    Union of:
+      * techniques observed on alerts created in the window
+      * techniques referenced by enabled detection rules (tenant-scoped or
+        platform-wide where ``tenant_id IS NULL``)
+    """
+    alert_techs = (
+        (
+            await db.execute(
+                select(func.distinct(func.jsonb_array_elements_text(Alert.mitre_techniques))).where(
+                    and_(
+                        Alert.tenant_id == tenant_id,
+                        Alert.created_at >= start,
+                        Alert.created_at < end,
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    rule_techs = (
+        (
+            await db.execute(
+                select(func.distinct(func.jsonb_array_elements_text(DetectionRule.mitre_techniques))).where(
+                    and_(
+                        DetectionRule.status == "enabled",
+                        (DetectionRule.tenant_id == tenant_id) | (DetectionRule.tenant_id.is_(None)),
+                    )
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    techniques = {t for t in alert_techs if t} | {t for t in rule_techs if t}
+    return len(techniques)
+
+
+@router.get("/funnel", response_model=FunnelMetrics)
+async def get_funnel_metrics(
+    user: AuthUser,
+    db: DBSession,
+    period: str = _PERIOD_QUERY,
+) -> FunnelMetrics:
+    """Return the live tenant funnel for the SOC Console (v1.5).
+
+    Funnel: events_of_interest → correlation_instances → alerts_generated →
+    analyst_queue_depth, plus efficiency ratios and MITRE coverage.
+
+    ``deltas`` compares the current window to the immediately preceding window
+    of the same length (e.g. for ``period=24h`` we compare to the 24h ending
+    24h ago). Values are percentage changes rounded to two decimals; a delta
+    of ``None`` means "no baseline" (the previous window was empty).
+    """
+    delta = _FUNNEL_PERIOD_MAP[period]
+    now = datetime.now(UTC)
+    end = now
+    start = end - delta
+    prev_end = start
+    prev_start = prev_end - delta
+
+    mitre_total = int(getattr(settings, "AISOC_FUNNEL_MITRE_TOTAL", 201)) or 201
+
+    current = await _funnel_window(db, user.tenant_id, start, end, mitre_total=mitre_total)
+    previous = await _funnel_window(db, user.tenant_id, prev_start, prev_end, mitre_total=mitre_total)
+
+    deltas = FunnelDeltas(
+        events_of_interest=_pct_delta(current["events_of_interest"], previous["events_of_interest"]),
+        correlation_instances=_pct_delta(current["correlation_instances"], previous["correlation_instances"]),
+        alerts_generated=_pct_delta(current["alerts_generated"], previous["alerts_generated"]),
+        # `None` when either window measured nothing: a delta between two
+        # values that were never measured is not a change, and `_pct_delta`
+        # on two zeros answers 0.0% — "flat", which reads as a stable
+        # measurement rather than an absent one.
+        signal_to_noise=(
+            _pct_delta(current["signal_to_noise"], previous["signal_to_noise"])
+            if current["signal_to_noise_sample_count"] and previous["signal_to_noise_sample_count"]
+            else None
+        ),
+        mttd_seconds=(
+            _pct_delta(current["mttd_seconds"], previous["mttd_seconds"])
+            if current["mttd_sample_count"] and previous["mttd_sample_count"]
+            else None
+        ),
+        analyst_queue_depth=_pct_delta(current["analyst_queue_depth"], previous["analyst_queue_depth"]),
+    )
+
+    return FunnelMetrics(
+        period=period,
+        events_of_interest=current["events_of_interest"],
+        correlation_instances=current["correlation_instances"],
+        alerts_generated=current["alerts_generated"],
+        signal_to_noise=current["signal_to_noise"],
+        signal_to_noise_sample_count=current.get("signal_to_noise_sample_count", 0),
+        mttd_seconds=current["mttd_seconds"],
+        mttd_sample_count=current.get("mttd_sample_count", 0),
+        analyst_queue_depth=current["analyst_queue_depth"],
+        correlation_efficiency=current["correlation_efficiency"],
+        alert_yield=current["alert_yield"],
+        mitre_coverage=current["mitre_coverage"],
+        deltas=deltas,
+        generated_at=now,
+        repeat_alerts_suppressed=current.get("repeat_alerts_suppressed", 0),
+        repeat_suppression_rate=current.get("repeat_suppression_rate", 0.0),
+        triaged_alerts=current.get("triaged_alerts", 0),
+        abstentions=current.get("abstentions", 0),
+        abstention_rate=current.get("abstention_rate", 0.0),
+        ungrounded_demotions=current.get("ungrounded_demotions", 0),
+        mean_groundedness=current.get("mean_groundedness"),
+        scored_verdicts=current.get("scored_verdicts", 0),
+    )

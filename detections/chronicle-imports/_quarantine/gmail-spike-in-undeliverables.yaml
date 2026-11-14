@@ -1,0 +1,54 @@
+id: chronicle-detection-rules-gmail-spike-in-undeliverables
+name: gmail_spike_in_undeliverables
+description: gmail_spike_in_undeliverables
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule gmail_spike_in_undeliverables {\n\n  meta:\n    author = \"Bastradamus\"\
+    \n    description = \"Detects a spike in undeliverable emails, this can be an\
+    \ early indication of a targeted phishing campaign or a compromised user account.\"\
+    \n    severity = \"Medium\"\n    priority = \"Medium\"\n    type = \"alert\"\n\
+    \    platform = \"Google workspace\"\n    data_source = \"Workspace Activity,\
+    \ gmail\"\n    mitre_attack_tactic = \"Initial Access\"\n    mitre_attack_technique\
+    \ = \"Phishing\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1566/\"\
+    \n\n  events:\n    $email.metadata.vendor_name = \"Google Workspace\"\n    $email.metadata.product_name\
+    \ = \"gmail\"\n    $email.metadata.event_type = \"EMAIL_TRANSACTION\"\n    $email.network.email.subject\
+    \ = /Undeliverable\\:/ nocase\n    $email.target.user.email_addresses = $user\n\
+    \    $email.network.email.subject = $subject\n\n  match:\n    $user over 10m\n\
+    \n  outcome:\n    $mitre_attack_tactic = array_distinct(\"Initial Access\")\n\
+    \    $mitre_attack_technique = array_distinct(\"Phishing\")\n    $mitre_attack_technique_id\
+    \ = array_distinct(\"T1566\")\n    $event_count = count_distinct($email.metadata.description)\n\
+    \    $target_user_distinct_count = count_distinct($user)\n    $target_user_count\
+    \ = count($user)\n    $principal_ip = array_distinct($email.principal.ip)\n  \
+    \  $count_subject_bounce = count_distinct($subject)\n    $count_bounce_distinct_mail_id\
+    \ = count_distinct($email.network.email.mail_id)\n    $sender_from = array_distinct($email.principal.network.email.from)\n\
+    \n  condition:\n    $email and $count_bounce_distinct_mail_id > 10 and $count_subject_bounce\
+    \ = 1\n}"
+  chronicle_rule_name: gmail_spike_in_undeliverables
+provenance:
+  source: chronicle/detection-rules
+  source_id: gmail_spike_in_undeliverables
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/workspace/gmail_spike_in_undeliverables.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

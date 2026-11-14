@@ -1,0 +1,53 @@
+id: splunk-security-content-bd5c311e-a6ea-48ae-a289-19a3398e3648
+name: Windows Identify Protocol Handlers
+description: The following analytic identifies the use of protocol handlers executed
+  via the command line. It leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process and command-line telemetry. This activity is significant
+  because protocol handlers can be exploited to execute arbitrary commands or launch
+  applications, potentially leading to unauthorized actions. If confirmed malicious,
+  an attacker could use this technique to gain code execution, escalate privileges,
+  or maintain persistence within the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/a0d3edb57d36e0916c94c0a464b2722e
+- https://www.oreilly.com/library/view/learning-java/1565927184/apas02.html
+- https://blogs.windows.com/msedgedev/2022/01/20/getting-started-url-protocol-handlers-microsoft-edge/
+- https://github.com/Mr-Un1k0d3r/PoisonHandler
+- https://www.mdsec.co.uk/2021/03/phishing-users-to-take-a-test/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218/T1218.md#atomic-test-5---protocolhandlerexe-downloaded-a-suspicious-file
+- https://techcommunity.microsoft.com/t5/windows-it-pro-blog/disabling-the-msix-ms-appinstaller-protocol-handler/ba-p/3119479
+- https://www.huntress.com/blog/microsoft-office-remote-code-execution-follina-msdt-bug
+- https://parsiya.net/blog/2021-03-17-attack-surface-analysis-part-2-custom-protocol-handlers/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Processes.process) as process values(Processes.parent_process)\
+    \ as parent_process FROM datamodel=Endpoint.Processes\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(Processes)`\n| lookup windows_protocol_handlers handler\
+    \ AS process OUTPUT handler ishandler\n| where ishandler=\"TRUE\"\n| `windows_identify_protocol_handlers_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bd5c311e-a6ea-48ae-a289-19a3398e3648
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_identify_protocol_handlers.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

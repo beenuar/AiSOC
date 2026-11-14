@@ -1,0 +1,45 @@
+id: splunk-security-content-482dd42a-acfa-486b-a0bb-d6fcda27318e
+name: Azure AD Multi-Factor Authentication Disabled
+description: The following analytic detects attempts to disable multi-factor authentication
+  (MFA) for an Azure AD user. It leverages Azure Active Directory AuditLogs to identify
+  the "Disable Strong Authentication" operation. This activity is significant because
+  disabling MFA can allow adversaries to maintain persistence using compromised accounts
+  without raising suspicion. If confirmed malicious, this action could enable attackers
+  to bypass an essential security control, potentially leading to unauthorized access
+  and prolonged undetected presence in the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/active-directory/authentication/concept-mfa-howitworks
+- https://docs.microsoft.com/en-us/azure/active-directory/authentication/howto-mfa-userstates
+- https://attack.mitre.org/tactics/TA0005/
+- https://attack.mitre.org/techniques/T1556/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=AuditLogs operationName=\"Disable Strong\
+    \ Authentication\"\n  | rename properties.* as *\n  | rename targetResources{}.type\
+    \ as type\n  | rename initiatedBy.user.userPrincipalName as initiatedBy\n  | rename\
+    \ userAgent as user_agent\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest user src\n       vendor_account vendor_product\
+    \ user_agent\n       initiatedBy signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_multi_factor_authentication_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 482dd42a-acfa-486b-a0bb-d6fcda27318e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multi_factor_authentication_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

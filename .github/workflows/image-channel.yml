@@ -1,0 +1,124 @@
+# Move the image `stable` channel to a named, already-published release.
+#
+# The image half of chart-channel.yml, and built for the same reason one
+# release later: when the release guard's registry read broke (the buildx
+# template stopped resolving on the runner image), two consecutive publishes
+# carried image `stable` across the v19 -> v20 application major — and there
+# was no way to repair the position short of waiting for the next release,
+# which would not have repaired it either. Dispatching this workflow IS the
+# operator decision the guard protects: it re-points every image's `stable`
+# tag at the named version's manifest, byte-identical, in either direction,
+# and says what it did per image.
+#
+# It never republishes a version tag — `vX.Y.Z` is immutable by convention
+# and an overwritten version is unrecoverable — it only moves the mutable
+# channel tag, the same way release.yml promotes on an ordinary release.
+name: Image channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Published release whose images `stable` should point at (e.g. v19.0.0). Every image must already carry the tag.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  move:
+    name: Point every image's `stable` at ${{ inputs.version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Retag `stable`, byte-identical, with before/after evidence
+        env:
+          VERSION: ${{ inputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
+          # The same first-party, non-demo list release.yml publishes. The
+          # demo console is deliberately absent: it never carries a channel.
+          IMAGES="aisoc-core-api aisoc-agents aisoc-realtime aisoc-web aisoc-ingest aisoc-enrichment aisoc-fusion aisoc-actions aisoc-connectors aisoc-threatintel aisoc-ueba aisoc-slack-bot aisoc-teams-bot aisoc-honeytokens aisoc-purple-team aisoc-osquery-tls"
+
+          # image tag -> "digest version-label", via manifest + config blob.
+          describe() {
+            local repo="$1" tag="$2" tok="$3" code digest config version
+            code=$(curl -s -o /tmp/m.json -w '%{http_code}' \
+              -H "Authorization: Bearer ${tok}" -H "Accept: ${MEDIA}" \
+              "https://ghcr.io/v2/beenuar/${repo}/manifests/${tag}" || echo 000)
+            [ "$code" = "200" ] || { echo "(absent: HTTP ${code})"; return 0; }
+            digest=$(python3 -c '
+          import json
+          m = json.load(open("/tmp/m.json"))
+          if "manifests" in m:
+              plats = [x["digest"] for x in m["manifests"] if x.get("platform",{}).get("architecture") in ("amd64","arm64")]
+              print(plats[0] if plats else "")
+          else:
+              print("self")')
+            if [ "$digest" = "self" ]; then
+              cp /tmp/m.json /tmp/mi.json
+            else
+              curl -fsS -H "Authorization: Bearer ${tok}" -H "Accept: ${MEDIA}" \
+                "https://ghcr.io/v2/beenuar/${repo}/manifests/${digest}" > /tmp/mi.json
+            fi
+            config=$(python3 -c 'import json; print(json.load(open("/tmp/mi.json"))["config"]["digest"])')
+            version=$(curl -fsSL -H "Authorization: Bearer ${tok}" \
+              "https://ghcr.io/v2/beenuar/${repo}/blobs/${config}" \
+              | python3 -c 'import json,sys; c=json.load(sys.stdin); print((c.get("config",{}).get("Labels") or {}).get("org.opencontainers.image.version","(no label)"))')
+            echo "${version}"
+          }
+
+          failures=0
+          for repo in $IMAGES; do
+            tok=$(curl -fsS -u "x:${GH_TOKEN}" \
+              "https://ghcr.io/token?scope=repository:beenuar/${repo}:pull,push&service=ghcr.io" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+            before=$(describe "$repo" stable "$tok")
+
+            # The target must exist; a channel pointed at nothing is worse
+            # than a channel in the wrong place.
+            #
+            # NOT `read -r code ctype < <(curl -w ...)`: curl's -w output
+            # carries no trailing newline, so `read` assigns both fields and
+            # still returns 1 at EOF — and under the step's `bash -e` that
+            # exited the whole script before its first line of output. The
+            # first dispatch of this workflow died exactly there, silently.
+            tmp_target=$(mktemp)
+            hdr=$(curl -s -o "$tmp_target" \
+              -w '%{http_code} %{content_type}' \
+              -H "Authorization: Bearer ${tok}" -H "Accept: ${MEDIA}" \
+              "https://ghcr.io/v2/beenuar/${repo}/manifests/${VERSION}" || echo "000 none")
+            code=${hdr%% *}
+            ctype=${hdr#* }
+            if [ "$code" != "200" ]; then
+              echo "::error::${repo}: ${VERSION} answered HTTP ${code}; stable left at '${before}'"
+              failures=$((failures + 1))
+              continue
+            fi
+
+            put_code=$(curl -s -o /tmp/put-answer.json -w '%{http_code}' -X PUT \
+              -H "Authorization: Bearer ${tok}" -H "Content-Type: ${ctype}" \
+              --data-binary @"$tmp_target" \
+              "https://ghcr.io/v2/beenuar/${repo}/manifests/stable")
+            if [ "$put_code" != "201" ]; then
+              echo "::error::${repo}: PUT stable answered HTTP ${put_code}; stable left at '${before}'"
+              cat /tmp/put-answer.json || true
+              failures=$((failures + 1))
+              continue
+            fi
+
+            after=$(describe "$repo" stable "$tok")
+            echo "${repo}: stable '${before}' -> '${after}'"
+            echo "${repo}: stable \`${before}\` -> \`${after}\`" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$after" != "$VERSION" ]; then
+              echo "::error::${repo}: stable reads '${after}' after the move, expected '${VERSION}'"
+              failures=$((failures + 1))
+            fi
+          done
+
+          [ "$failures" -eq 0 ] || { echo "::error::${failures} image(s) failed to move"; exit 1; }

@@ -1,0 +1,7 @@
+{
+  "image": "registry.corp.com/svc:1.2.3",
+  "image_registry_in_allowlist": true,
+  "namespace": "production",
+  "object_resource": "pods",
+  "verb": "create"
+}

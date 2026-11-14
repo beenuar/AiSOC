@@ -1,0 +1,6 @@
+{
+  "event_type": "sudo-use",
+  "host": "db-prod-01",
+  "mfa_verified": false,
+  "user": "user"
+}

@@ -1,0 +1,24 @@
+id: det-cloud-109
+name: Entra ID Legacy Authentication Re-Enabled
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Entra ID Legacy Authentication
+  Re-Enabled'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    operation_name == "Update policy"
+    AND block_legacy_auth == false
+false_positives:
+- Migration of legacy app
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

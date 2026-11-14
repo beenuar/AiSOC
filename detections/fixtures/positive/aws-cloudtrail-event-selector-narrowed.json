@@ -1,0 +1,4 @@
+{
+  "event_name": "PutEventSelectors",
+  "selector_includes_management_events": false
+}

@@ -1,0 +1,33 @@
+id: osctrl
+name: osctrl Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  osctrl — open-source osquery fleet manager. Pulls distributed-query results
+  and node telemetry from the osctrl admin API. Synthesises severity from the
+  osquery table queried so detection rules can promote interesting rows.
+author: AiSOC Core Team
+tags: [edr, osctrl, osquery, endpoint, open-source]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/osctrl.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [base_url, api_token]
+  properties:
+    base_url:
+      type: string
+      description: "Base URL of the osctrl admin server (no trailing slash). Use https in production."
+    api_token:
+      type: string
+      description: "Long-lived admin token issued from the osctrl UI under Manage Users -> generate token."
+      secret: true
+    environment:
+      type: string
+      description: "osctrl environment to scope queries to (e.g. 'prod', 'corp'). Required for distributed queries."
+      default: "prod"
+    verify_tls:
+      type: boolean
+      description: "Verify TLS certificate when calling the osctrl admin API."
+      default: true

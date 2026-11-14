@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-cactustorch-remote-thread-creation
+name: cactustorch_remote_thread_creation
+description: cactustorch_remote_thread_creation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule cactustorch_remote_thread_creation {\n meta:\n    author\
+    \ = \"@SBousseaden (detection), Thomas Patzke (rule)\"\n    description = \"Detects\
+    \ remote thread creation from CACTUSTORCH as described in references.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/fwqVBGQnSxxk\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1055, t1064\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"8\" and (re.regex($selection.principal.process.file.full_path, `.*\\\\System32\\\
+    \\cscript\\.exe`) or re.regex($selection.principal.process.file.full_path, `.*\\\
+    \\System32\\\\wscript\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\System32\\\\mshta\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\winword\\.exe`) or re.regex($selection.principal.process.file.full_path,\
+    \ `.*\\\\excel\\.exe`)) and re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\SysWOW64\\\\.*`) and $selection.principal.application = \"\")\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: cactustorch_remote_thread_creation
+provenance:
+  source: chronicle/detection-rules
+  source_id: cactustorch_remote_thread_creation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/cactustorch_remote_thread_creation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

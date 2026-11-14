@@ -1,0 +1,7 @@
+{
+  "baseline_resource_rarity": 0.991,
+  "eventName": "DeleteBucketPolicy",
+  "eventSource": "s3.amazonaws.com",
+  "resource": "arn:aws:s3:::prod-audit-logs",
+  "user": "mara.l@example.com"
+}

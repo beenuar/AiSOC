@@ -1,0 +1,4 @@
+{
+  "event_type": "smb_pipe",
+  "pipe_name": "msagent_"
+}

@@ -1,0 +1,11 @@
+{
+  "action": "UPDATED",
+  "target_path": "/etc/ld.so.conf",
+  "hostname": "build-server-01",
+  "node_key": "bld001zzz",
+  "tenant_id": "acme",
+  "process_name": "ldconfig",
+  "pid": 301,
+  "username": "root",
+  "event_time": "2026-05-10T08:00:12Z"
+}

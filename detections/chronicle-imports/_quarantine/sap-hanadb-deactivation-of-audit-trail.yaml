@@ -1,0 +1,51 @@
+id: chronicle-detection-rules-sap-hanadb-deactivation-of-audit-trail
+name: sap_hanadb_deactivation_of_audit_trail
+description: sap_hanadb_deactivation_of_audit_trail
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_hanadb_deactivation_of_audit_trail {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects the deactivation of the global\
+    \ auditing state in SAP HANA, which stops all audit logging.\"\n    severity =\
+    \ \"Critical\"\n    tactic = \"TA0005\"\n    technique = \"T1562.001\"\n\n  events:\n\
+    \    $e.metadata.product_name = \"SAP_HANA_AUDIT\"\n\n    (\n        $e.metadata.product_event_type\
+    \ = /AUDIT CONFIGURATION/ nocase and\n        $e.target.resource.attribute.labels[\"\
+    parameter\"] = \"global_auditing_state\" nocase and\n        $e.target.resource.attribute.labels[\"\
+    new_value\"] = \"false\" nocase\n    ) or\n    (\n        $e.metadata.product_event_type\
+    \ = \"SYSTEM CONFIGURATION CHANGE\" nocase and\n        $e.additional.fields[\"\
+    executed_statement\"] = /ALTER SYSTEM ALTER CONFIGURATION/ nocase and\n      \
+    \  $e.additional.fields[\"executed_statement\"] = /UNSET/ nocase\n    )\n    $user\
+    \ = $e.principal.user.userid\n\n  match:\n    $user over 30m\n\n  outcome:\n \
+    \   $risk_score = max(95)\n    $principal_user = array_distinct($user)\n    $system_id\
+    \ = array_distinct($e.target.resource.attribute.labels[\"system_id\"])\n    $prev_value\
+    \ = array_distinct($e.target.resource.attribute.labels[\"old_value\"])\n    $new_value\
+    \ = array_distinct($e.target.resource.attribute.labels[\"new_value\"])\n    $action\
+    \ = array_distinct($e.security_result.action)\n\n  condition:\n    $e\n}"
+  chronicle_rule_name: sap_hanadb_deactivation_of_audit_trail
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_hanadb_deactivation_of_audit_trail
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_hanadb_deactivation_of_audit_trail.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,6 @@
+{
+  "baseline_principal_volume_z": 0.2,
+  "event_type": "ReportExport",
+  "resource": "Nightly Pipeline Snapshot",
+  "user": "svc-datawarehouse@example.com"
+}

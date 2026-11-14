@@ -1,0 +1,46 @@
+id: splunk-security-content-04023928-0381-4935-82cb-03372b2ef644
+name: Windows ScManager Security Descriptor Tampering Via Sc.EXE
+description: The following analytic detects changes in the ScManager service security
+  descriptor settings. It leverages data from Endpoint Detection and Response (EDR)
+  agents, specifically searching for any process execution involving the "sc.exe"
+  binary with the "sdset" flag targeting the "scmanager" service. If confirmed malicious,
+  this could allow an attacker to escalate their privileges.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/redcanaryco/atomic-red-team/blob/8ac5c4f84692b11ea2832d18d3dc6f1ce7fb4e41/atomics/T1569.002/T1569.002.md#atomic-test-7---modifying-acl-of-service-control-manager-via-sdet
+- https://0xv1n.github.io/posts/scmanager/
+- https://attack.mitre.org/techniques/T1569/002/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name=sc.exe\n        OR\n        Processes.original_file_name=sc.exe\n\
+    \    )\n    Processes.process=\"*sdset *\" Processes.process=\"*scmanager*\"\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_scmanager_security_descriptor_tampering_via_sc_exe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 04023928-0381-4935-82cb-03372b2ef644
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_scmanager_security_descriptor_tampering_via_sc_exe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

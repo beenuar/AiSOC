@@ -1,0 +1,28 @@
+id: datadog-cloud-siem
+name: Datadog Cloud SIEM Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Datadog Cloud SIEM. Pulls Security Signals and supports log search across the
+  Datadog logs platform.
+author: AiSOC Core Team
+tags: [siem, datadog, cloud-siem]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/datadog_cloud_siem.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [site, api_key, application_key]
+  properties:
+    site:
+      type: string
+      description: Datadog site
+    api_key:
+      type: string
+      description: API Key
+      secret: true
+    application_key:
+      type: string
+      description: Application Key
+      secret: true

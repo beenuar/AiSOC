@@ -1,0 +1,24 @@
+id: det-cloud-229
+name: GCP Project-Wide Instance Metadata Set
+description: Project-wide metadata applies to every instance that does not override it, so one SSH key
+  here is access to the whole fleet.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.004
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: compute
+detection:
+  condition: |
+    method_name == "v1.compute.projects.setCommonInstanceMetadata"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

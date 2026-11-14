@@ -1,0 +1,50 @@
+id: splunk-security-content-ca96297f-e82e-4749-8cc9-d1ab555abb57
+name: Ollama Possible Memory Exhaustion Resource Abuse
+description: Detects abnormal memory allocation patterns and excessive runner operations
+  in Ollama that may indicate resource exhaustion attacks, memory abuse through malicious
+  model loading, or attempts to degrade system performance by overwhelming GPU/CPU
+  resources. Adversaries may deliberately load multiple large models, trigger repeated
+  model initialization cycles, or exploit memory allocation mechanisms to exhaust
+  available system resources, causing denial of service conditions or degrading performance
+  for legitimate users.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1499
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` ("*llama_kv_cache*" OR "*compute buffer*" OR "*llama
+    runner started*" OR "*loaded runners*") | rex field=_raw "count=(?<runner_count>\d+)"
+    | rex field=_raw "size\s*=\s*(?<memory_mb>[\d\.]+)\s+MiB" | rex field=_raw "started
+    in\s*(?<load_time>[\d\.]+)\s*seconds" | rex field=_raw "source=(?<code_source>[^\s]+)"
+    | bin _time span=5m | stats count as operations, sum(runner_count) as total_runners,
+    dc(code_source) as unique_sources, values(code_source) as code_sources, avg(memory_mb)
+    as avg_memory, max(memory_mb) as max_memory, sum(memory_mb) as total_memory, avg(load_time)
+    as avg_load_time, max(load_time) as max_load_time by _time, host | where operations
+    > 5 OR total_runners > 0 OR max_memory > 400 OR total_memory > 500 | eval avg_memory=round(avg_memory,
+    2) | eval max_memory=round(max_memory, 2) | eval total_memory=round(total_memory,
+    2) | eval avg_load_time=round(avg_load_time, 2) | eval severity=case( max_memory
+    > 500 OR total_memory > 1000, "critical", max_memory > 400 OR operations > 20,
+    "high", operations > 10, "medium", 1=1, "low" ) | eval attack_type="Resource Exhaustion
+    / Memory Abuse" | sort -_time | table _time, host, operations, total_runners,
+    unique_sources, avg_memory, max_memory, total_memory, avg_load_time, max_load_time,
+    severity, attack_type | `ollama_possible_memory_exhaustion_resource_abuse_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ca96297f-e82e-4749-8cc9-d1ab555abb57
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_possible_memory_exhaustion_resource_abuse.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

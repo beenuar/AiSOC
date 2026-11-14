@@ -1,0 +1,7 @@
+{
+  "baseline_action_rarity": 0.012,
+  "eventName": "AttachUserPolicy",
+  "eventSource": "iam.amazonaws.com",
+  "policy_arn": "arn:aws:iam::aws:policy/ReadOnlyAccess",
+  "user": "svc-iam-provisioner@example.com"
+}

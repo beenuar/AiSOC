@@ -1,0 +1,45 @@
+id: splunk-security-content-de365ffa-42f5-46b5-b43f-fa72290b8218
+name: Okta Multiple Users Failing To Authenticate From Ip
+description: The following analytic identifies instances where more than 10 unique
+  user accounts have failed to authenticate from a single IP address within a 5-minute
+  window in an Okta tenant. This detection uses OktaIm2 logs ingested via the Splunk
+  Add-on for Okta Identity Cloud. Such activity is significant as it may indicate
+  brute-force attacks or password spraying attempts. If confirmed malicious, this
+  behavior suggests an external entity is attempting to compromise multiple user accounts,
+  potentially leading to unauthorized access to organizational resources and data
+  breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://splunkbase.splunk.com/app/6553
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count max(_time) as lastTime,\
+    \ min(_time) as firstTime dc(Authentication.user) as unique_accounts values(Authentication.signature)\
+    \ as signature values(Authentication.user) as user values(Authentication.app)\
+    \ as app values(Authentication.authentication_method) as authentication_method\
+    \ values(Authentication.dest) as dest FROM datamodel=Authentication\n  WHERE Authentication.action=\"\
+    failure\"\n    AND\n    Authentication.signature=user.session.start\n  BY _time\
+    \ span=5m Authentication.src\n     sourcetype\n| where unique_accounts > 9\n|\
+    \ `drop_dm_object_name(\"Authentication\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `okta_multiple_users_failing_to_authenticate_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: de365ffa-42f5-46b5-b43f-fa72290b8218
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_multiple_users_failing_to_authenticate_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

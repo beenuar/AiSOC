@@ -1,0 +1,49 @@
+id: splunk-security-content-e26bc52d-9cbc-4743-9745-e8781d935042
+name: M365 Copilot Non Compliant Devices Accessing M365 Copilot
+description: Detects M365 Copilot access from non-compliant or unmanaged devices that
+  violate corporate security policies, indicating potential shadow IT usage, BYOD
+  policy violations, or compromised endpoint access. The detection filters M365 Copilot
+  Graph API events where deviceDetail.isCompliant=false or deviceDetail.isManaged=false,
+  then aggregates by user, operating system, and browser to calculate metrics including
+  event counts, unique IPs and locations, and compliance/management status over time.
+  Users accessing Copilot from non-compliant or unmanaged devices are flagged and
+  sorted by activity volume and geographic spread, enabling security teams to identify
+  unauthorized endpoints that may lack proper security controls, encryption, or MDM
+  enrollment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_copilot_graph_api` (appDisplayName=\"*Copilot*\" OR appDisplayName=\"\
+    M365ChatClient\") deviceDetail.isCompliant=false OR deviceDetail.isManaged=false\n\
+    \  | eval user = userPrincipalName\n  | stats count as events, dc(ipAddress) as\
+    \ unique_ips, values(ipAddress) as ip_addresses, dc(location.city) as unique_cities,\
+    \ values(location.city) as cities, dc(location.countryOrRegion) as unique_countries,\
+    \ values(location.countryOrRegion) as countries, values(deviceDetail.isCompliant)\
+    \ as compliance_status, values(deviceDetail.isManaged) as management_status, min(_time)\
+    \ as first_seen, max(_time) as last_seen\n    BY user, deviceDetail.operatingSystem,\
+    \ deviceDetail.browser\n  | eval days_active = round((last_seen - first_seen)/86400,\
+    \ 1)\n  | eval first_seen = strftime(first_seen, \"%Y-%m-%d %H:%M:%S\")\n  | eval\
+    \ last_seen = strftime(last_seen, \"%Y-%m-%d %H:%M:%S\")\n  | sort -events, -unique_countries\n\
+    \  | `m365_copilot_non_compliant_devices_accessing_m365_copilot_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e26bc52d-9cbc-4743-9745-e8781d935042
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_non_compliant_devices_accessing_m365_copilot.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

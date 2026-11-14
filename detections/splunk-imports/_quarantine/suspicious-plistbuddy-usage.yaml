@@ -1,0 +1,42 @@
+id: splunk-security-content-c3194009-e0eb-4f84-87a9-4070f8688f00
+name: Suspicious PlistBuddy Usage
+description: The following analytic identifies the use of the native macOS utility,
+  PlistBuddy, to create or modify property list (.plist) files. This detection leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on process names
+  and command-line executions involving PlistBuddy. This activity is significant because
+  PlistBuddy can be used to establish persistence by modifying LaunchAgents, as seen
+  in the Silver Sparrow malware. If confirmed malicious, this could allow an attacker
+  to maintain persistence, execute arbitrary commands, and potentially escalate privileges
+  on the compromised macOS system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543.001
+  categories:
+  - endpoint
+references:
+- https://www.marcosantadev.com/manage-plist-files-plistbuddy/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=PlistBuddy\
+    \ (Processes.process=*LaunchAgents*\n    OR\n    Processes.process=*RunAtLoad*\n\
+    \    OR\n    Processes.process=*true*)\n  BY Processes.dest Processes.user Processes.parent_process\n\
+    \     Processes.process_name Processes.process Processes.process_id\n     Processes.parent_process_id\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `suspicious_plistbuddy_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c3194009-e0eb-4f84-87a9-4070f8688f00
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_plistbuddy_usage.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

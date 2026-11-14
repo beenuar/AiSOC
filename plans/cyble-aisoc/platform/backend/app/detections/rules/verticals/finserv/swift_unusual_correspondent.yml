@@ -1,0 +1,26 @@
+title: SWIFT MT103 to Unusual Correspondent Bank
+id: aisoc-vt-fin-0001-swift-unusual-correspondent
+status: experimental
+description: |
+  An MT103 customer-credit-transfer was sent to a beneficiary bank whose
+  BIC has not appeared in this tenant's prior month of correspondent
+  traffic. Strong precursor signal for SWIFT-fraud campaigns where
+  attackers re-use compromised Alliance/Access terminals to push funds
+  through previously-unseen intermediaries.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: swift
+  service: alliance_access
+tags:
+  - attack.t1565.002
+  - attack.impact
+  - aisoc.vertical.finserv
+  - aisoc.compliance.psd2
+detection:
+  selection:
+    event.module: swift.alliance
+    event.action: 'mt103.sent'
+  filter:
+    correspondent.seen_before: true
+  condition: selection and not filter

@@ -1,0 +1,44 @@
+id: splunk-security-content-63a8a537-36fd-4aac-a3ea-1a96afd2c871
+name: O365 DLP Rule Triggered
+description: The following analytic detects when Microsoft Office 365 Data Loss Prevention
+  (DLP) rules have been triggered. DLP rules can be configured for any number of security,
+  regulatory, or business compliance reasons, as such this analytic will only be as
+  accurate as the upstream DLP configuration. Detections from this analytic should
+  be evaluated thoroughly to de termine what, if any, security relevance the underlying
+  DLP events contain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048
+  - T1567
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/purview/dlp-learn-about-dlp
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation=DLPRuleMatch | eval recipient
+    = ''ExchangeMetaData.To{}'', signature_id = ''ExchangeMetaData.UniqueID'', signature
+    = ''PolicyDetails{}.Rules{}.RuleName'' , src_user = UserId, reason =''PolicyDetails{}.Rules{}.ConditionsMatched.SensitiveInformation{}.SensitiveInformationTypeName'',
+    result=''PolicyDetails{}.Rules{}.Actions{}'', file_name=case(NOT match(''PolicyDetails{}.Rules{}.ConditionsMatched.SensitiveInformation{}.Location'',"Message
+    Body"),''PolicyDetails{}.Rules{}.ConditionsMatched.SensitiveInformation{}.Location'')
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime values(signature)
+    as signature values(file_name) as file_name values(ExchangeMetaData.Subject) AS
+    subject values(Workload) as app values(result) as result by action dest user src
+    vendor_account vendor_product src_user recipient signature_id reason | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_dlp_rule_triggered_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 63a8a537-36fd-4aac-a3ea-1a96afd2c871
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_dlp_rule_triggered.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

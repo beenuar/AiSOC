@@ -1,0 +1,8 @@
+{
+  "host": "app.corp.com",
+  "method": "POST",
+  "origin_present": false,
+  "referer_present": false,
+  "request_uri": "/account/email",
+  "request_uri_in_sensitive_paths": true
+}

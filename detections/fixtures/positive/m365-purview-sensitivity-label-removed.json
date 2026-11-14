@@ -1,0 +1,5 @@
+{
+  "operation": "SensitivityLabelRemoved",
+  "item": "document.docx",
+  "actor": "user@corp.com"
+}

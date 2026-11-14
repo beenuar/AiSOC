@@ -1,0 +1,77 @@
+id: kubernetes-audit
+name: Kubernetes Audit Logs
+version: 1.0.0
+category: cloud
+vendor: Kubernetes
+publisher: AiSOC Community
+description: >
+  Kubernetes apiserver audit logs in dual delivery mode: webhook
+  (apiserver pushes audit events to AiSOC's tenant-scoped ingest
+  endpoint with a shared-secret header) or file_tail (AiSOC reads
+  a local audit log forward from a byte cursor). Powers cluster-level
+  detections including kubectl exec abuse, ServiceAccount token theft,
+  RBAC privilege escalation, and impersonation. Severity is bucketed
+  by verb + resource + response code so the inbox surfaces high-signal
+  events instead of routine apiserver chatter.
+homepage: https://kubernetes.io/docs/tasks/debug/debug-cluster/audit/
+docs_url: /docs/connectors/kubernetes-audit
+license: MIT
+capabilities:
+  - pull_audit
+  - pull_alerts
+config_schema:
+  - name: mode
+    label: Delivery mode
+    type: select
+    required: true
+    default: webhook
+    options:
+      - value: webhook
+        label: Webhook (apiserver pushes)
+      - value: file_tail
+        label: File tail (read local audit log)
+    help_text: >
+      Webhook is the right choice for managed clusters (EKS / GKE
+      / AKS). File tail is the right choice for self-hosted clusters
+      where you can mount the audit log path into the AiSOC
+      connector pod.
+  - name: cluster_name
+    label: Cluster name
+    type: string
+    required: true
+    help_text: >
+      Human-readable cluster name. Stamped onto every normalised
+      event so detection content and investigations can filter
+      to a single cluster.
+  - name: inbox_token
+    label: Inbox token (webhook mode, legacy path)
+    type: secret
+    required: false
+    help_text: >
+      Optional. Use only if you cannot configure the apiserver to
+      send the ``X-AiSOC-K8s-Token`` header (some managed control
+      planes restrict custom headers in audit-webhook kubeconfig).
+      Bound inbox token created with the ``k8s-audit`` template
+      attached. Configure your apiserver AuditSink or
+      ``--audit-webhook-config-file`` to POST audit events to
+      ``/v1/inbox/<this-token>``. Prefer the dedicated
+      ``/v1/ingest/k8s-audit/<tenant_id>`` endpoint described in
+      the connector docs whenever possible.
+  - name: audit_log_path
+    label: Audit log path (file_tail mode only)
+    type: string
+    required: false
+    default: /var/log/kubernetes/audit/audit.log
+    help_text: >
+      Absolute path to the apiserver audit log file inside the
+      connector pod. Mount it read-only from the host or from a
+      persistent volume the apiserver writes to.
+  - name: cursor_path
+    label: Cursor file path (file_tail mode only)
+    type: string
+    required: false
+    help_text: >
+      Optional override for where AiSOC stores its byte-position
+      cursor. Defaults to ``<audit_log_path>.aisoc-cursor``. Use
+      a writeable path — the connector pod needs to update this
+      on every successful poll.

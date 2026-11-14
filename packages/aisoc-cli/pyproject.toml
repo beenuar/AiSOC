@@ -1,0 +1,88 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisoc-cli"
+version = "0.1.0"
+description = "AiSOC Developer CLI — scaffold, validate, and publish plugins and detections"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+  { name = "Beenu Arora", email = "beenu@cyble.com" },
+]
+keywords = ["aisoc", "soc", "security", "cli", "plugin"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+requires-python = ">=3.11"
+dependencies = [
+  "click>=8.1",
+  "httpx>=0.27",
+  "pyyaml>=6.0",
+  "jsonschema>=4.21",
+  # Ed25519 publisher signing. The verifier is services/api, so this is one
+  # half of a contract and carries the same range as every other install
+  # path — see scripts/check_dependency_pins.py.
+  "cryptography>=46,<51",
+  "rich>=13.7",
+  "structlog>=24.1",
+]
+
+[project.scripts]
+aisoc = "aisoc_cli.main:cli"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-asyncio>=0.23",
+  "mypy>=2.3.1,<3",
+  "ruff>=0.16.8,<0.17",
+]
+
+[project.urls]
+Homepage = "https://github.com/beenuar/AiSOC"
+Documentation = "https://github.com/beenuar/AiSOC#readme"
+Repository = "https://github.com/beenuar/AiSOC"
+
+[tool.hatch.build.targets.wheel]
+# `packages` already carries everything under src/aisoc_cli, templates
+# included, so they reach the wheel at aisoc_cli/templates/... where
+# `importlib.resources` expects them.
+#
+# There used to be a `force-include` mapping that same directory to that same
+# destination. Hatchling then tried to add each template twice and refused:
+#   ValueError: A second file is being added to the wheel archive at the same
+#   path: aisoc_cli/templates/connector/README.md.tmpl
+# Nothing built this wheel except a tag, so the failure was invisible until
+# the release ran — and it would have blocked the first real publish.
+# `test_templates_reach_the_wheel` in tests/ now asserts the templates are
+# present, so removing the redundant mapping cannot quietly drop them.
+packages = ["src/aisoc_cli"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/aisoc_cli",
+  "tests",
+  "README.md",
+  "LICENSE",
+  "pyproject.toml",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+strict = true
+python_version = "3.11"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

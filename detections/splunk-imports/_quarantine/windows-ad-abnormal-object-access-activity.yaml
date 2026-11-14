@@ -1,0 +1,44 @@
+id: splunk-security-content-71b289db-5f2c-4c43-8256-8bf26ae7324a
+name: Windows AD Abnormal Object Access Activity
+description: The following analytic identifies a statistically significant increase
+  in access to Active Directory objects, which may indicate attacker enumeration.
+  It leverages Windows Security Event Code 4662 to monitor and analyze access patterns,
+  comparing them against historical averages to detect anomalies. This activity is
+  significant for a SOC because abnormal access to AD objects can be an early indicator
+  of reconnaissance efforts by an attacker. If confirmed malicious, this behavior
+  could lead to unauthorized access, privilege escalation, or further compromise of
+  the Active Directory environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://medium.com/securonix-tech-blog/detecting-ldap-enumeration-and-bloodhound-s-sharphound-collector-using-active-directory-decoys-dfc840f2f644
+- https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4662
+- https://attack.mitre.org/tactics/TA0007/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4662\n  | stats min(_time) AS firstTime,\
+    \ max(_time) AS lastTime, dc(ObjectName) AS ObjectName_count, values(ObjectType)\
+    \ AS ObjectType, latest(Computer) AS dest count\n    BY SubjectUserName\n  | eventstats\
+    \ avg(ObjectName_count) AS average stdev(ObjectName_count) AS standarddev\n  |\
+    \ eval limit = round((average+(standarddev*3)),0), user = SubjectUserName\n  |\
+    \ where ObjectName_count > limit\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `windows_ad_abnormal_object_access_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 71b289db-5f2c-4c43-8256-8bf26ae7324a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_abnormal_object_access_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

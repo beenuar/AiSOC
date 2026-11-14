@@ -1,0 +1,30 @@
+title: DNS Over HTTPS to External Resolver
+id: aisoc-id-nw-0012-doh-external
+status: stable
+description: |
+  Internal host issues DNS-over-HTTPS requests to a public DoH
+  provider, bypassing corporate DNS visibility. Used by malware
+  to hide C2 lookups and by users to evade DNS-based controls.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1572
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    network.transport: 'tcp'
+    destination.port: 443
+  doh_destination:
+    destination.domain|contains:
+      - 'dns.google'
+      - 'cloudflare-dns.com'
+      - 'mozilla.cloudflare-dns.com'
+      - 'dns.quad9.net'
+      - 'doh.opendns.com'
+      - 'dns.adguard.com'
+      - 'doh.cleanbrowsing.org'
+  condition: selection and doh_destination

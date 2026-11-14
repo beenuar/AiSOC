@@ -1,0 +1,88 @@
+id: mitre-car-car-2019-04-002
+name: Generic Regsvr32
+description: Regsvr32 can be used to execute arbitrary code in the context of a Windows
+  signed binary, which can be used to bypass application whitelisting. This analytic
+  looks for suspicious usage of the tool. It's not likely that you'll get millions
+  of hits, but it does occur during normal activity so some form of baselining would
+  be necessary for this to be an alerting analytic. Alternatively, it can be used
+  for hunt by looking for new or anomalous DLLs manually.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Main Pattern
+    type: splunk
+    code: 'index=__your_sysmon_data__ EventCode=1 regsvr32.exe | search ParentImage="*regsvr32.exe"
+      AND Image!="*regsvr32.exe*"
+
+      '
+  - name: Main Pattern - pseudocode
+    type: pseudocode
+    code: "processes = search Process:Create\nregsvr_processes = filter processes\
+      \ where (\n  parent_image_path == \"*regsvr32.exe\" and image_path != \"*regsvr32.exe*\"\
+      \n )\noutput regsvr_processes\n"
+  - name: New items since last month
+    type: splunk
+    code: 'index=__your_sysmon_data__ earliest=-d@d latest=now() EventCode=1 regsvr32.exe
+      | search ParentImage="*regsvr32.exe" AND Image!="*regsvr32.exe*" | search NOT
+      [
+
+      search index=__your_sysmon_data__ earliest=-60d@d latest=-30d@d EventCode=1
+      regsvr32.exe | search ParentImage="*regsvr32.exe" AND Image!="*regsvr32.exe*"
+      | dedup CommandLine | fields CommandLine ]
+
+      '
+  - name: Spawning child processes
+    type: splunk
+    code: 'index=__your_sysmon_data__ EventCode=1 (ParentImage="C:\\Windows\\System32\\regsvr32.exe"
+      OR ParentImage="C:\\Windows\\SysWOW64\\regsvr32.exe") AND Image!="C:\\Windows\\System32\\regsvr32.exe"
+      AND Image!="C:\\Windows\\SysWOW64\\regsvr32.exe" AND Image!="C:\\WINDOWS\\System32\\regsvr32.exe"
+      AND Image!="C:\\WINDOWS\\SysWOW64\\regsvr32.exe" AND Image!="C:\\Windows\\SysWOW64\\WerFault.exe"
+      AND Image!="C:\\Windows\\System32\\wevtutil.exe" AND Image!="C:\\Windows\\System32\\WerFault.exe"|stats
+      values(ComputerName) as "Computer Name" values(ParentCommandLine) as "Parent
+      Command Line" count(Image) as ImageCount by Image
+
+      '
+  - name: Spawning child processes - pseudocode
+    type: pseudocode
+    code: "processes = search Process:Create\nregsvr_processes = filter processes\
+      \ where (\n  (parent_image_path == \"C:\\Windows\\System32\\regsvr32.exe\" or\
+      \ parent_image_path == \"C:\\Windows\\SysWOW64\\regsvr32.exe\") and\n  image_path\
+      \ != \"C:\\Windows\\System32\\regsvr32.exe\" and\n  image_path != \"C:\\Windows\\\
+      SysWOW64\\regsvr32.exe\" and\n  image_path != \"C:\\Windows\\SysWOW64\\WerFault.exe\"\
+      \ and\n  image_path != \"C:\\Windows\\System32\\WerFault.exe\" and\n  image_path\
+      \ != \"C:\\Windows\\System32\\wevtutil.exe\"\n )\noutput regsvr_processes\n"
+  - name: Loading unsigned images
+    type: splunk
+    code: 'index=__your_sysmon_data__ EventCode=7 (Image="C:\\Windows\\System32\\regsvr32.exe"
+      OR Image="C:\\Windows\\SysWOW64\\regsvr32.exe") Signed=false ImageLoaded!="C:\\Program
+      Files*" ImageLoaded!="C:\\Windows\\*"|stats values(ComputerName) as "Computer
+      Name" count(ImageLoaded) as ImageLoadedCount by ImageLoaded
+
+      '
+  - name: Loading unsigned images - pseudocode
+    type: pseudocode
+    code: "modules = search Module:Load\nunsigned_modules = filter modules where (\n\
+      \  (image_path == \"C:\\Windows\\System32\\regsvr32.exe\" or image_path == \"\
+      C:\\Windows\\SysWOW64\\regsvr32.exe\") and\n  signer == null and\n  module_path\
+      \ != \"C:\\Program Files*\" and\n  module_path != \"C:\\Windows\\*\"\n)\noutput\
+      \ unsigned_modules\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-04-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-04-002.yaml
+notes:
+  car_status: needs_implementation

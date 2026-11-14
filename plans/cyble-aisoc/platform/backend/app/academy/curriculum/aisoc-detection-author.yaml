@@ -1,0 +1,98 @@
+id: aisoc-detection-author
+title: Detection Author Path
+version: "1.0.0"
+audience: Detection engineers contributing to the OSS detection library.
+description: |
+  How to write production-grade Sigma rules that pass the AiSOC OSS
+  CI gate (H1-H8 / S1-S4 checks). Pairs with the
+  CONTRIBUTING-DETECTIONS.md spec.
+estimated_minutes: 60
+passing_score: 0.7
+
+modules:
+  - id: m1-sigma-basics
+    title: Sigma in 10 minutes
+    lessons:
+      - id: l1-rule-anatomy
+        title: Anatomy of a Sigma rule
+        kind: reading
+        estimated_minutes: 8
+        body: |
+          Title, id, status, description, level, logsource, tags,
+          detection, falsepositives. What each field is for and
+          which ones AiSOC's CI specifically validates.
+      - id: l2-detection-block
+        title: Writing the detection block
+        kind: reading
+        estimated_minutes: 12
+        body: |
+          Selections, modifiers, and conditions. How to translate
+          "any process named svchost.exe spawned from a non-Windows
+          path" into a working Sigma rule.
+
+  - id: m2-aisoc-policy
+    title: The AiSOC policy on detection content
+    lessons:
+      - id: l3-h1-h8-walkthrough
+        title: H1-H8 hard checks, line by line
+        kind: reading
+        estimated_minutes: 10
+        body: |
+          Why each hard check exists, and how to fix it when CI
+          rejects your PR. Includes worked examples from real
+          contributor PRs.
+      - id: l4-tests-yaml
+        title: Writing tests.yml positives and negatives
+        kind: reading
+        estimated_minutes: 8
+        body: |
+          Positives validate the rule fires when it should.
+          Negatives validate it doesn't fire when it shouldn't.
+          The validator runs both before merge.
+      - id: l5-quiz-policy
+        title: Quiz — the OSS contribution policy
+        kind: quiz
+        passing_score: 0.7
+        questions:
+          - id: q1
+            prompt: |
+              Which check requires that your rule compiles to BOTH
+              Splunk SPL and Sentinel KQL?
+            choices:
+              - id: a
+                label: H1
+              - id: b
+                label: H6
+              - id: c
+                label: H8
+              - id: d
+                label: S4
+            answer: c
+          - id: q2
+            prompt: |
+              You add a negative sample to your tests.yml and CI
+              fails it. What does that mean?
+            choices:
+              - id: a
+                label: The negative DID match the rule (it should not)
+              - id: b
+                label: The negative is malformed YAML
+              - id: c
+                label: H7 hard error
+              - id: d
+                label: The CI is flaky; retry
+            answer: a
+          - id: q3
+            prompt: |
+              S4 (falsepositives non-empty) is currently a soft
+              warning. When does it become a hard error?
+            choices:
+              - id: a
+                label: Never
+              - id: b
+                label: In v0.2 once the legacy pack is backfilled
+              - id: c
+                label: Immediately on the next deploy
+              - id: d
+                label: When the SDK ships v1.0.0
+            answer: b

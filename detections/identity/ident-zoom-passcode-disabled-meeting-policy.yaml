@@ -1,0 +1,24 @@
+id: det-identity-157
+name: Zoom Account Policy Disables Meeting Passcode
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Zoom Account Policy
+  Disables Meeting Passcode'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: zoom
+  service: admin
+detection:
+  condition: |
+    action IN ["update_account_settings", "update_user_settings"]
+    AND passcode_required == false
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

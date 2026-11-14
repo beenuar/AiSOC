@@ -1,0 +1,8 @@
+{
+  "baseline_location_rarity": 0.02,
+  "country": "GB",
+  "event_type": "user.mfa.factor.reset_all",
+  "outcome": "SUCCESS",
+  "target_user": "priya.n@example.com",
+  "user": "servicedesk@example.com"
+}

@@ -1,0 +1,52 @@
+id: splunk-security-content-0d42b295-0f1f-4183-b75e-377975f47c65
+name: Kubernetes Process with Resource Ratio Anomalies
+description: The following analytic detects anomalous changes in resource utilization
+  ratios for processes running on a Kubernetes node. It leverages process metrics
+  collected via an OTEL collector and hostmetrics receiver, analyzed through Splunk
+  Observability Cloud. The detection uses a lookup table containing average and standard
+  deviation values for various resource ratios (e.g., CPU:memory, CPU:disk operations).
+  Significant deviations from these baselines may indicate compromised processes,
+  malicious activity, or misconfigurations. If confirmed malicious, this could signify
+  a security breach, allowing attackers to manipulate workloads, potentially leading
+  to data exfiltration or service disruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| mstats avg(process.*) as process.* where `kubernetes_metrics` by
+    host.name k8s.cluster.name k8s.node.name process.executable.name span=10s | eval
+    cpu:mem = ''process.cpu.utilization''/''process.memory.utilization'' | eval cpu:disk
+    = ''process.cpu.utilization''/''process.disk.operations'' | eval mem:disk = ''process.memory.utilization''/''process.disk.operations''
+    | eval cpu:threads = ''process.cpu.utilization''/''process.threads'' | eval disk:threads
+    = ''process.disk.operations''/''process.threads'' | eval key = ''k8s.cluster.name''
+    + ":" + ''host.name'' + ":" + ''process.executable.name'' | lookup k8s_process_resource_ratio_baseline
+    key | fillnull | eval anomalies = "" | foreach stdev_* [ eval anomalies =if( ''<<MATCHSTR>>''
+    > (''avg_<<MATCHSTR>>'' + 4 * ''stdev_<<MATCHSTR>>''), anomalies + "<<MATCHSTR>>
+    ratio higher than average by " + tostring(round((''<<MATCHSTR>>'' - ''avg_<<MATCHSTR>>'')/''stdev_<<MATCHSTR>>''
+    ,2)) + " Standard Deviations. <<MATCHSTR>>=" + tostring(''<<MATCHSTR>>'') + "
+    avg_<<MATCHSTR>>=" + tostring(''avg_<<MATCHSTR>>'') + " ''stdev_<<MATCHSTR>>''="
+    + tostring(''stdev_<<MATCHSTR>>'') + ", " , anomalies) ] | eval anomalies = replace(anomalies,
+    ",\s$", "") | where anomalies!="" | stats count values(anomalies) as anomalies
+    by host.name k8s.cluster.name k8s.node.name process.executable.name | where count
+    > 5 | rename host.name as host | `kubernetes_process_with_resource_ratio_anomalies_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0d42b295-0f1f-4183-b75e-377975f47c65
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_process_with_resource_ratio_anomalies.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

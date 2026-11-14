@@ -1,0 +1,41 @@
+id: splunk-security-content-40e3b299-19a5-4460-96e9-e1467f714f8e
+name: PowerShell Enable PowerShell Remoting
+description: The following analytic detects the use of the Enable-PSRemoting cmdlet,
+  which allows PowerShell remoting on a local or remote computer. This detection leverages
+  PowerShell Script Block Logging (EventCode 4104) to identify when this cmdlet is
+  executed. Monitoring this activity is crucial as it can indicate an attacker enabling
+  remote command execution capabilities on a compromised system. If confirmed malicious,
+  this activity could allow an attacker to take control of the system remotely, execute
+  commands, and potentially pivot to other systems within the network, leading to
+  further compromise and lateral movement.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/enable-psremoting?view=powershell-7.3
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText=\"*Enable-PSRemoting*\"\
+    \n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `powershell_enable_powershell_remoting_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 40e3b299-19a5-4460-96e9-e1467f714f8e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_enable_powershell_remoting.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

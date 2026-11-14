@@ -1,0 +1,217 @@
+"""
+Data models for the generic ``live_action`` interface.
+
+The live-action layer is the registry-driven counterpart to the original
+``EXECUTOR_REGISTRY`` (``services/actions/app/services/executor_registry.py``).
+That registry is keyed by the ``ActionType`` enum and only knows about the
+in-tree executors that ship with the actions service. It cannot be extended
+at runtime, which means every new vendor integration requires a code change
+inside the actions service itself.
+
+The live-action layer flips that model on its head:
+
+* Implementations are keyed by ``(vendor_id, capability)`` rather than a
+  fixed ``ActionType``. ``vendor_id`` matches the connector ID surfaced by
+  ``services/connectors`` (e.g. ``"crowdstrike"``, ``"defender"``,
+  ``"okta"``, or any plugin-supplied ID). ``capability`` reuses the existing
+  ``Capability`` enum from ``services/connectors/app/connectors/base.py``,
+  so the agent's planner does not have to learn a separate vocabulary.
+* Multiple implementations can coexist for the same capability — one per
+  vendor — and the dispatcher picks the right one based on the request.
+* Plugins can register their own implementations at startup via
+  :func:`live_actions.registry.register_executor`, including for
+  capabilities that no in-tree executor currently supports.
+
+Why we did not just extend ``EXECUTOR_REGISTRY`` directly:
+  1. ``ActionType`` and ``Capability`` are not 1:1 — capabilities like
+     ``BLOCK_HASH``, ``REVOKE_TOKEN``, or future plugin-only verbs have no
+     corresponding ``ActionType`` member. Extending ``ActionType`` for every
+     plugin would make it the integration choke point we are trying to
+     escape.
+  2. The classic registry has no notion of *which vendor* implements the
+     action. ``IsolateHostExecutor`` itself fans out to CrowdStrike or
+     Defender by inspecting ``parameters["vendor"]``. That hides the choice
+     from the planner and from audit logs.
+  3. Plugin authors should be able to ship a new ``(vendor_id, capability)``
+     pair without reaching into the actions service. Registry-driven dispatch
+     is the cleanest way to express that.
+
+Both layers continue to coexist. The classic ``/api/v1/actions`` endpoint
+keeps its current behaviour for backwards compatibility; the new
+``/api/v1/live-actions`` endpoints (defined in
+``app.live_actions.router``) sit alongside it.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
+from uuid import UUID, uuid4
+
+from pydantic import BaseModel, Field
+
+
+class LiveActionStatus(str, Enum):
+    """Final state of a live-action execution.
+
+    Distinct from :class:`app.models.action.ActionStatus` because the
+    live-action layer does not (yet) own approval/rollback orchestration —
+    it is a pure execution surface. The fewer states we expose here, the
+    clearer the contract for plugin authors.
+    """
+
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    SIMULATED = "simulated"  # No credentials → safe simulation path.
+    # Phase B2 — the autonomy-safety gate (Phase 9a `decide()`) is wired into
+    # dispatch. These two states mean the executor was intentionally NOT
+    # invoked: the tier/blast policy blocked it outright, or it needs a human.
+    BLOCKED = "blocked"
+    PENDING_APPROVAL = "pending_approval"
+    #: The vendor accepted the request, the work started, and the outcome is
+    #: not known yet. Nothing failed and nothing is finished.
+    #:
+    #: Added because two executors had no honest state to land in and so were
+    #: unreachable through governed dispatch. ``chatops_verify`` delivers a
+    #: prompt and waits for a person to click; ``capture_forensics`` queues an
+    #: acquisition that MDE completes minutes later. Both returned the legacy
+    #: ``ActionStatus.RUNNING``, which ``_to_live_status`` collapsed into
+    #: SUCCEEDED along with everything else that was not FAILED — reporting an
+    #: unanswered question and an uncollected package as completed actions.
+    #:
+    #: Distinct from PENDING_APPROVAL, which means the opposite: nothing ran,
+    #: because policy wants a human first. Here the vendor was touched and the
+    #: caller has to come back — post-action verification deliberately does not
+    #: run against this state, since there is not yet an effect to read back.
+    AWAITING_COMPLETION = "awaiting_completion"
+
+
+class LiveActionRequest(BaseModel):
+    """Request payload accepted by a :class:`LiveActionExecutor`.
+
+    ``capability`` and ``vendor_id`` are stored as strings rather than the
+    ``Capability`` enum so the wire format is stable even if the enum
+    grows new members in older deployments. The dispatcher validates them
+    against the registry on the way in.
+
+    ``params`` is intentionally an open-ended dict — different vendors need
+    different shapes (CrowdStrike's RTR script vs Okta's user lookup) and
+    forcing a single typed schema across all of them would either exclude
+    real integrations or require a discriminated union we'd have to extend
+    every time we add a connector.
+
+    ``dry_run`` is a first-class request field rather than a query param
+    because the agent planner emits it as part of the action plan; we want
+    the same payload shape whether the executor was invoked from REST,
+    from the agent runner, or from a unit test.
+    """
+
+    request_id: UUID = Field(default_factory=uuid4)
+    capability: str
+    vendor_id: str
+    target: str = ""
+    params: dict[str, Any] = Field(default_factory=dict)
+    # Phase B2 — connector-style credentials (schema field names, e.g.
+    # ``client_id`` / ``api_token``). When present, the dispatcher translates
+    # them into the executor's vendor-prefixed params via
+    # ``app.services.credential_resolver.resolve_params`` — so callers holding
+    # a decrypted connector ``auth_config`` don't need to know each executor's
+    # parameter vocabulary. Explicit ``params`` keys win on collision.
+    auth_config: dict[str, Any] | None = None
+    dry_run: bool = False
+
+    #: How sure the caller is that the finding justifying this action is real,
+    #: 0..1. The capability contract says what the verb does to an estate; this
+    #: says how good the reason is. ``approval_matrix`` needs both.
+    #:
+    #: ``None`` is not "no opinion", it is the lowest band — the matrix treats
+    #: it that way on purpose, because defaulting permissive turns a scoring
+    #: bug into an autonomous containment.
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+
+    # Provenance — these are filled in by the API layer / agent runner so
+    # the executor's structured logs can be correlated back to the case or
+    # playbook that triggered it. They are optional because plugin authors
+    # invoking executors directly (e.g. from tests) shouldn't have to mint
+    # synthetic UUIDs.
+    case_id: UUID | None = None
+    playbook_run_id: UUID | None = None
+    #: The step that asked for this, when the caller is a playbook. Carried so
+    #: the audit trail names the step rather than only the run: a playbook can
+    #: contain several actions and "run X did something" is not an audit trail.
+    playbook_step_id: str = ""
+    tenant_id: UUID | None = None
+    requested_by: str = "system"
+
+    #: Optional signed VAID badge (beenuar/AiSOC#1739) naming the agent
+    #: identity that requested this dispatch — a plain JSON document, never
+    #: an in-process object, because this request may cross a process
+    #: boundary (the agent runner calling this service) that no Python
+    #: object survives. Verified by ``app.security.vaid_verifier`` only
+    #: when the optional VAID plugin is enabled; ``None`` otherwise, which
+    #: is a no-op and not a refusal, so a deployment that has not opted in
+    #: sees no behaviour change.
+    vaid_badge: dict[str, Any] | None = None
+
+
+class LiveActionResult(BaseModel):
+    """Result returned by a :class:`LiveActionExecutor`.
+
+    ``summary`` is a one-line human-readable string that the case timeline
+    renders verbatim — keep it short and concrete (e.g.
+    ``"Isolated host srv-12 on CrowdStrike (rtr_session=abc123)"``), not
+    a paragraph.
+
+    ``details`` carries the structured payload the vendor returned, so
+    downstream consumers (agent reflection, post-mortems) can dig in
+    without a second round-trip.
+
+    ``error`` is set when ``status == FAILED``; we keep ``status`` as the
+    source of truth and let consumers special-case ``error is not None``
+    only when they want a stack-trace-style display.
+    """
+
+    request_id: UUID
+    status: LiveActionStatus
+    capability: str
+    vendor_id: str
+    summary: str
+    details: dict[str, Any] = Field(default_factory=dict)
+    error: str | None = None
+    completed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class LiveActionDescriptor(BaseModel):
+    """Discovery payload returned by ``GET /api/v1/live-actions``.
+
+    Lets the agent planner (and the frontend "test action" UI) enumerate
+    the available ``(vendor_id, capability)`` pairs without having to
+    introspect Python class hierarchies. ``source`` distinguishes
+    ``"builtin"`` adapters (which wrap the in-tree executors) from
+    ``"plugin"`` registrations so operators can audit which integrations
+    a deployment is actually using.
+    """
+
+    vendor_id: str
+    capability: str
+    description: str
+    source: str  # "builtin" | "plugin"
+    requires_credentials: bool = True
+    #: What this verb does to the estate if the finding is wrong, and whether
+    #: a human has to authorise it. Both read from ``CAPABILITY_CONTRACTS``
+    #: at discovery time rather than declared per executor, because the
+    #: contract belongs to the capability and a per-executor copy is how one
+    #: vendor's arm comes to be graded more generously than another's.
+    #:
+    #: Published here because ``services/api`` needs to know which verbs are
+    #: reads before it will let an investigation agent call one, and the
+    #: alternative was a second copy of the classification in that service.
+    #: A mirror of a safety classification is a mirror that eventually
+    #: disagrees, and the generous copy is the one that gets used.
+    #:
+    #: Empty for a capability with no contract entry, which is a plugin verb.
+    #: An empty impact must never be read as read-only; the API's read door
+    #: requires the exact string ``read_only``.
+    impact: str = ""
+    approval: str = ""

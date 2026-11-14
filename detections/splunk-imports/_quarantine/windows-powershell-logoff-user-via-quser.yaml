@@ -1,0 +1,41 @@
+id: splunk-security-content-6d70780d-4cfe-4820-bafd-1b43941986b5
+name: Windows Powershell Logoff User via Quser
+description: The following analytic detects the process of logging off a user through
+  the use of the quser and logoff commands. By monitoring for these commands, the
+  analytic identifies actions where a user session is forcibly terminated, which could
+  be part of an administrative task or a potentially unauthorized access attempt.
+  This detection helps identify potential misuse or malicious activity where a user’s
+  access is revoked without proper authorization, providing insight into potential
+  security incidents involving account management or session manipulation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1531
+  categories:
+  - endpoint
+references:
+- https://devblogs.microsoft.com/scripting/automating-quser-through-powershell/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*quser*logoff*\"\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_powershell_logoff_user_via_quser_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6d70780d-4cfe-4820-bafd-1b43941986b5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_logoff_user_via_quser.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

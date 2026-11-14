@@ -1,0 +1,42 @@
+id: splunk-security-content-8551252d-b5b6-4b6e-8a82-51460aeb29a3
+name: DNS Kerberos Coercion
+description: Detects DNS-based Kerberos coercion attacks where adversaries inject
+  marshaled credential structures into DNS records to spoof SPNs and redirect authentication
+  such as in CVE-2025-33073. This detection leverages suricata looking for specific
+  CREDENTIAL_TARGET_INFORMATION structures in DNS queries.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1557.001
+  - T1187
+  - T1071.004
+  categories:
+  - network
+references:
+- https://web.archive.org/web/20250617122747/https://www.synacktiv.com/publications/ntlm-reflection-is-dead-long-live-ntlm-reflection-an-in-depth-analysis-of-cve-2025
+- https://www.synacktiv.com/publications/relaying-kerberos-over-smb-using-krbrelayx
+- https://www.guidepointsecurity.com/blog/the-birth-and-death-of-loopyticket/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(DNS.src) as src values(DNS.dest) as dest FROM\
+    \ datamodel=Network_Resolution\n  WHERE DNS.query=\"*1UWhRC*\" DNS.query=\"*AAAAA*\"\
+    \ DNS.query=\"*YBAAAA*\"\n  BY DNS.answer DNS.answer_count DNS.query\n     DNS.query_count\
+    \ DNS.reply_code_id DNS.src\n     DNS.vendor_product\n| `drop_dm_object_name(DNS)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table firstTime lastTime query count src dest\n| `dns_kerberos_coercion_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8551252d-b5b6-4b6e-8a82-51460aeb29a3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/dns_kerberos_coercion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

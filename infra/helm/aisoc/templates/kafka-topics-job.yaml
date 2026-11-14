@@ -1,0 +1,85 @@
+{{- if and .Values.kafka.deploy.enabled .Values.kafka.deploy.createTopics.enabled }}
+{{- /*
+  Create the spine's topics before anything publishes to them.
+
+  Auto-creation is on, and it is not enough. The first POST to
+  /v1/ingest/batch on a fresh install is answered
+  `{"error":"failed to publish events"}` with
+  `Unknown Topic Or Partition` in the ingest log: the metadata request
+  triggers creation and the produce that triggered it still fails. A retry
+  succeeds, so the symptom is one lost batch at install time and nothing
+  afterwards, which is exactly the kind of loss nobody traces.
+
+  Pre-creating also pins partitions and replication factor rather than
+  inheriting the broker defaults. An auto-created topic takes whatever
+  KAFKA_NUM_PARTITIONS happened to be when the broker booted, so a topic
+  created during a misconfigured window keeps one partition forever and
+  quietly caps fusion at one consuming replica.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aisoc.fullname" . }}-kafka-topics
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: kafka-topics
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: kafka-topics
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: topics
+          image: "{{ .Values.kafka.deploy.image.repository }}:{{ .Values.kafka.deploy.image.tag }}"
+          imagePullPolicy: {{ .Values.kafka.deploy.image.pullPolicy }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+              bootstrap="{{ include "aisoc.kafkaBootstrap" . }}"
+              # The Job can start before the quorum has elected a controller,
+              # and `kafka-topics.sh --create` against a broker that has not
+              # joined fails in a way that looks like a configuration error.
+              # Wait for the cluster to answer rather than consuming a
+              # backoffLimit attempt on a race.
+              for attempt in $(seq 1 30); do
+                if /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$bootstrap" >/dev/null 2>&1; then
+                  break
+                fi
+                echo "waiting for $bootstrap (attempt $attempt)"
+                sleep 5
+              done
+              for topic in {{ join " " .Values.kafka.deploy.createTopics.names }}; do
+                /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$bootstrap" \
+                  --create --if-not-exists --topic "$topic" \
+                  --partitions {{ .Values.kafka.deploy.numPartitions }} \
+                  --replication-factor {{ .Values.kafka.deploy.replicationFactor }}
+                echo "ok: $topic"
+              done
+              /opt/kafka/bin/kafka-topics.sh --bootstrap-server "$bootstrap" --list
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+{{- end }}

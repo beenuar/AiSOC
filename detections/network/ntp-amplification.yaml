@@ -1,0 +1,27 @@
+id: det-network-027
+name: NTP Amplification Reflector Attack (Inbound monlist)
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'NTP Amplification
+  Reflector Attack (Inbound monlist)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1498.002
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "UDP"
+    AND src_port == 123
+    AND dst_port == 123
+    AND ntp_command == "monlist"
+    AND src_ip_class == "internet"
+false_positives:
+- Legacy NTP misconfiguration (must be patched)
+playbook: tpl-ddos
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

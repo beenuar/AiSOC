@@ -1,0 +1,1509 @@
+"""Unit tests for the in-process connector scheduler.
+
+We test the scheduler in isolation from APScheduler internals by directly
+calling ``reload_jobs`` / ``_poll_one`` with fakes for the engine, vault,
+ingest client, and connector class. The point of these tests is to
+exercise the *control flow*:
+
+* reload picks up new instances, reschedules changed ones, drops removed ones
+* a successful poll decrypts creds, instantiates the connector, calls
+  fetch_alerts, pushes to ingest, and records success
+* every failure path flips the connector to unhealthy without raising
+
+We do *not* test APScheduler itself — that has its own tests.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from app.connectors.base import AcknowledgementResult, BaseConnector, ConnectorSchema
+from app.db.connector_repo import ConnectorInstance
+from app.scheduler import ConnectorScheduler, _coerce_poll_interval
+
+
+def _make_instance(
+    *,
+    connector_type: str = "crowdstrike",
+    is_enabled: bool = True,
+    auth_config: dict[str, Any] | None = None,
+    connector_config: dict[str, Any] | None = None,
+) -> ConnectorInstance:
+    return ConnectorInstance(
+        id=uuid.uuid4(),
+        tenant_id=uuid.uuid4(),
+        name="test",
+        connector_type=connector_type,
+        is_enabled=is_enabled,
+        auth_config=auth_config or {"client_id": "id", "client_secret": "secret"},
+        connector_config=connector_config or {},
+        health_status="healthy",
+        last_sync=None,
+        events_ingested=0,
+        error_count=0,
+        events_dropped=0,
+        schema_fingerprint=None,
+        last_schema_drift_at=None,
+        last_drift_details=None,
+    )
+
+
+# ---------------------------------------------------------------------------
+# poll_interval coercion
+# ---------------------------------------------------------------------------
+
+
+def test_poll_interval_default():
+    assert _coerce_poll_interval({}) == 300
+
+
+def test_poll_interval_clamps_low():
+    assert _coerce_poll_interval({"poll_interval_seconds": 5}) == 30
+
+
+def test_poll_interval_clamps_high():
+    assert _coerce_poll_interval({"poll_interval_seconds": 999_999}) == 86400
+
+
+def test_poll_interval_invalid_falls_back():
+    assert _coerce_poll_interval({"poll_interval_seconds": "not-a-number"}) == 300
+
+
+def test_poll_interval_passes_through_valid():
+    assert _coerce_poll_interval({"poll_interval_seconds": 600}) == 600
+
+
+# ---------------------------------------------------------------------------
+# _poll_one happy path
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_poll_one_happy_path(monkeypatch):
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={"poll_interval_seconds": 60},
+    )
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"raw": "event"}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: {"normalized": True, **e})
+
+    fake_connector_class = MagicMock(return_value=fake_connector)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": fake_connector_class},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    fake_vault = _FakeVault()
+    fake_ingest = _FakeIngestClient(accepted=1)
+
+    scheduler = ConnectorScheduler(engine=fake_engine, ingest_client=fake_ingest, vault=fake_vault)
+    # We don't call start() because we don't want APScheduler running for
+    # this test — _poll_one operates on the injected fakes directly.
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    fake_connector_class.assert_called_once_with(client_id="id", client_secret="secret")
+    fake_connector.fetch_alerts.assert_awaited_once_with(since_seconds=60)
+    assert fake_ingest.calls == 1
+    pushed = fake_ingest.last_payload
+    assert pushed["events"] == [{"normalized": True, "raw": "event"}]
+    assert fake_engine.success_calls == [inst.id]
+    assert fake_engine.failure_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Checkpoints advance only after full-batch ingest acceptance
+# ---------------------------------------------------------------------------
+
+
+def _checkpointing_connector(events: list[dict[str, Any]]) -> MagicMock:
+    connector = MagicMock()
+    connector.fetch_alerts = AsyncMock(return_value=events)
+    connector.normalize = MagicMock(side_effect=lambda event: event)
+    connector.get_checkpoint.return_value = {"time": "2026-01-01T00:00:02Z", "id": "event-2"}
+    return connector
+
+
+@pytest.mark.asyncio
+async def test_full_ingest_acceptance_persists_the_staged_checkpoint(monkeypatch):
+    inst = _make_instance(connector_type="fake_connector")
+    events = [{"id": "event-1"}, {"id": "event-2"}]
+    connector = _checkpointing_connector(events)
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock(return_value=connector)})
+    engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=engine,
+        ingest_client=_FakeIngestClient(accepted=2, rejected=0),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert engine.checkpoint_calls == [
+        {
+            "connector_id": inst.id,
+            "checkpoint": {"time": "2026-01-01T00:00:02Z", "id": "event-2"},
+        }
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "response",
+    [
+        pytest.param({"accepted": 1, "rejected": 1}, id="partial-rejection"),
+        pytest.param({"accepted": 1, "rejected": 0}, id="accepted-count-too-small"),
+        pytest.param({"accepted": 3, "rejected": 0}, id="accepted-count-too-large"),
+        pytest.param({"accepted": 2}, id="missing-rejected-count"),
+        pytest.param({"rejected": 0}, id="missing-accepted-count"),
+    ],
+)
+async def test_incomplete_ingest_response_withholds_the_checkpoint(monkeypatch, caplog, response):
+    inst = _make_instance(connector_type="fake_connector")
+    connector = _checkpointing_connector([{"id": "event-1"}, {"id": "event-2"}])
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock(return_value=connector)})
+    engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=engine,
+        ingest_client=_FakeIngestClient(response=response),
+        vault=_FakeVault(),
+    )
+
+    with caplog.at_level("WARNING", logger="aisoc.connectors.scheduler"):
+        await scheduler._poll_one(connector_id=inst.id)
+
+    assert engine.checkpoint_calls == []
+    assert "connector.scheduler.checkpoint_withheld" in caplog.text
+    assert "submitted=2" in caplog.text
+    assert f"accepted={int(response.get('accepted', 0) or 0)}" in caplog.text
+    assert f"rejected={int(response.get('rejected', 0) or 0)}" in caplog.text
+    assert f"counts_present={str('accepted' in response and 'rejected' in response)}" in caplog.text
+    assert "event-1" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_empty_fully_processed_batch_may_persist_a_staged_checkpoint(monkeypatch):
+    """Source rows intentionally removed by filters must not replay forever."""
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={
+            "filter_rules": [{"field": "severity", "op": "eq", "value": "info", "action": "drop"}],
+        },
+    )
+    connector = _checkpointing_connector([{"id": "event-2", "severity": "info"}])
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock(return_value=connector)})
+    engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=engine,
+        ingest_client=_FakeIngestClient(accepted=0, rejected=0),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert engine.checkpoint_calls == [
+        {
+            "connector_id": inst.id,
+            "checkpoint": {"time": "2026-01-01T00:00:02Z", "id": "event-2"},
+        }
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Schema-Drift Sentinel + filter-rules pipeline integration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_poll_one_filter_rules_drop_events(monkeypatch):
+    """Pre-ingest filter rules should drop matching events and bump the
+    drop counter passed to record_poll_success without ever shipping the
+    dropped events to ingest."""
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={
+            "poll_interval_seconds": 60,
+            "filter_rules": [
+                {"field": "severity", "op": "eq", "value": "info", "action": "drop"},
+            ],
+        },
+    )
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(
+        return_value=[
+            {"severity": "info", "id": "drop-me"},
+            {"severity": "high", "id": "keep-me"},
+        ]
+    )
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    fake_ingest = _FakeIngestClient(accepted=1)
+
+    captured_success: dict[str, Any] = {}
+
+    async def capture_record_poll_success(
+        conn: Any,
+        connector_id: uuid.UUID,
+        *,
+        events_added: int,
+        events_dropped: int = 0,
+        schema_fingerprint: str | None = None,
+        last_event_at: Any = None,
+        last_event_kind: str | None = None,
+    ) -> None:
+        conn.engine.success_calls.append(connector_id)
+        captured_success["events_added"] = events_added
+        captured_success["events_dropped"] = events_dropped
+        captured_success["schema_fingerprint"] = schema_fingerprint
+
+    monkeypatch.setattr("app.scheduler.record_poll_success", capture_record_poll_success)
+
+    scheduler = ConnectorScheduler(engine=fake_engine, ingest_client=fake_ingest, vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # Only the high-severity event should reach ingest.
+    pushed = fake_ingest.last_payload
+    assert pushed is not None
+    assert pushed["events"] == [{"severity": "high", "id": "keep-me"}]
+    assert captured_success["events_dropped"] == 1
+    assert captured_success["events_added"] == 1
+    assert captured_success["schema_fingerprint"] is not None
+
+
+@pytest.mark.asyncio
+async def test_poll_one_first_poll_records_fingerprint_no_drift(monkeypatch):
+    """First poll on a connector with no baseline should record the new
+    fingerprint via record_poll_success but NOT trigger record_schema_drift."""
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={"poll_interval_seconds": 60},
+    )
+    # Baseline is None on the ConnectorInstance.
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"severity": "high", "host": "h1"}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert fake_engine.success_calls == [inst.id]
+    # No drift expected on first poll.
+    assert fake_engine.drift_calls == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_detects_schema_drift(monkeypatch):
+    """When the new fingerprint differs from the stored baseline,
+    record_schema_drift should be called with details describing the
+    change before record_poll_success is invoked."""
+    # Synthesize a baseline fingerprint that differs from what the
+    # current poll will produce.
+    from app.pipeline.fingerprint import compute_fingerprint as cf
+
+    stale_fp = cf([{"severity": "high"}])  # baseline: only one field
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={"poll_interval_seconds": 60},
+    )
+    inst.schema_fingerprint = stale_fp
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"severity": "high", "host": "h1", "new_field": "x"}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert fake_engine.success_calls == [inst.id]
+    assert len(fake_engine.drift_calls) == 1
+    drift = fake_engine.drift_calls[0]
+    assert drift["connector_id"] == inst.id
+    assert drift["fingerprint"] != stale_fp
+    assert "added" in drift["details"]
+    assert "previous_fingerprint" in drift["details"]
+    assert drift["details"]["previous_fingerprint"] == stale_fp
+
+
+@pytest.mark.asyncio
+async def test_poll_one_stable_schema_no_drift(monkeypatch):
+    """If the new fingerprint matches the stored baseline, the row's
+    fingerprint is rewritten via success but no drift event fires."""
+    from app.pipeline.fingerprint import compute_fingerprint as cf
+
+    events = [{"severity": "high", "host": "h1"}]
+    baseline_fp = cf(events)
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={"poll_interval_seconds": 60},
+    )
+    inst.schema_fingerprint = baseline_fp
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=events)
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert fake_engine.success_calls == [inst.id]
+    assert fake_engine.drift_calls == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_quiet_hour_does_not_clobber_fingerprint(monkeypatch):
+    """If a poll returns zero events the fingerprint is None and we should
+    NOT overwrite the baseline in the row (ConnectorInstance fingerprint
+    stays as-is)."""
+    from app.pipeline.fingerprint import compute_fingerprint as cf
+
+    baseline_fp = cf([{"severity": "high", "host": "h1"}])
+    inst = _make_instance(
+        connector_type="fake_connector",
+        connector_config={"poll_interval_seconds": 60},
+    )
+    inst.schema_fingerprint = baseline_fp
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    captured_success: dict[str, Any] = {}
+
+    async def capture_record_poll_success(
+        conn: Any,
+        connector_id: uuid.UUID,
+        *,
+        events_added: int,
+        events_dropped: int = 0,
+        schema_fingerprint: str | None = None,
+        last_event_at: Any = None,
+        last_event_kind: str | None = None,
+    ) -> None:
+        conn.engine.success_calls.append(connector_id)
+        captured_success["schema_fingerprint"] = schema_fingerprint
+
+    monkeypatch.setattr("app.scheduler.record_poll_success", capture_record_poll_success)
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=0),
+        vault=_FakeVault(),
+    )
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # Empty batch → fingerprint should be None so the DB layer leaves the
+    # baseline alone.
+    assert captured_success["schema_fingerprint"] is None
+    assert fake_engine.drift_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Failure paths each flip the row to unhealthy without raising
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_poll_one_unknown_connector_type(monkeypatch):
+    inst = _make_instance(connector_type="not_in_registry")
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
+
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.failure_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_decrypt_failure(monkeypatch):
+    inst = _make_instance(connector_type="fake_connector")
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": MagicMock()})
+
+    bad_vault = _FakeVault()
+    bad_vault.fail = True
+
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=bad_vault)
+    await scheduler._poll_one(connector_id=inst.id)
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.failure_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_constructor_typeerror(monkeypatch):
+    inst = _make_instance(
+        connector_type="fake_connector",
+        auth_config={"unexpected_kwarg": "x"},
+    )
+
+    def bad_ctor(**_kwargs: Any) -> Any:
+        raise TypeError("got unexpected keyword argument")
+
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": bad_ctor})
+
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.failure_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_fetch_raises(monkeypatch):
+    inst = _make_instance(connector_type="fake_connector")
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(side_effect=RuntimeError("api boom"))
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.failure_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_ingest_raises(monkeypatch):
+    from app.ingest_client import IngestClientError
+
+    inst = _make_instance(connector_type="fake_connector")
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+    fake_connector.get_checkpoint.return_value = {"time": "2026-01-01T00:00:01Z", "id": "event-1"}
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    bad_ingest = _FakeIngestClient()
+    bad_ingest.exc = IngestClientError("ingest down")
+
+    scheduler = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=bad_ingest, vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.failure_calls == [inst.id]
+    assert engine.checkpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_instance_disappeared(monkeypatch):
+    """If the connector row was deleted between reload and poll, we no-op."""
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
+    scheduler = ConnectorScheduler(engine=_FakeEngine([]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    await scheduler._poll_one(connector_id=uuid.uuid4())
+
+    engine: _FakeEngine = scheduler._engine  # type: ignore[assignment]
+    assert engine.success_calls == []
+    assert engine.failure_calls == []
+
+
+# ---------------------------------------------------------------------------
+# reload_jobs sync logic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_reload_adds_and_drops_jobs(monkeypatch):
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
+    a = _make_instance()
+    b = _make_instance()
+    engine = _FakeEngine([a, b])
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    fake_aps = _FakeAPScheduler()
+    scheduler._scheduler = fake_aps
+
+    await scheduler.reload_jobs()
+    added_first = {kw["id"] for kw in fake_aps.added}
+    assert f"connector:{a.id}" in added_first
+    assert f"connector:{b.id}" in added_first
+
+    # Drop b.
+    engine.instances = [a]
+    await scheduler.reload_jobs()
+    assert f"connector:{b.id}" in fake_aps.removed
+
+
+@pytest.mark.asyncio
+async def test_reload_skips_unchanged_jobs(monkeypatch):
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
+    inst = _make_instance(connector_config={"poll_interval_seconds": 120})
+    engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    fake_aps = _FakeAPScheduler()
+    scheduler._scheduler = fake_aps
+
+    await scheduler.reload_jobs()
+    assert len(fake_aps.added) == 1
+
+    # Second reload with no changes — no add_job should fire again.
+    await scheduler.reload_jobs()
+    assert len(fake_aps.added) == 1
+
+
+@pytest.mark.asyncio
+async def test_reload_reschedules_when_interval_changes(monkeypatch):
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {})
+    inst = _make_instance(connector_config={"poll_interval_seconds": 120})
+    engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    fake_aps = _FakeAPScheduler()
+    scheduler._scheduler = fake_aps
+
+    await scheduler.reload_jobs()
+    assert len(fake_aps.added) == 1
+    first_seconds = fake_aps.added[0]["seconds"]
+    assert first_seconds == 120
+
+    # Mutate the instance to bump the interval; reload should add_job again
+    # (with replace_existing=True, which APScheduler treats as reschedule).
+    inst.connector_config = {"poll_interval_seconds": 600}
+    await scheduler.reload_jobs()
+    assert len(fake_aps.added) == 2
+    assert fake_aps.added[-1]["seconds"] == 600
+
+
+# ---------------------------------------------------------------------------
+# Workstream 5: backfill-on-outage worker
+# ---------------------------------------------------------------------------
+#
+# These tests pin down the behavior described in the v2 plan:
+#
+# * After an outage of >= ``_BACKFILL_OUTAGE_THRESHOLD_S`` (30 min) the
+#   recovery poll schedules a one-shot backfill poll using a lookback that
+#   covers the outage duration plus a small buffer, capped at
+#   ``_MAX_BACKFILL_LOOKBACK_S`` (24h).
+# * Outages shorter than the threshold do NOT trigger a backfill.
+# * If a backfill ran inside ``_BACKFILL_FLAP_WINDOW_S`` (10 min) we
+#   suppress re-firing — flap protection.
+# * Backfill polls themselves never recurse into another backfill (we
+#   pass ``backfill_seconds`` so the scheduler treats this as a one-shot).
+# * The flap-suppress timestamp is written *before* the backfill poll
+#   runs so a parallel scheduler job can't double-fire.
+
+
+@pytest.mark.asyncio
+async def test_poll_one_recovery_after_long_outage_schedules_backfill(monkeypatch):
+    """Recovery from a 45-minute outage should fire one backfill poll
+    using a lookback window that covers the outage + small buffer."""
+    from app import scheduler as scheduler_mod
+
+    inst = _make_instance(connector_type="fake_connector")
+    inst.last_outage_at = datetime.now(UTC) - timedelta(minutes=45)
+    inst.last_backfill_at = None
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # First call: normal recovery poll using poll_interval (300 default).
+    # Second call: one-shot backfill with the outage-derived lookback.
+    assert fake_connector.fetch_alerts.await_count == 2
+    first_call = fake_connector.fetch_alerts.await_args_list[0]
+    second_call = fake_connector.fetch_alerts.await_args_list[1]
+
+    assert first_call.kwargs["since_seconds"] == 300  # default poll cadence
+    backfill_seconds = second_call.kwargs["since_seconds"]
+
+    # Window should be ~45 min + 5 min buffer = ~3000s, but the backfill
+    # caller passes ``int(outage_duration) + buffer``. Allow ±10s for
+    # clock drift between the test setup and the now() inside the
+    # scheduler.
+    expected = int(45 * 60) + scheduler_mod._BACKFILL_LOOKBACK_BUFFER_S
+    assert abs(backfill_seconds - expected) <= 10
+    # Cap should never be exceeded.
+    assert backfill_seconds <= scheduler_mod._MAX_BACKFILL_LOOKBACK_S
+
+    # Backfill timestamp was stamped before the second poll fired.
+    assert getattr(fake_engine, "backfill_calls", []) == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_short_outage_skips_backfill(monkeypatch):
+    """Outages shorter than the 30-minute threshold should never schedule
+    a backfill — the recovery poll covers them."""
+    inst = _make_instance(connector_type="fake_connector")
+    # 5 minutes of outage — well below the 30-min threshold.
+    inst.last_outage_at = datetime.now(UTC) - timedelta(minutes=5)
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # Exactly one fetch (the recovery poll). No backfill fan-out.
+    assert fake_connector.fetch_alerts.await_count == 1
+    assert getattr(fake_engine, "backfill_calls", []) == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_recent_backfill_suppresses_flap(monkeypatch):
+    """If we already ran a backfill inside the flap window, do NOT
+    re-fire even if last_outage_at looks long enough."""
+    inst = _make_instance(connector_type="fake_connector")
+    inst.last_outage_at = datetime.now(UTC) - timedelta(minutes=60)
+    # Recent backfill — inside the 10-minute flap window.
+    inst.last_backfill_at = datetime.now(UTC) - timedelta(minutes=2)
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # No second fetch and no new backfill stamp.
+    assert fake_connector.fetch_alerts.await_count == 1
+    assert getattr(fake_engine, "backfill_calls", []) == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_old_backfill_outside_flap_window_allows_refire(monkeypatch):
+    """If the previous backfill ran outside the flap window, a fresh
+    long-outage recovery should still schedule a new backfill."""
+    inst = _make_instance(connector_type="fake_connector")
+    inst.last_outage_at = datetime.now(UTC) - timedelta(minutes=60)
+    # Last backfill 30 minutes ago — outside the 10-minute flap window.
+    inst.last_backfill_at = datetime.now(UTC) - timedelta(minutes=30)
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # Recovery poll + one-shot backfill = 2 fetches.
+    assert fake_connector.fetch_alerts.await_count == 2
+    assert getattr(fake_engine, "backfill_calls", []) == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_poll_one_backfill_does_not_recurse(monkeypatch):
+    """A backfill poll itself must not schedule yet another backfill —
+    we pass ``backfill_seconds`` so recovery detection is skipped."""
+    inst = _make_instance(connector_type="fake_connector")
+    # Even if last_outage_at is set, an explicit backfill_seconds should
+    # cause the recovery branch to be skipped.
+    inst.last_outage_at = datetime.now(UTC) - timedelta(hours=2)
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id, backfill_seconds=3600)
+
+    # Exactly one fetch (the backfill itself). No second one for cascade.
+    assert fake_connector.fetch_alerts.await_count == 1
+    assert fake_connector.fetch_alerts.await_args.kwargs["since_seconds"] == 3600
+    assert getattr(fake_engine, "backfill_calls", []) == []
+
+
+@pytest.mark.asyncio
+async def test_poll_one_backfill_window_capped_at_max(monkeypatch):
+    """A 36-hour outage should still produce a backfill window capped at
+    24 hours (``_MAX_BACKFILL_LOOKBACK_S``)."""
+    from app import scheduler as scheduler_mod
+
+    inst = _make_instance(connector_type="fake_connector")
+    inst.last_outage_at = datetime.now(UTC) - timedelta(hours=36)
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    # Two fetches: recovery + one-shot backfill.
+    assert fake_connector.fetch_alerts.await_count == 2
+    backfill_seconds = fake_connector.fetch_alerts.await_args_list[1].kwargs["since_seconds"]
+    # The cap kicks in BEFORE the buffer is added inside _poll_one
+    # (see ``backfill_window_seconds = min(...)``), so the value passed
+    # to the recursive call equals the cap exactly.
+    assert backfill_seconds == scheduler_mod._MAX_BACKFILL_LOOKBACK_S
+
+
+@pytest.mark.asyncio
+async def test_poll_one_no_outage_no_backfill(monkeypatch):
+    """When the connector was never in outage (last_outage_at is None),
+    no backfill should ever fire even if a poll succeeds."""
+    inst = _make_instance(connector_type="fake_connector")
+    assert inst.last_outage_at is None
+
+    fake_connector = MagicMock()
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"x": 1}])
+    fake_connector.normalize = MagicMock(side_effect=lambda e: e)
+
+    monkeypatch.setattr(
+        "app.scheduler.CONNECTOR_REGISTRY",
+        {"fake_connector": MagicMock(return_value=fake_connector)},
+    )
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(
+        engine=fake_engine,
+        ingest_client=_FakeIngestClient(accepted=1),
+        vault=_FakeVault(),
+    )
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert fake_connector.fetch_alerts.await_count == 1
+    assert getattr(fake_engine, "backfill_calls", []) == []
+
+
+# ---------------------------------------------------------------------------
+# Test fakes
+# ---------------------------------------------------------------------------
+
+
+class _FakeAPScheduler:
+    def __init__(self) -> None:
+        self.added: list[dict[str, Any]] = []
+        self.removed: list[str] = []
+
+    def add_job(
+        self,
+        func: Any,
+        trigger: str,
+        *,
+        seconds: int,
+        id: str,
+        replace_existing: bool,
+        max_instances: int,
+        coalesce: bool,
+        next_run_time: Any = None,
+        kwargs: dict[str, Any] | None = None,
+    ) -> None:
+        self.added.append(
+            {
+                "func": func,
+                "trigger": trigger,
+                "seconds": seconds,
+                "id": id,
+                "kwargs": kwargs or {},
+            }
+        )
+
+    def remove_job(self, job_id: str) -> None:
+        self.removed.append(job_id)
+
+
+class _FakeAsyncContextManager:
+    """Minimal stand-in for ``async with engine.begin() as conn``."""
+
+    def __init__(self, conn: Any) -> None:
+        self._conn = conn
+
+    async def __aenter__(self) -> Any:
+        return self._conn
+
+    async def __aexit__(self, *_args: Any) -> None:
+        return None
+
+
+class _FakeEngine:
+    """Async engine fake that records scheduler persistence calls."""
+
+    def __init__(self, instances: list[ConnectorInstance]) -> None:
+        self.instances = list(instances)
+        self.success_calls: list[uuid.UUID] = []
+        self.failure_calls: list[uuid.UUID] = []
+        self.drift_calls: list[dict[str, Any]] = []
+        self.checkpoint_calls: list[dict[str, Any]] = []
+        # Workstream 5: track every record_backfill_run() call so backfill
+        # tests can assert when the flap-suppress timestamp was stamped.
+        self.backfill_calls: list[uuid.UUID] = []
+
+    def begin(self) -> _FakeAsyncContextManager:
+        return _FakeAsyncContextManager(_FakeConnection(self))
+
+
+class _FakeConnection:
+    def __init__(self, engine: _FakeEngine) -> None:
+        self.engine = engine
+
+
+class _FakeVault:
+    def __init__(self) -> None:
+        self.fail = False
+
+    def decrypt_dict(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.fail:
+            from app.security.credential_vault import CredentialVaultError
+
+            raise CredentialVaultError("decrypt failed")
+        return dict(payload)
+
+
+class _FakeIngestClient:
+    def __init__(
+        self,
+        accepted: int = 0,
+        rejected: int = 0,
+        *,
+        response: dict[str, Any] | None = None,
+    ) -> None:
+        self.calls = 0
+        self.accepted = accepted
+        self.rejected = rejected
+        self.response = response
+        self.last_payload: dict[str, Any] | None = None
+        self.exc: BaseException | None = None
+
+    async def push_events(self, **kwargs: Any) -> dict[str, Any]:
+        self.calls += 1
+        self.last_payload = kwargs
+        if self.exc is not None:
+            raise self.exc
+        if self.response is not None:
+            return dict(self.response)
+        return {"accepted": self.accepted, "rejected": self.rejected}
+
+    async def aclose(self) -> None:
+        return None
+
+
+# Patch the connector_repo db functions to operate on the fake engine
+# attached to each connection. We do this once at module import via a
+# pytest fixture autouse=True so individual tests don't need to
+# remember.
+
+
+@pytest.fixture(autouse=True)
+def _patch_repo_calls(monkeypatch):
+    async def fake_fetch_enabled_connectors(conn: Any) -> list[ConnectorInstance]:
+        return list(conn.engine.instances)
+
+    async def fake_record_poll_success(
+        conn: Any,
+        connector_id: uuid.UUID,
+        *,
+        events_added: int,
+        events_dropped: int = 0,
+        schema_fingerprint: str | None = None,
+        last_event_at: Any = None,
+        last_event_kind: str | None = None,
+    ) -> None:
+        conn.engine.success_calls.append(connector_id)
+
+    async def fake_record_poll_failure(conn: Any, connector_id: uuid.UUID) -> None:
+        conn.engine.failure_calls.append(connector_id)
+
+    async def fake_record_schema_drift(
+        conn: Any,
+        connector_id: uuid.UUID,
+        *,
+        fingerprint: str,
+        details: dict[str, Any],
+    ) -> None:
+        getattr(conn.engine, "drift_calls", []).append({"connector_id": connector_id, "fingerprint": fingerprint, "details": details})
+
+    async def fake_record_checkpoint(
+        conn: Any,
+        connector_id: uuid.UUID,
+        checkpoint: dict[str, Any],
+    ) -> None:
+        conn.engine.checkpoint_calls.append({"connector_id": connector_id, "checkpoint": checkpoint})
+
+    async def fake_record_backfill_run(
+        conn: Any,
+        connector_id: uuid.UUID,
+    ) -> None:
+        getattr(conn.engine, "backfill_calls", []).append(connector_id)
+
+    monkeypatch.setattr("app.scheduler.fetch_enabled_connectors", fake_fetch_enabled_connectors)
+    monkeypatch.setattr("app.scheduler.record_poll_success", fake_record_poll_success)
+    monkeypatch.setattr("app.scheduler.record_poll_failure", fake_record_poll_failure)
+    monkeypatch.setattr("app.scheduler.record_schema_drift", fake_record_schema_drift)
+    monkeypatch.setattr("app.scheduler.record_checkpoint", fake_record_checkpoint)
+    monkeypatch.setattr("app.scheduler.record_backfill_run", fake_record_backfill_run)
+
+
+# ---------------------------------------------------------------------------
+# #527 — polling jobs must be registered ACTIVE, never paused.
+#
+# These use a REAL AsyncIOScheduler (not the fake) because the regression is a
+# pure APScheduler semantic: passing ``next_run_time=None`` adds the job in a
+# paused state, which the fake scheduler cannot reproduce.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_extrahop_instance_gets_a_job_that_will_fire():
+    """Depth plan wave 2, 8.2: the seventh registration surface.
+
+    A connector the scheduler registers PAUSED polls nothing, reports
+    healthy and produces an empty queue. That is the #527 regression this
+    repository already paid for once, and a new connector is exactly where
+    it would come back unnoticed, because every other surface would look
+    correct.
+
+    A real AsyncIOScheduler and not the fake, for the same reason the test
+    below gives: the failure is a pure APScheduler semantic the fake cannot
+    reproduce.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="extrahop", connector_config={"poll_interval_seconds": 120})
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    sched._poll_one = AsyncMock()
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+        job = aps.get_job(f"connector:{inst.id}")
+        assert job is not None, "no polling job was scheduled for an enabled ExtraHop instance"
+        assert job.next_run_time is not None, "the ExtraHop polling job was registered PAUSED (#527 regression)"
+    finally:
+        aps.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_reload_registers_active_not_paused_job():
+    """A newly enabled connector gets a non-null next_run_time (not paused)."""
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="crowdstrike", connector_config={"poll_interval_seconds": 60})
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    # Keep the test hermetic — the job must never actually reach the network.
+    sched._poll_one = AsyncMock()
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+
+        job = aps.get_job(f"connector:{inst.id}")
+        assert job is not None, "polling job was not scheduled"
+        # The #527 failure mode: a paused job has next_run_time is None.
+        assert job.next_run_time is not None, "polling job registered PAUSED (#527 regression)"
+
+        # First-run jitter stays bounded by the poll interval (capped at 60s).
+        delay = (job.next_run_time - datetime.now(UTC)).total_seconds()
+        assert -1 <= delay <= 61, f"first-run delay {delay}s outside jitter bound"
+
+        diag = sched.job_diagnostics()
+        assert diag, "job_diagnostics returned nothing"
+        assert all(d["paused"] is False for d in diag), f"a job is paused: {diag}"
+    finally:
+        aps.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
+async def test_scheduled_job_executes_without_manual_resume():
+    """An active job fires on its own — no explicit ``resume()`` needed (#527)."""
+    import asyncio as _asyncio
+
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="crowdstrike", connector_config={"poll_interval_seconds": 30})
+    # UUID int == 0 → jitter (id.int % window) == 0 → first_run == now, so the
+    # job is due immediately once the scheduler is running.
+    inst.id = uuid.UUID(int=0)
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+
+    ran = _asyncio.Event()
+
+    async def _fake_poll(*, connector_id, **_kw):  # noqa: ANN001
+        ran.set()
+
+    sched._poll_one = _fake_poll
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+        await _asyncio.wait_for(ran.wait(), timeout=5)
+    finally:
+        aps.shutdown(wait=False)
+
+    assert ran.is_set(), "scheduled polling job did not execute on its own"
+
+
+# ---------------------------------------------------------------------------
+# #528 — the scheduler must normalize each event exactly once.
+# ---------------------------------------------------------------------------
+
+
+def test_safe_normalize_passes_through_canonical_event():
+    """A self-normalized (canonical) event must NOT be re-normalized (#528)."""
+    from app.scheduler import _is_canonical_event, _safe_normalize
+
+    canonical = {
+        "source": "splunk",
+        "external_id": "NOTABLE-1",
+        "title": "Brute Force Detected",
+        "severity": "high",
+        "raw_event": {"event_id": "NOTABLE-1", "urgency": "high"},
+    }
+    assert _is_canonical_event(canonical) is True
+
+    class _BrokenReNormalizer:
+        connector_id = "splunk"
+
+        def normalize(self, _raw):  # would corrupt a canonical event if called
+            raise AssertionError("normalize must not run on an already-canonical event")
+
+    # Passed straight through, unchanged — the double-normalize is skipped.
+    assert _safe_normalize(_BrokenReNormalizer(), canonical) is canonical
+
+
+def test_safe_normalize_still_normalizes_raw_event():
+    """A genuinely raw vendor row is still normalized exactly once."""
+    from app.scheduler import _safe_normalize
+
+    class _Normalizer:
+        connector_id = "x"
+
+        def normalize(self, raw):
+            return {"source": "x", "raw_event": raw, "external_id": raw["id"]}
+
+    out = _safe_normalize(_Normalizer(), {"id": "abc", "foo": "bar"})
+    assert out["external_id"] == "abc"
+    assert out["raw_event"] == {"id": "abc", "foo": "bar"}
+
+
+# ---------------------------------------------------------------------------
+# Egress guard on the poll path (GHSA-cq4g-g6wp-4m2w)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_poll_refuses_a_stored_internal_destination(monkeypatch):
+    """A row saved before registration-time validation existed must not be
+    polled: the poll records a failure (visible as unhealthy in the UI) and
+    the connector class is never even constructed, so no socket can open.
+    This file rather than test_egress_guard.py because the repo-call fakes
+    are patched by this module's autouse fixture."""
+    inst = _make_instance(
+        connector_type="fake_connector",
+        auth_config={"token": "x"},
+        connector_config={"base_url": "http://169.254.169.254/latest/meta-data/"},
+    )
+    fake_connector_class = MagicMock()
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"fake_connector": fake_connector_class})
+    monkeypatch.delenv("AISOC_SSRF_ALLOW_PRIVATE", raising=False)
+
+    fake_engine = _FakeEngine([inst])
+    scheduler = ConnectorScheduler(engine=fake_engine, ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    await scheduler._poll_one(connector_id=inst.id)
+
+    fake_connector_class.assert_not_called()
+    assert fake_engine.failure_calls == [inst.id]
+    assert fake_engine.success_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — acknowledgement waits for durable downstream acceptance
+#
+# These drive a connector over a queue that really behaves like one, rather
+# than a MagicMock. The defect under test is an acknowledgement that lands
+# before durability, and a mock records the call without modelling its
+# consequence: the message leaving the queue. This queue drains on ack and
+# redelivers everything that was never acked, so "was the event lost?" is a
+# question the test can actually ask.
+# ---------------------------------------------------------------------------
+
+
+class _AtLeastOnceQueue:
+    """A queue with the one property that makes this class of bug possible.
+
+    An acknowledged message is gone for good; an unacknowledged one comes
+    back. Nothing here is more capable than SQS or Pub/Sub — in particular
+    there is no second copy of an acked message anywhere, which is precisely
+    why acking early cannot be undone.
+    """
+
+    def __init__(self, messages: list[dict[str, Any]], *, refuse_acks: bool = False) -> None:
+        self._messages: dict[str, dict[str, Any]] = {m["handle"]: m for m in messages}
+        self.receive_calls = 0
+        self.acked: list[str] = []
+        #: Models a handle the source refuses — a lapsed visibility timeout,
+        #: an expired ack deadline, a missing delete permission. The message
+        #: stays, which is what makes the redelivery real rather than asserted.
+        self.refuse_acks = refuse_acks
+
+    def receive(self) -> list[dict[str, Any]]:
+        self.receive_calls += 1
+        return [dict(m) for m in self._messages.values()]
+
+    def ack(self, handles: list[str]) -> None:
+        for handle in handles:
+            if self.refuse_acks:
+                continue
+            self._messages.pop(handle, None)
+            self.acked.append(handle)
+
+    @property
+    def depth(self) -> int:
+        return len(self._messages)
+
+
+class _QueueBackedConnector(BaseConnector):
+    """The smallest honest queue connector: pull, stage, let the caller commit."""
+
+    connector_id = "test_queue_backed"
+    connector_name = "Queue backed"
+    connector_category = "cloud"
+    dedup_identity_field: tuple[str, ...] = ("record_id",)
+
+    #: Set by the test. The scheduler constructs a fresh instance per poll,
+    #: so per-poll state cannot live on the instance — same as production.
+    queue: Any = None
+    #: Record ids whose ``normalize`` should raise, to model one child event
+    #: of a multi-event notification failing.
+    broken: frozenset[str] = frozenset()
+
+    def __init__(self, **_config: Any) -> None:
+        """Accept whatever the scheduler hands over, like a real connector.
+
+        Not decoration: without it the scheduler's ``TypeError`` guard catches
+        the construction, records a failure and returns before polling — and
+        a test asserting "the message was not acknowledged" then passes
+        because nothing ran at all.
+        """
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:  # pragma: no cover - not exercised
+        raise NotImplementedError
+
+    async def test_connection(self) -> dict[str, Any]:  # pragma: no cover
+        raise NotImplementedError
+
+    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for message in type(self).queue.receive():
+            rows.extend(message["rows"])
+            self.stage_acknowledgement([message["handle"]])
+        return [self.normalize(row) for row in self.apply_checkpoint(rows)]
+
+    def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        if raw.get("record_id") in type(self).broken:
+            raise ValueError(f"cannot normalize {raw['record_id']}")
+        return {"source": self.connector_id, "raw_event": raw, "external_id": raw["record_id"]}
+
+    async def commit_acknowledgements(self) -> AcknowledgementResult:
+        handles = self.take_pending_acknowledgements()
+        queue = type(self).queue
+        before = queue.depth
+        queue.ack(handles)
+        # Derived from what the queue actually did, not from what was asked.
+        # A result that reports success for every handle it was handed is the
+        # exact shape that hides a delete nobody is allowed to make.
+        confirmed = before - queue.depth
+        return AcknowledgementResult(requested=len(handles), confirmed=confirmed, failed=len(handles) - confirmed)
+
+
+def _queue_message(handle: str, *record_ids: str) -> dict[str, Any]:
+    return {"handle": handle, "rows": [{"record_id": rid, "event_time": f"2026-10-08T11:00:0{i}Z"} for i, rid in enumerate(record_ids)]}
+
+
+def _queue_scheduler(
+    monkeypatch: Any,
+    queue: _AtLeastOnceQueue,
+    ingest: _FakeIngestClient,
+    *,
+    broken: frozenset[str] = frozenset(),
+    checkpoint: dict[str, Any] | None = None,
+) -> tuple[ConnectorScheduler, ConnectorInstance, _FakeEngine]:
+    config: dict[str, Any] = {"poll_interval_seconds": 60}
+    if checkpoint is not None:
+        config["checkpoint"] = checkpoint
+    inst = _make_instance(connector_type="test_queue_backed", connector_config=config)
+    monkeypatch.setattr(_QueueBackedConnector, "queue", queue)
+    monkeypatch.setattr(_QueueBackedConnector, "broken", broken)
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"test_queue_backed": _QueueBackedConnector})
+    engine = _FakeEngine([inst])
+    # The fakes are structural stand-ins, deliberately narrower than the real
+    # clients — the point of this module, and the reason every other test here
+    # does the same.
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=ingest, vault=_FakeVault())  # type: ignore[arg-type]
+    return scheduler, inst, engine
+
+
+@pytest.mark.asyncio
+async def test_a_fetch_that_ingest_rejects_leaves_the_message_on_the_queue(monkeypatch):
+    """Finding 4, stated as the property that matters: no loss.
+
+    The fetch succeeds, ingest answers 500, and the only acceptable outcome is
+    that the message is still there to be read again.
+    """
+    from app.ingest_client import IngestClientError
+
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient()
+    ingest.exc = IngestClientError("ingest down")
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == [], "acknowledging here deletes the only copy of the events"
+    assert queue.depth == 1
+    assert engine.failure_calls == [inst.id]
+    assert engine.checkpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_the_rejected_batch_is_recovered_in_full_on_the_next_poll(monkeypatch):
+    """Completeness, not just 'the handle survived'. The second poll has to
+    produce the same events, because that is what 'not lost' means."""
+    from app.ingest_client import IngestClientError
+
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient()
+    ingest.exc = IngestClientError("ingest down")
+    scheduler, inst, _engine = _queue_scheduler(monkeypatch, queue, ingest)
+    await scheduler._poll_one(connector_id=inst.id)
+
+    ingest.exc = None
+    ingest.accepted = 2
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert [e["external_id"] for e in (ingest.last_payload or {})["events"]] == ["r1", "r2"]
+    assert queue.acked == ["h1"]
+    assert queue.depth == 0
+
+
+@pytest.mark.asyncio
+async def test_a_partially_accepted_batch_is_not_acknowledged(monkeypatch):
+    """Ingest reports per-event normalization failures as HTTP 200 with
+    counts, so a 200 is not a guarantee. One rejected event means the whole
+    notification stays answerable."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=1, rejected=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == []
+    assert queue.depth == 1
+    assert engine.checkpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_child_event_that_cannot_be_normalized_withholds_the_acknowledgement(monkeypatch):
+    """One notification, several events, one of them unusable. The scheduler's
+    normalizer returns the raw row rather than raising, so the batch reaches
+    ingest with an event ingest will reject — and the ack has to wait for that
+    answer rather than assume it."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=1, rejected=1)
+    scheduler, inst, _engine = _queue_scheduler(monkeypatch, queue, ingest, broken=frozenset({"r2"}))
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == []
+    assert queue.depth == 1
+
+
+@pytest.mark.asyncio
+async def test_a_fully_accepted_batch_is_acknowledged_and_does_not_come_back(monkeypatch):
+    """The other direction. A guarantee that never acknowledges is not a
+    guarantee, it is a queue that never drains."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=2)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == ["h1"]
+    assert queue.depth == 0
+    assert engine.success_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_the_checkpoint_is_durable_before_the_acknowledgement_is_sent(monkeypatch):
+    """Process exits after acceptance but before acknowledgement.
+
+    The ordering is what makes that survivable: the identities are persisted
+    first, so the redelivery that follows a crash in this window is
+    recognised as one. Acking first would make the crash lose nothing but
+    would make a *failed* ack indistinguishable from a successful one.
+    """
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
+    ingest = _FakeIngestClient(accepted=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+    order: list[str] = []
+
+    real_ack = _AtLeastOnceQueue.ack
+
+    def _record_ack(self: _AtLeastOnceQueue, handles: list[str]) -> None:
+        order.append("ack")
+        real_ack(self, handles)
+
+    monkeypatch.setattr(_AtLeastOnceQueue, "ack", _record_ack)
+    original_record = scheduler._record_checkpoint
+
+    async def _record_checkpoint(*args: Any, **kwargs: Any) -> None:
+        order.append("checkpoint")
+        await original_record(*args, **kwargs)
+
+    monkeypatch.setattr(scheduler, "_record_checkpoint", _record_checkpoint)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert order == ["checkpoint", "ack"]
+    assert engine.checkpoint_calls, "the dedup identities have to reach the database before the queue forgets the message"
+
+
+@pytest.mark.asyncio
+async def test_a_redelivery_after_a_lost_acknowledgement_is_not_a_duplicate(monkeypatch):
+    """Accepted downstream, checkpointed, acknowledgement never landed.
+
+    Covers both the crash in that window and a source that refused the
+    handle; they are the same situation from the next poll's point of view.
+    The event must not be submitted twice, and the message must still leave.
+    """
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")], refuse_acks=True)
+    ingest = _FakeIngestClient(accepted=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert [e["external_id"] for e in (ingest.last_payload or {})["events"]] == ["r1"]
+    assert queue.depth == 1, "the refused handle means the message is still there"
+    persisted = engine.checkpoint_calls[-1]["checkpoint"]
+
+    # The redelivery, against a source that now accepts the acknowledgement.
+    resumed_queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
+    resumed_ingest = _FakeIngestClient(accepted=0)
+    resumed, inst2, _engine2 = _queue_scheduler(monkeypatch, resumed_queue, resumed_ingest, checkpoint=persisted)
+
+    await resumed._poll_one(connector_id=inst2.id)
+
+    assert (resumed_ingest.last_payload or {})["events"] == [], "the event was already accepted downstream once"
+    assert resumed_queue.acked == ["h1"], "and the message still has to leave the queue"

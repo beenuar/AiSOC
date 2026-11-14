@@ -1,0 +1,44 @@
+id: splunk-security-content-127c8d08-25ff-11ec-9223-acde48001122
+name: Malicious InProcServer32 Modification
+description: The following analytic detects a process modifying the registry with
+  a known malicious CLSID under InProcServer32. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on registry modifications within the HKLM or
+  HKCU Software Classes CLSID paths. This activity is significant as it may indicate
+  an attempt to load a malicious DLL, potentially leading to code execution. If confirmed
+  malicious, this could allow an attacker to persist in the environment, execute arbitrary
+  code, or escalate privileges, posing a severe threat to system integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://bohops.com/2018/06/28/abusing-com-registry-structure-clsid-localserver32-inprocserver32/
+- https://tria.ge/210929-ap75vsddan
+- https://www.virustotal.com/gui/file/cb77b93150cb0f7fe65ce8a7e2a5781e727419451355a7736db84109fa215a89
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    where Registry.registry_path="*\\CLSID\\{89565275-A714-4a43-912E-978B935EDCCC}\\InProcServer32\\(Default)"
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `malicious_inprocserver32_modification_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 127c8d08-25ff-11ec-9223-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/malicious_inprocserver32_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

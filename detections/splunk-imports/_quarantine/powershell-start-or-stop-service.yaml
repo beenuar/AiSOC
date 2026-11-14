@@ -1,0 +1,41 @@
+id: splunk-security-content-04207f8a-e08d-4ee6-be26-1e0c4488b04a
+name: PowerShell Start or Stop Service
+description: The following analytic identifies the use of PowerShell's Start-Service
+  or Stop-Service cmdlets on an endpoint. It leverages PowerShell Script Block Logging
+  to detect these commands. This activity is significant because attackers can manipulate
+  services to disable or stop critical functions, causing system instability or disrupting
+  business operations. If confirmed malicious, this behavior could allow attackers
+  to disable security services, evade detection, or disrupt essential services, leading
+  to potential system downtime and compromised security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://learn-powershell.net/2012/01/15/startingstopping-and-restarting-remote-services-with-powershell/
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/start-service?view=powershell-7.3
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText IN (\"*start-service*\"\
+    , \"*stop-service*\")\n  | fillnull\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY dest signature signature_id\n       user_id vendor_product\
+    \ EventID\n       Guid Opcode Name\n       Path ProcessID ScriptBlockId\n    \
+    \   ScriptBlockText\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `powershell_start_or_stop_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 04207f8a-e08d-4ee6-be26-1e0c4488b04a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_start_or_stop_service.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,48 @@
+id: splunk-security-content-173a1cb9-1814-4128-a9dc-f29dade89957
+name: Cisco Secure Firewall - Wget or Curl Download
+description: The following analytic detects outbound connections initiated by command-line
+  tools such as curl or wget. It leverages Cisco Secure Firewall Threat Defense logs
+  and identifies allowed connections (action=Allow) where either the EVE_Process or
+  ClientApplication fields indicate use of these utilities. While curl and wget are
+  legitimate tools commonly used for software updates and scripting, adversaries often
+  abuse them to download payloads, retrieve additional tools, or establish staging
+  infrastructure from compromised systems. If confirmed malicious, this behavior may
+  indicate the download phase of an attack chain or a command-and-control utility
+  retrieval.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.003
+  - T1059
+  - T1071.001
+  - T1105
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=ConnectionEvent action IN (\"Trust\"\
+    , \"Allow\", \"allowed\") AND\n( EVE_Process IN (\"*curl*\", \"*wget*\") OR ClientApplication\
+    \ IN (\"cURL\", \"Wget\") )\n| stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    Values(rule) as rule\n    Values(url) as url\n    Values(dest_port)\
+    \ as dest_port\n    Values(ClientApplicationVersion) as ClientApplicationVersion\n\
+    \    Values(src_port) as src_port\n    by src, dest, transport, EVE_Process, ClientApplication,\
+    \ action\n| table src src_port dest dest_port transport url EVE_Process ClientApplication\
+    \ ClientApplicationVersion rule firstTime lastTime\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_secure_firewall___wget_or_curl_download_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 173a1cb9-1814-4128-a9dc-f29dade89957
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___wget_or_curl_download.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

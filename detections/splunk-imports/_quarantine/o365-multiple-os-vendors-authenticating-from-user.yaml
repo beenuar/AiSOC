@@ -1,0 +1,57 @@
+id: splunk-security-content-3451e58a-9457-4985-a600-b616b0cbfda1
+name: O365 Multiple OS Vendors Authenticating From User
+description: The following analytic identifies when multiple operating systems are
+  used to authenticate to Azure/EntraID/Office 365 by the same user account over a
+  short period of time. This activity could be indicative of attackers enumerating
+  various logon capabilities of Azure/EntraID/Office 365 and attempting to discover
+  weaknesses in the organizational MFA or conditional access configurations. Usage
+  of the tools like "MFASweep" will trigger this detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110
+- https://www.blackhillsinfosec.com/exploiting-mfa-inconsistencies-on-microsoft-services/
+- https://sra.io/blog/msspray-wait-how-many-endpoints-dont-have-mfa/
+- https://github.com/dafthack/MFASweep/tree/master
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation IN (UserLoginFailed,UserLoggedIn)
+
+    | eval -time = _time
+
+    | bin _time span=15m
+
+    | fillnull
+
+    | stats values(Operation) as signature, values(ErrorNumber) as signature_id, values(OS)
+    as os_name, dc(OS) as os_count, count, min(-time) as firstTime, max(-time) as
+    lastTime by ClientIP, UserId, _time, dest, vendor_account, vendor_product
+
+    | where os_count >= 4
+
+    | eval src = ClientIP, user = UserId
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_multiple_os_vendors_authenticating_from_user_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 3451e58a-9457-4985-a600-b616b0cbfda1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_os_vendors_authenticating_from_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

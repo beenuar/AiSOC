@@ -1,0 +1,26 @@
+title: Citizen-Services Database Bulk PII Query by Single Caseworker
+id: aisoc-vt-pub-0001-citizen-pii-bulk-query
+status: experimental
+description: |
+  A caseworker or front-line agent ran queries against the citizen
+  services system (benefits, DMV, tax, social services) returning PII
+  for substantially more residents than their daily baseline. Classic
+  pattern for insider lookup-for-hire and political surveillance
+  abuse.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: gov
+  service: citizen_services
+tags:
+  - attack.t1530
+  - attack.collection
+  - aisoc.vertical.public_sector
+  - aisoc.compliance.privacy_act
+detection:
+  selection:
+    event.module: gov.citizen_services
+    event.action: 'record.queried'
+  anomaly:
+    records.sigma|gte: 4.0
+  condition: selection and anomaly

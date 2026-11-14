@@ -1,0 +1,37 @@
+# Atlassian Opsgenie alert action webhook template.
+#
+# Opsgenie ships a flat alert object on each action (Create, Acknowledge,
+# Close, AddNote). We project it onto an OCSF Security Finding and pass
+# the action name through as activity_name so detection content can
+# distinguish a fresh alert from a closure.
+#
+# Reference:
+#   https://support.atlassian.com/opsgenie/docs/integrations-with-incoming-webhooks/
+id: opsgenie
+vendor_name: Atlassian
+product_name: Opsgenie
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  alert.alertId: finding.uid
+  alert.message: finding.title
+  alert.description: finding.description
+  alert.alias: finding.related_events.id
+  alert.source: source
+  alert.entity: finding.evidence.process
+  alert.tags: finding.types
+  action: activity_name
+  alert.tinyId: finding.related_events.uid
+  alert.team: finding.product.name
+severity_field: alert.priority
+severity_map:
+  P1: 5
+  P2: 4
+  P3: 3
+  P4: 2
+  P5: 1
+time_field: alert.createdAt
+message_field: alert.message
+constants:
+  source_type: opsgenie

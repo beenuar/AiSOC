@@ -1,0 +1,23 @@
+title: HTTP Error Spike From Single Source
+id: aisoc-id-ws-0006-error-spike
+status: experimental
+description: |
+  A single source IP generates more than 200 4xx/5xx responses
+  within five minutes — indicative of forced browsing,
+  brute-force, or vulnerability scanning.
+author: Cyble AiSOC
+level: low
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1595
+  - attack.reconnaissance
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+    http.response.status_code|gte: 400
+  spike:
+    enrich.web.error_per_src_5m|gte: 200
+  condition: selection and spike

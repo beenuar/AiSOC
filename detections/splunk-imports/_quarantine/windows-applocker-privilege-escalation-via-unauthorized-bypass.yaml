@@ -1,0 +1,44 @@
+id: splunk-security-content-bca48629-7fa2-40d3-9e5d-807564504e28
+name: Windows AppLocker Privilege Escalation via Unauthorized Bypass
+description: The following analytic utilizes Windows AppLocker event logs to identify
+  attempts to bypass application restrictions. AppLocker is a feature that allows
+  administrators to specify which applications are permitted to run on a system. This
+  analytic is designed to identify attempts to bypass these restrictions, which could
+  be indicative of an attacker attempting to escalate privileges. The analytic uses
+  EventCodes 8007, 8004, 8022, 8025, 8029, and 8040 to identify these attempts. The
+  analytic will identify the host, full file path, and target user associated with
+  the bypass attempt. These EventCodes are related to block events and focus on 5
+  attempts or more.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/querying-application-control-events-centrally-using-advanced-hunting
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/using-event-viewer-with-applocker
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`applocker` EventCode IN (8007, 8004, 8022, 8025, 8029, 8040)\n  |\
+    \ spath input=UserData_Xml\n  | rename RuleAndFileData.* as *, Computer as dest,\
+    \ TargetUser AS user\n  | stats count AS attempt_count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest, PolicyName, RuleId,\n       user, TargetProcessId,\
+    \ FilePath,\n       FullFilePath, EventCode\n  | where attempt_count > 5\n  |\
+    \ sort - attempt_count\n  | lookup applockereventcodes EventCode OUTPUT Description\n\
+    \  | `windows_applocker_privilege_escalation_via_unauthorized_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bca48629-7fa2-40d3-9e5d-807564504e28
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_applocker_privilege_escalation_via_unauthorized_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

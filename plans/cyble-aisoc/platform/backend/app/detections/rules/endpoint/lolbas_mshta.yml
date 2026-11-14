@@ -1,0 +1,22 @@
+title: LOLBAS — mshta.exe Executing Remote Script
+id: aisoc-id-ep-0002-mshta-remote
+status: stable
+description: mshta.exe used to execute an HTA from a remote URL.
+author: Cyble AiSOC
+level: high
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1218.005
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    process.executable|endswith: '\mshta.exe'
+    process.command_line|contains:
+      - 'http://'
+      - 'https://'
+      - 'javascript:'
+      - 'vbscript:'
+  condition: selection

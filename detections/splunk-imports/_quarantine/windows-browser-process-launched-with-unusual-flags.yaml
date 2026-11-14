@@ -1,0 +1,51 @@
+id: splunk-security-content-841e2abc-0442-4e7f-b445-b22680632a08
+name: Windows Browser Process Launched with Unusual Flags
+description: The following analytic detects the use of unusual browser flags, specifically
+  --mute-audio and --do-not-elevate, which deviate from standard browser launch behavior.
+  These flags may indicate automated scripts, testing environments, or attempts to
+  modify browser functionality for silent operation or restricted privilege execution.
+  Detection focuses on non-standard launch parameters, unexpected process behavior,
+  or deviations from baseline configurations. Monitoring such flag usage helps identify
+  potentially suspicious activity, misconfigurations, or policy violations, enabling
+  security teams to investigate anomalies, ensure system compliance, and differentiate
+  legitimate administrative or testing uses from unusual or unauthorized operations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - endpoint
+references:
+- https://www.recordedfuture.com/research/from-castleloader-to-castlerat-tag-150-advances-operations
+- https://peter.sh/experiments/chromium-command-line-switches/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where NOT (Processes.parent_process_name
+    IN ("chrome.exe", "msedge.exe", "brave.exe", "firefox.exe", "explorer.exe")) AND
+    NOT (Processes.parent_process_path IN("C:\\Program Files*", "C:\\Windows\\System32\\*",
+    "C:\\Windows\\SysWow64\\*",)) AND Processes.process_name IN ("chrome.exe", "msedge.exe",
+    "brave.exe", "firefox.exe") AND Processes.process IN ("*--mute-audio*","*--no-de-elevate*",
+    "*--do-not-de-elevate*") by Processes.action Processes.dest Processes.original_file_name
+    Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid
+    Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path
+    Processes.process Processes.process_exec Processes.process_guid Processes.process_hash
+    Processes.process_id Processes.process_integrity_level Processes.process_name
+    Processes.process_path Processes.user Processes.user_id Processes.vendor_product
+    | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_browser_process_launched_with_unusual_flags_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 841e2abc-0442-4e7f-b445-b22680632a08
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_browser_process_launched_with_unusual_flags.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

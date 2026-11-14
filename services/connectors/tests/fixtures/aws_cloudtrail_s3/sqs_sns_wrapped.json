@@ -1,0 +1,9 @@
+{
+  "Type": "Notification",
+  "MessageId": "6a1b2c3d-0000-4000-8000-000000000011",
+  "TopicArn": "arn:aws:sns:us-east-1:123456789012:aisoc-org-trail",
+  "Subject": "Amazon S3 Notification",
+  "Message": "{\"Records\":[{\"eventVersion\":\"2.1\",\"eventSource\":\"aws:s3\",\"awsRegion\":\"eu-west-1\",\"eventName\":\"ObjectCreated:Put\",\"s3\":{\"bucket\":{\"name\":\"example-org-trail\"},\"object\":{\"key\":\"AWSLogs/123456789012/vpcflowlogs/eu-west-1/2026/10/08/123456789012_vpcflowlogs_eu-west-1_fl-0a1b2c3d_20261008T1105Z_9f8e7d6c.log.gz\",\"size\":1180}}}]}",
+  "Timestamp": "2026-10-08T11:05:44.912Z",
+  "SignatureVersion": "1"
+}

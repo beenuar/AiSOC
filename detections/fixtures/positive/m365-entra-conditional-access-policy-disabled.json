@@ -1,0 +1,8 @@
+{
+  "operation_name": "Update conditional access policy",
+  "new_value": [
+    {
+      "state": "disabled"
+    }
+  ]
+}

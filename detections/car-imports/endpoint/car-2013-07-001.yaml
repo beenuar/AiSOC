@@ -1,0 +1,79 @@
+id: mitre-car-car-2013-07-001
+name: Suspicious Arguments
+description: "Malicious actors may rename built-in commands or external tools, such\
+  \ as those provided by SysInternals, to better [blend in](https://attack.mitre.org/tactics/TA0005)\
+  \ with the environment. In those cases, the file path name is arbitrary and may\
+  \ blend in well with the background. If the arguments are closely inspected, it\
+  \ may be possible to infer what tools are running and understand what an adversary\
+  \ is doing. When any legitimate software shares the same command lines, it must\
+  \ be whitelisted according to the expected parameters.\n\nAny tool of interest with\
+  \ commonly known command line usage can be detecting by command line analysis. Known\
+  \ substrings of command lines include\n\n-   PuTTY\n-   port forwarding `-R * -pw`\n\
+  -   secure copy (scp) `-pw * * *@*`\n-   mimikatz `sekurlsa::`\n-   RAR `* -hp *`\n\
+  -   Archive`* a *`\n    Additionally, it may be useful to find IP addresses in the\
+  \ command line\n-   `\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}`\n    Logically this\
+  \ analytic makes use of [CAR-2014-03-005](../CAR-2014-03-005)."
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  - T1021
+  - T1105
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      port_fwd = filter process where (command_line match "-R .* -pw")
+
+      scp = filter process where (command_line match "-pw .* .* .*@.*"
+
+      mimikatz = filter process where (command_line match "sekurlsa")
+
+      rar = filter process where (command_line match " -hp ")
+
+      archive = filter process where (command_line match ".* a .*")
+
+      ip_addr = filter process where (command_line match \d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})
+
+
+      output port_fwd, scp, mimikatz, rar, archive, ip_addr'
+  - name: ''
+    type: splunk
+    code: index=__your_sysmon_index__ EventCode=1 (CommandLine="* -R * -pw*" OR CommandLine="*
+      -pw * *@*" OR CommandLine="*sekurlsa*" OR CommandLine="* -hp *" OR CommandLine="*
+      a *")
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (command_line == \"* -R * -pw*\" or\
+      \ command_line == \"* -pw * *@*\" or command_line == \"*sekurlsa*\" or command_line\
+      \ == \"* -hp *\" or command_line == \"* a *\")"
+  - name: ''
+    type: splunk
+    code: index=__your_sysmon_index__ EventCode=1 |regex CommandLine=".*\b(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}\b.*"
+  - name: ''
+    type: DNIF
+    code: _fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $Process=regex(.*(\-r.*\-pw|\-pw.*\@|sekurlsa|\-hp|
+      a |\\d\{1\,3\}\\\.\\d\{1\,3\}\\\.\\d\{1\,3\}).*)i limit 100
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon event_id=1 (command="* -R * -pw*" OR command="* -pw
+      * *@*" OR command="*sekurlsa*" OR command="* -hp *" OR command="* a *")
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-07-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-07-001.yaml
+notes:
+  car_status: needs_implementation

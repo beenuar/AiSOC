@@ -1,0 +1,43 @@
+id: splunk-security-content-13f081d6-7052-428a-bbb0-892c79ca7c65
+name: Kubernetes newly seen TCP edge
+description: The following analytic identifies newly seen TCP communication between
+  source and destination workload pairs within a Kubernetes cluster. It leverages
+  Network Performance Monitoring metrics collected via an OTEL collector and pulled
+  from Splunk Observability Cloud. The detection compares network activity over the
+  last hour with the past 30 days to spot new inter-workload communications. This
+  is significant as new connections can indicate changes in application behavior or
+  potential security threats. If malicious, unauthorized connections could lead to
+  data breaches, privilege escalation, lateral movement, or disruption of critical
+  services, compromising the application's integrity, availability, and confidentiality.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204
+  categories:
+  - cloud
+references:
+- https://github.com/signalfx/splunk-otel-collector-chart
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| mstats count(tcp.packets) as tcp.packets_count where `kubernetes_metrics`\
+    \ AND earliest=-1h by k8s.cluster.name source.workload.name dest.workload.name\n\
+    | eval current=\"True\"\n| append [ mstats count(tcp.packets) as tcp.packets_count\
+    \ where `kubernetes_metrics` AND earliest=-30d latest=-1h by source.workload.name\
+    \ dest.workload.name\n| eval current=\"false\" ]\n| eventstats values(current)\
+    \ as current\n  BY source.workload.name dest.workload.name\n| search current=\"\
+    true\" current!=\"false\"\n| rename k8s.cluster.name as host\n| `kubernetes_newly_seen_tcp_edge_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 13f081d6-7052-428a-bbb0-892c79ca7c65
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_newly_seen_tcp_edge.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

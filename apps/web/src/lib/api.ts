@@ -1,0 +1,8187 @@
+/**
+ * AiSOC API Client
+ *
+ * Typed HTTP client that talks to the Core API service and a few sibling
+ * microservices (agents, fusion, threatintel, enrichment).
+ *
+ * Conventions:
+ *   - Every public function returns a typed `Promise<T>`. Callers should
+ *     wrap with SWR / React Query for caching + retries.
+ *   - Errors are thrown as native `Error` with the HTTP status + body so
+ *     UI components can catch and render `<ErrorState error={e} />`.
+ *   - Base URLs default to "" (same-origin) so the browser hits whatever
+ *     host it loaded the page from. Next.js `rewrites()` then proxies the
+ *     `/api/v1/*`, `/api/v1/contextual/*`, `/ws/*` and `/sse` paths to the
+ *     right downstream service. This makes the bundle host-agnostic — the
+ *     same image works on `localhost:3000`, behind nginx, or behind a
+ *     Cloudflare Tunnel pointed at `tryaisoc.com`.
+ *   - `NEXT_PUBLIC_*_URL` env vars are still honoured if you want to bypass
+ *     the proxy (e.g. point the bundle at a different API origin during
+ *     local debugging).
+ */
+
+/**
+ * Returns `url` unchanged when running server-side or when `url` is already
+ * same-origin. In the browser, if `url` is cross-origin relative to the page,
+ * we fall back to `''` (same-origin) so Next.js rewrites can proxy the request.
+ *
+ * This prevents a misconfigured NEXT_PUBLIC_*_URL (e.g. pointing directly at
+ * api.tryaisoc.com) from bypassing the proxy and triggering CORS blocks.
+ */
+function safeBase(url: string): string {
+  if (!url) return "";
+  if (typeof window === "undefined") return url; // SSR — let Next.js rewrites decide
+  try {
+    const envOrigin = new URL(url).origin;
+    if (envOrigin !== window.location.origin) {
+      // Cross-origin base detected. Fall back to same-origin so the Next.js
+      // rewrite proxy can handle the request without CORS issues.
+      return "";
+    }
+  } catch {
+    // Relative URL or invalid — use as-is (same-origin path is fine)
+  }
+  return url;
+}
+
+export const API_BASE = safeBase(process.env.NEXT_PUBLIC_API_URL || "");
+const AGENTS_BASE = safeBase(process.env.NEXT_PUBLIC_AGENTS_URL || "");
+const ACTIONS_BASE = safeBase(process.env.NEXT_PUBLIC_ACTIONS_URL || "");
+const FUSION_BASE = safeBase(process.env.NEXT_PUBLIC_FUSION_URL || "");
+const THREATINTEL_BASE = safeBase(process.env.NEXT_PUBLIC_THREATINTEL_URL || "");
+const ENRICHMENT_BASE = safeBase(process.env.NEXT_PUBLIC_ENRICHMENT_URL || "");
+const REALTIME_BASE = safeBase(process.env.NEXT_PUBLIC_REALTIME_URL || "");
+const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || ""; // WS handled separately by wsOrigin()
+
+/**
+ * Compute the WebSocket origin at call time.
+ *
+ * If the bundle was built with `NEXT_PUBLIC_WS_URL` set, use that verbatim.
+ * Otherwise, derive `wss://<current-host>` from `window.location` so the WS
+ * connection lands on the same host the page was loaded from (the Next.js
+ * rewrites then proxy `/ws/*` to the realtime gateway).
+ *
+ * SSR fallback: returns `''` so the resulting URL is path-only; nothing on
+ * the server actually opens WebSockets.
+ */
+function wsOrigin(): string {
+  if (WS_BASE) return WS_BASE;
+  if (typeof window !== "undefined") {
+    const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${window.location.host}`;
+  }
+  return "";
+}
+
+const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || "00000000-0000-0000-0000-000000000001";
+
+export const API_BASES = {
+  api: API_BASE,
+  agents: AGENTS_BASE,
+  actions: ACTIONS_BASE,
+  fusion: FUSION_BASE,
+  threatintel: THREATINTEL_BASE,
+  enrichment: ENRICHMENT_BASE,
+  realtime: REALTIME_BASE,
+  ws: WS_BASE,
+} as const;
+
+export const DEFAULT_TENANT_ID = TENANT_ID;
+
+// ─── Active tenant (W5 — tenant switcher) ───────────────────────────────────
+//
+// The console used to ship every request with the env-derived TENANT_ID. With
+// the tenant switcher, MSSP parents and analysts who carry credentials for
+// multiple tenants need a way to flip the `X-Tenant-Id` header at runtime.
+// We expose three building blocks the TenantContext + switcher consume:
+//
+//   - ACTIVE_TENANT_KEY:    localStorage key for the override
+//   - getActiveTenantId():  read precedence — override → cached user → env
+//   - setActiveTenantId():  persist (or clear) the override
+//
+// `request()` calls `getActiveTenantId()` on every call so a tenant flip
+// applies to the very next fetch without needing a page reload. The env var
+// `NEXT_PUBLIC_TENANT_ID` remains the floor so demo and SSR contexts keep
+// working when no user is logged in.
+
+export const ACTIVE_TENANT_KEY = "aisoc.activeTenantId";
+
+export function getActiveTenantId(): string {
+  if (typeof window === "undefined") return TENANT_ID;
+  try {
+    const override = window.localStorage.getItem(ACTIVE_TENANT_KEY);
+    if (override) return override;
+    const raw = window.localStorage.getItem(AUTH_USER_KEY);
+    if (raw) {
+      const user = JSON.parse(raw) as { tenant_id?: string };
+      if (user.tenant_id) return user.tenant_id;
+    }
+  } catch {
+    /* localStorage unavailable / malformed payload — fall through */
+  }
+  return TENANT_ID;
+}
+
+export function setActiveTenantId(tenantId: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (tenantId) {
+      window.localStorage.setItem(ACTIVE_TENANT_KEY, tenantId);
+    } else {
+      window.localStorage.removeItem(ACTIVE_TENANT_KEY);
+    }
+  } catch {
+    /* private-mode quota errors — surface choice is in-memory only */
+  }
+}
+
+interface FetchOptions extends RequestInit {
+  params?: Record<string, string | number | boolean | undefined>;
+  baseUrl?: string;
+  /** Sign-in challenges authenticate with their own credential in the body. */
+  skipAuthRefresh?: boolean;
+  /** Services deriving tenancy exclusively from the JWT need no tenant claim. */
+  omitTenantHeader?: boolean;
+}
+
+export class ApiError extends Error {
+  status: number;
+  body: string;
+
+  constructor(message: string, status: number, body: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
+/**
+ * The headers every console call to an AiSOC API must carry.
+ *
+ * Used by the shared JSON/raw transport and callers that need to inspect
+ * headers. Requests needing a raw body should use {@link apiFetch} so they
+ * also renew the session. The API authenticates a bearer token; a tenant
+ * header is a caller-supplied claim.
+ *
+ * `X-Tenant-Id` resolves at call time so the tenant switcher applies to the
+ * very next request without a page reload.
+ */
+export function apiHeaders(extra?: HeadersInit): Record<string, string> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    "X-Tenant-Id": getActiveTenantId(),
+  };
+  const canonical: Record<string, string> = {
+    authorization: "Authorization",
+    "content-type": "Content-Type",
+    "x-tenant-id": "X-Tenant-Id",
+    accept: "Accept",
+  };
+  new Headers(extra).forEach((value, key) => {
+    headers[canonical[key] ?? key] = value;
+  });
+
+  if (typeof window !== "undefined") {
+    try {
+      if (!headers.Authorization && !headers.authorization) {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      /* localStorage unavailable; ignore */
+    }
+  }
+
+  return headers;
+}
+
+/**
+ * Whether a JWT's `exp` has passed. True when it cannot be read.
+ *
+ * Deliberately does not verify the signature: the browser cannot, and
+ * this is a usability check rather than a security one. The API verifies
+ * for real, and a forged token simply 401s there.
+ */
+export function isTokenExpired(token: string, nowSeconds?: number): boolean {
+  const parts = token.split(".");
+  if (parts.length !== 3) return true;
+  try {
+    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))) as {
+      exp?: number;
+    };
+    if (typeof payload.exp !== "number") return false;
+    // A small skew, so a token that expires mid-request does not bounce
+    // the user out of a page that was working a second ago.
+    const now = nowSeconds ?? Math.floor(Date.now() / 1000);
+    return payload.exp <= now - 5;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Routes that must not trigger the 401 self-heal.
+ *
+ * Signing in is where a 401 means "wrong password", not "your session
+ * died" — redirecting there would replace the form's error message with a
+ * reload of the same form.
+ */
+const AUTH_EXEMPT_PATHS = [
+  "/api/v1/auth/login",
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/sso/status",
+  "/api/v1/auth/mfa/verify",
+  "/api/v1/auth/mfa/webauthn/challenge",
+  "/api/v1/auth/mfa/webauthn/verify",
+  "/api/v1/passkeys/authenticate/begin",
+  "/api/v1/passkeys/authenticate/finish",
+];
+
+interface StoredSession {
+  access: string | null;
+  refresh: string | null;
+  user: string | null;
+  generation: number;
+}
+
+let sessionGeneration = 0;
+let pendingRefresh: { session: StoredSession; promise: Promise<void> } | null = null;
+
+function storedSession(): StoredSession {
+  let access = null;
+  let refresh = null;
+  let user = null;
+  if (typeof window !== "undefined") {
+    try {
+      access = window.localStorage.getItem(AUTH_TOKEN_KEY);
+      refresh = window.localStorage.getItem(AUTH_REFRESH_KEY);
+      // A cached profile can outlive a passkey sign-in. Bind replays to the
+      // credential's identity, never to stale presentation data. The server
+      // still verifies the signature; this comparison only prevents replay.
+      for (const token of [access, refresh]) {
+        if (!token) continue;
+        try {
+          const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+          if (typeof payload.sub === "string") {
+            user = JSON.stringify([payload.sub, payload.tenant_id]);
+            break;
+          }
+        } catch {
+          /* Try the refresh credential if access cannot be decoded. */
+        }
+      }
+    } catch {
+      /* Storage is unavailable. */
+    }
+  }
+  return { access, refresh, user, generation: sessionGeneration };
+}
+
+function sameSession(a: StoredSession, b: StoredSession): boolean {
+  return a.access === b.access && a.refresh === b.refresh &&
+    a.user === b.user && a.generation === b.generation;
+}
+
+function sessionChanged(): ApiError {
+  return new ApiError("Session changed while the request was pending", 0, "");
+}
+
+function sessionAfterRefresh(previous: StoredSession): StoredSession {
+  const current = storedSession();
+  if (current.generation !== previous.generation || current.user !== previous.user || !current.access) {
+    throw sessionChanged();
+  }
+  return current;
+}
+
+/** Cancel one caller promptly without cancelling the shared refresh. */
+function waitForRefresh(promise: Promise<void>, signal?: AbortSignal | null): Promise<void> {
+  if (!signal) return promise;
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    if (signal.aborted) abort();
+    promise.then(
+      () => { signal.removeEventListener("abort", abort); resolve(); },
+      (error) => { signal.removeEventListener("abort", abort); reject(error); }
+    );
+  });
+}
+
+/** One refresh per stored credential, shared by JSON and streaming callers. */
+async function refreshSession(session: StoredSession, path: string): Promise<void> {
+  if (!sameSession(session, storedSession())) throw sessionChanged();
+  if (pendingRefresh && sameSession(pendingRefresh.session, session)) {
+    return pendingRefresh.promise;
+  }
+
+  const promise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      // Do not use the authenticated client here: a rejected refresh must
+      // never refresh itself. Nor may one cancelled panel cancel its peers.
+      const response = await fetch(`${API_BASE}/api/v1/auth/refresh`, {
+        method: "POST",
+        headers: apiHeaders(),
+        body: JSON.stringify({ refresh_token: session.refresh }),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!sameSession(session, storedSession())) throw sessionChanged();
+      if (!response.ok) {
+        const body = await response.text().catch(() => "");
+        if (!sameSession(session, storedSession())) throw sessionChanged();
+        if (response.status === 401) handleUnauthorized(path);
+        throw new ApiError("Session refresh failed", response.status, body);
+      }
+      const tokens = await response.json().catch(() => null) as TokenResponse | null;
+      if (!tokens || typeof tokens.access_token !== "string" || !tokens.access_token ||
+          typeof tokens.refresh_token !== "string" || !tokens.refresh_token) {
+        throw new ApiError("Session refresh returned an invalid token response", 502, "");
+      }
+      if (!sameSession(session, storedSession())) throw sessionChanged();
+      window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+      window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      // An outage or a timeout is not evidence that the credential is dead.
+      throw new ApiError(`Session refresh unavailable: ${(error as Error).message}`, 0, "");
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+  const flight = { session, promise };
+  pendingRefresh = flight;
+  try {
+    await promise;
+  } finally {
+    if (pendingRefresh === flight) pendingRefresh = null;
+  }
+}
+
+/**
+ * Clear a dead session and send the user to sign in again.
+ *
+ * Called only after renewal is unavailable or the renewed session is rejected.
+ */
+function handleUnauthorized(path: string): void {
+  if (typeof window === "undefined") return;
+  if (AUTH_EXEMPT_PATHS.some((exempt) => path.startsWith(exempt))) return;
+  // Already on the sign-in page: clearing is right, navigating would loop.
+  const onLogin = window.location.pathname.startsWith("/login");
+  sessionGeneration += 1;
+  try {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    window.localStorage.removeItem(AUTH_REFRESH_KEY);
+    window.localStorage.removeItem(AUTH_USER_KEY);
+  } catch {
+    /* localStorage unavailable; the redirect below still helps */
+  }
+  if (!onLogin) {
+    const next = encodeURIComponent(window.location.pathname + window.location.search);
+    window.location.assign(`/login?next=${next}`);
+  }
+}
+
+async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  let response: Response;
+  try {
+    response = await apiFetch(path, options);
+  } catch (err) {
+    if (err instanceof ApiError || (err as Error).name === "AbortError") throw err;
+    throw new ApiError(`Network error talking to ${path}: ${(err as Error).message}`, 0, "");
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => "");
+    throw new ApiError(
+      `API ${response.status} ${response.statusText} — ${path}`,
+      response.status,
+      errorText
+    );
+  }
+
+  if (response.status === 204) return {} as T;
+  // Some endpoints (the agent stream, NDJSON) might not be JSON. Callers that
+  // need streams should use apiFetch(). Here we assume JSON.
+  return (await response.json()) as T;
+}
+
+/**
+ * The credentialed JSON client, for calls with no typed wrapper yet.
+ *
+ * Sixty-one console call sites reached the API with no `Authorization`
+ * header, forty-five of them through a bare `fetch(url)`. They worked only
+ * because the API resolved a credential-free request to a demo administrator
+ * in a development-class environment. Prefer a typed namespace below when one
+ * covers the route; reach for this when none does, rather than for `fetch`.
+ *
+ * `scripts/check_console_auth_headers.py` keeps the class closed.
+ */
+export async function apiRequest<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  return request<T>(path, options);
+}
+
+/**
+ * SWR fetcher that carries a credential.
+ *
+ * SWR calls a fetcher as `f(key)`, so a fetcher has nowhere to put options
+ * and every single-argument fetcher in this console was anonymous by
+ * construction. This one routes through {@link request}, so it also throws
+ * {@link ApiError} with the status intact, which `describeApiFailure` needs
+ * to tell a console bug from an outage.
+ */
+export async function authedFetcher<T>(url: string): Promise<T> {
+  return request<T>(url);
+}
+
+/**
+ * A credentialed `fetch` that returns the raw `Response`.
+ *
+ * For NDJSON streams, SSE, PDF and Markdown downloads. Attaches the session
+ * and tenant, renews expired access, and retries a protected 401 at most once.
+ * Successful response bodies remain unread for the caller.
+ */
+export async function apiFetch(path: string, options: FetchOptions = {}): Promise<Response> {
+  const { params, baseUrl, skipAuthRefresh, omitTenantHeader, ...fetchOptions } = options;
+  let url = /^https?:\/\//.test(path) ? path : `${baseUrl ?? API_BASE}${path}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== "") {
+        searchParams.set(key, String(value));
+      }
+    });
+    const qs = searchParams.toString();
+    if (qs) url += `?${qs}`;
+  }
+  const headers = apiHeaders(fetchOptions.headers);
+  if (omitTenantHeader) delete headers["X-Tenant-Id"];
+  if (typeof FormData !== "undefined" && fetchOptions.body instanceof FormData &&
+      !new Headers(fetchOptions.headers).has("Content-Type")) {
+    delete headers["Content-Type"];
+  }
+  let session = storedSession();
+  const explicitAuth = new Headers(fetchOptions.headers).get("Authorization");
+  const authPath = new URL(url, typeof window === "undefined" ? "http://localhost" : window.location.origin).pathname;
+  const managed = typeof window !== "undefined" && !skipAuthRefresh &&
+    !AUTH_EXEMPT_PATHS.some((exempt) => authPath.startsWith(exempt)) &&
+    (!explicitAuth || explicitAuth === `Bearer ${session.access}`);
+  let refreshed = false;
+  fetchOptions.signal?.throwIfAborted();
+  if (managed && session.refresh && (!session.access || isTokenExpired(session.access))) {
+    await waitForRefresh(refreshSession(session, authPath), fetchOptions.signal);
+    session = sessionAfterRefresh(session);
+    refreshed = true;
+    headers.Authorization = `Bearer ${session.access}`;
+  }
+  const send = () => {
+    fetchOptions.signal?.throwIfAborted();
+    if (managed && !sameSession(session, storedSession())) throw sessionChanged();
+    return fetch(url, { ...fetchOptions, headers: { ...headers }, cache: "no-store" });
+  };
+  let response = await send();
+  if (response.status !== 401 || !managed) return response;
+
+  const current = storedSession();
+  if (current.generation !== session.generation || current.user !== session.user ||
+      (session.access && !current.access) || (current.access !== session.access && !current.user)) {
+    throw sessionChanged();
+  }
+  // Another request (or tab) may already have renewed the credential while
+  // this request's 401 was travelling back. Reuse it instead of refreshing twice.
+  if (current.access !== session.access || (!refreshed && current.refresh)) {
+    if (current.access === session.access) {
+      await waitForRefresh(refreshSession(current, authPath), fetchOptions.signal);
+    }
+    session = sessionAfterRefresh(session);
+    headers.Authorization = `Bearer ${session.access}`;
+    await response.body?.cancel();
+    response = await send();
+  }
+  if (response.status === 401 && sameSession(session, storedSession())) {
+    handleUnauthorized(authPath);
+  }
+  return response;
+}
+
+// ─── Onboarding ──────────────────────────────────────────────────────────────
+
+export interface SetupStep {
+  key: string;
+  label: string;
+  done: boolean;
+  why: string;
+  href: string | null;
+  detail: string | null;
+}
+
+export interface OnboardingStatus {
+  first_run: boolean;
+  steps: SetupStep[];
+  connectors: number;
+  alerts: number;
+  sample_data_loaded: boolean;
+}
+
+export interface SampleDataResult {
+  accepted: number;
+  rejected: number;
+  scenarios: { key: string; title: string; severity: string; why: string }[];
+  note: string;
+}
+
+/**
+ * What a tenant still has to set up, and the one button that gives an
+ * evaluator something to look at.
+ *
+ * `first_run` is derived from the tenant's own data server-side rather
+ * than from a stored flag, so it stays true if somebody connects a source
+ * through the API or deletes their last one.
+ */
+export const onboardingApi = {
+  status: () => request<OnboardingStatus>("/api/v1/onboarding/status"),
+  loadSampleData: () =>
+    request<SampleDataResult>("/api/v1/onboarding/sample-data", { method: "POST" }),
+};
+
+// ─── Auth ────────────────────────────────────────────────────────────────────
+
+export const AUTH_TOKEN_KEY = "aisoc.responder.accessToken";
+export const AUTH_REFRESH_KEY = "aisoc.responder.refreshToken";
+export const AUTH_USER_KEY = "aisoc.responder.user";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  username?: string | null;
+  role: string;
+  tenant_id: string;
+  is_active?: boolean;
+  preferences?: Record<string, unknown>;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+  expires_in: number;
+}
+
+export interface LoginResult extends TokenResponse {
+  user: AuthUser;
+}
+
+/**
+ * What `POST /auth/login` answers when the password was right and a second
+ * factor is outstanding (HTTP 202). Two distinct cases, and conflating them
+ * sends the user to the wrong screen: `mfa_required` means "type a code",
+ * `mfa_enrollment_required` means "your tenant now requires a factor you
+ * have never set up".
+ */
+export interface MfaChallenge {
+  mfa_token: string;
+  mfa_required?: boolean;
+  mfa_enrollment_required?: boolean;
+  methods?: string[];
+}
+
+export function isMfaChallenge(result: LoginResult | MfaChallenge): result is MfaChallenge {
+  return "mfa_token" in result && !("user" in result);
+}
+
+function persistAuth(tokens: TokenResponse, user: AuthUser): void {
+  if (typeof window === "undefined") return;
+  sessionGeneration += 1;
+  try {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+    if (tokens.refresh_token) {
+      window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    } else {
+      window.localStorage.removeItem(AUTH_REFRESH_KEY);
+    }
+    window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+  } catch {
+    /* localStorage unavailable; ignore */
+  }
+}
+
+/** Replace the whole credential pair before verifying a new sign-in. */
+function beginSession(tokens: Pick<TokenResponse, "access_token" | "refresh_token">): void {
+  if (typeof window === "undefined") return;
+  sessionGeneration += 1;
+  try {
+    window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+    if (tokens.refresh_token) window.localStorage.setItem(AUTH_REFRESH_KEY, tokens.refresh_token);
+    else window.localStorage.removeItem(AUTH_REFRESH_KEY);
+    window.localStorage.removeItem(AUTH_USER_KEY);
+  } catch {
+    /* localStorage unavailable; the server still decides authentication. */
+  }
+}
+
+export const authApi = {
+  /**
+   * Public SSO availability for the login screen: whether SSO is offered,
+   * under what label, and whether password sign-in remains open. Reveals
+   * no provider internals; a failure reads as "no SSO" rather than an
+   * error state, so a status outage never blocks the password form.
+   */
+  ssoStatus: async (): Promise<{
+    sso_enabled: boolean;
+    provider: string;
+    login_label: string;
+    local_login_enabled: boolean;
+  }> => {
+    try {
+      return await request("/api/v1/auth/sso/status");
+    } catch {
+      return {
+        sso_enabled: false,
+        provider: "oidc",
+        login_label: "Continue with SSO",
+        local_login_enabled: true,
+      };
+    }
+  },
+
+  /**
+   * Email + password login against ``POST /api/v1/auth/login``.
+   *
+   * The backend returns access + refresh tokens only, so we follow up with
+   * ``GET /api/v1/auth/me`` to fetch the user record. On success, persist
+   * everything under the same localStorage keys the responder PWA uses
+   * (``aisoc.responder.accessToken`` etc.) so the existing ``request()``
+   * helper attaches the JWT automatically and a single login covers desktop
+   * + mobile.
+   */
+  async login(email: string, password: string): Promise<LoginResult | MfaChallenge> {
+    const tokens = await request<TokenResponse & Partial<MfaChallenge>>("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    // HTTP 202: the password was accepted and no session was issued. The
+    // caller has to run the second factor; storing anything here would
+    // persist a token that does not exist.
+    if (!tokens.access_token && tokens.mfa_token) {
+      return {
+        mfa_token: tokens.mfa_token,
+        mfa_required: tokens.mfa_required,
+        mfa_enrollment_required: tokens.mfa_enrollment_required,
+        methods: tokens.methods,
+      };
+    }
+    beginSession(tokens);
+    const user = await request<AuthUser>("/api/v1/auth/me");
+    persistAuth(tokens, user);
+    return { ...tokens, user };
+  },
+
+  logout(): void {
+    if (typeof window === "undefined") return;
+    sessionGeneration += 1;
+    try {
+      window.localStorage.removeItem(AUTH_TOKEN_KEY);
+      window.localStorage.removeItem(AUTH_REFRESH_KEY);
+      window.localStorage.removeItem(AUTH_USER_KEY);
+    } catch {
+      /* ignore */
+    }
+  },
+
+  currentUser(): AuthUser | null {
+    if (typeof window === "undefined") return null;
+    try {
+      const raw = window.localStorage.getItem(AUTH_USER_KEY);
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  /**
+   * Whether the stored session can make a request or renew first.
+   * This is a UI guard only: the API still verifies both credentials.
+   */
+  isAuthenticated(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+      const { access, refresh } = storedSession();
+      return Boolean((access && !isTokenExpired(access)) || (refresh && !isTokenExpired(refresh)));
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Complete an SSO handoff that the IdP redirected back into the URL
+   * fragment (`#access_token=...&refresh_token=...`). Browsers never send
+   * fragments to servers, so the tokens appear in no access log or Referer
+   * header; this consumes them the moment the login screen mounts, verifies
+   * the access token against `/auth/me`, persists the session exactly like
+   * a password login would, and scrubs the fragment from history so the
+   * tokens do not linger in the address bar or browser session history.
+   */
+  async completeSsoHandoff(): Promise<boolean> {
+    if (typeof window === "undefined") return false;
+    try {
+      const hash = window.location.hash;
+      if (!hash.includes("access_token=")) return false;
+      const params = new URLSearchParams(hash.replace(/^#/, ""));
+      const accessToken = params.get("access_token");
+      if (!accessToken) return false;
+      const refreshToken = params.get("refresh_token") || "";
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+      const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) return false;
+      const user = await res.json();
+      persistAuth(
+        {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          token_type: "bearer",
+          expires_in: 0,
+        },
+        user
+      );
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  /**
+   * Finish a sign-in that `POST /auth/login` answered with 202.
+   *
+   * Takes a TOTP code or a recovery code — the API decides which by trying
+   * the authenticator first, so the user types whichever they have without
+   * telling the console which it is.
+   */
+  async completeMfa(mfaToken: string, code: string): Promise<LoginResult> {
+    const tokens = await request<TokenResponse>("/api/v1/auth/mfa/verify", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token: mfaToken, code }),
+    });
+    beginSession(tokens);
+    const user = await request<AuthUser>("/api/v1/auth/me");
+    persistAuth(tokens, user);
+    return { ...tokens, user };
+  },
+
+  /**
+   * Adopt a session handed back by a non-login endpoint.
+   *
+   * `POST /auth/mfa/enroll/confirm` returns a token pair when the
+   * enrolment completed from a sign-in challenge, so the user is not made
+   * to authenticate a second time with a code they just proved.
+   */
+  async adoptSession(accessToken: string, refreshToken: string): Promise<AuthUser> {
+    beginSession({ access_token: accessToken, refresh_token: refreshToken });
+    const user = await request<AuthUser>("/api/v1/auth/me");
+    persistAuth(
+      {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        token_type: "bearer",
+        expires_in: 0,
+      },
+      user
+    );
+    return user;
+  },
+
+  /** Merge user preferences on the server (theme, layout, etc.). */
+  async updateUserPreferences(preferences: Record<string, unknown>): Promise<AuthUser> {
+    const response = await apiFetch("/api/v1/auth/me/preferences", {
+      method: "PATCH",
+      body: JSON.stringify({ preferences }),
+    });
+    if (!response.ok) throw new Error("Failed to update preferences");
+    const user = (await response.json()) as AuthUser;
+    // Keep locally-cached user in sync
+    try {
+      window.localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+    } catch {
+      /* ignore */
+    }
+    return user;
+  },
+};
+
+// ─── Multi-factor authentication ─────────────────────────────────────────────
+//
+// Every call takes an optional `mfaToken`. It is how a user whose tenant
+// has just started requiring a second factor enrols: they hold a correct
+// password and no session, so there is no bearer credential to send and
+// the challenge stands in for one. With a session, omit it.
+
+export interface MfaStatus {
+  enrolled: boolean;
+  tenant_requires_totp: boolean;
+  recovery_codes_remaining: number;
+  /** Which factor, not just whether there is one: a holder of only a
+   *  security key must not be offered "enter the code from your app". */
+  has_totp: boolean;
+  has_webauthn: boolean;
+  /** Roles the tenant enforces, and whether the caller's own is one. */
+  require_for_roles: string[];
+  required_for_me: boolean;
+}
+
+export interface MfaEnrollment {
+  secret: string;
+  otpauth_uri: string;
+}
+
+export interface MfaConfirmed {
+  recovery_codes: string[];
+  access_token?: string | null;
+  refresh_token?: string | null;
+}
+
+export const mfaApi = {
+  status: (): Promise<MfaStatus> => request("/api/v1/auth/mfa/status"),
+
+  enrollBegin: (mfaToken?: string): Promise<MfaEnrollment> =>
+    request("/api/v1/auth/mfa/enroll/begin", {
+      method: "POST",
+      body: JSON.stringify(mfaToken ? { mfa_token: mfaToken } : {}),
+      skipAuthRefresh: Boolean(mfaToken),
+    }),
+
+  enrollConfirm: (code: string, mfaToken?: string): Promise<MfaConfirmed> =>
+    request("/api/v1/auth/mfa/enroll/confirm", {
+      method: "POST",
+      body: JSON.stringify(mfaToken ? { code, mfa_token: mfaToken } : { code }),
+      skipAuthRefresh: Boolean(mfaToken),
+    }),
+
+  /** Remove your own factor. The API requires a current code, so a stolen
+   *  session cannot strip the thing protecting it. */
+  disable: (code: string): Promise<void> =>
+    request("/api/v1/auth/mfa", { method: "DELETE", body: JSON.stringify({ code }) }),
+
+  /** Administrative reset for a colleague who lost their phone. Audited
+   *  with the reason, which is why the reason is required here too. */
+  reset: (userId: string, reason: string): Promise<{ status: string }> =>
+    request(`/api/v1/auth/mfa/reset/${encodeURIComponent(userId)}`, {
+      method: "POST",
+      body: JSON.stringify({ reason }),
+    }),
+
+  policy: (): Promise<MfaPolicy> => request("/api/v1/auth/mfa/policy"),
+
+  /** The whole policy, both halves at once. The role list is *replaced*,
+   *  not merged, so clearing a role here actually clears it. */
+  setPolicy: (requireTotp: boolean, requireForRoles: string[] = []): Promise<MfaPolicy> =>
+    request("/api/v1/auth/mfa/policy", {
+      method: "PUT",
+      body: JSON.stringify({ require_totp: requireTotp, require_for_roles: requireForRoles }),
+    }),
+
+  /** Assertion options for a sign-in that owes a second factor. The user
+   *  comes from the signed challenge, never from this call. */
+  webauthnChallenge: (mfaToken: string): Promise<WebAuthnChallenge> =>
+    request("/api/v1/auth/mfa/webauthn/challenge", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token: mfaToken }),
+    }),
+
+  webauthnVerify: (
+    mfaToken: string,
+    challenge: string,
+    credential: Record<string, unknown>
+  ): Promise<{ access_token: string; refresh_token: string }> =>
+    request("/api/v1/auth/mfa/webauthn/verify", {
+      method: "POST",
+      body: JSON.stringify({ mfa_token: mfaToken, challenge, credential }),
+    }),
+};
+
+export interface MfaPolicy {
+  require_totp: boolean;
+  require_for_roles: string[];
+}
+
+export interface WebAuthnChallenge {
+  publicKey: Record<string, unknown>;
+  challenge: string;
+}
+
+// ─── Tenants & MSSP ─────────────────────────────────────────────────────────
+//
+// The W5 tenant switcher needs to know:
+//   - which tenant the user is currently authenticated against
+//     (`tenants/me` — single canonical source of truth, includes display name)
+//   - what other tenants they can flip to
+//     (`mssp/children` for MSSP parents — returns *real* child tenants from
+//      the DB, not the mock list used by the parent dashboard)
+//
+// Failures are caught by the caller — the switcher gracefully degrades to a
+// single-tenant role badge when these endpoints 401/404 (e.g. a tenant user
+// who isn't an MSSP parent will not have any children but still has /me).
+
+export interface MyTenant {
+  id: string;
+  name: string;
+  // mssp_role and parent_tenant_id come from the lightweight identity
+  // endpoint and are present for any tenant (null for standalone tenants).
+  mssp_role?: "parent" | "child" | null;
+  parent_tenant_id?: string | null;
+}
+
+export interface ChildTenant {
+  id: string;
+  name: string;
+  mssp_role: string;
+  created_at?: string;
+}
+
+// Full tenant record from `GET /api/v1/tenants/me` (requires `settings:read`).
+// See services/api/app/api/v1/endpoints/tenants.py, class TenantResponse.
+export interface FullTenant {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  limits: Record<string, unknown>;
+  mssp_role?: "parent" | "child" | null;
+  parent_tenant_id?: string | null;
+  created_at: string;
+}
+
+// Tenant member from `GET /api/v1/tenants/me/users` (requires `users:read`).
+// See services/api/app/api/v1/endpoints/tenants.py, class UserResponse.
+export interface TenantUser {
+  id: string;
+  tenant_id: string;
+  email: string;
+  username: string;
+  role: string;
+  is_active: boolean;
+  last_login: string | null;
+  created_at: string;
+}
+
+/**
+ * What the product is called and what it looks like, for this tenant.
+ *
+ * Resolved server-side from the organisation the tenant belongs to, so the
+ * console never has to know whether a deployment is white-labelled: an
+ * unbranded one gets the platform defaults from the same endpoint. One code
+ * path rather than a branded one and an unbranded one that drift.
+ */
+export interface Branding {
+  product_name: string;
+  primary_color: string;
+  accent_color: string;
+  support_email: string | null;
+  support_url: string | null;
+  sender_name: string;
+  footer_text: string;
+  /** A path on this deployment, never a third-party address. */
+  logo_url: string | null;
+  org_id: string | null;
+  is_white_labelled: boolean;
+}
+
+export const brandingApi = {
+  /** Readable by any authenticated member; the console calls it per page load. */
+  async get(): Promise<Branding> {
+    return request<Branding>("/api/v1/branding");
+  },
+
+  /**
+   * The logo bytes, fetched with the caller's credential.
+   *
+   * `logo_url` cannot be handed to an `<img src>`. The route authenticates a
+   * bearer token, and the only credential a browser attaches to an image
+   * request is a cookie — so the sidebar logo answered 401 on every
+   * deployment not running the development auth shim, which is every
+   * deployment a customer has. Fetched here and handed to the DOM as an
+   * object URL instead.
+   */
+  async logo(path: string): Promise<Blob> {
+    const response = await apiFetch(path);
+    if (!response.ok) {
+      throw new ApiError(`branding logo request failed`, response.status, "");
+    }
+    return response.blob();
+  },
+
+  /**
+   * Write branding for the organisation the caller's tenant belongs to.
+   *
+   * A tenant in no operator organisation gets a 409 from the route, which is
+   * a real answer and not an error: there is nothing to brand. Callers
+   * branch on it rather than rendering a failure.
+   */
+  async update(body: BrandingUpdate): Promise<Branding> {
+    return request<Branding>("/api/v1/branding", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  /**
+   * Upload a logo or favicon.
+   *
+   * Multipart, so the JSON content type `apiHeaders` sets by default has to
+   * go — the browser must write its own `multipart/form-data` header with
+   * the boundary it generated, and overriding it produces a body the server
+   * cannot parse.
+   */
+  async uploadAsset(kind: "logo" | "favicon", file: File): Promise<BrandAsset> {
+    const form = new FormData();
+    form.append("file", file);
+    const response = await apiFetch(`/api/v1/branding/assets/${kind}`, {
+      method: "POST",
+      body: form,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      // The route's 422 messages name the reason (wrong magic bytes, an SVG
+      // the sanitiser refused, an unsupported type). Surfacing that verbatim
+      // is the difference between "upload failed" and an operator knowing to
+      // re-export the file.
+      let detail = `branding asset upload failed (${response.status})`;
+      try {
+        const parsed = JSON.parse(text) as { detail?: string };
+        if (parsed.detail) detail = parsed.detail;
+      } catch {
+        /* a non-JSON body is already covered by the status-code fallback */
+      }
+      throw new ApiError(detail, response.status, text);
+    }
+    return JSON.parse(text) as BrandAsset;
+  },
+
+  async deleteAsset(kind: "logo" | "favicon"): Promise<void> {
+    return request<void>(`/api/v1/branding/assets/${kind}`, { method: "DELETE" });
+  },
+};
+
+/** The writable subset of {@link Branding}; `logo_url` is set by upload. */
+export interface BrandingUpdate {
+  product_name?: string | null;
+  primary_color?: string | null;
+  accent_color?: string | null;
+  support_email?: string | null;
+  support_url?: string | null;
+  sender_name?: string | null;
+  footer_text?: string | null;
+}
+
+export interface BrandAsset {
+  id: string;
+  kind: string;
+  content_type: string;
+  bytes: number;
+  sanitized: boolean;
+  removed?: { elements: string[]; attributes: string[] };
+}
+
+// ─── Data lifecycle: retention (wave 2, Phase 9.5) ──────────────────────────
+//
+// `/data-lifecycle/retention` has had GET and PUT since migration 049 and no
+// console binding at all, so a tenant's retention was settable only by curl.
+
+export interface RetentionPolicy {
+  raw_events_days: number;
+  alerts_days: number;
+  audit_days: number;
+  /**
+   * Whether this deployment actually deletes on these windows.
+   *
+   * `RETENTION_WORKER_ENABLED` defaults to false, so the console must be able
+   * to say "this is a stated policy, nothing is deleting yet" rather than
+   * implying a deletion that does not happen.
+   */
+  purge_worker_enabled: boolean;
+  purge_worker_dry_run: boolean;
+}
+
+export const retentionApi = {
+  get: () => request<RetentionPolicy>("/api/v1/data-lifecycle/retention"),
+
+  /**
+   * Partial by design: the route merges each absent field with what is
+   * stored, so sending one window never silently resets the other two.
+   */
+  update: (body: Partial<RetentionPolicy>) =>
+    request<RetentionPolicy>("/api/v1/data-lifecycle/retention", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
+// ─── MSSP rule packs and delegations (wave 2, Phase 9.5) ────────────────────
+
+export interface RulePack {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackAssignment {
+  id: string;
+  pack_id: string;
+  child_tenant_id: string;
+  enabled: boolean;
+  parameter_overrides: Record<string, unknown>;
+  created_at: string;
+}
+
+export const rulePacksApi = {
+  list: () => request<RulePack[]>("/api/v1/mssp/rule-packs"),
+
+  create: (body: { name: string; description?: string | null; category?: string | null; is_default?: boolean }) =>
+    request<RulePack>("/api/v1/mssp/rule-packs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  update: (id: string, body: Partial<{ name: string; description: string | null; category: string | null; is_default: boolean }>) =>
+    request<RulePack>(`/api/v1/mssp/rule-packs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  remove: (id: string) => request<void>(`/api/v1/mssp/rule-packs/${id}`, { method: "DELETE" }),
+
+  /**
+   * Assign a pack to one managed tenant.
+   *
+   * Assignment is what makes a pack take effect, so a console that only
+   * created packs would leave an operator with a library that detects
+   * nothing — which is why this is on the panel and not deferred.
+   */
+  assign: (id: string, body: { child_tenant_id: string; enabled?: boolean; parameter_overrides?: Record<string, unknown> }) =>
+    request<PackAssignment>(`/api/v1/mssp/rule-packs/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export interface Delegation {
+  id: string;
+  parent_tenant_id: string;
+  child_tenant_id: string;
+  granted_role: string;
+  granted_by_user: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export const delegationsApi = {
+  /** Live grants only; the route filters revoked rows out server-side. */
+  list: () => request<Delegation[]>("/api/v1/mssp/delegations"),
+
+  /**
+   * The route refuses a role the caller does not itself hold — 403 when the
+   * role exists and is above them, 422 when it is not a role at all. Both
+   * messages are written for an operator, so callers surface them verbatim.
+   */
+  create: (body: { child_tenant_id: string; granted_role: string; expires_at?: string | null }) =>
+    request<Delegation>("/api/v1/mssp/delegations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  revoke: (id: string) => request<void>(`/api/v1/mssp/delegations/${id}`, { method: "DELETE" }),
+};
+
+export interface RetroHuntSettings {
+  enabled: boolean;
+  lookback_days: number;
+  include_federated: boolean;
+  max_sweeps_per_hour: number;
+  max_sweeps_per_day: number;
+  sweeps_this_hour: number;
+  sweeps_today: number;
+  sweeps_skipped_budget: number;
+}
+
+export const retroHuntsApi = {
+  /**
+   * This tenant's answer to "may AiSOC sweep my history".
+   *
+   * A tenant that has never opted in has no settings row, and the API returns
+   * the column defaults rather than a 404 -- "you have not opted in" is a
+   * state with a correct answer.
+   */
+  async getSettings(): Promise<RetroHuntSettings> {
+    return request<RetroHuntSettings>("/api/v1/retro-hunts/settings");
+  },
+
+  /**
+   * Opt in or out. The budget fields are read-only here by design: they are
+   * the operator's ceiling on what one tenant can cost the deployment.
+   */
+  async putSettings(body: {
+    enabled: boolean;
+    lookback_days: number;
+    include_federated: boolean;
+  }): Promise<RetroHuntSettings> {
+    return request<RetroHuntSettings>("/api/v1/retro-hunts/settings", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+};
+
+export interface RbacPermission {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+}
+
+export interface RbacRole {
+  id: string;
+  tenant_id: string;
+  name: string;
+  label?: string | null;
+  description: string | null;
+  is_system: boolean;
+  permissions: RbacPermission[];
+  user_count: number;
+  is_sso_default: boolean;
+}
+
+export interface UserRoleOut {
+  user_id: string;
+  role_id: string;
+  role_name: string;
+}
+
+export interface RbacPermissionLite {
+  name: string;
+  description?: string | null;
+  category?: string | null;
+}
+
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  username?: string | null;
+  is_active: boolean;
+  role: string;
+  roles: string[];
+  provider: string;
+  last_login: string | null;
+  created_at: string;
+  effective_permissions: string[];
+}
+
+export interface AdminUserPage {
+  items: AdminUserRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/**
+ * RBAC console surface. All endpoints are admin-gated server-side
+ * (`roles:read` / `roles:write`); a 403 here means the signed-in operator
+ * is not a platform admin, and the screens must render read-only or hide
+ * management controls accordingly — never pretend success.
+ */
+export const rbacApi = {
+  async listRoles(): Promise<RbacRole[]> {
+    return request<RbacRole[]>("/api/v1/rbac/roles");
+  },
+
+  async listPermissions(): Promise<RbacPermissionLite[]> {
+    return request<RbacPermissionLite[]>("/api/v1/rbac/permissions");
+  },
+
+  async seedRoles(): Promise<{
+    seeded: boolean;
+    permissions: number;
+    roles: number;
+    role_permissions: number;
+    user_roles: number;
+  }> {
+    return request("/api/v1/rbac/roles/seed", { method: "POST" });
+  },
+
+  async createRole(body: {
+    name: string;
+    label?: string;
+    description?: string | null;
+    permission_names: string[];
+  }): Promise<RbacRole> {
+    return request<RbacRole>("/api/v1/rbac/roles", { method: "POST", body: JSON.stringify(body) });
+  },
+
+  /** Update label/description and (optionally) replace the permission set. */
+  async updateRole(
+    roleId: string,
+    body: { label?: string; description?: string | null; permission_names?: string[] }
+  ): Promise<RbacRole> {
+    return request<RbacRole>(`/api/v1/rbac/roles/${roleId}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    });
+  },
+
+  async deleteRole(roleId: string): Promise<void> {
+    await apiFetch(`/api/v1/rbac/roles/${roleId}`, { method: "DELETE" });
+  },
+
+  /** Replace a user's primary role. Takes effect on their next request. */
+  async setPrimaryRole(userId: string, roleName: string, reason: string): Promise<UserRoleOut> {
+    return request<UserRoleOut>(`/api/v1/rbac/users/${userId}/role`, {
+      method: "PUT",
+      body: JSON.stringify({ role_name: roleName, reason }),
+    });
+  },
+};
+
+/**
+ * Admin Users screen. Server-gated to `roles:write` (admin) on every route;
+ * role changes revoke the target's sessions and take effect immediately.
+ */
+export const adminUsersApi = {
+  async listUsers(
+    params: {
+      search?: string;
+      role?: string;
+      status?: "active" | "disabled";
+      sort?: "name" | "email" | "status" | "created" | "last_login";
+      order?: "asc" | "desc";
+      limit?: number;
+      offset?: number;
+    } = {}
+  ): Promise<AdminUserPage> {
+    const qs = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    });
+    const suffix = qs.toString();
+    return request<AdminUserPage>(`/api/v1/admin/users${suffix ? `?${suffix}` : ""}`);
+  },
+
+  async getUser(userId: string): Promise<AdminUserRow> {
+    return request<AdminUserRow>(`/api/v1/admin/users/${userId}`);
+  },
+
+  async setRoles(userId: string, roleNames: string[], reason: string): Promise<AdminUserRow> {
+    return request<AdminUserRow>(`/api/v1/admin/users/${userId}/roles`, {
+      method: "PUT",
+      body: JSON.stringify({ role_names: roleNames, reason }),
+    });
+  },
+
+  async addRole(userId: string, roleName: string, reason: string): Promise<AdminUserRow> {
+    return request<AdminUserRow>(`/api/v1/admin/users/${userId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ role_name: roleName, reason }),
+    });
+  },
+
+  async removeRole(userId: string, roleName: string, reason: string): Promise<AdminUserRow> {
+    const qs = reason ? `?reason=${encodeURIComponent(reason)}` : "";
+    return request<AdminUserRow>(
+      `/api/v1/admin/users/${userId}/roles/${encodeURIComponent(roleName)}${qs}`,
+      {
+        method: "DELETE",
+      }
+    );
+  },
+
+  async setStatus(userId: string, isActive: boolean, reason: string): Promise<AdminUserRow> {
+    return request<AdminUserRow>(`/api/v1/admin/users/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ is_active: isActive, reason }),
+    });
+  },
+
+  async deleteUser(userId: string, reason: string): Promise<void> {
+    await request<void>(`/api/v1/admin/users/${userId}?reason=${encodeURIComponent(reason)}`, {
+      method: "DELETE",
+    });
+  },
+};
+
+export const tenantsApi = {
+  /**
+   * Lightweight tenant identity for the SOC console TopBar.
+   *
+   * Uses `/api/v1/tenants/me/identity` (any authenticated user) instead of
+   * `/api/v1/tenants/me` (requires `settings:read`) so analyst/viewer roles
+   * can render the tenant pill and role badge without leaking plan or
+   * settings configuration.
+   */
+  async me(): Promise<MyTenant> {
+    return request<MyTenant>("/api/v1/tenants/me/identity");
+  },
+
+  /** Full tenant record (plan, limits, settings) for the Workspace settings panel. */
+  async getFull(): Promise<FullTenant> {
+    return request<FullTenant>("/api/v1/tenants/me");
+  },
+
+  /** All users in the current tenant, for the Workspace settings panel. */
+  async listUsers(): Promise<TenantUser[]> {
+    return request<TenantUser[]>("/api/v1/tenants/me/users");
+  },
+};
+
+// The managed-portfolio read surface. Every figure below is counted from the
+// tenant's own rows by `services/api/app/services/mssp_portfolio.py`; there is
+// no revenue, risk-score or analyst-allocation data anywhere in this product,
+// so the console does not have columns for them.
+
+export interface PortfolioConnectorHealth {
+  total: number;
+  healthy: number;
+  stale: number;
+  error: number;
+}
+
+export interface PortfolioLimitHeadroom {
+  key: string;
+  label: string;
+  used: number;
+  limit: number | null;
+  remaining: number | null;
+  pct_used: number | null;
+  /** unlimited | ok | warning | exhausted */
+  state: string;
+}
+
+export interface PortfolioTenant {
+  tenant_id: string;
+  name: string;
+  slug: string;
+  relationship: string;
+  is_active: boolean;
+  open_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  untriaged_alerts: number;
+  /** Seeded demo rows, counted apart from the figures above. */
+  synthetic_alerts: number;
+  open_cases: number;
+  sla_breached_cases: number;
+  /** Null when this tenant closed no cases in the trailing window. */
+  mttr_minutes: number | null;
+  connectors: PortfolioConnectorHealth;
+  last_event_at: string | null;
+  limits: PortfolioLimitHeadroom[];
+  limits_exhausted: number;
+  limits_warning: number;
+}
+
+export interface PortfolioSummary {
+  tenants: number;
+  tenants_active: number;
+  open_alerts: number;
+  critical_alerts: number;
+  high_alerts: number;
+  untriaged_alerts: number;
+  synthetic_alerts: number;
+  open_cases: number;
+  sla_breached_cases: number;
+  mttr_minutes: number | null;
+  connectors_total: number;
+  connectors_healthy: number;
+  connectors_stale: number;
+  connectors_error: number;
+  tenants_with_exhausted_limits: number;
+  tenants_with_limit_warnings: number;
+  tenants_without_connectors: number;
+}
+
+export interface Portfolio {
+  org_id: string | null;
+  org_slug: string | null;
+  org_name: string | null;
+  org_role: string | null;
+  /** True when the caller's role reaches the whole portfolio rather than explicit grants. */
+  portfolio_wide: boolean;
+  /**
+   * How many tenants the caller is scoped to. Distinguishes "your organisation
+   * manages none" from "you were granted none" — different problems, and a bare
+   * zero row count tells them apart for nobody.
+   */
+  scoped_tenants: number;
+  summary: PortfolioSummary;
+  tenants: PortfolioTenant[];
+}
+
+export interface PortfolioAlert {
+  alert_id: string;
+  tenant_id: string;
+  tenant_name: string;
+  title: string;
+  severity: string;
+  status: string;
+  category: string | null;
+  created_at: string | null;
+  event_time: string | null;
+  case_id: string | null;
+  is_synthetic: boolean;
+}
+
+export const msspApi = {
+  async listChildren(): Promise<ChildTenant[]> {
+    return request<ChildTenant[]>("/api/v1/mssp/children");
+  },
+
+  /**
+   * Managed portfolio: per-tenant posture plus derived totals.
+   *
+   * Throws `ApiError` with status 403 when the caller belongs to no operator
+   * organisation. That is not an error state in the console — cross-tenant
+   * reads simply are not theirs to make — so callers should branch on it.
+   */
+  async getPortfolio(): Promise<Portfolio> {
+    return request<Portfolio>("/api/v1/mssp/portfolio");
+  },
+
+  /** Open alerts across the portfolio. Excludes seeded demo rows by default. */
+  async listPortfolioAlerts(
+    params: { severity?: string; limit?: number } = {}
+  ): Promise<PortfolioAlert[]> {
+    return request<PortfolioAlert[]>("/api/v1/mssp/portfolio/alerts", {
+      params: { severity: params.severity, limit: params.limit ?? 25 },
+    });
+  },
+};
+
+// ─── Alerts ─────────────────────────────────────────────────────────────────
+
+export type AlertSeverity = "critical" | "high" | "medium" | "low" | "info";
+export type AlertStatus = "new" | "triaged" | "investigating" | "resolved" | "false_positive";
+
+export interface MitreAttack {
+  tactic: string;
+  technique: string;
+  techniqueId: string;
+}
+
+export interface AlertIOC {
+  type: string;
+  value: string;
+  malicious?: boolean;
+}
+
+export type ConfidenceLabel = "high" | "medium" | "low";
+
+/**
+ * The closed set of anonymizer and hosting classes ingest can stamp.
+ * Mirrors `ALL_CLASSES` in `scripts/ip_class_dataset.py` and the dataset
+ * manifest; a value outside it is dropped rather than rendered, because an
+ * unrecognised class on a security surface reads as a finding nobody can
+ * explain.
+ */
+export type IpClass =
+  | "vpn"
+  | "tor_exit"
+  | "public_proxy"
+  | "residential_proxy"
+  | "hosting_provider";
+
+const IP_CLASSES: readonly IpClass[] = [
+  "vpn",
+  "tor_exit",
+  "public_proxy",
+  "residential_proxy",
+  "hosting_provider",
+];
+
+function asIpClass(value: unknown): IpClass | undefined {
+  return typeof value === "string" && (IP_CLASSES as readonly string[]).includes(value)
+    ? (value as IpClass)
+    : undefined;
+}
+
+export interface ConfidenceFactor {
+  factor: string;
+  label: string;
+  value: number;
+  contribution: number;
+  weight: number;
+}
+
+/**
+ * One pivotable entity from the Investigation Rail (W6).
+ *
+ * The API groups these by ``kind`` — *principal* (user, host, asset),
+ * *network* (ip, domain, fqdn), *workflow* (case_id, run_id, ledger),
+ * *tenant* (tenant_id) — so the rail can render each group with its
+ * own affordances. ``value`` is always renderable as text; ``label``
+ * is an optional human-friendly override. ``pivotPath`` is an
+ * internal href (e.g. ``/graph?node=ip:10.0.0.1``) when the entity
+ * can be opened in the AttackGraphView.
+ */
+export interface RelatedEntity {
+  kind: "principal" | "network" | "workflow" | "tenant";
+  type: string;
+  value: string;
+  label?: string | null;
+  pivotPath?: string | null;
+}
+
+/**
+ * One row in the Investigation Rail's mini-timeline (W6).
+ *
+ * Reuses the shape of ``InvestigationLedger`` so the existing
+ * renderer can be lifted. Sourced from the case timeline and audit
+ * log; capped at the six most recent events on the server.
+ */
+export interface MiniTimelineEvent {
+  id: string;
+  timestamp: string;
+  type: string;
+  title: string;
+  description?: string | null;
+  actor?: string | null;
+  /** ``case_timeline`` or ``audit_log`` — surfaced as a small badge. */
+  source: "case_timeline" | "audit_log";
+}
+
+/**
+ * One row in the rail's "Recommended actions" list (W6).
+ *
+ * Generated by the ResponderAgent and normalised server-side so the
+ * UI can render legacy list-of-strings payloads and the structured
+ * shape uniformly.
+ */
+export interface RecommendedAction {
+  priority: "critical" | "high" | "medium" | "low" | "info";
+  action: string;
+  rationale?: string | null;
+  risk?: string | null;
+}
+
+/**
+ * What the tenant's business-context rules did to this alert before triage,
+ * plus the verdict's cited impact statement — read from the auto-triage
+ * ledger event. Absent (not empty) when no rule fired: the backend writes
+ * the keys only on a match, so absence is honest absence.
+ */
+export interface BusinessContextRail {
+  matchedRuleIds: string[];
+  severityBefore?: string | null;
+  severityAfter?: string | null;
+  impactStatement?: string | null;
+  impactCitations: string[];
+}
+
+export interface Alert {
+  id: string;
+  title: string;
+  description: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  source: string;
+  sourceRef?: string;
+  tenantId: string;
+  /** Normalised 0-100 integer. Absent when nothing scored the alert — do not
+   *  render a `0` in its place, that is a measurement nobody made. */
+  riskScore?: number;
+  mitreAttack?: MitreAttack[];
+  iocs?: AlertIOC[];
+  rawEvent?: Record<string, unknown>;
+  /** Where-in-the-source-console coordinates (rule id, agent, original alert id) parsed
+   *  server-side from the ingested payload - search the source console with these. */
+  wazuhLocator?: Record<string, unknown>;
+  assignee?: string;
+  caseId?: string;
+  tags?: string[];
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt?: string;
+  confidenceLabel?: ConfidenceLabel;
+  /**
+   * Fusion detection confidence as an integer 0-100, normalised by
+   * `normalizeAlert` regardless of which key and scale the payload used.
+   * Render it as `N/100` — it is not a probability that the verdict is
+   * correct, and it is independent of severity.
+   */
+  confidenceScore?: number;
+  confidenceRationale?: ConfidenceFactor[];
+  /**
+   * Anonymizer or hosting class of the source address, stamped at ingest
+   * from a pinned local dataset. Absent means the dataset had no entry,
+   * which is the ordinary case: three of the five classes ship with no
+   * records because no redistributable source for them exists. Render
+   * absence as nothing at all, never as a reassuring "not an anonymizer".
+   */
+  srcIpClass?: IpClass;
+  /** Version of the dataset that produced `srcIpClass`. Shown beside the
+   *  chip because the dataset is refreshed and a class has to be datable. */
+  srcIpClassDatasetVersion?: string;
+  ledgerRunId?: string;
+  /** Analyst-corrected verdict (Tier 1.5 override loop). */
+  disposition?: "true_positive" | "false_positive" | "benign" | "escalate" | null;
+  // ─── Investigation Rail envelope (W6) ─────────────────────────────────────
+  //
+  // The list endpoint never populates these — they're only present
+  // on ``GET /api/v1/alerts/{id}``. The rail component checks for
+  // their presence before rendering each section, so it degrades
+  // gracefully when the backend predates v1.5.
+  narrative?: string | null;
+  relatedEntities?: RelatedEntity[];
+  miniTimeline?: MiniTimelineEvent[];
+  recommendedActions?: RecommendedAction[];
+  businessContext?: BusinessContextRail | null;
+  // ─── Automated triage ────────────────────────────────────────────────────
+  //
+  // `services/agents` auto-triages every fused alert and writes the verdict
+  // back onto the row (`ledger.persist_auto_triage`). The API has returned
+  // `ai_score` / `ai_summary` / `triage_groundedness` on every alert since,
+  // and this mapper dropped all three — so the one output of the AI the
+  // product leads with was metered, persisted, and rendered nowhere.
+  /** 0–1 confidence the triage run reported. Distinct from `confidenceScore`,
+   *  which is fusion's detection confidence and has nothing to do with the
+   *  agent. */
+  aiScore?: number;
+  /** The verdict's rationale, as written by whichever path produced it. The
+   *  model's own text is prefixed `LLM auto-triage verdict:`; the
+   *  deterministic fallback reads as a description of the signals it matched.
+   *  Rendered verbatim so the reader can tell them apart. */
+  aiSummary?: string;
+  /** Fraction of the verdict's cited indicators that appear in the evidence.
+   *  `null`/absent means *not assessed* — the deterministic path never scores
+   *  groundedness, and rendering that as 0 would read as "wholly unsupported".
+   */
+  triageGroundedness?: number | null;
+  /** Indicators the verdict cited that the evidence never contained. */
+  triageUngrounded?: string[];
+}
+
+/**
+ * Normalize an alert payload coming back from the API.
+ *
+ * The Postgres-backed API speaks ``snake_case`` (``tenant_id``,
+ * ``risk_score``, ``confidence_label``, …) while the web console's
+ * ``Alert`` type uses ``camelCase``. We map the keys explicitly so
+ * the UI can rely on the documented shape and the new Investigation
+ * Rail fields (W6 — ``narrative``, ``related_entities``,
+ * ``mini_timeline``, ``recommended_actions``) flow through one
+ * predictable boundary.
+ *
+ * Unknown / missing keys are tolerated — older API builds simply
+ * don't carry the new fields and the rail renders empty sections.
+ */
+function normalizeAlert(raw: unknown): Alert {
+  const r = (raw ?? {}) as Record<string, unknown>;
+
+  const pickStr = (snake: string, camel: string): string | undefined => {
+    const v = r[snake] ?? r[camel];
+    return typeof v === "string" ? v : undefined;
+  };
+  const pickNum = (snake: string, camel: string): number | undefined => {
+    const v = r[snake] ?? r[camel];
+    return typeof v === "number" ? v : undefined;
+  };
+  const pickArr = <T = unknown>(snake: string, camel: string): T[] | undefined => {
+    const v = r[snake] ?? r[camel];
+    return Array.isArray(v) ? (v as T[]) : undefined;
+  };
+
+  // Tags arrive either as a bare array (legacy) or as the JSONB
+  // ``{labels: [...]}`` shape the cases endpoint uses. Normalise to
+  // a plain string[] so the rail and grid can map without a guard.
+  const tagsRaw = r.tags;
+  let tags: string[] | undefined;
+  if (Array.isArray(tagsRaw)) {
+    tags = tagsRaw.map((t) => String(t));
+  } else if (
+    tagsRaw &&
+    typeof tagsRaw === "object" &&
+    Array.isArray((tagsRaw as Record<string, unknown>).labels)
+  ) {
+    tags = ((tagsRaw as Record<string, unknown>).labels as unknown[]).map((t) => String(t));
+  }
+
+  // MITRE: the API can return either ``mitre_attack`` (already
+  // structured) or the split ``mitre_tactics`` / ``mitre_techniques``
+  // arrays. Prefer structured; otherwise zip the two parallel lists.
+  let mitreAttack: MitreAttack[] | undefined;
+  const mitreStructured = r.mitre_attack ?? r.mitreAttack;
+  if (Array.isArray(mitreStructured)) {
+    mitreAttack = (mitreStructured as Array<Record<string, unknown>>).map((m) => ({
+      tactic: String(m.tactic ?? ""),
+      technique: String(m.technique ?? ""),
+      techniqueId: String(m.technique_id ?? m.techniqueId ?? ""),
+    }));
+  } else {
+    const techniques = pickArr<string>("mitre_techniques", "mitreTechniques");
+    const tactics = pickArr<string>("mitre_tactics", "mitreTactics");
+    if (techniques && techniques.length > 0) {
+      mitreAttack = techniques.map((t, i) => ({
+        tactic: tactics?.[i] ? String(tactics[i]) : "",
+        technique: String(t),
+        techniqueId: String(t),
+      }));
+    }
+  }
+
+  const rationaleRaw = r.confidence_rationale ?? r.confidenceRationale;
+  const confidenceRationale = Array.isArray(rationaleRaw)
+    ? (rationaleRaw as Array<Record<string, unknown>>).map((f) => ({
+        factor: String(f.factor ?? ""),
+        label: String(f.label ?? ""),
+        value: Number(f.value ?? 0),
+        contribution: Number(f.contribution ?? 0),
+        weight: Number(f.weight ?? 0),
+      }))
+    : undefined;
+
+  // Confidence arrives on two keys at two different scales, and this field
+  // used to accept whichever showed up first: the API surfaces `confidence`
+  // as an integer 0-100, while fusion's `confidence_score` is the raw
+  // [0.0, 1.0] float the band was derived from. One field carrying two
+  // scales meant every consumer had to guess, and they guessed differently —
+  // `AlertDetailView` multiplied by 100 and rendered a real confidence of 21
+  // as "2100%", while `AttackStory` rendered the same value as "21/100".
+  // Both passed their tests because each mock used the scale its own view
+  // assumed.
+  //
+  // Normalised here, once, to the canonical 0-100 integer. The scale is
+  // decided by the *key*, never by the magnitude: a genuine confidence of 1
+  // is indistinguishable from a raw score of 1.0 by value alone.
+  const canonicalConfidence = pickNum("confidence", "confidence");
+  const rawConfidenceScore = pickNum("confidence_score", "confidenceScore");
+  const confidenceScore =
+    canonicalConfidence !== undefined
+      ? canonicalConfidence
+      : rawConfidenceScore !== undefined
+        ? Math.round(rawConfidenceScore * 100)
+        : undefined;
+
+  // ── Investigation Rail envelope (W6) ────────────────────────────────────
+  // `alert_rail.RelatedEntity` serialises as `{group, kind, value, label,
+  // pivot}`. This mapper read `e.type` and `e.pivot_path`, which the API has
+  // never sent, and passed `e.kind` ("host") into the client's `kind`, which
+  // is the rail *column* ("principal"). All three were wrong in the same
+  // direction: `pivotPath` was always null so no chip was ever a link, `type`
+  // was always empty, and `ENTITY_KIND_CONFIG[kind]` missed on every row — so
+  // the section rendered its header with a count and no chips beneath it. The
+  // `/graph?entity=…` route fix and its URL encoding were therefore
+  // unreachable from the console on every deployment.
+  //
+  // `group`/`kind` are read first and the old spellings kept as fallbacks, so
+  // a console pointed at an older API still renders.
+  const relatedRaw = r.related_entities ?? r.relatedEntities;
+  const relatedEntities = Array.isArray(relatedRaw)
+    ? (relatedRaw as Array<Record<string, unknown>>).map((e) => ({
+        kind: (e.group ?? e.kind ?? "principal") as RelatedEntity["kind"],
+        // `type` prefers its own spelling so a legacy `{kind: 'principal',
+        // type: 'host'}` payload still reports the concrete type, and falls
+        // back to `kind` for the current `{group, kind}` shape.
+        type: String(e.type ?? e.kind ?? ""),
+        value: String(e.value ?? ""),
+        label: (e.label as string | null | undefined) ?? null,
+        pivotPath:
+          (e.pivot as string | null | undefined) ??
+          (e.pivot_path as string | null | undefined) ??
+          (e.pivotPath as string | null | undefined) ??
+          null,
+      }))
+    : undefined;
+
+  const timelineRaw = r.mini_timeline ?? r.miniTimeline;
+  const miniTimeline = Array.isArray(timelineRaw)
+    ? (timelineRaw as Array<Record<string, unknown>>).map((e) => ({
+        id: String(e.id ?? ""),
+        timestamp: String(e.timestamp ?? ""),
+        type: String(e.type ?? ""),
+        title: String(e.title ?? ""),
+        description: (e.description as string | null | undefined) ?? null,
+        actor: (e.actor as string | null | undefined) ?? null,
+        source: (e.source ?? "audit_log") as MiniTimelineEvent["source"],
+      }))
+    : undefined;
+
+  // Business-context rail leg. Snake-case is what the API sends; camel kept
+  // as a fallback for the same reason the other envelope fields keep one.
+  const bcRaw = (r.business_context ?? r.businessContext) as Record<string, unknown> | null | undefined;
+  const businessContext: BusinessContextRail | null =
+    bcRaw && typeof bcRaw === "object"
+      ? {
+          matchedRuleIds: Array.isArray(bcRaw.matched_rule_ids ?? bcRaw.matchedRuleIds)
+            ? ((bcRaw.matched_rule_ids ?? bcRaw.matchedRuleIds) as unknown[]).map(String)
+            : [],
+          severityBefore: (bcRaw.severity_before ?? bcRaw.severityBefore ?? null) as string | null,
+          severityAfter: (bcRaw.severity_after ?? bcRaw.severityAfter ?? null) as string | null,
+          impactStatement: (bcRaw.impact_statement ?? bcRaw.impactStatement ?? null) as string | null,
+          impactCitations: Array.isArray(bcRaw.impact_citations ?? bcRaw.impactCitations)
+            ? ((bcRaw.impact_citations ?? bcRaw.impactCitations) as unknown[]).map(String)
+            : [],
+        }
+      : null;
+
+  const recommendedRaw =
+    r.recommended_actions ?? r.recommendedActions ?? r.ai_recommendations ?? r.aiRecommendations;
+  let recommendedActions: RecommendedAction[] | undefined;
+  if (Array.isArray(recommendedRaw)) {
+    recommendedActions = (recommendedRaw as unknown[]).map((item) => {
+      if (typeof item === "string") {
+        return { priority: "medium", action: item };
+      }
+      const o = (item ?? {}) as Record<string, unknown>;
+      return {
+        priority: (o.priority ?? "medium") as RecommendedAction["priority"],
+        action: String(o.action ?? ""),
+        rationale: (o.rationale as string | null | undefined) ?? null,
+        risk: (o.risk as string | null | undefined) ?? null,
+      };
+    });
+  }
+
+  // Risk has the same two-scales-one-field problem confidence had above, and
+  // it resolved across three keys: `risk_score ?? ai_score ?? confidence ?? 0`.
+  // `risk_score` and `ai_score` are [0,1] floats (fusion documents the first
+  // as "0-1, vendor-provided"; `metrics.py` buckets the second "across
+  // [0, 1]"), while `confidence` is the canonical 0-100 integer. The live
+  // path is `ai_score` — the `alerts` table has no `risk_score` column — so a
+  // real alert scoring 0.85 reached the console as 0.85, and the two surfaces
+  // reading it disagreed: the rail printed `Math.round(0.85)` as "risk 1"
+  // while the detail view printed "0.85".
+  //
+  // Normalised here, once, to the canonical 0-100 integer, with the scale
+  // decided by the *key*: a genuine confidence of 1 is indistinguishable from
+  // a model score of 1.0 by value alone. The camelCase `riskScore` is this
+  // function's own output name, so it is already on the 0-100 scale and is
+  // passed through — re-normalising an alert must not multiply it again.
+  //
+  // The `?? 0` that used to close the chain is gone too: an alert carrying
+  // none of these keys is unscored, and "nobody scored this" is not "scored
+  // zero risk". The rail already guards on `typeof riskScore === 'number'` to
+  // omit the chip, and the default made that guard unreachable.
+  const unitScaleRisk = pickNum("risk_score", "risk_score") ?? pickNum("ai_score", "aiScore");
+  const alreadyNormalisedRisk = pickNum("riskScore", "riskScore");
+  const riskScore =
+    unitScaleRisk !== undefined
+      ? Math.round(unitScaleRisk * 100)
+      : (alreadyNormalisedRisk ?? canonicalConfidence);
+
+  return {
+    id: String(r.id ?? ""),
+    title: String(r.title ?? ""),
+    description: String(r.description ?? ""),
+    severity: ((r.severity as string) ?? "medium") as AlertSeverity,
+    status: ((r.status as string) ?? "new") as AlertStatus,
+    source: pickStr("source", "source") ?? pickStr("connector_type", "connectorType") ?? "unknown",
+    sourceRef: pickStr("source_ref", "sourceRef"),
+    tenantId: pickStr("tenant_id", "tenantId") ?? "",
+    riskScore,
+    mitreAttack,
+    iocs: pickArr<AlertIOC>("iocs", "iocs"),
+    rawEvent:
+      (r.raw_event as Record<string, unknown> | undefined) ??
+      (r.rawEvent as Record<string, unknown> | undefined),
+    wazuhLocator:
+      (r.wazuh_locator as Record<string, unknown> | undefined) ??
+      (r.wazuhLocator as Record<string, unknown> | undefined),
+    assignee: pickStr("assignee", "assignee"),
+    caseId: pickStr("case_id", "caseId"),
+    tags,
+    createdAt:
+      pickStr("created_at", "createdAt") ??
+      pickStr("first_seen", "firstSeen") ??
+      new Date().toISOString(),
+    updatedAt:
+      pickStr("updated_at", "updatedAt") ??
+      pickStr("last_seen", "lastSeen") ??
+      new Date().toISOString(),
+    resolvedAt: pickStr("resolved_at", "resolvedAt"),
+    confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as ConfidenceLabel | undefined,
+    confidenceScore,
+    confidenceRationale,
+    srcIpClass: asIpClass(r.src_ip_class ?? r.srcIpClass),
+    srcIpClassDatasetVersion: pickStr(
+      "src_ip_class_dataset_version",
+      "srcIpClassDatasetVersion",
+    ),
+    ledgerRunId: pickStr("ledger_run_id", "ledgerRunId"),
+    disposition: (r.disposition ?? null) as Alert["disposition"],
+    narrative: (r.narrative as string | null | undefined) ?? null,
+    relatedEntities,
+    miniTimeline,
+    recommendedActions,
+    businessContext,
+    aiScore: pickNum("ai_score", "aiScore"),
+    aiSummary: pickStr("ai_summary", "aiSummary"),
+    // `?? null` and not `?? undefined`: the column is nullable because NULL
+    // means "not assessed", and collapsing that into absent loses the
+    // distinction the schema comment exists to preserve.
+    triageGroundedness:
+      typeof (r.triage_groundedness ?? r.triageGroundedness) === "number"
+        ? ((r.triage_groundedness ?? r.triageGroundedness) as number)
+        : null,
+    triageUngrounded: pickArr<string>("triage_ungrounded", "triageUngrounded"),
+  };
+}
+
+export interface AlertsResponse {
+  alerts: Alert[];
+  total: number;
+  page: number;
+  pageSize: number;
+  /** Absent when the server did not send them — see `AlertFacets`. */
+  facets?: AlertFacets;
+}
+
+/**
+ * Counts over the whole filtered result set, from `AlertListResponse.facets`.
+ *
+ * The stat strip used to derive these in the browser from the loaded page, so
+ * they were capped at `pageSize` and sat beside a server-side `total` in the
+ * hundreds. The server computes them off the same `WHERE` clause as `total`.
+ *
+ * A missing key inside `bySeverity` / `byStatus` means the server counted and
+ * found none. The whole object being absent means the server told us nothing,
+ * which is a different thing and must not render as a zero.
+ */
+export interface AlertFacets {
+  bySeverity: Record<string, number>;
+  byStatus: Record<string, number>;
+  /** Uses the API's shared unresolved vocabulary (`new | triaging | in_progress`). */
+  unresolved: number;
+}
+
+function countMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== "object") return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number"
+    )
+  );
+}
+
+/**
+ * Reads `AlertListResponse.facets`, or returns `undefined` when the server
+ * sent none. Returning an empty-but-present object here would be the same
+ * mistake as a `?? 0`: the strip could not tell "no criticals" from "nobody
+ * counted".
+ */
+function normalizeAlertFacets(raw: unknown): AlertFacets | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const unresolved = r.unresolved;
+  return {
+    bySeverity: countMap(r.by_severity ?? r.bySeverity),
+    byStatus: countMap(r.by_status ?? r.byStatus),
+    unresolved: typeof unresolved === "number" ? unresolved : 0,
+  };
+}
+
+export interface AlertFilters {
+  severity?: string;
+  status?: string;
+  source?: string;
+  assignee?: string;
+  startTime?: string;
+  endTime?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  tenantId?: string;
+  /**
+   * `newest` (created_at descending) or `priority` (severity first, then
+   * created_at). The API defaults to `newest` to keep its published contract;
+   * the console asks for `priority` so a noisy low-severity source cannot
+   * push a critical off page one.
+   */
+  sort?: "newest" | "priority";
+}
+
+/**
+ * The five fields `PATCH /api/v1/alerts/{id}` can actually apply.
+ *
+ * This was `Partial<Alert>`, which let the console send any of the row's
+ * ~40 columns. The server ignored everything outside this set and still
+ * answered 200, so `{ disposition }` or `{ severity }` compiled, ran and
+ * changed nothing (issue #1280). The server now refuses them; narrowing
+ * the type here makes the rejected call fail to compile instead, and
+ * `AlertUpdateRequest` on the Python side is the one definition this
+ * mirrors.
+ *
+ * Severity goes through `POST /alerts/{id}/escalate`, a disposition
+ * through `POST /feedback/alert-override`, and a snooze through
+ * `POST /alerts/{id}/snooze`.
+ */
+export interface AlertUpdate {
+  status?: AlertStatus;
+  priority?: number;
+  tags?: string[];
+  /** `null` releases the alert back to the pool. */
+  assignee?: string | null;
+  case_id?: string | null;
+}
+
+export const alertsApi = {
+  list: async (filters: AlertFilters = {}) => {
+    const raw = await request<{
+      items?: unknown[];
+      alerts?: unknown[];
+      total?: number;
+      page?: number;
+      page_size?: number;
+      pageSize?: number;
+      facets?: unknown;
+    }>("/api/v1/alerts", {
+      params: filters as Record<string, string>,
+    });
+    // `AlertListResponse` puts the rows under `items`, not `alerts`
+    // (services/api/app/api/v1/endpoints/alerts.py). Reading only `alerts`
+    // resolved every page to [] while `total` reported the real count, so
+    // the queue rendered "1,247 alerts" above an empty table. `alerts` is
+    // still accepted because the mobile responder routes emit that shape.
+    const rows = Array.isArray(raw.items) ? raw.items : Array.isArray(raw.alerts) ? raw.alerts : [];
+    return {
+      alerts: rows.map(normalizeAlert),
+      total: typeof raw.total === "number" ? raw.total : 0,
+      page: typeof raw.page === "number" ? raw.page : 1,
+      pageSize:
+        typeof raw.pageSize === "number"
+          ? raw.pageSize
+          : typeof raw.page_size === "number"
+            ? raw.page_size
+            : 50,
+      facets: normalizeAlertFacets(raw.facets),
+    } satisfies AlertsResponse;
+  },
+
+  get: async (id: string) => {
+    const raw = await request<unknown>(`/api/v1/alerts/${id}`);
+    return normalizeAlert(raw);
+  },
+
+  update: async (id: string, data: AlertUpdate) => {
+    const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return normalizeAlert(raw);
+  },
+
+  bulkAction: (ids: string[], action: string, data?: Record<string, unknown>) =>
+    request<{ updated: number }>("/api/v1/alerts/bulk", {
+      method: "POST",
+      body: JSON.stringify({ ids, action, ...data }),
+    }),
+
+  /**
+   * Structured AI explanation for one alert (Stage 2 #6).
+   *
+   * `POST /api/v1/alerts/{id}/explain` returns a single JSON envelope
+   * with rule lineage, contributing events, MITRE technique cards, the
+   * live false-positive rate for the matched rule, suggested next
+   * steps, and a deterministic-or-LLM summary. Counterpart to the
+   * agents service's NDJSON token stream — use this when you want
+   * the *whole* answer in one shot (PDF builder, mobile app, the
+   * console drawer's first paint) instead of typing it out.
+   *
+   * The endpoint is rate-limited per tenant (token bucket; default
+   * burst 20, refill 0.2/s) and returns 429 with `Retry-After` when
+   * the bucket is empty. 404 means either the alert doesn't exist or
+   * the backend predates this endpoint — both are signals to fall
+   * back to the streaming explainer.
+   */
+  explain: (alertId: string, signal?: AbortSignal) =>
+    request<AlertExplanation>(`/api/v1/alerts/${alertId}/explain`, {
+      method: "POST",
+      signal,
+    }),
+};
+
+// ─── Investigation Queue (W7) ───────────────────────────────────────────────
+//
+// The Investigation Queue is the analyst's working surface: one ranked list
+// of "what should I work on next?" sourced from the canonical alerts table.
+// The backend computes a virtual ``sla_due_at`` per row (``first_seen +
+// mttd_target`` for the alert's severity) and orders the queue by
+//
+//   1. assignment bucket (mine before unassigned), and
+//   2. ``sla_due_at`` ascending within each bucket.
+//
+// Snoozed and closed alerts are excluded server-side. Unassigned ``medium``
+// and below are also excluded — those are triaged in bulk on /alerts, not
+// one-by-one on the queue. See ``services/api/app/services/alert_queue.py``
+// for the full contract.
+
+export type QueueOwner = "me" | "unassigned" | "all";
+export type QueuePeriod = "24h" | "7d" | "30d" | "all";
+export type QueueBucket = "mine" | "unassigned";
+export type QueueRisk = "low" | "medium" | "high";
+
+export interface QueueAsset {
+  /** ``host`` | ``user`` | ``ip`` | ``asset`` — chosen by the backend. */
+  kind: string;
+  value: string;
+  label?: string | null;
+}
+
+export interface QueueAction {
+  /** 1-indexed priority; lower is more urgent. */
+  priority: number;
+  action: string;
+  risk: QueueRisk;
+}
+
+export interface QueueItem {
+  id: string;
+  tenant_id: string;
+  title: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  priority: number;
+  category?: string | null;
+  connector_type?: string | null;
+
+  assigned_to_id?: string | null;
+  case_id?: string | null;
+
+  first_seen: string;
+  sla_due_at: string;
+  /** Seconds until ``sla_due_at`` — negative once breached. */
+  sla_remaining_seconds: number;
+  sla_breached: boolean;
+  age_seconds: number;
+
+  asset?: QueueAsset | null;
+  suggested_action?: QueueAction | null;
+
+  bucket: QueueBucket;
+}
+
+export interface QueueCounts {
+  mine: number;
+  unassigned: number;
+  all: number;
+}
+
+export interface QueueResponse {
+  items: QueueItem[];
+  total: number;
+  counts: QueueCounts;
+  period: QueuePeriod;
+  owner: QueueOwner;
+  page: number;
+  page_size: number;
+  pages: number;
+  /** Server's authoritative ``now`` — the UI drifts its countdowns from this. */
+  generated_at: string;
+}
+
+export interface QueueFilters {
+  owner?: QueueOwner;
+  period?: QueuePeriod;
+  page?: number;
+  page_size?: number;
+}
+
+export const queueApi = {
+  /**
+   * Fetch the Investigation Queue.
+   *
+   * Returns up to ``page_size`` items (capped server-side at 200) plus
+   * the live ``counts`` for all buckets — that's what the sidebar badge
+   * polls. The endpoint is cheap because the server only projects the
+   * columns the queue actually renders; do *not* fan out to ``alertsApi.get``
+   * for every row.
+   */
+  list: (filters: QueueFilters = {}) =>
+    request<QueueResponse>("/api/v1/alerts/queue", {
+      params: filters as Record<string, string | number>,
+    }),
+
+  /**
+   * Atomically claim an unassigned alert for the current user.
+   *
+   * Returns ``409`` if another analyst grabbed the row first — the UI
+   * should surface that as "claimed by Sam · refresh" rather than a
+   * generic error. Idempotent if the caller already owns the alert.
+   */
+  claim: (alertId: string) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/claim`, {
+      method: "POST",
+    }),
+
+  /**
+   * Reassign or unassign an alert. Pass ``assignee = null`` to release.
+   *
+   * Reuses the existing ``PATCH /alerts/{id}`` endpoint — the server
+   * already accepts ``assignee`` updates. We add a thin wrapper here so
+   * the queue view doesn't have to re-derive the URL.
+   */
+  assign: (alertId: string, assignee: string | null) =>
+    request<Alert>(`/api/v1/alerts/${alertId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ assignee }),
+    }),
+
+  /**
+   * Snooze an alert for ``duration_minutes`` (1 → 43200 / 30d) or until
+   * a specific timestamp. The alert re-enters the queue automatically
+   * once ``snoozed_until`` passes.
+   */
+  snooze: (alertId: string, body: { duration_minutes?: number; until?: string; reason?: string }) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/snooze`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+// ─── Risk-Based Alerting (entity rollup) ─────────────────────────────────────
+//
+// Wave 1 of the AiSOC v6 capability roadmap: alerts contribute time-decayed
+// risk *points* onto the entities they touch (user / host / src_ip / domain).
+// Once an entity crosses ``rba_promotion_threshold`` it becomes the primary
+// unit of triage in the UI — so the analyst opens "the user fox.beach" with
+// 47 contributing alerts attached, not 47 separate alert rows. The endpoints
+// live on the fusion service (port 8082) and are proxied same-origin via
+// next.config.js → ``/api/v1/fusion/*``.
+
+export type EntityType = "user" | "host" | "ip" | "domain";
+
+/** A single alert that contributed risk to an entity. */
+export interface EntityRiskContribution {
+  alert_id: string;
+  severity: AlertSeverity;
+  /** Points contributed *at the moment of observation* — not decayed. */
+  raw_points: number;
+  /** ISO-8601 timestamp the alert was observed. */
+  observed_at: string;
+  title?: string | null;
+  source?: string | null;
+}
+
+/** A rolled-up entity with its current decayed risk score. */
+export interface EntityRiskRecord {
+  tenant_id: string;
+  entity_type: EntityType;
+  entity_value: string;
+  /** Time-decayed score (0 → ∞ in theory, capped in practice by the engine). */
+  score: number;
+  /** Same as ``score`` rounded — convenience for the UI's badge. */
+  display_score: number;
+  /** Promotion threshold the engine was configured with at observation time. */
+  threshold: number;
+  /** True if ``score`` has crossed ``threshold`` at least once. */
+  promoted: boolean;
+  /** ID of the incident the entity was promoted into, if any. */
+  promoted_incident_id?: string | null;
+  /** ISO-8601 timestamp of the last contributing alert. */
+  last_seen: string;
+  /** ISO-8601 timestamp the entity first picked up any risk. */
+  first_seen: string;
+  /** Top contributing alerts, newest first, capped to ~25. */
+  contributions: EntityRiskContribution[];
+  /** Count by severity over the decay window — drives the queue badge. */
+  severity_histogram: Record<AlertSeverity, number>;
+  /** Convenience: total alert count in the decay window. */
+  alert_count: number;
+}
+
+export interface EntityRiskQueueResponse {
+  tenant_id: string;
+  threshold: number;
+  entities: EntityRiskRecord[];
+}
+
+export interface EntityRiskStats {
+  tenant_id: string;
+  /** Promotion threshold (mirrored from the engine). */
+  threshold: number;
+  /** Total active entities in the window. */
+  total: number;
+  /** Entities currently at or above ``threshold``. */
+  promoted: number;
+  /** Banded counts for the queue header chips. */
+  bands: {
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+  };
+  /** Total alerts contributing across all entities in the window. */
+  alert_count: number;
+  /** Convenience: alert-to-incident ratio observed in the current window. */
+  alert_to_incident_ratio?: number | null;
+}
+
+/**
+ * Path namespace served by the fusion service. Goes through Next.js
+ * rewrites (`/api/v1/fusion/*` → ``${FUSION_HOST}/*``) so the bundle
+ * stays same-origin.
+ */
+const FUSION_PATH = "/api/v1/fusion";
+
+// The tenant is no longer sent by default. It used to be, resolved from the
+// build-time `NEXT_PUBLIC_TENANT_ID` when nothing better was cached — and the
+// server took whatever arrived, because the entity-risk routes had no auth
+// dependency at all. Now the server derives the tenant from the bearer token
+// and treats the parameter as a filter it intersects with that scope, so
+// sending a stale build-time value would turn into a 403 for a perfectly
+// legitimate session. Omitting it is both safer and more correct: an explicit
+// `tenantId` is still honoured for an operator narrowing to one managed
+// customer, and naming a tenant outside their scope is refused server-side.
+export const entityRiskApi = {
+  /** Top-N entities by current decayed risk score. */
+  queue: (
+    params: {
+      tenantId?: string;
+      limit?: number;
+      promotedOnly?: boolean;
+    } = {}
+  ) =>
+    request<EntityRiskQueueResponse>(`${FUSION_PATH}/entity-risk/queue`, {
+      params: {
+        tenant_id: params.tenantId,
+        limit: params.limit ?? 25,
+        promoted_only: params.promotedOnly ? "true" : undefined,
+      },
+    }),
+
+  /** Tenant-scoped queue stats for dashboards (banding, totals, threshold). */
+  stats: (tenantId?: string) =>
+    request<EntityRiskStats>(`${FUSION_PATH}/entity-risk/stats`, {
+      params: { tenant_id: tenantId },
+    }),
+
+  /** Full risk record for a single entity (drawer detail). */
+  get: (entityType: EntityType, entityValue: string, tenantId?: string) => {
+    const pathType = entityType === "ip" ? "src_ip" : entityType;
+    return request<EntityRiskRecord>(
+      `${FUSION_PATH}/entity-risk/${pathType}/${encodeURIComponent(entityValue)}`,
+      { params: { tenant_id: tenantId } }
+    );
+  },
+};
+
+// ─── Cases ───────────────────────────────────────────────────────────────────
+
+/**
+ * The six states a case can hold, matching the `aisoc_cases` CHECK and
+ * `services/api/app/services/case_status.py`.
+ *
+ * This read `open | in_progress | pending | resolved | closed`, which shares
+ * exactly two members with the real vocabulary. Three of its values the
+ * database rejects outright, and the four states a case is actually *in* for
+ * most of its life -- new, triaged, investigating, contained -- were absent.
+ * Every `Record<CaseStatus, …>` keyed off this union was therefore complete
+ * by the type checker and missing an entry for most real rows, so the case
+ * workspace rendered an undefined label and the status dropdown offered three
+ * values the API refuses.
+ */
+export const CASE_STATUSES = [
+  "new",
+  "triaged",
+  "investigating",
+  "contained",
+  "resolved",
+  "closed",
+] as const;
+
+export type CaseStatus = "new" | "triaged" | "investigating" | "contained" | "resolved" | "closed";
+export type CaseSeverity = "critical" | "high" | "medium" | "low";
+
+export interface CaseTimelineEvent {
+  id: string;
+  type: string;
+  timestamp: string;
+  title: string;
+  description?: string;
+  actor?: string;
+}
+
+export interface CaseTask {
+  id: string;
+  title: string;
+  status: "todo" | "in_progress" | "done";
+  assignee?: string;
+  dueAt?: string;
+  createdAt: string;
+}
+
+export interface Case {
+  id: string;
+  /**
+   * Short, human-friendly case identifier (e.g. ``INC-001``).
+   * Returned by the backend as ``case_number`` and used by demo deeplinks.
+   */
+  caseNumber?: string;
+  title: string;
+  description?: string;
+  status: CaseStatus;
+  severity: CaseSeverity;
+  /** Display alias for severity used by some UIs. */
+  priority?: CaseSeverity;
+  assignee?: string;
+  tenantId?: string;
+  alertIds?: string[];
+  /** Cached count from the backend so the UI doesn't have to re-aggregate. */
+  alertCount?: number;
+  tags?: string[];
+  mitre?: string[];
+  resolution?: string;
+  createdBy?: string;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string;
+  dueAt?: string;
+  timeline?: CaseTimelineEvent[];
+  tasks?: CaseTask[];
+}
+
+// The console speaks the backend vocabulary directly.
+//
+// There were two translation maps here, and the round trip through them was
+// **destructive**: `contained` came in as `in_progress`, and `in_progress`
+// went back out as `investigating`. So opening a contained case and saving
+// any edit -- a title, an assignee -- silently moved it backwards and
+// discarded the containment an analyst had recorded. The lossiness is
+// structural: six states cannot round-trip through five.
+//
+// The UI simplification they existed for is not worth that. Four of the six
+// states now have their own label and colour, which is more information
+// than the collapsed model carried anyway.
+function toUiStatus(raw: unknown): CaseStatus {
+  if (typeof raw !== "string") return "new";
+  const known: readonly string[] = CASE_STATUSES;
+  return known.includes(raw) ? (raw as CaseStatus) : "new";
+}
+
+export interface CasesResponse {
+  cases: Case[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+// ─── WS-D2 — Per-case auto-summary artifact ─────────────────────────────────
+//
+// Mirrors the Pydantic schemas in ``services/api/app/services/case_summary.py``.
+// We keep these as a flat block of ``snake_case`` interfaces (matching the
+// JSON over the wire) so consumers don't pay a transformation cost — the
+// backend is the source of truth for shape, the UI just renders.
+export interface CaseSummaryHeader {
+  case_id: string;
+  case_number: string | null;
+  title: string;
+  description: string | null;
+  severity: string;
+  status: string;
+  assignee: string | null;
+  created_by: string | null;
+  tags: Record<string, unknown>;
+}
+
+export interface CaseLifecycleTimings {
+  opened_at: string;
+  triaged_at: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+  sla_due_at: string | null;
+  time_to_triage_hours: number | null;
+  time_to_resolve_hours: number | null;
+  time_to_close_hours: number | null;
+  sla_breached: boolean;
+}
+
+export interface CaseSummaryTaskBreakdown {
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  overdue: number;
+}
+
+export interface CaseSummaryCommentBreakdown {
+  total: number;
+  analyst: number;
+  system: number;
+  distinct_authors: string[];
+}
+
+export interface CaseSummaryCoverage {
+  mitre_techniques: string[];
+  mitre_tactic_buckets: Record<string, number>;
+  compliance_frameworks: string[];
+}
+
+export interface CaseSummaryObservables {
+  total_nodes: number;
+  total_edges: number;
+  node_kind_counts: Record<string, number>;
+  distinct_kinds: string[];
+}
+
+export interface CaseSummaryEvidence {
+  total_items: number;
+  distinct_kinds: string[];
+}
+
+export interface CaseSummaryTimelineEntry {
+  ts: string;
+  kind: string; // "case" | "comment" | "task"
+  label: string;
+  detail: string | null;
+}
+
+export interface CaseSummaryRecommendation {
+  severity: string; // "info" | "warning" | "critical"
+  title: string;
+  body: string;
+}
+
+export interface CaseAutoSummary {
+  generated_at: string;
+  headline: string;
+  case: CaseSummaryHeader;
+  lifecycle: CaseLifecycleTimings;
+  coverage: CaseSummaryCoverage;
+  alerts: { count?: number; ids?: string[] } & Record<string, unknown>;
+  observables: CaseSummaryObservables;
+  evidence: CaseSummaryEvidence;
+  tasks: CaseSummaryTaskBreakdown;
+  comments: CaseSummaryCommentBreakdown;
+  timeline: CaseSummaryTimelineEntry[];
+  recommendations: CaseSummaryRecommendation[];
+}
+
+export interface CaseFilters {
+  status?: string;
+  priority?: string;
+  severity?: string;
+  assignee?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/**
+ * Normalize a case payload from the backend API.
+ *
+ * The Postgres-backed API returns snake_case fields and stores `tags` as a
+ * JSONB object (`{labels: string[]}`). The web console's `Case` type uses
+ * camelCase and expects `tags: string[]`. Without this normalization the
+ * detail page crashes with a runtime TypeError when components call
+ * `.map()` on `tags` directly.
+ */
+function normalizeCase(raw: unknown): Case {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const tagsRaw = r.tags;
+  let tags: string[] | undefined;
+  if (Array.isArray(tagsRaw)) {
+    tags = tagsRaw.map((t) => String(t));
+  } else if (
+    tagsRaw &&
+    typeof tagsRaw === "object" &&
+    Array.isArray((tagsRaw as Record<string, unknown>).labels)
+  ) {
+    tags = ((tagsRaw as Record<string, unknown>).labels as unknown[]).map((t) => String(t));
+  }
+
+  const alertIds = Array.isArray(r.alert_ids)
+    ? (r.alert_ids as unknown[]).map((x) => String(x))
+    : Array.isArray(r.alertIds)
+      ? (r.alertIds as unknown[]).map((x) => String(x))
+      : undefined;
+
+  const mitre = Array.isArray(r.mitre_techniques)
+    ? (r.mitre_techniques as unknown[]).map((x) => String(x))
+    : Array.isArray(r.mitre)
+      ? (r.mitre as unknown[]).map((x) => String(x))
+      : undefined;
+
+  const createdAt =
+    (r.created_at as string | undefined) ??
+    (r.createdAt as string | undefined) ??
+    (r.opened_at as string | undefined) ??
+    new Date().toISOString();
+
+  const updatedAt =
+    (r.updated_at as string | undefined) ?? (r.updatedAt as string | undefined) ?? createdAt;
+
+  const caseNumber =
+    (r.case_number as string | undefined) ?? (r.caseNumber as string | undefined) ?? undefined;
+
+  return {
+    id: String(r.id ?? ""),
+    caseNumber,
+    title: String(r.title ?? ""),
+    description: (r.description as string | undefined) ?? undefined,
+    status: toUiStatus(r.status),
+    severity: (r.severity as Case["severity"]) ?? "medium",
+    priority:
+      (r.priority as Case["severity"] | undefined) ?? (r.severity as Case["severity"] | undefined),
+    assignee: (r.assignee as string | null | undefined) ?? undefined,
+    tenantId: (r.tenant_id as string | undefined) ?? (r.tenantId as string | undefined),
+    alertIds,
+    alertCount:
+      (r.alert_count as number | undefined) ??
+      (r.alertCount as number | undefined) ??
+      (alertIds ? alertIds.length : undefined),
+    tags,
+    mitre,
+    resolution: (r.resolution as string | undefined) ?? undefined,
+    createdBy: (r.created_by as string | undefined) ?? (r.createdBy as string | undefined),
+    createdAt,
+    updatedAt,
+    closedAt:
+      (r.closed_at as string | null | undefined) ??
+      (r.closedAt as string | null | undefined) ??
+      undefined,
+    dueAt:
+      (r.sla_due_at as string | null | undefined) ??
+      (r.dueAt as string | null | undefined) ??
+      undefined,
+    timeline: Array.isArray(r.timeline) ? (r.timeline as CaseTimelineEvent[]) : undefined,
+    tasks: Array.isArray(r.tasks) ? (r.tasks as CaseTask[]) : undefined,
+  };
+}
+
+export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}): CasesResponse {
+  // The API may return either a bare array of cases or an envelope shape.
+  if (Array.isArray(raw)) {
+    const cases = raw.map(normalizeCase);
+    return {
+      cases,
+      total: cases.length,
+      page: filters.page ?? 1,
+      pageSize: filters.pageSize ?? cases.length,
+    };
+  }
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const list = Array.isArray(r.cases) ? (r.cases as unknown[]).map(normalizeCase) : [];
+  return {
+    cases: list,
+    total: typeof r.total === "number" ? (r.total as number) : list.length,
+    page: typeof r.page === "number" ? (r.page as number) : (filters.page ?? 1),
+    pageSize:
+      typeof r.pageSize === "number"
+        ? (r.pageSize as number)
+        : typeof r.page_size === "number"
+          ? (r.page_size as number)
+          : (filters.pageSize ?? list.length),
+  };
+}
+
+export const casesApi = {
+  /** Explicit reopen — the sanctioned backwards status move (PATCH is
+   * forward-only and answers 422 on backwards transitions). */
+  async reopen(
+    caseId: string,
+    opts: { reason: string; status?: "new" | "triaged" | "investigating" }
+  ): Promise<Case> {
+    const raw = await request<unknown>(`/api/v1/cases/${encodeURIComponent(caseId)}/reopen`, {
+      method: "POST",
+      body: JSON.stringify(opts),
+    });
+    return normalizeCase(raw);
+  },
+
+  list: async (filters: CaseFilters = {}) => {
+    // The status filter is passed through unchanged. It used to be rewritten
+    // through a five-state UI vocabulary, which could not express `contained`
+    // at all and mapped it onto `investigating` on the way back.
+    const params: Record<string, string> = {};
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || value === "") continue;
+      params[key] = String(value);
+    }
+    const raw = await request<unknown>("/api/v1/cases", { params });
+    return normalizeCasesResponse(raw, filters);
+  },
+
+  get: async (id: string) => {
+    const raw = await request<unknown>(`/api/v1/cases/${id}`);
+    return normalizeCase(raw);
+  },
+
+  create: async (data: Partial<Case>) => {
+    // The backend CreateCaseRequest speaks snake_case and does NOT enable
+    // populate_by_name, so a raw camelCase Case payload silently drops fields
+    // like alertIds (the alert→case promotion never linked the alert). Map the
+    // UI fields the create flow uses onto the API schema explicitly.
+    const body: Record<string, unknown> = {};
+    if (data.title !== undefined) body.title = data.title;
+    if (data.description !== undefined) body.description = data.description;
+    if (data.severity !== undefined) body.severity = data.severity;
+    if (data.assignee !== undefined) body.assignee = data.assignee;
+    if (data.alertIds !== undefined) body.alert_ids = data.alertIds;
+    if (data.mitre !== undefined) body.mitre_techniques = data.mitre;
+    if (data.dueAt !== undefined) body.sla_due_at = data.dueAt;
+    const raw = await request<unknown>("/api/v1/cases", {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+    return normalizeCase(raw);
+  },
+
+  update: async (id: string, data: Partial<Case>) => {
+    const raw = await request<unknown>(`/api/v1/cases/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return normalizeCase(raw);
+  },
+
+  addComment: (id: string, comment: string) =>
+    request<{ id: string; comment: string; createdAt: string }>(`/api/v1/cases/${id}/comments`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    }),
+
+  linkAlerts: async (id: string, alertIds: string[]) => {
+    // Backend AddAlertsRequest expects snake_case `alert_ids`; sending
+    // `alertIds` raised a 422 and the alert was never attached to the case.
+    const raw = await request<unknown>(`/api/v1/cases/${id}/alerts`, {
+      method: "POST",
+      body: JSON.stringify({ alert_ids: alertIds }),
+    });
+    return normalizeCase(raw);
+  },
+
+  getTimeline: (id: string) =>
+    request<{ events: CaseTimelineEvent[] }>(`/api/v1/cases/${id}/timeline`),
+
+  addTask: (id: string, task: Partial<CaseTask>) =>
+    request<CaseTask>(`/api/v1/cases/${id}/tasks`, {
+      method: "POST",
+      body: JSON.stringify(task),
+    }),
+
+  updateTask: (caseId: string, taskId: string, task: Partial<CaseTask>) =>
+    request<CaseTask>(`/api/v1/cases/${caseId}/tasks/${taskId}`, {
+      method: "PATCH",
+      body: JSON.stringify(task),
+    }),
+
+  investigate: (caseId: string, alertSummary?: string) =>
+    request<{ run_id: string; case_id: string; status: string; message: string }>(
+      `/api/v1/cases/${caseId}/investigate`,
+      {
+        method: "POST",
+        body: JSON.stringify({ alert_summary: alertSummary ?? "" }),
+      }
+    ),
+
+  getInvestigation: (caseId: string, runId: string) =>
+    request<{
+      run_id: string;
+      case_id: string;
+      status: string;
+      audit_log?: Array<{ kind: string; agent: string; summary: string; ts: string }>;
+      recon?: Record<string, unknown>;
+      forensic?: Record<string, unknown>;
+      responder?: Record<string, unknown>;
+      error?: string;
+    }>(`/api/v1/cases/${caseId}/investigations/${runId}`),
+
+  /**
+   * Attack-chain timeline visualization (T3.3 — v8.0).
+   *
+   * Backed by `/api/v1/cases/{id}/attack-chain` which runs a graph BFS over
+   * the case's seed alert and returns a ranked, time-ordered chain of
+   * related alerts plus a side-by-side entity graph. Severity stays as a
+   * lowercase string (info|low|medium|high|critical) to round-trip the
+   * five-tier ladder cleanly.
+   *
+   * Window defaults to 24h; the backend rejects unknown windows with 400.
+   * Returns `null` when the case has no linked alerts (the seed cannot be
+   * resolved). All other failures throw so SWR can surface them.
+   */
+  getAttackChain: async (
+    caseId: string,
+    options: { window?: AttackChainWindow } = {}
+  ): Promise<AttackChainTimeline | null> => {
+    const params: Record<string, string> = {};
+    if (options.window) params.window = options.window;
+    const raw = await request<BackendAttackChainResponse>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/attack-chain`,
+      { params }
+    );
+    if (!raw.seed_alert_id) return null;
+    return {
+      caseId: raw.case_id,
+      tenantId: raw.tenant_id,
+      window: raw.window,
+      seedAlertId: raw.seed_alert_id,
+      chainSignature: raw.chain_signature ?? null,
+      confidence: typeof raw.confidence === "number" ? raw.confidence : 0,
+      generatedAt: raw.generated_at ?? new Date().toISOString(),
+      chain: (raw.chain ?? []).map((link) => ({
+        alertId: link.alert_id,
+        title: link.title,
+        severity: link.severity,
+        eventTime: link.event_time,
+        score: link.score,
+        distance: link.distance,
+        dtSeconds: link.dt_seconds,
+        sharedEntities: link.shared_entities ?? [],
+        mitreTechniques: link.mitre_techniques ?? [],
+        connectorType: link.connector_type ?? null,
+        sourceEventIds: link.source_event_ids ?? [],
+      })),
+      entityGraph: {
+        nodes: raw.entity_graph?.nodes ?? [],
+        edges: raw.entity_graph?.edges ?? [],
+      },
+    };
+  },
+
+  /** Trigger a browser download of the PDF report. */
+  downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
+    const resp = await apiFetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`);
+    if (!resp.ok) {
+      const err = await resp.text().catch(() => resp.statusText);
+      throw new Error(err);
+    }
+    const blob = await resp.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `aisoc-report-${runId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  },
+
+  // WS-D2 — auto-summary at investigation close.
+  // The backend renders both the structured payload (json) and a print-ready
+  // page (html). We expose JSON for callers that want to drive their own UI
+  // (e.g. an inline drawer) and an "open in new tab" helper for the HTML
+  // artifact so operators can Cmd/Ctrl-P → Save as PDF for case-file archival.
+  /** Fetch the structured per-case auto-summary payload. */
+  getAutoSummary: (caseId: string) =>
+    request<CaseAutoSummary>(`/api/v1/cases/${caseId}/summary`, {
+      params: { format: "json" },
+    }),
+
+  /**
+   * Open the per-case auto-summary HTML artifact in a new tab.
+   *
+   * We deliberately fetch with the auth headers (instead of a plain
+   * ``window.open(url)``) because the backend requires the bearer token and
+   * tenant header — direct anchor navigation would drop them and 401.
+   * Mirrors the WS-G2 ``reportsApi.weeklyDigestHtml`` pattern so both
+   * report surfaces behave consistently in the PWA.
+   */
+  openAutoSummaryHtml: async (caseId: string): Promise<void> => {
+    const response = await apiFetch(`/api/v1/cases/${caseId}/summary?format=html`, {
+      headers: { Accept: "text/html" },
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /cases/${caseId}/summary`,
+        response.status,
+        detail
+      );
+    }
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    // Use a transient anchor so the print-ready page lands in its own tab.
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.target = "_blank";
+    a.rel = "noopener";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    // Hold the blob URL long enough for the new tab to read it, then release.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+  },
+};
+
+// ─── Investigation Ledger (persistent agent decision log) ───────────────────
+//
+// Backed by /v1/investigations endpoints. Every event the agent emits during
+// an investigation is durably stored and replayable forever. The ledger UI
+// renders this as a per-step timeline + side-panel "explain" view.
+
+export interface LedgerRunSummary {
+  id: string;
+  case_id: string;
+  status: "running" | "completed" | "failed" | string;
+  model_used: string | null;
+  iterations: number;
+  total_tokens: number;
+  /** Measured (gateway-reported) spend; 0 with a 0 count means unmeasured. */
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  started_at: string;
+  completed_at: string | null;
+  error: string | null;
+}
+
+export interface LedgerModelCost {
+  model: string;
+  /** What the gateway resolved ``model`` to; ``model`` is often an alias. */
+  resolved_model: string | null;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  total_latency_ms: number;
+  call_count: number;
+}
+
+export interface LedgerRunDetail extends LedgerRunSummary {
+  alert_summary: string | null;
+  event_count: number;
+  artifact_count: number;
+  /**
+   * Per-model token/spend/latency breakdown. Empty list when the run pre-dates
+   * the cost-telemetry rollout or used no LLM models.
+   */
+  model_costs: LedgerModelCost[];
+}
+
+export interface LedgerEvent {
+  id: string;
+  run_id: string;
+  seq: number;
+  ts: string;
+  kind: string;
+  agent: string;
+  summary: string;
+  payload: Record<string, unknown> | null;
+  input_hash: string | null;
+  output_hash: string | null;
+  duration_ms: number;
+}
+
+export interface LedgerEventList {
+  items: LedgerEvent[];
+  total: number;
+  since: number | null;
+  next_seq: number | null;
+}
+
+export interface LedgerArtifactSummary {
+  id: string;
+  kind: string;
+  sha256: string;
+  size_bytes: number;
+  event_id: string | null;
+  created_at: string;
+}
+
+export interface LedgerArtifactDetail extends LedgerArtifactSummary {
+  content: string | null;
+  blob_ref: string | null;
+}
+
+export interface LedgerExplain {
+  run: LedgerRunSummary;
+  previous: LedgerEvent | null;
+  focus: LedgerEvent;
+  next: LedgerEvent | null;
+  artifacts: LedgerArtifactDetail[];
+}
+
+export const ledgerApi = {
+  /** List investigation runs for the current tenant (optionally scoped to a case). */
+  listRuns: (params?: { caseId?: string; status?: string; limit?: number }) =>
+    request<LedgerRunSummary[]>("/api/v1/investigations", {
+      params: {
+        case_id: params?.caseId,
+        status: params?.status,
+        limit: params?.limit,
+      },
+    }),
+
+  /** Run summary + counts of attached events/artifacts. */
+  getRun: (runId: string) => request<LedgerRunDetail>(`/api/v1/investigations/${runId}`),
+
+  /** Paginated event timeline. Use `since` to tail. */
+  listEvents: (runId: string, params?: { since?: number; limit?: number }) =>
+    request<LedgerEventList>(`/api/v1/investigations/${runId}/events`, {
+      params: { since: params?.since, limit: params?.limit },
+    }),
+
+  /** Full ordered event list (bounded). */
+  replay: (runId: string, maxEvents = 10000) =>
+    request<LedgerEvent[]>(`/api/v1/investigations/${runId}/replay`, {
+      params: { max_events: maxEvents },
+    }),
+
+  /** "Why did the agent do this?" — previous → focus → next plus inlined artifacts. */
+  explain: (runId: string, step: number) =>
+    request<LedgerExplain>(`/api/v1/investigations/${runId}/explain`, {
+      params: { step },
+    }),
+
+  /** Artifact list for a run. */
+  listArtifacts: (runId: string) =>
+    request<LedgerArtifactSummary[]>(`/api/v1/investigations/${runId}/artifacts`),
+
+  /** Single artifact (full inlined content). */
+  getArtifact: (runId: string, artifactId: string) =>
+    request<LedgerArtifactDetail>(`/api/v1/investigations/${runId}/artifacts/${artifactId}`),
+};
+
+// ─── Metrics / Dashboard ─────────────────────────────────────────────────────
+
+export interface DashboardMetrics {
+  period?: "1h" | "24h" | "7d" | "30d";
+  alerts: {
+    total: number;
+    new: number;
+    critical: number;
+    high: number;
+    medium: number;
+    low: number;
+    info?: number;
+    resolvedToday: number;
+    /** Unresolved alerts only (excludes resolved/closed). */
+    active?: number;
+    /** Unresolved critical alerts only. */
+    criticalActive?: number;
+    /** Alerts in resolved state (all time). */
+    resolved?: number;
+    /** Mean time to resolve, in **hours**, from closed cases. */
+    mttr: number;
+    /** Cases the mean was taken over. Zero means unmeasured, not zero hours. */
+    mttr_sample_count?: number;
+  };
+  cases: {
+    open: number;
+    inProgress: number;
+    resolvedThisWeek: number;
+    /** Created within the rolling 7d window. */
+    openedThisWeek?: number;
+    /** Closed (closed_at set) within the rolling 7d window. */
+    closedThisWeek?: number;
+  };
+  sources: Array<{ name: string; count: number; status: string }>;
+  topMitre: Array<{ tactic: string; count: number }>;
+  alertsTrend: Array<{ timestamp: string; count: number; severity: string }>;
+  threatsBySource: Array<{ source: string; count: number }>;
+}
+
+/**
+ * Funnel KPI metrics (PR-3 / W1).
+ *
+ * Mirrors ``FunnelMetrics`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/metrics.py``. Drives the
+ * ``FunnelKpiBar`` and ``EfficiencyReport`` widgets on the dashboard.
+ */
+export interface FunnelMetrics {
+  period: "1h" | "24h" | "7d" | "30d";
+  events_of_interest: number;
+  correlation_instances: number;
+  alerts_generated: number;
+  /** 0..1 ratio: true positives / alerts with a *decided* verdict. */
+  signal_to_noise: number;
+  /** Mean time-to-detect in seconds (Alert.created_at → first_seen_at). */
+  mttd_seconds: number;
+  /**
+   * The denominator behind each figure above. Zero means unmeasured, not
+   * zero: the server sends `0.0` for both rather than `null` (a breaking
+   * change for every existing client), so the pair *is* the measurement.
+   * Read them together or the tile claims a perfect signal/noise ratio and
+   * instant detection for a tenant where nobody has looked at anything.
+   * Optional so the console still works against an API that predates them.
+   */
+  signal_to_noise_sample_count?: number;
+  mttd_sample_count?: number;
+  /** Alerts that are neither terminal nor dispositioned. */
+  analyst_queue_depth: number;
+  /** Alerts produced per correlation instance, clamped to [0, 1]. */
+  correlation_efficiency: number;
+  /** Alerts produced per event-of-interest, clamped to [0, 1]. */
+  alert_yield: number;
+  mitre_coverage: { covered: number; total: number; ratio: number };
+  /**
+   * Period-over-period deltas as **percentages**, e.g. `5.0` = +5%.
+   *
+   * This said "fraction, e.g. 0.05 = +5%", which is backwards: the
+   * backend's `_pct_delta` multiplies by 100 before returning, and
+   * `test_funnel_and_pipeline.py` pins `_pct_delta(150.0, 100.0) == 50.0`.
+   * The renderer believed the comment and scaled a second time.
+   */
+  deltas: {
+    events_of_interest: number | null;
+    correlation_instances: number | null;
+    alerts_generated: number | null;
+    signal_to_noise: number | null;
+    mttd_seconds: number | null;
+    analyst_queue_depth: number | null;
+  };
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
+/**
+ * Pipeline health (PR-3 / W9).
+ *
+ * Mirrors ``PipelineHealth`` Pydantic model. Drives the
+ * ``PipelineHealth`` strip on /dashboard.
+ */
+export interface PipelineStage {
+  stage: "ingest" | "normalize" | "fuse" | "correlate" | "alert";
+  backlog: number;
+  p95_latency_ms: number;
+  error_rate: number;
+  status: "unknown" | "green" | "yellow" | "red";
+  /**
+   * Numeric fields above that this stage could not measure. They still carry
+   * `0` on the wire; render them as `n/a`, never as a value. Optional because
+   * an older API will not send it -- treat absent as "nothing declared",
+   * which is the pre-existing behaviour rather than a silent claim of
+   * full instrumentation.
+   */
+  unmeasured?: string[];
+  /**
+   * What the stage observed when the observation is not a backlog. The
+   * correlate stage reported its single-event alert count under `backlog`,
+   * so the strip read "Backlog 7" on a tenant with nothing queued.
+   */
+  detail?: string | null;
+}
+
+export interface PipelineHealth {
+  /** Worst stage status, surfaced at the top of the pipeline rail. */
+  overall_status: "unknown" | "green" | "yellow" | "red";
+  stages: PipelineStage[];
+  /** ISO-8601 server timestamp. */
+  generated_at: string;
+}
+
+/**
+ * SOC Performance metrics (PR-3 / W2).
+ *
+ * Mirrors ``SOCMetrics`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/metrics.py``. Drives the SOC
+ * Performance panel + ATT&CK heatmap on /dashboard.
+ */
+export interface SOCKpis {
+  mttd_hours: number;
+  mttr_hours: number;
+  mttc_hours: number;
+  false_positive_rate: number;
+  escalation_rate: number;
+  alert_volume_7d: number;
+  cases_opened_7d: number;
+  cases_closed_7d: number;
+  /** Alerts a **human** dispositioned, from the lifecycle events carrying an actor. */
+  analyst_overrides_7d: number;
+  /** The agent's own dispositions over the same window. */
+  ai_dispositions_7d?: number;
+  /**
+   * How many rows each mean above was averaged over. Zero means the figure is
+   * unmeasured rather than zero — render "not measured", not "0.0 hrs".
+   * Optional so the console still works against an API that predates them.
+   */
+  mttd_sample_count?: number;
+  mttr_sample_count?: number;
+  mttc_sample_count?: number;
+  /**
+   * The denominator each rate above was computed over. Zero means the rate is
+   * undefined rather than 0% — a tenant that has resolved nothing has not
+   * achieved a 0% false-positive rate. Optional for the same reason as the
+   * sample counts. The false-positive denominator counts *decided* verdicts
+   * only: `needs_review` is the agent declining to decide, and a rate that
+   * counts abstentions scores it on questions it refused to answer.
+   */
+  false_positive_rate_sample_count?: number;
+  escalation_rate_sample_count?: number;
+}
+
+export interface AttackHeatmapCell {
+  tactic: string;
+  technique: string;
+  count: number;
+}
+
+export interface CalibrationBucket {
+  predicted_lower: number;
+  predicted_upper: number;
+  sample_count: number;
+  actual_tp_rate: number;
+}
+
+export interface SOCMetrics {
+  kpis: SOCKpis;
+  attack_heatmap: AttackHeatmapCell[];
+  calibration_curve: CalibrationBucket[];
+}
+
+/**
+ * Investigation cost telemetry (PR-3 / cost panel).
+ *
+ * Mirrors ``CostAggregate`` Pydantic model in
+ * ``services/api/app/api/v1/endpoints/investigations.py``.
+ */
+export interface CostAggregateRow {
+  model: string;
+  runs: number;
+  calls: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  total_latency_ms: number;
+  /** Read with ``measured_call_count``: zero there means this is not a mean. */
+  avg_cost_per_run: number;
+  avg_latency_per_call_ms: number;
+}
+
+export interface CostAggregate {
+  window_days: number;
+  by_model: CostAggregateRow[];
+  totals: CostAggregateRow | null;
+}
+
+/**
+ * The windows every metrics route accepts, matching `_PERIOD_QUERY`'s pattern
+ * server-side and `TIME_WINDOWS` in `lib/timeWindow.ts`. Named once so the
+ * four call sites below cannot drift apart from each other.
+ */
+export type TimeWindowParam = "1h" | "24h" | "7d" | "30d";
+
+export const metricsApi = {
+  /**
+   * Dashboard tiles for a time window.
+   *
+   * `period` was not a parameter: the console shipped a global time-window
+   * selector whose only consumer was itself, so changing it re-rendered a
+   * header and fetched nothing. Defaulted rather than required so no existing
+   * caller changes behaviour by omission.
+   */
+  getDashboard: (period: TimeWindowParam = "24h") =>
+    request<DashboardMetrics>("/api/v1/metrics/dashboard", { params: { period } }),
+
+  getAlertTrend: (period: TimeWindowParam) =>
+    request<{ data: Array<{ timestamp: string; count: number }> }>(`/api/v1/metrics/alerts/trend`, {
+      params: { period },
+    }),
+
+  /** Funnel KPIs (events → correlations → alerts) with deltas. */
+  getFunnel: (period: TimeWindowParam = "24h") =>
+    request<FunnelMetrics>("/api/v1/metrics/funnel", { params: { period } }),
+
+  /** Per-stage pipeline health (ingest → normalize → fuse → correlate → alert). */
+  getPipelineHealth: () => request<PipelineHealth>("/api/v1/health/pipeline"),
+
+  /**
+   * SOC Performance KPIs + ATT&CK heatmap + calibration curve.
+   *
+   * Tenant-scoped server-side; the client just needs the bearer token
+   * and X-Tenant-Id header that `request()` already attaches.
+   */
+  getSOC: (period: TimeWindowParam = "24h") =>
+    request<SOCMetrics>("/api/v1/metrics/soc", { params: { period } }),
+};
+
+// ─── Operational health: connector fleet, rejected events, alert posture ─────
+//
+// Three endpoints that existed server-side with no client. They answer the
+// question the alert-centric dashboards structurally cannot: whether the
+// absence of alerts means the estate is quiet or the pipeline stopped.
+
+/** How a connector is doing against *its own* configured poll cadence. */
+export type FleetHealthState = "healthy" | "degraded" | "failed" | "unproven" | "disabled";
+
+export interface FleetConnectorHealth {
+  connector_id: string;
+  name: string;
+  connector_type: string;
+  state: FleetHealthState;
+  /** Operator-actionable wording from the server. Never bare "unhealthy". */
+  reason: string;
+  last_sync: string | null;
+  seconds_since_sync: number | null;
+  poll_interval_seconds: number;
+  /** How many poll cycles have been missed. Fractional. */
+  missed_intervals: number | null;
+  error_count: number;
+  events_ingested: number;
+  oauth_refresh_failures: number;
+  schema_drift_at: string | null;
+}
+
+export interface FleetHealth {
+  generated_at: string;
+  /** Worst enabled connector's state — deliberately not an average. */
+  state: FleetHealthState;
+  counts: Record<FleetHealthState, number>;
+  connectors: FleetConnectorHealth[];
+}
+
+export interface DeadLetterEntry {
+  id: string;
+  topic: string;
+  reason: string;
+  schema_version: string | null;
+  payload_excerpt: string | null;
+  source_event_id: string | null;
+  occurred_at: string | null;
+  acknowledged: boolean;
+}
+
+export interface DeadLetters {
+  window_hours: number;
+  total: number;
+  by_reason: Array<{ reason: string; count: number }>;
+  truncated: boolean;
+  dead_letters: DeadLetterEntry[];
+}
+
+export interface AlertStats {
+  total: number;
+  by_severity: Record<string, number>;
+  by_status: Record<string, number>;
+  new_last_24h: number;
+  critical_open: number;
+}
+
+export const operationsApi = {
+  /**
+   * Which connectors have quietly stopped working.
+   *
+   * Staleness is judged per connector against its own cadence, so a daily
+   * connector is not reported as failing eleven hours in.
+   */
+  fleetHealth: () => request<FleetHealth>("/api/v1/health/fleet"),
+
+  /** Events the pipeline refused, and why. */
+  deadLetters: (params: { hours?: number; limit?: number } = {}) =>
+    request<DeadLetters>("/api/v1/health/dead-letters", {
+      params: params as Record<string, string>,
+    }),
+
+  /** Severity / status distribution plus the two counters worth paging on. */
+  alertStats: () => request<AlertStats>("/api/v1/alerts/stats"),
+};
+
+// ─── Investigations ─────────────────────────────────────────────────────────
+
+export const investigationsApi = {
+  /**
+   * Investigation cost telemetry aggregated over the last `windowDays`.
+   * Backs the Cost Telemetry panel on /dashboard.
+   */
+  getCostAggregate: (windowDays: number = 30) =>
+    request<CostAggregate>("/api/v1/investigations/costs/aggregate", {
+      params: { window_days: windowDays },
+    }),
+};
+
+// ─── SOC Insights (T3.1) ─────────────────────────────────────────────────────
+//
+// Backs the SOC Insights dashboard at /dashboards/soc-insights. The payload is
+// intentionally flat — 7 tiles, each with a value, previous-window value,
+// optional delta_pct (null when there's no prior data), and a 24-bucket
+// sparkline. The page re-fetches on every `insights_updated` WebSocket poke.
+
+export type InsightsWindow = "24h" | "7d" | "30d";
+
+export interface InsightSparkline {
+  points: number[];
+}
+
+export interface InsightTile {
+  key: string;
+  label: string;
+  value: number;
+  /**
+   * Rows the mean was averaged over. `0` means the window measured
+   * nothing, so `value` is a placeholder rather than a result — the
+   * console renders "not measured" instead. Optional so a server that
+   * predates the field is handled without a cast.
+   */
+  sample_count?: number;
+  unit: "hours" | "pct" | "count" | "usd" | "hours_saved";
+  previous_value: number;
+  delta_pct: number | null;
+  sparkline: InsightSparkline;
+}
+
+export interface SOCInsightsResponse {
+  window: InsightsWindow;
+  generated_at: string;
+  tenant_id: string;
+  tiles: InsightTile[];
+  manual_investigation_minutes: number;
+}
+
+export const insightsApi = {
+  /**
+   * Fetches the SOC Insights aggregate payload for the given window.
+   *
+   * The endpoint is tenant-scoped server-side; the client only needs to
+   * pick a window. SWR keys should include the window so flipping the
+   * filter doesn't show stale numbers from the previous range.
+   */
+  getSOC: (window: InsightsWindow) =>
+    request<SOCInsightsResponse>("/api/v1/insights/soc", {
+      params: { window },
+    }),
+};
+
+// ─── Connectors ──────────────────────────────────────────────────────────────
+
+export type ConnectorStatus = "active" | "inactive" | "error" | "configuring";
+
+export interface Connector {
+  id: string;
+  name: string;
+  type: string;
+  status: ConnectorStatus;
+  /** `true` when the connector is enabled (separate from runtime status). */
+  enabled?: boolean;
+  tenantId?: string;
+  category?: string;
+  config?: Record<string, unknown>;
+  lastSync?: string;
+  /** Number of alerts ingested through this connector. */
+  alertCount?: number;
+  alertsIngested?: number;
+  errorMessage?: string;
+  description?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  /** SHA-256 fingerprint of the most recent normalized event schema. */
+  schemaFingerprint?: string;
+  /** Timestamp of the most recent schema-drift event (null/undef if never). */
+  lastSchemaDriftAt?: string;
+  /** Human-readable diff for the most recent drift event. */
+  lastDriftDetails?: {
+    added?: string[];
+    removed?: string[];
+    previous_fingerprint?: string;
+  };
+  /** Cumulative count of events the pre-ingest filter dropped. */
+  eventsDropped?: number;
+  /**
+   * Timestamp of the most recently *ingested* normalized event.
+   *
+   * Distinct from `lastSync`, which advances on every poll cycle.
+   * `lastEventAt` only advances when an event actually lands — it's
+   * what feeds the freshness-SLO badge in the connectors list and
+   * the onboarding "verify data flowing" screen.
+   */
+  lastEventAt?: string;
+  /** Short label for the most recent event source (e.g. "alert", "audit"). */
+  lastEventKind?: string;
+  /**
+   * Live freshness SLO verdict for the connector instance (Workstream 5).
+   *
+   * The server computes this from ``lastEventAt`` against a per-category
+   * cadence table (5 min for EDR, 15 min for SIEM, etc.) so a single
+   * Splunk that polls slowly doesn't drag the whole fleet to yellow. The
+   * UI badge renders directly from ``status`` — no client-side rule
+   * duplication so a future cadence change ships in one place.
+   */
+  freshness?: {
+    status: "green" | "yellow" | "red" | "unknown";
+    expected_cadence_seconds: number;
+    seconds_since_last_event: number | null;
+    category: string;
+  };
+}
+
+export interface ConnectorsResponse {
+  connectors: Connector[];
+  total: number;
+}
+
+/** A single config field surfaced by ``BaseConnector.schema()`` on the backend. */
+export interface ConnectorSchemaField {
+  name: string;
+  type: "string" | "secret" | "select" | "textarea" | "boolean" | "number";
+  label: string;
+  required?: boolean;
+  default?: string | number | boolean | null;
+  placeholder?: string;
+  help_text?: string;
+  options?: Array<{ value: string; label: string }>;
+}
+
+/** Forward-looking OAuth hints; rendered as "Hosted OAuth coming soon". */
+export interface ConnectorOAuthHints {
+  supported_in_hosted?: boolean;
+  authorize_url?: string;
+  token_url?: string;
+  scopes?: string[];
+}
+
+/** A catalog entry: one available connector type with its config schema. */
+export interface ConnectorCatalogEntry {
+  connector_id: string;
+  connector_name: string;
+  category: string;
+  description: string;
+  fields: ConnectorSchemaField[];
+  docs_url?: string;
+  oauth?: ConnectorOAuthHints;
+}
+
+export interface ConnectorCatalogResponse {
+  connectors: ConnectorCatalogEntry[];
+}
+
+/** Result of a "Test connection" call (pre-save or against a saved instance). */
+export interface ConnectorTestResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+  latency_ms?: number;
+  latencyMs?: number;
+  details?: Record<string, unknown>;
+}
+
+/** Raw shape returned by the API for a connector instance row. */
+interface BackendConnectorResponse {
+  id: string;
+  tenant_id: string;
+  name: string;
+  connector_type: string;
+  category: string;
+  is_enabled: boolean;
+  connector_config: Record<string, unknown>;
+  health_status: string;
+  last_health_check: string | null;
+  last_sync: string | null;
+  events_ingested: number;
+  error_count: number;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  schema_fingerprint?: string | null;
+  last_schema_drift_at?: string | null;
+  last_drift_details?: {
+    added?: string[];
+    removed?: string[];
+    previous_fingerprint?: string;
+  } | null;
+  events_dropped?: number | null;
+  // Workstream 1: distinct from `last_sync` — only advances when a
+  // normalized event actually lands. The verify-data-flowing screen
+  // and freshness-SLO badge both read from here.
+  last_event_at?: string | null;
+  last_event_kind?: string | null;
+  // Workstream 5: freshness SLO computed server-side from ``last_event_at``
+  // against a per-category cadence table. Optional because the API may
+  // omit it for connectors that haven't ingested yet (the server still
+  // emits an ``unknown`` verdict, but defensive null-handling lets the
+  // UI degrade gracefully if the field is ever stripped).
+  freshness?: {
+    status: "green" | "yellow" | "red" | "unknown";
+    expected_cadence_seconds: number;
+    seconds_since_last_event: number | null;
+    category: string;
+  } | null;
+}
+
+/** Aggregated health summary for the connectors fleet (a single tenant). */
+export interface ConnectorHealthSummary {
+  total: number;
+  healthy: number;
+  unhealthy: number;
+  unknown: number;
+  /** Connectors whose schema has ever drifted. */
+  drifted: number;
+  /** Connectors whose schema drifted in the last 24h. */
+  driftedRecently: number;
+  /** Most-recent drift timestamp across the fleet. */
+  lastDriftAt?: string;
+  /** Cumulative events ingested across all enabled connectors. */
+  totalEventsIngested: number;
+  /** Cumulative events dropped by pre-ingest filter rules. */
+  totalEventsDropped: number;
+}
+
+/**
+ * Map the backend ``health_status`` enum (``healthy``/``unhealthy``/``unknown``)
+ * to the frontend ``ConnectorStatus`` (``active``/``inactive``/``error``/
+ * ``configuring``). The mapping also folds in ``is_enabled`` because a disabled
+ * connector should always render as ``inactive`` in the UI regardless of its
+ * last health check.
+ */
+function deriveConnectorStatus(row: BackendConnectorResponse): ConnectorStatus {
+  if (!row.is_enabled) return "inactive";
+  switch (row.health_status) {
+    case "healthy":
+      return "active";
+    case "unhealthy":
+    case "error":
+      return "error";
+    case "unknown":
+    case "":
+      return "configuring";
+    default:
+      return "configuring";
+  }
+}
+
+function mapBackendConnector(row: BackendConnectorResponse): Connector {
+  return {
+    id: row.id,
+    name: row.name,
+    type: row.connector_type,
+    category: row.category,
+    status: deriveConnectorStatus(row),
+    enabled: row.is_enabled,
+    tenantId: row.tenant_id,
+    config: row.connector_config,
+    lastSync: row.last_sync ?? undefined,
+    alertCount: row.events_ingested,
+    alertsIngested: row.events_ingested,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    schemaFingerprint: row.schema_fingerprint ?? undefined,
+    lastSchemaDriftAt: row.last_schema_drift_at ?? undefined,
+    lastDriftDetails: row.last_drift_details ?? undefined,
+    eventsDropped: row.events_dropped ?? 0,
+    lastEventAt: row.last_event_at ?? undefined,
+    lastEventKind: row.last_event_kind ?? undefined,
+    freshness: row.freshness ?? undefined,
+  };
+}
+
+export interface CreateConnectorPayload {
+  name: string;
+  connector_type: string;
+  category?: string;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface UpdateConnectorPayload {
+  name?: string;
+  is_enabled?: boolean;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+  tags?: string[];
+}
+
+export interface TestConnectorPayload {
+  connector_type: string;
+  auth_config?: Record<string, unknown>;
+  connector_config?: Record<string, unknown>;
+}
+
+/**
+ * Watermark response polled by the wizard's "verify data flowing" panel.
+ *
+ * The shape mirrors ``LastEventResponse`` from the API service. Note
+ * the field is intentionally distinct from ``last_sync``: ``last_sync``
+ * advances on every poll cycle (including empty polls), while
+ * ``last_event_at`` only advances when a normalized event actually
+ * lands in ``raw_events``. ``data_flowing`` is the server's own
+ * answer to "is data live?" so every client agrees on the rule.
+ */
+export interface ConnectorLastEvent {
+  connector_id: string;
+  last_event_at: string | null;
+  last_event_kind: string | null;
+  events_ingested: number;
+  last_sync: string | null;
+  health_status: string;
+  data_flowing: boolean;
+}
+
+/**
+ * Input to the AI troubleshooter. We intentionally send only the
+ * **keys** of ``auth_config`` (not values) so the backend can hint
+ * about which field to revisit without ever seeing the credential.
+ */
+export interface TroubleshootRequest {
+  connector_type: string;
+  error: string;
+  auth_config_keys?: string[];
+}
+
+/** Structured fix suggestion the wizard renders next to a failed test. */
+export interface TroubleshootResponse {
+  likely_cause: string;
+  fix_steps: string[];
+  doc_link?: string | null;
+}
+
+/** Push-token reveal response. */
+export interface IngestTokenResponse {
+  connector_id: string;
+  ingest_token: string;
+  inbox_url: string;
+}
+
+export const connectorsApi = {
+  /**
+   * List connector instances for the current tenant.
+   *
+   * The backend returns a raw ``list[ConnectorResponse]``; we wrap it in a
+   * ``ConnectorsResponse`` envelope and map each row from snake_case to the
+   * camelCase frontend shape so views never have to reach into raw API rows.
+   */
+  list: async (): Promise<ConnectorsResponse> => {
+    const rows = await request<BackendConnectorResponse[]>("/api/v1/connectors");
+    const connectors = rows.map(mapBackendConnector);
+    return { connectors, total: connectors.length };
+  },
+
+  /** Catalog of available connector types (one entry per registered class). */
+  catalog: () => request<ConnectorCatalogResponse>("/api/v1/connectors/catalog"),
+
+  get: async (id: string): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>(`/api/v1/connectors/${id}`);
+    return mapBackendConnector(row);
+  },
+
+  create: async (data: CreateConnectorPayload): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>("/api/v1/connectors", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+    return mapBackendConnector(row);
+  },
+
+  update: async (id: string, data: UpdateConnectorPayload): Promise<Connector> => {
+    const row = await request<BackendConnectorResponse>(`/api/v1/connectors/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    return mapBackendConnector(row);
+  },
+
+  /** Run "Test connection" against a saved instance. */
+  test: (id: string) =>
+    request<ConnectorTestResult>(`/api/v1/connectors/${id}/test`, {
+      method: "POST",
+    }),
+
+  /** Run "Test connection" with un-saved credentials from the wizard. */
+  testInline: (payload: TestConnectorPayload) =>
+    request<ConnectorTestResult>("/api/v1/connectors/test", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Ask the AI troubleshooter to classify a failed test.
+   *
+   * Used by the AddConnector wizard immediately after `test` or
+   * `testInline` returns ``success=false``. Renders into the
+   * "Likely cause / fix steps / docs" callout in the modal.
+   */
+  troubleshoot: (payload: TroubleshootRequest) =>
+    request<TroubleshootResponse>("/api/v1/connectors/troubleshoot", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Poll the verify-data-flowing watermark for a connector.
+   *
+   * Distinct from `lastSync`: this only advances when an actual
+   * normalized event lands. Returned even when no event has ever
+   * landed (with `data_flowing=false`) so the polling loop can have
+   * stable shape rather than a 404.
+   */
+  lastEvent: (id: string) => request<ConnectorLastEvent>(`/api/v1/connectors/${id}/last_event_at`),
+
+  /**
+   * Generate or rotate the per-connector push-ingest token.
+   *
+   * Used by the wizard's "Push (any vendor)" path to surface a
+   * `curl` example. Calling this rotates the token; the previous
+   * one is invalidated immediately.
+   */
+  refreshIngestToken: (id: string) =>
+    request<IngestTokenResponse>(`/api/v1/connectors/${id}/push/refresh`, {
+      method: "POST",
+    }),
+
+  delete: (id: string) => request<void>(`/api/v1/connectors/${id}`, { method: "DELETE" }),
+
+  /**
+   * Aggregated health summary for the connectors fleet.
+   *
+   * Surfaces healthy/degraded/error counts, schema-drift events seen in the
+   * last 24h, and the cumulative count of events the pre-ingest filter
+   * dropped. Used by the Connectors page header strip and the new
+   * "Connector Health" widget on the dashboard.
+   */
+  health: async (): Promise<ConnectorHealthSummary> => {
+    const raw = await request<{
+      total: number;
+      healthy: number;
+      unhealthy: number;
+      unknown: number;
+      drifted: number;
+      drifted_recently: number;
+      last_drift_at: string | null;
+      total_events_ingested: number;
+      total_events_dropped: number;
+    }>("/api/v1/connectors/health");
+    return {
+      total: raw.total,
+      healthy: raw.healthy,
+      unhealthy: raw.unhealthy,
+      unknown: raw.unknown,
+      drifted: raw.drifted,
+      driftedRecently: raw.drifted_recently,
+      lastDriftAt: raw.last_drift_at ?? undefined,
+      totalEventsIngested: raw.total_events_ingested,
+      totalEventsDropped: raw.total_events_dropped,
+    };
+  },
+};
+
+// ─── Universal capture / inbox tokens (Workstream 6) ───────────────────────
+
+/**
+ * Catalog entry for a vendor template the operator can pick when minting
+ * an inbox URL. Mirrors `InboxTemplateInfo` on the API side; the wizard
+ * groups by `category` to keep the picker scannable.
+ */
+export interface InboxTemplate {
+  template_id: string;
+  label: string;
+  description: string;
+  category: string;
+}
+
+/** Existing inbox token row — list view, plaintext token NOT included. */
+export interface InboxTokenListItem {
+  fingerprint: string;
+  template_id: string;
+  label: string | null;
+  has_hmac_secret: boolean;
+  created_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+}
+
+/**
+ * Mint / rotate response. `token` is the plaintext (returned exactly once
+ * at mint or rotate time); `inbox_url` is the absolute URL the operator
+ * pastes into the vendor's webhook config.
+ */
+export interface InboxTokenSecret {
+  token: string;
+  inbox_url: string;
+  template_id: string;
+  label: string | null;
+  has_hmac_secret: boolean;
+  created_at: string;
+  revoked_at: string | null;
+  last_used_at: string | null;
+}
+
+/** Body for `POST /api/v1/inbox/tokens`. */
+export interface MintInboxTokenPayload {
+  template_id: string;
+  label?: string | null;
+  hmac_secret?: string | null;
+}
+
+export const inboxApi = {
+  /** List vendor templates the operator can mint inbox URLs for. */
+  templates: () => request<InboxTemplate[]>("/api/v1/inbox/templates"),
+
+  /** List the calling tenant's inbox tokens (revoked filtered out). */
+  list: (params?: { include_revoked?: boolean }) => {
+    const qs = params?.include_revoked ? "?include_revoked=true" : "";
+    return request<InboxTokenListItem[]>(`/api/v1/inbox/tokens${qs}`);
+  },
+
+  /** Mint a new inbox token. Plaintext returned exactly once. */
+  mint: (payload: MintInboxTokenPayload) =>
+    request<InboxTokenSecret>("/api/v1/inbox/tokens", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Rotate an existing token: mints a new one with the same template / label
+   * / HMAC, revokes the old. Returns the new plaintext exactly once.
+   */
+  rotate: (fingerprint: string) =>
+    request<InboxTokenSecret>(`/api/v1/inbox/tokens/${encodeURIComponent(fingerprint)}/rotate`, {
+      method: "POST",
+    }),
+
+  /** Permanently revoke an inbox token. */
+  revoke: (fingerprint: string) =>
+    request<void>(`/api/v1/inbox/tokens/${encodeURIComponent(fingerprint)}`, { method: "DELETE" }),
+};
+
+// ─── Hosted OAuth (Workstream 2) ──────────────────────────────────────────────
+
+/**
+ * Per-tenant OAuth client registration, returned by GET / PUT
+ * `/api/v1/oauth/app/{connector_type}`.
+ *
+ * The secret is *never* round-tripped to the browser — only `has_secret`
+ * lets the UI render a "credential present" badge. To rotate the
+ * client_secret, call `oauthApi.upsertApp()` with a fresh value.
+ */
+export interface OAuthAppView {
+  connector_type: string;
+  client_id: string;
+  has_secret: boolean;
+  authorize_url: string | null;
+  token_url: string | null;
+  scopes: string[] | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
+ * Payload accepted by `PUT /api/v1/oauth/app/{connector_type}`.
+ *
+ * `authorize_url`, `token_url`, and `scopes` are optional — when omitted,
+ * the backend falls back to the connector class's `OAuthHints` defaults
+ * (e.g. Okta / Azure AD / GitHub).
+ */
+export interface OAuthAppRegistrationPayload {
+  client_id: string;
+  client_secret: string;
+  authorize_url?: string | null;
+  token_url?: string | null;
+  scopes?: string[] | null;
+}
+
+/**
+ * Response from `GET /api/v1/oauth/start?response_mode=json`.
+ *
+ * The default `response_mode=redirect` returns a 302; SPAs that want to
+ * handle the redirect themselves (e.g. open the consent screen in a
+ * popup) call with `response_mode=json` and use this shape.
+ */
+export interface OAuthStartResponse {
+  authorize_url: string;
+  state: string;
+}
+
+/**
+ * Options for `oauthApi.startUrl()` — the helper that builds the
+ * canonical `/api/v1/oauth/start?...` URL the browser navigates to.
+ *
+ * `connector_id` is set when the operator is *re-authing* an existing
+ * connector instance (token expired, scope upgrade); otherwise omit it
+ * and the callback will INSERT a fresh `connectors` row.
+ *
+ * `extras` ride along in the state row and end up in the connector's
+ * `connector_config` after callback (e.g. `organization` for GitHub,
+ * `cloud_id` for Atlassian).
+ */
+export interface OAuthStartOptions {
+  connectorType: string;
+  connectorId?: string;
+  returnTo?: string;
+  name?: string;
+  extras?: Record<string, unknown>;
+}
+
+export const oauthApi = {
+  /**
+   * Fetch the registered OAuth app for a connector class. Returns 404
+   * until the operator has called `upsertApp()` at least once.
+   */
+  getApp: (connectorType: string) =>
+    request<OAuthAppView>(`/api/v1/oauth/app/${encodeURIComponent(connectorType)}`),
+
+  /**
+   * Register or rotate the tenant's OAuth client for a connector class.
+   * The backend encrypts `client_secret` at rest via the credential vault.
+   */
+  upsertApp: (connectorType: string, payload: OAuthAppRegistrationPayload) =>
+    request<OAuthAppView>(`/api/v1/oauth/app/${encodeURIComponent(connectorType)}`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Unregister the tenant's OAuth client for a connector class. */
+  deleteApp: (connectorType: string) =>
+    request<void>(`/api/v1/oauth/app/${encodeURIComponent(connectorType)}`, { method: "DELETE" }),
+
+  /**
+   * Build the `/api/v1/oauth/start?...` URL. The caller does
+   * `window.location.assign(oauthApi.startUrl({...}))` to kick off the
+   * hosted OAuth dance — we don't fetch this ourselves because the
+   * server response is a 302 to the provider, not JSON the SPA wants
+   * to parse.
+   *
+   * Returns a same-origin URL so Next.js rewrites can proxy to the API.
+   */
+  startUrl: (opts: OAuthStartOptions): string => {
+    const params = new URLSearchParams();
+    params.set("connector_type", opts.connectorType);
+    if (opts.connectorId) params.set("connector_id", opts.connectorId);
+    if (opts.returnTo) params.set("return_to", opts.returnTo);
+    if (opts.name) params.set("name", opts.name);
+    if (opts.extras && Object.keys(opts.extras).length > 0) {
+      params.set("extras", JSON.stringify(opts.extras));
+    }
+    return `${API_BASE}/api/v1/oauth/start?${params.toString()}`;
+  },
+
+  /**
+   * JSON variant of `startUrl()`: instead of redirecting, the API
+   * returns `{ authorize_url, state }` so a popup-based UX can drive
+   * the consent screen itself.
+   */
+  startJson: (opts: OAuthStartOptions) => {
+    const params: Record<string, string> = {
+      connector_type: opts.connectorType,
+      response_mode: "json",
+    };
+    if (opts.connectorId) params.connector_id = opts.connectorId;
+    if (opts.returnTo) params.return_to = opts.returnTo;
+    if (opts.name) params.name = opts.name;
+    if (opts.extras && Object.keys(opts.extras).length > 0) {
+      params.extras = JSON.stringify(opts.extras);
+    }
+    return request<OAuthStartResponse>("/api/v1/oauth/start", { params });
+  },
+};
+
+// ─── Threat Intel ─────────────────────────────────────────────────────────────
+
+/**
+ * The indicator kinds the console renders a badge for.
+ *
+ * `vulnerability` is in this list because it is what the one real feed a
+ * default install ships — the CISA KEV catalogue — emits, and leaving it
+ * out badged all 1,766 of its CVEs as IPs.
+ *
+ * The union is deliberately open. `type` arrives from a feed payload and
+ * the threat-intel service does not constrain it, so a closed union would
+ * be a claim about other people's data: a loader added tomorrow emits
+ * whatever it emits, and the console's job is to render that honestly
+ * rather than to coerce it into the nearest known value.
+ */
+export type KnownIndicatorType =
+  | "ip"
+  | "domain"
+  | "hash"
+  | "url"
+  | "email"
+  | "vulnerability";
+
+export type IndicatorType = KnownIndicatorType | (string & {});
+
+/**
+ * A canonical threat indicator surfaced by the threatintel service.
+ *
+ * Carries the analyst-facing fields used by the IOC inbox (severity,
+ * confidence, tags) plus the raw lookup data (sources, geo, ASN).
+ */
+export interface ThreatIndicator {
+  id: string;
+  type: IndicatorType;
+  value: string;
+  /** 0-100 confidence score blended across providers. */
+  confidence: number;
+  severity: AlertSeverity;
+  malicious: boolean;
+  tags?: string[];
+  sources: string[];
+  firstSeen?: string;
+  lastSeen?: string;
+  description?: string;
+  country?: string;
+  asn?: string;
+  mitre?: string[];
+}
+
+export interface IOCLookup extends ThreatIndicator {
+  /** Free-form provider blob (kept around for power users). */
+  raw?: Record<string, unknown>;
+}
+
+/**
+ * The outcome of one IOC lookup. Three states, deliberately — "the store
+ * answered and holds nothing on this indicator" and "the store did not
+ * answer" are different facts, and only the first of them is good news.
+ *
+ * Collapsing them is what the console used to do: the lookup `catch` set a
+ * `notFound` flag that rendered a green **CLEAN — no threat indicators found
+ * for this IOC**, so a transport error, a 5xx, or a route that did not exist
+ * all read to an analyst as an all-clear on the indicator they were checking.
+ * It called `/api/v1/enrichment/lookup`, which the API does not serve, so
+ * every lookup took that branch and the panel had only ever said "clean".
+ */
+export type IOCLookupOutcome =
+  | { status: "match"; indicator: ThreatIndicator }
+  | { status: "clean" }
+  | { status: "failed"; reason: string };
+
+export const threatIntelApi = {
+  /**
+   * Look one indicator up in the tenant's threat-intel store.
+   *
+   * Goes to `/api/v1/threat-intel/indicators`, the route that serves the
+   * page's own list — so the lookup reads the same store the table does, and
+   * a match here is an indicator the deployment actually holds. The response
+   * carries `degraded`/`reason`, which the backend already sets when it
+   * answered from a fallback or could not reach its index; that is treated as
+   * a failed lookup rather than a clean one, because a partial store cannot
+   * support "we hold nothing on this".
+   */
+  lookup: async (ioc: string): Promise<IOCLookupOutcome> => {
+    let response: {
+      indicators?: ThreatIndicator[];
+      degraded?: boolean;
+      reason?: string;
+    };
+    try {
+      response = await request("/api/v1/threat-intel/indicators", { params: { q: ioc } });
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : undefined;
+      // status 0 is `request`'s own marker for "never reached the server".
+      const detail =
+        status === undefined || status === 0
+          ? "the threat-intel service could not be reached"
+          : `the threat-intel service answered HTTP ${status}`;
+      return { status: "failed", reason: detail };
+    }
+
+    if (response.degraded) {
+      return {
+        status: "failed",
+        reason: response.reason?.trim() || "the threat-intel store answered from a degraded source",
+      };
+    }
+
+    const match = (response.indicators ?? []).find(
+      (candidate) => candidate.value?.toLowerCase() === ioc.toLowerCase()
+    );
+    return match ? { status: "match", indicator: match } : { status: "clean" };
+  },
+
+  // `bulkLookup` used to live here. It posted `{ iocs: [...] }` to
+  // `/api/v1/enrichment/bulk` and had **zero callers**. That path is not
+  // served by the API — measured against a running stack, 404 — and the
+  // request shape was not the one the enrichment service reads either
+  // (`POST /enrich/bulk` takes `{ items: [...] }`). It is deleted rather
+  // than repointed: an exported helper aimed at a route that does not exist
+  // is a loaded gun, because whoever wires it up first gets a rejected
+  // promise and, following the shape `lookup` used to have, renders it as a
+  // clean verdict. A bulk lookup can be written against
+  // `/api/v1/threat-intel/indicators` — the route `lookup` uses — when
+  // something needs one.
+
+  // `total` is the store's count of indicators in scope; `shown` is how many
+  // this response carries. They are different numbers and the console renders
+  // both — it used to render the page length as the catalogue size.
+  //
+  // `degraded`/`reason` are on the type because the route sets them and the
+  // list path was throwing them away. Measured against a running stack with
+  // no threat-intel service, this route answers **HTTP 200** with
+  // `{"indicators":[],"total":0,"degraded":true,"reason":"the threat-intel
+  // service did not answer (ConnectError); no indicators can be listed"}` —
+  // so a consumer keying only on "did the request succeed" reads an explicit
+  // non-measurement as a measurement of zero. `lookup` above already treats
+  // the same flag as a failed lookup.
+  list: (filters: { type?: IndicatorType; tag?: string; q?: string } = {}) =>
+    request<{
+      indicators: ThreatIndicator[];
+      total: number;
+      shown?: number;
+      bounded?: boolean;
+      degraded?: boolean;
+      reason?: string;
+    }>("/api/v1/threat-intel/indicators", { params: filters as Record<string, string> }),
+};
+
+// ─── AI Agents ────────────────────────────────────────────────────────────────
+
+export interface AgentInvestigation {
+  id: string;
+  alertId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  findings?: string;
+  recommendations?: string[];
+  actions?: Array<{ type: string; target: string; status: string }>;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export const agentsApi = {
+  /**
+   * Stream a structured "Explain this alert" walkthrough as NDJSON.
+   *
+   * Each line in `response.body` is one {@link ExplainStreamFrame}.
+   * Returns the raw `Response` because the drawer renders frames as
+   * they arrive — see `ExplainDrawer.tsx` for the consumer.
+   */
+  explainStream: (
+    payload: { alert: Record<string, unknown>; alertId?: string },
+    signal?: AbortSignal
+  ) =>
+    apiFetch("/api/v1/explain", {
+      method: "POST",
+      baseUrl: AGENTS_BASE,
+      body: JSON.stringify({
+        alert: payload.alert,
+        alert_id: payload.alertId,
+        tenant_id: getActiveTenantId(),
+      }),
+      signal,
+    }),
+};
+
+// ─── Explain endpoint frames ─────────────────────────────────────────────────
+//
+// One frame per NDJSON line. The drawer routes each frame by `kind` and
+// appends to the matching section, so order matters: `section` opens a
+// section, subsequent typed frames fill it, and `done` closes the stream.
+
+export interface ExplainSectionFrame {
+  kind: "section";
+  id: "summary" | "ocsf" | "mitre" | "evidence" | "next";
+  title: string;
+}
+
+export interface ExplainDeltaFrame {
+  kind: "delta";
+  section: "summary";
+  text: string;
+}
+
+export interface ExplainOcsfFrame {
+  kind: "ocsf";
+  category: string;
+  category_uid: number;
+  class: string;
+  class_uid: number;
+  activity: string;
+  fields: Record<string, unknown>;
+}
+
+export interface ExplainMitreFrame {
+  kind: "mitre";
+  id: string;
+  name: string;
+  tactic_names: string[];
+  description: string;
+  url: string;
+  found: boolean;
+}
+
+export interface ExplainEvidenceFrame {
+  kind: "evidence";
+  label: string;
+  value: string;
+  annotation: string;
+}
+
+export interface ExplainNextStepFrame {
+  kind: "next_step";
+  title: string;
+  rationale: string;
+  playbook_id: string | null;
+}
+
+export interface ExplainDoneFrame {
+  kind: "done";
+  alert_id: string;
+}
+
+export interface ExplainErrorFrame {
+  kind: "error";
+  error: string;
+}
+
+export type ExplainStreamFrame =
+  | ExplainSectionFrame
+  | ExplainDeltaFrame
+  | ExplainOcsfFrame
+  | ExplainMitreFrame
+  | ExplainEvidenceFrame
+  | ExplainNextStepFrame
+  | ExplainDoneFrame
+  | ExplainErrorFrame;
+
+// ─── Structured Alert Explanation (POST /api/v1/alerts/{id}/explain) ────────
+//
+// Stage 2 #6 added a *structured* one-shot explainer alongside the agents
+// service's NDJSON streaming explainer. Where the stream emits tokens for
+// a typewriter UX, this endpoint returns the *whole* answer in one JSON
+// envelope — including richer context the streaming endpoint doesn't have:
+//
+//   * `rule_lineage`        — which detection rule fired (best-effort,
+//                              with a confidence band on the match itself)
+//   * `historical_fp_rate`  — live false-positive rate over the last 30
+//                              days, scoped to rule, technique, category,
+//                              or tenant (whichever has enough samples)
+//   * deterministic-or-LLM `summary` (with `llm_used` + `llm_reason` so
+//      the UI can disclose when the prose was generated vs. fallback)
+//
+// The dataclass shape mirrors `services/api/app/services/alert_explain.py`.
+// Keep the two in sync; the backend serializes via `dataclasses.asdict`.
+
+/** Lineage of the detection rule that produced an alert. */
+export interface RuleLineage {
+  rule_id: string | null;
+  rule_name: string | null;
+  rule_description: string | null;
+  rule_status: string | null;
+  rule_severity: string | null;
+  rule_confidence: number | null;
+  rule_language: string | null;
+  is_builtin: boolean;
+  /** Confidence in the lineage *match itself*, not the rule's own confidence. */
+  confidence: "high" | "medium" | "low";
+  /**
+   * How the lineage was resolved. `none` means we couldn't match any rule.
+   * `raw_event` / `tags` are deterministic; `mitre_overlap` and `category`
+   * are best-effort guesses.
+   */
+  match_method: "raw_event" | "tags" | "mitre_overlap" | "category" | "none";
+}
+
+/** Live false-positive rate for the matched rule (or fallback scope). */
+export interface HistoricalFpRate {
+  fp_rate: number;
+  sample_size: number;
+  false_positives: number;
+  lookback_days: number;
+  /** Which scope was used. Narrower = more relevant; broader = more samples. */
+  scope: "rule" | "category" | "technique" | "tenant";
+  /** Human-readable description of which scope was used and why. */
+  notes: string;
+}
+
+/** A deterministic, hand-curated suggested next step. */
+export interface SuggestedAction {
+  title: string;
+  rationale: string;
+  /** ID of a playbook the user can launch directly, or null if N/A. */
+  playbook_id: string | null;
+  priority: "immediate" | "soon" | "fyi";
+}
+
+/** A single signal from the raw event that contributed to the alert. */
+export interface ContributingEvent {
+  label: string;
+  value: string;
+  /** Optional hint about why this signal mattered (e.g. "matched rule pattern"). */
+  annotation?: string;
+}
+
+/** Resolved MITRE ATT&CK technique card (id, name, tactics, link). */
+export interface MitreTechniqueCard {
+  id: string;
+  name: string;
+  tactic_names: string[];
+  description: string;
+  url: string;
+}
+
+/** Top-level structured explanation envelope. */
+export interface AlertExplanation {
+  alert_id: string;
+  summary: string;
+  rule_lineage: RuleLineage;
+  contributing_events: ContributingEvent[];
+  mitre_techniques: MitreTechniqueCard[];
+  historical_fp_rate: HistoricalFpRate;
+  suggested_actions: SuggestedAction[];
+  /** True when the summary was LLM-generated; false → deterministic fallback. */
+  llm_used: boolean;
+  /** Source of the summary: `tenant_byok`, `platform_default`, `deterministic`, etc. */
+  llm_source: string;
+  /** When `llm_used=false`, why we fell back (e.g. `airgap_blocked`, `no_credential`). */
+  llm_reason: string;
+  /** ISO-8601 timestamp the explanation was generated. */
+  generated_at: string;
+}
+
+// ─── Hunt / Search ───────────────────────────────────────────────────────────
+
+export interface HuntQuery {
+  query: string;
+  language?: "kql" | "lucene" | "sql" | "esql";
+  startTime?: string;
+  endTime?: string;
+  limit?: number;
+}
+
+/**
+ * The wire shape of one hit from `POST /api/v1/hunt/search`.
+ *
+ * @wire agents POST /api/v1/hunt/search#hits[]
+ */
+export interface HuntHitWire {
+  id: string;
+  timestamp: string;
+  source: string;
+  event_type: string;
+  raw: Record<string, unknown>;
+  highlights: string[];
+}
+
+/**
+ * The wire shape of `POST /api/v1/hunt/search`.
+ *
+ * Field for field what `services/agents/app/api/hunt_search.py` serialises —
+ * note *agents*, not `services/api`, which is why no spec gate covered it.
+ * `scripts/check_console_wire_contract.py` holds this interface against that
+ * service's own OpenAPI document in both directions, so a rename on either
+ * side fails CI instead of resolving to `undefined` in a browser.
+ *
+ * It had drifted on seven names at once (#1648): the handler sends `took_ms`,
+ * `query`, `source` and `notice` where the client declared `took` and nothing
+ * else, and sends `raw`, `highlights` and `event_type` per hit where the
+ * client declared `fields`, `highlight` and a `severity` no response has ever
+ * carried. `request<T>` asserts the shape rather than validating it, so the
+ * type checker believed every one of them.
+ *
+ * @wire agents POST /api/v1/hunt/search
+ */
+export interface HuntSearchWire {
+  query: string;
+  total: number;
+  /** `null` when no query ran. Never 0 for an unmeasured read. */
+  took_ms: number | null;
+  hits: HuntHitWire[];
+  /**
+   * `live` — the tenant's event lake answered. `unavailable` — no query ran.
+   *
+   * The backend no longer emits `sample`: it used to return five fabricated
+   * CrowdStrike events unconditionally, and that generator is deleted.
+   * `sample` survives on {@link HuntResponse} because the console's own
+   * demo-gated fallback still constructs it client-side.
+   *
+   * Not optional. The handler sets it on every path — it used to carry a
+   * default, which is why this was `source?:` — and declaring it optional
+   * makes a caller guard a case the service cannot produce.
+   */
+  source: "live" | "unavailable";
+  notice?: string | null;
+}
+
+/** One hunt hit as the console uses it — see {@link normalizeHuntResponse}. */
+export interface HuntResult {
+  id: string;
+  timestamp: string;
+  source: string;
+  eventType: string | null;
+  /**
+   * Client-side only. The search endpoint does not classify, so this is
+   * absent on every real hit and the row renders a neutral "event" badge.
+   * Sample hits carry one.
+   */
+  severity?: AlertSeverity;
+  fields: Record<string, unknown>;
+  highlights: string[];
+}
+
+export interface HuntResponse {
+  query: string;
+  total: number;
+  /**
+   * Latency the backend measured, in milliseconds, or `null` when it
+   * reported none. Absent is not zero: `?? 0` here would print "0ms" beside
+   * a hit count for something nobody timed.
+   */
+  tookMs: number | null;
+  hits: HuntResult[];
+  /**
+   * `live` — these hits came from the tenant's lake; zero of them is a
+   * result. `unavailable` — no query ran, and `notice` says why; zero hits
+   * is not a result and must not read as one. `sample` — the console's own
+   * demo-gated fallback, never the backend.
+   */
+  source: "sample" | "live" | "unavailable";
+  notice: string | null;
+}
+
+function normalizeHuntHit(raw: unknown): HuntResult {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const fields = r.raw;
+  return {
+    id: typeof r.id === "string" ? r.id : "",
+    timestamp: typeof r.timestamp === "string" ? r.timestamp : "",
+    source: typeof r.source === "string" ? r.source : "unknown",
+    eventType: typeof r.event_type === "string" ? r.event_type : null,
+    fields:
+      fields !== null && typeof fields === "object" && !Array.isArray(fields)
+        ? (fields as Record<string, unknown>)
+        : {},
+    highlights: Array.isArray(r.highlights) ? r.highlights.map(String) : [],
+  };
+}
+
+/**
+ * The one place the hunt wire shape becomes the shape the console reads.
+ *
+ * Same remedy as {@link normalizeAlert}: one canonical name per value,
+ * resolved once at the boundary. Adding `took` beside `took_ms` and `fields`
+ * beside `raw` would have left two live declarations of each value, which is
+ * the condition that drifted in the first place.
+ */
+export function normalizeHuntResponse(raw: unknown): HuntResponse {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const hits = Array.isArray(r.hits) ? r.hits.map(normalizeHuntHit) : [];
+  return {
+    query: typeof r.query === "string" ? r.query : "",
+    total: typeof r.total === "number" ? r.total : hits.length,
+    tookMs: typeof r.took_ms === "number" ? r.took_ms : null,
+    hits,
+    // A backend that did not say is not a backend that said "live". The
+    // honesty marker defaults to the claim that costs nothing to be wrong
+    // about — and `unavailable` is carried through rather than collapsed
+    // into `sample`, because "we could not look" and "here are invented
+    // events" are different things to put in front of an analyst.
+    source: r.source === "live" ? "live" : r.source === "unavailable" ? "unavailable" : "sample",
+    notice: typeof r.notice === "string" ? r.notice : null,
+  };
+}
+
+/**
+ * A saved hunt search, as `POST /api/v1/hunt/saved` returns it.
+ *
+ * @wire agents POST /api/v1/hunt/saved
+ */
+export interface SavedSearch {
+  id: string;
+  name: string;
+  query: string;
+  language: string;
+  createdAt: string;
+  pinned?: boolean;
+}
+
+/** What `POST /api/v1/agents/hunt` answers. */
+export interface AgentHuntResponse {
+  hypothesis: string;
+  /**
+   * Whether the hunt *ran*. Not the same as `matches.length > 0`: a hunt
+   * that could not run is not a hunt that found nothing, and collapsing
+   * the two is how a console shows a reassuring empty result for a search
+   * that never happened. False always carries an `unavailable_reason`.
+   */
+  checked: boolean;
+  matches: Record<string, unknown>[];
+  /** Plans the validator would not run. Shown, not swallowed. */
+  refusals: string[];
+  unavailable_reason: string | null;
+}
+
+export const huntApi = {
+  /**
+   * Natural-language hunting through the agent (parity 6.1).
+   *
+   * The agent plans; the planner validates every attempt against the
+   * allowed shape. The model never writes a query directly. The tenant
+   * comes from the caller's token server-side and is deliberately not a
+   * parameter here.
+   */
+  runAgentHunt: (hypothesis: string) =>
+    request<AgentHuntResponse>("/api/v1/agents/hunt", {
+      method: "POST",
+      body: JSON.stringify({ hypothesis }),
+    }),
+
+  search: (query: HuntQuery): Promise<HuntResponse> =>
+    request<HuntSearchWire>("/api/v1/hunt/search", {
+      method: "POST",
+      body: JSON.stringify(query),
+    }).then(normalizeHuntResponse),
+
+  listSaved: () => request<{ searches: SavedSearch[] }>("/api/v1/hunt/saved"),
+
+  saveSearch: (data: Pick<SavedSearch, "name" | "query" | "language">) =>
+    request<SavedSearch>("/api/v1/hunt/saved", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  deleteSaved: (id: string) => request<void>(`/api/v1/hunt/saved/${id}`, { method: "DELETE" }),
+};
+
+// ─── Event lake (Phase A1/C1) ────────────────────────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/lake.py`. `/lake/sql` runs a
+// tenant-scoped SELECT against the ClickHouse warm tier (the server injects the
+// `tenant_id` predicate before execution); `/lake/schema` returns the
+// allowlisted tables + columns the Explore surface renders as a schema helper.
+
+export interface LakeQueryRequest {
+  sql: string;
+  row_cap?: number;
+  timeout_seconds?: number;
+}
+
+export interface LakeQueryResponse {
+  columns: string[];
+  rows: unknown[][];
+  row_count: number;
+  row_cap: number;
+  referenced_tables: string[];
+  elapsed_ms: number;
+  executed_at: string;
+}
+
+export interface LakeColumnInfo {
+  name: string;
+  type: string;
+  comment: string;
+}
+
+export interface LakeTableInfo {
+  table: string;
+  columns: LakeColumnInfo[];
+}
+
+export interface LakeSchemaResponse {
+  tables: LakeTableInfo[];
+}
+
+export const lakeApi = {
+  sql: (body: LakeQueryRequest) =>
+    request<LakeQueryResponse>("/api/v1/lake/sql", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  schema: () => request<LakeSchemaResponse>("/api/v1/lake/schema"),
+};
+
+// ─── Federated SIEM search ───────────────────────────────────────────────────
+//
+// Client for `services/api/app/api/v1/endpoints/federated.py`, which fans one
+// `UnifiedQuery` out to every federated-capable connector the tenant has
+// enabled (Splunk, Microsoft Sentinel, Elastic, QRadar) using that tenant's
+// own vault-encrypted credentials, and merges the rows.
+//
+// The shape worth preserving through the client is `sources[]`. The endpoint
+// deliberately never fails the whole call because one backend is slow, 401s or
+// 5xxs — it returns a per-backend verdict instead. Collapsing that into a
+// single throw would discard exactly the information an analyst needs to tell
+// "Sentinel has nothing" from "Sentinel did not answer", so nothing here
+// treats a per-source error as a request error.
+
+/** Operator vocabulary accepted by `Indicator` in the connectors service. */
+export type FederatedOperator =
+  "eq" | "ne" | "contains" | "starts_with" | "ends_with" | "gt" | "gte" | "lt" | "lte" | "in";
+
+export const FEDERATED_OPERATORS: readonly FederatedOperator[] = [
+  "eq",
+  "ne",
+  "contains",
+  "starts_with",
+  "ends_with",
+  "gt",
+  "gte",
+  "lt",
+  "lte",
+  "in",
+] as const;
+
+/** One `field <op> value` triple. Stacking indicators implies AND. */
+export interface FederatedIndicator {
+  field: string;
+  operator: FederatedOperator;
+  value: unknown;
+}
+
+export interface FederatedSearchRequest {
+  free_text?: string;
+  indicators?: FederatedIndicator[];
+  since_seconds?: number;
+  limit?: number;
+  connector_ids?: string[] | null;
+  per_backend_timeout_seconds?: number | null;
+}
+
+/**
+ * Per-backend outcome.
+ *
+ * `status` is `ok` (rows returned, possibly zero), `error` (this backend
+ * failed and `error` carries the message; others may have succeeded), or
+ * `unsupported` (the connector type does not speak federated search).
+ */
+export interface FederatedSourceVerdict {
+  connector_id: string;
+  connector_name: string;
+  connector_type: string;
+  status: "ok" | "error" | "unsupported";
+  row_count: number;
+  duration_ms: number;
+  error: string | null;
+}
+
+/** Source tag the API stamps onto every merged row. */
+export interface FederatedRowSource {
+  connector_id: string;
+  connector_name: string;
+  connector_type: string;
+}
+
+export type FederatedRow = Record<string, unknown> & {
+  _aisoc_source?: FederatedRowSource;
+};
+
+export interface FederatedSearchResponse {
+  rows: FederatedRow[];
+  row_count: number;
+  sources: FederatedSourceVerdict[];
+  truncated: boolean;
+}
+
+export interface FederatedBackend {
+  connector_id: string;
+  connector_type: string;
+  name: string;
+  health_status: string;
+  is_enabled: boolean;
+}
+
+export interface FederatedBackendsResponse {
+  backends: FederatedBackend[];
+}
+
+/**
+ * Thrown when the deployment has `AISOC_FEATURE_FED_SEARCH=false`.
+ *
+ * The endpoint answers 404 for that case, which is indistinguishable from a
+ * routing mistake unless the client names it. A disabled feature is a
+ * configuration fact the operator can act on; a generic "not found" is not.
+ */
+export class FederatedSearchDisabledError extends Error {
+  constructor() {
+    super("Federated search is disabled on this deployment (AISOC_FEATURE_FED_SEARCH).");
+    this.name = "FederatedSearchDisabledError";
+  }
+}
+
+function asFederatedError(err: unknown): never {
+  // `_ensure_feature_enabled` answers 404 with this detail. The same endpoint
+  // also 404s for an unknown `connector_ids` entry, so match on the body
+  // rather than the status alone — misreporting a typo'd connector id as a
+  // disabled feature would send the operator to the wrong config file.
+  if (
+    err instanceof ApiError &&
+    err.status === 404 &&
+    /AISOC_FEATURE_FED_SEARCH|federated search is disabled/i.test(err.body)
+  ) {
+    throw new FederatedSearchDisabledError();
+  }
+  throw err;
+}
+
+export const federatedApi = {
+  /** Connector instances `search()` would fan out to, with their health. */
+  listBackends: async (): Promise<FederatedBackendsResponse> => {
+    try {
+      const raw = await request<Partial<FederatedBackendsResponse>>("/api/v1/federated/backends");
+      return { backends: Array.isArray(raw.backends) ? raw.backends : [] };
+    } catch (err) {
+      return asFederatedError(err);
+    }
+  },
+
+  search: async (body: FederatedSearchRequest): Promise<FederatedSearchResponse> => {
+    try {
+      const raw = await request<Partial<FederatedSearchResponse>>("/api/v1/federated/search", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      const rows = Array.isArray(raw.rows) ? raw.rows : [];
+      return {
+        rows,
+        row_count: typeof raw.row_count === "number" ? raw.row_count : rows.length,
+        sources: Array.isArray(raw.sources) ? raw.sources : [],
+        truncated: raw.truncated === true,
+      };
+    } catch (err) {
+      return asFederatedError(err);
+    }
+  },
+};
+
+// ─── Natural-language query translator (T3.4) ────────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/nl_query.py`. The translator
+// itself never mutates state — it just maps an English question to an
+// ES|QL / SPL / KQL triple plus a human-readable explanation. The /hunt
+// page calls this when an analyst clicks an example-query pill or hits
+// "Translate" in the NL input.
+
+export interface NlQueryTranslateRequest {
+  question: string;
+  index_pattern?: string;
+  time_range_hours?: number;
+}
+
+export interface NlQueryTranslateResponse {
+  request_id: string;
+  question: string;
+  esql: string;
+  spl: string;
+  kql: string;
+  explanation: string;
+  created_at: string;
+  engine: "deterministic" | "llm";
+  grammar_validated: boolean;
+}
+
+export interface NlQueryResult {
+  columns: string[];
+  rows: unknown[][];
+  total_rows: number;
+  took_ms?: number | null;
+}
+
+export interface NlQueryExecuteResponse extends NlQueryTranslateResponse {
+  result: NlQueryResult | null;
+  execution_error: string | null;
+  /**
+   * Which store answered. "Nothing matched in your SIEM" and "nothing
+   * matched in AiSOC's own lake" are different findings and an analyst must
+   * be able to tell them apart.
+   */
+  executed_against: "elasticsearch" | "lake" | null;
+  /**
+   * Translator fields the lake does not store. A hunt that quietly drops
+   * half its filters returns more rows than was asked for, which reads as
+   * "nothing was filtered out".
+   */
+  unsupported_filters: string[];
+  /**
+   * The query text actually sent to the store.
+   *
+   * For a lake execution this is **not** the ES|QL translation — the lake
+   * speaks SQL and the question is compiled separately. Showing the ES|QL
+   * beside lake rows would be a query that did not produce them.
+   */
+  executed_query: string | null;
+  executed_query_language: "sql" | "esql" | null;
+  /** Bound values, kept apart from the text rather than interpolated into it. */
+  executed_query_params: Record<string, unknown>;
+}
+
+export const nlQueryApi = {
+  translate: (data: NlQueryTranslateRequest) =>
+    request<NlQueryTranslateResponse>("/api/v1/nl-query/translate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Translate *and run*, against the tenant's SIEM when one is connected and
+   * otherwise against AiSOC's own lake.
+   *
+   * `translate` alone returns an ES|QL/SPL/KQL triple and runs nothing; the
+   * explorer used to call it and then post the ES|QL to the lake's SQL
+   * endpoint, which are different languages.
+   */
+  execute: (data: NlQueryTranslateRequest & { max_rows?: number }) =>
+    request<NlQueryExecuteResponse>("/api/v1/nl-query/execute", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+// ─── Saved natural-language hunts (T3.4) ─────────────────────────────────────
+//
+// Backs the /hunt page's NL hero block + saved-hunts sidebar. Distinct from
+// `huntApi` above (legacy SIEM-style query bar, demo-data fallback) and from
+// the hypothesis-driven `/hunts` workbench (heavyweight, detection-engineer
+// authored, separate page). Wire shape mirrors
+// `services/api/app/api/v1/endpoints/saved_hunts.py`.
+
+export type HuntLanguage = "esql" | "kql" | "spl";
+
+export interface TranslatedQueryEnvelope {
+  esql: string;
+  kql: string;
+  spl: string;
+  explanation: string;
+}
+
+export interface SavedHunt {
+  id: string;
+  name: string;
+  nl_query: string;
+  translated_query: TranslatedQueryEnvelope;
+  language: HuntLanguage;
+  schedule: string | null;
+  last_run_at: string | null;
+  created_at: string;
+  updated_at: string;
+  created_by: string | null;
+}
+
+export interface CreateSavedHuntRequest {
+  name: string;
+  nl_query: string;
+  language?: HuntLanguage;
+  schedule?: string | null;
+}
+
+export interface RunSavedHuntResponse {
+  id: string;
+  name: string;
+  nl_query: string;
+  translated_query: TranslatedQueryEnvelope;
+  last_run_at: string;
+}
+
+export const savedHuntsApi = {
+  list: () => request<SavedHunt[]>("/api/v1/saved-hunts"),
+
+  get: (id: string) => request<SavedHunt>(`/api/v1/saved-hunts/${id}`),
+
+  create: (data: CreateSavedHuntRequest) =>
+    request<SavedHunt>("/api/v1/saved-hunts", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  remove: (id: string) => request<void>(`/api/v1/saved-hunts/${id}`, { method: "DELETE" }),
+
+  /**
+   * Re-translate the saved NL question and stamp `last_run_at`. The endpoint
+   * does not execute the underlying ES|QL — that path is the job of
+   * `/api/v1/nl-query/execute` (which requires a configured Elasticsearch
+   * URL). We use the returned `translated_query` to populate the editor.
+   */
+  run: (id: string) =>
+    request<RunSavedHuntResponse>(`/api/v1/saved-hunts/${id}/run`, {
+      method: "POST",
+    }),
+};
+
+// ─── Attack Graph (Neo4j) ────────────────────────────────────────────────────
+
+export type GraphNodeKind =
+  | "host"
+  | "user"
+  | "ip"
+  | "domain"
+  | "hash"
+  | "process"
+  | "technique"
+  | "tactic"
+  | "alert"
+  | "asset";
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  kind: GraphNodeKind;
+  riskScore?: number;
+  severity?: AlertSeverity;
+  attributes?: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  label: string;
+  weight?: number;
+  attributes?: Record<string, unknown>;
+}
+
+export interface AttackGraph {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  generatedAt: string;
+  /**
+   * The response was cut at the server's ceiling, so paths are missing.
+   *
+   * Optional because `/graph/blast-radius` and the case attack-path route
+   * reuse this shape and bound differently. A consumer must treat `undefined`
+   * as "this endpoint does not say" and not as "complete" — the two are only
+   * the same for a response that was never bounded.
+   */
+  truncated?: boolean;
+  /** The node ceiling the service applied, when it reports one. */
+  nodeLimit?: number;
+  /** The edge ceiling the service applied, when it reports one. */
+  edgeLimit?: number;
+}
+
+export interface AttackPath {
+  id: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  totalRisk: number;
+  hops: number;
+}
+
+export interface MitreCoverageCell {
+  techniqueId: string;
+  techniqueName: string;
+  tactic: string;
+  detections: number;
+  alerts: number;
+  /** 0-1 normalized coverage for heatmap shading. */
+  intensity: number;
+}
+
+export interface MitreCoverage {
+  tactics: string[];
+  cells: MitreCoverageCell[];
+  generatedAt: string;
+}
+
+/**
+ * Case-scoped attack path graph as returned by the Attack-Path Investigation
+ * Agent backend (`/api/v1/graph/attack-path/{case_id}`). Distinct from the
+ * tenant-level `AttackGraph` overview because the backend payload schema is
+ * leaner: each node carries a `properties` dict and edges carry a relationship
+ * `type` instead of label/weight metadata.
+ */
+export interface CaseAttackPathNode {
+  id: string;
+  label: string;
+  properties: Record<string, unknown>;
+}
+
+export interface CaseAttackPathEdge {
+  source: string;
+  target: string;
+  type: string;
+}
+
+export interface CaseAttackPath {
+  caseId: string;
+  nodes: CaseAttackPathNode[];
+  edges: CaseAttackPathEdge[];
+  nodeCount: number;
+  edgeCount: number;
+}
+
+interface BackendCaseAttackPathResponse {
+  case_id: string;
+  nodes: CaseAttackPathNode[];
+  edges: CaseAttackPathEdge[];
+  node_count: number;
+  edge_count: number;
+}
+
+// ─── Attack chain timeline (T3.3 — v8.0) ──────────────────────────────────────
+// The attack-chain endpoint returns a ranked, time-ordered chain of related
+// alerts starting from the seed alert anchored to a case. It's distinct from
+// the case attack-path graph above: this view is *temporal* (a timeline of
+// alerts) while the path view is *topological* (a graph of entities). Both
+// power different tabs in the case workspace.
+
+/** Severity ladder mirrors the backend five-tier scale exactly. */
+export type AttackChainSeverity = "info" | "low" | "medium" | "high" | "critical";
+
+/** Allowed lookback windows. The backend rejects anything else with 400. */
+export type AttackChainWindow = "1h" | "6h" | "24h" | "72h" | "7d" | "30d";
+
+/**
+ * A single link in the chain — one related alert plus the metadata that
+ * makes it readable in a timeline: how far it is from the seed (graph
+ * distance), how it scored relative to other candidates, the entities it
+ * shares with the seed, and which MITRE techniques it tagged.
+ */
+export interface AttackChainLink {
+  alertId: string;
+  title: string;
+  severity: AttackChainSeverity | string;
+  /** ISO-8601. The chain is ordered by this field. */
+  eventTime: string;
+  /** Ranking score the BFS uses to pick the top chain candidates. */
+  score: number;
+  /** Hops from the seed alert in the entity graph. 0 == seed itself. */
+  distance: number;
+  /** Time gap from the previous link, in seconds. Always >= 0. */
+  dtSeconds: number;
+  /** Entities that bridge this link to the rest of the chain. */
+  sharedEntities: Array<{ kind: string; value: string }>;
+  mitreTechniques: string[];
+  connectorType: string | null;
+  sourceEventIds: string[];
+}
+
+/** Entity nodes & edges rendered side-by-side with the timeline.
+ *
+ * Node shape from the backend is `{id, kind, label, ...extras}` where extras
+ * depend on the kind: Alert nodes also carry `severity` and `event_time`.
+ * Edges are `{source, target, kind}` — the relationship label (e.g. TOUCHES).
+ */
+export interface AttackChainEntityNode {
+  id: string;
+  kind: string;
+  label?: string;
+  severity?: string;
+  event_time?: string;
+  [key: string]: unknown;
+}
+export interface AttackChainEntityEdge {
+  source: string;
+  target: string;
+  kind: string;
+}
+
+export interface AttackChainTimeline {
+  caseId: string;
+  tenantId: string;
+  window: string;
+  seedAlertId: string;
+  chainSignature: string | null;
+  /** 0..1 — substrate-level confidence in the chain reconstruction. */
+  confidence: number;
+  generatedAt: string;
+  chain: AttackChainLink[];
+  entityGraph: {
+    nodes: AttackChainEntityNode[];
+    edges: AttackChainEntityEdge[];
+  };
+}
+
+/** Raw shape returned by `/api/v1/cases/{id}/attack-chain`. */
+interface BackendAttackChainResponse {
+  case_id: string;
+  tenant_id: string;
+  window: string;
+  seed_alert_id: string | null;
+  chain_signature: string | null;
+  confidence: number;
+  generated_at: string;
+  chain: Array<{
+    alert_id: string;
+    title: string;
+    severity: string;
+    event_time: string;
+    score: number;
+    distance: number;
+    dt_seconds: number;
+    shared_entities: Array<{ kind: string; value: string }>;
+    mitre_techniques: string[];
+    connector_type: string | null;
+    source_event_ids: string[];
+  }>;
+  entity_graph: {
+    nodes: AttackChainEntityNode[];
+    edges: AttackChainEntityEdge[];
+  };
+  // Empty-chain responses include a `reason` breadcrumb the UI can show.
+  reason?: string;
+}
+
+export const graphApi = {
+  getOverview: (filters: { entity?: string; depth?: number } = {}) =>
+    request<AttackGraph>("/api/v1/graph", {
+      params: filters as Record<string, string | number>,
+    }),
+
+  getMitreCoverage: () => request<MitreCoverage>("/api/v1/graph/mitre/coverage"),
+
+  /**
+   * Fetch the reconstructed attack-path graph for a single case.
+   * Backed by the Attack-Path Investigation Agent endpoint
+   * `/api/v1/graph/attack-path/{case_id}`.
+   * Returns `null` when the case has no linked graph entities (404 from API).
+   */
+  getCaseAttackPath: async (
+    caseId: string,
+    options: { maxDepth?: number } = {}
+  ): Promise<CaseAttackPath | null> => {
+    try {
+      const raw = await request<BackendCaseAttackPathResponse>(
+        `/api/v1/graph/attack-path/${encodeURIComponent(caseId)}`,
+        {
+          params: options.maxDepth ? { max_depth: options.maxDepth } : {},
+        }
+      );
+      return {
+        caseId: raw.case_id,
+        nodes: raw.nodes ?? [],
+        edges: raw.edges ?? [],
+        nodeCount: raw.node_count ?? 0,
+        edgeCount: raw.edge_count ?? 0,
+      };
+    } catch (err) {
+      const apiErr = err as { status?: number };
+      if (apiErr?.status === 404) return null;
+      throw err;
+    }
+  },
+};
+
+// ─── Detection Rules ─────────────────────────────────────────────────────────
+
+export type DetectionLanguage =
+  | "sigma"
+  | "yara"
+  | "kql"
+  | "eql"
+  | "lucene"
+  | "regex"
+  /**
+   * The compiled ``match_when`` spec the fusion detection engine evaluates.
+   * Deliberately not one of the six the rule IDE can execute: the body is
+   * read-only and the engine, not the API, is what runs it.
+   */
+  | "aisoc-match";
+
+export interface DetectionRule {
+  id: string;
+  name: string;
+  description?: string;
+  language: DetectionLanguage;
+  body: string;
+  enabled: boolean;
+  tags?: string[];
+  mitre?: string[];
+  severity?: AlertSeverity;
+  createdAt: string;
+  updatedAt: string;
+  lastTriggeredAt?: string;
+  hitCount?: number;
+  /**
+   * True when the fusion detection engine loads this rule from the compiled
+   * corpus and evaluates it against live telemetry. A tenant's own rule is
+   * not loaded by the engine, so "disabled" means different things for the
+   * two and the card says which.
+   */
+  isBuiltin?: boolean;
+  /** The engine's rule id (``det-cloud-063``) — what an alert carries. */
+  sourceId?: string | null;
+  /** Whether this tenant has stored any decision about the rule. */
+  tuned?: boolean;
+  /**
+   * ``createdAt``/``updatedAt`` on an untuned built-in are the timestamp of
+   * the compiled artefact this deployment ships, not an authoring date.
+   */
+  timestampsFromArtefact?: boolean;
+}
+
+export interface DetectionRuleListResult {
+  rules: DetectionRule[];
+  /** Rules matching the request's filters — not the number returned. */
+  total: number;
+  /** The library before filters, split by origin. */
+  builtinTotal: number;
+  customTotal: number;
+  returned: number;
+  offset: number;
+  limit: number;
+  /**
+   * Set when the compiled corpus could not be read at all. Rendered as a
+   * failure, never as "no rules exist": telling an operator their coverage
+   * is zero when a file is merely unreachable is the defect this surface was
+   * reported for.
+   */
+  catalogError: string | null;
+  /** Artefacts that resolved nowhere while others did. */
+  missingArtefacts: string[];
+}
+
+export interface DetectionRuleListParams {
+  search?: string;
+  severity?: string;
+  category?: string;
+  mitre?: string;
+  enabled?: boolean;
+  source?: "all" | "builtin" | "custom";
+  limit?: number;
+  offset?: number;
+}
+
+// ─── Detection management UI (WS-B3) ─────────────────────────────────────────
+//
+// Rule-centric MITRE coverage, bulk enable/disable, and the drift inbox are
+// powered by ``services/api/app/api/v1/endpoints/detection_compat.py``.
+// Schemas are mirrored here field-for-field so the UI gets autocomplete and
+// the compiler catches drift if the backend payload ever changes shape.
+
+export interface DetectionCoverageCell {
+  techniqueId: string;
+  tactic: string | null;
+  techniqueName?: string | null;
+  totalRules: number;
+  activeRules: number;
+  inactiveRules: number;
+}
+
+export interface DetectionCoverageSummary {
+  totalRules: number;
+  activeRules: number;
+  inactiveRules: number;
+  techniques: number;
+  /** Techniques with at least one *active* rule. */
+  coveredTechniques: number;
+}
+
+export interface DetectionCoverage {
+  tactics: string[];
+  cells: DetectionCoverageCell[];
+  summary: DetectionCoverageSummary;
+  generatedAt: string;
+}
+
+export interface DetectionDriftEntry {
+  ruleId: string;
+  name: string;
+  severity: string;
+  enabled: boolean;
+  confidence: number;
+  fpRate: number;
+  lastTriggeredAt: string | null;
+  daysSinceTriggered: number | null;
+  /** ``high_fp_rate``, ``low_confidence``, ``stale``. */
+  issues: string[];
+}
+
+export interface DetectionDriftSummary {
+  total: number;
+  highFpRate: number;
+  lowConfidence: number;
+  stale: number;
+  /**
+   * Rules the drift heuristics cannot judge. Every one of them reads a
+   * column only operator review and the rule IDE write, and the compiled
+   * corpus records none, so built-ins are counted here rather than filed as
+   * "low confidence, stale".
+   */
+  unscored?: number;
+}
+
+export interface DetectionDrift {
+  entries: DetectionDriftEntry[];
+  summary: DetectionDriftSummary;
+  generatedAt: string;
+}
+
+export interface DetectionBulkToggleResult {
+  updated: number;
+  /** Rule IDs the backend refused (not tenant-owned, malformed, missing). */
+  skipped: string[];
+}
+
+/** One bar in the confidence histogram. */
+export interface ConfidenceBucket {
+  /** Display label, e.g. ``"0–25"``. */
+  label: string;
+  floor: number;
+  ceil: number;
+  count: number;
+  activeCount: number;
+}
+
+/** Per-MITRE-tactic confidence average. */
+export interface TacticConfidence {
+  tactic: string;
+  rules: number;
+  activeRules: number;
+  avgConfidence: number;
+  avgConfidenceActive: number;
+}
+
+/** Compact rule reference for the lowest/highest tables. */
+export interface ConfidenceRuleEntry {
+  ruleId: string;
+  name: string;
+  severity: string;
+  enabled: boolean;
+  confidence: number;
+  fpRate: number;
+  primaryTactic: string | null;
+}
+
+export interface ConfidenceSummary {
+  totalRules: number;
+  activeRules: number;
+  avgConfidence: number;
+  avgConfidenceActive: number;
+  medianConfidence: number;
+  /** Rules below the drift low-confidence threshold (server side: 60). */
+  lowConfidence: number;
+  /**
+   * Rules excluded from every figure above because no confidence has ever
+   * been recorded for them. Rendered beside the averages so a mean over
+   * three rules is not read as a mean over the whole library.
+   */
+  unscored?: number;
+}
+
+export interface DetectionConfidence {
+  summary: ConfidenceSummary;
+  buckets: ConfidenceBucket[];
+  tactics: TacticConfidence[];
+  lowest: ConfidenceRuleEntry[];
+  highest: ConfidenceRuleEntry[];
+  generatedAt: string;
+}
+
+export interface DetectionBacktestResult {
+  rule_id: string;
+  rule_language: string;
+  window_days: number;
+  events_scanned: number;
+  would_fire: number;
+  hit_rate: number;
+  sample_matches: Record<string, unknown>[];
+  error: string | null;
+}
+
+export const detectionApi = {
+  /**
+   * The tenant's effective rule library: the compiled corpus the engine runs
+   * plus whatever this tenant has tuned. Filters and paging are server-side
+   * because the library is 2,614 rules on a default install and serialising
+   * all of it is several megabytes.
+   */
+  list: (params: DetectionRuleListParams = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== "") {
+        query.set(key, String(value));
+      }
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return request<DetectionRuleListResult>(`/api/v1/detection/rules${suffix}`);
+  },
+
+  get: (id: string) => request<DetectionRule>(`/api/v1/detection/rules/${id}`),
+
+  // Wave 2 (W2.3) — backtest a saved rule over the last N days of real lake
+  // events. Returns exactly how many events would have fired + sample matches.
+  backtest: (id: string, body: { window_days?: number; limit?: number; source?: string | null }) =>
+    request<DetectionBacktestResult>(`/api/v1/rules/${id}/backtest`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  create: (rule: Partial<DetectionRule>) =>
+    request<DetectionRule>("/api/v1/detection/rules", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    }),
+
+  update: (id: string, rule: Partial<DetectionRule>) =>
+    request<DetectionRule>(`/api/v1/detection/rules/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(rule),
+    }),
+
+  delete: (id: string) => request<void>(`/api/v1/detection/rules/${id}`, { method: "DELETE" }),
+
+  test: (rule: Pick<DetectionRule, "language" | "body"> & { sample?: string }) =>
+    request<{ matches: number; preview: HuntResult[] }>("/api/v1/detection/test", {
+      method: "POST",
+      body: JSON.stringify(rule),
+    }),
+
+  // ─── WS-B3 management endpoints ──────────────────────────────────────────
+
+  coverage: () => request<DetectionCoverage>("/api/v1/detection/coverage"),
+
+  drift: () => request<DetectionDrift>("/api/v1/detection/drift"),
+
+  /**
+   * Confidence distribution + per-tactic averages + worst/best rules.
+   * The plan calls this "confidence trends"; we surface it as a
+   * snapshot histogram + ranked tables since rule confidence isn't
+   * captured historically yet.
+   */
+  confidence: () => request<DetectionConfidence>("/api/v1/detection/confidence"),
+
+  /**
+   * Enable or disable many rules in one round-trip. Built-in /
+   * cross-tenant rules are silently skipped server-side and reported in
+   * the ``skipped`` array of the response so the UI can surface them.
+   */
+  bulkToggle: (ruleIds: string[], enabled: boolean) =>
+    request<DetectionBulkToggleResult>("/api/v1/detection/rules/bulk-toggle", {
+      method: "POST",
+      body: JSON.stringify({ ruleIds, enabled }),
+    }),
+};
+
+// ─── Detection-as-code proposals (Wave 2 — w2-dac) ──────────────────────────
+//
+// Mirrors `services/api/app/api/v1/endpoints/detection_proposals.py`. Backed
+// by `DetectionRuleProposal` + `DetectionEvalBaseline` tables. The eval
+// verdict is computed server-side from a `scripts/run_evals.py` JSON report
+// and the most recent active MITRE accuracy baseline; ≥ 1pp regression
+// blocks approval / merge.
+
+export type DetectionProposalStatus =
+  "proposed" | "in_review" | "eval_passed" | "eval_failed" | "approved" | "rejected" | "promoted";
+
+export interface DetectionProposalEvalVerdict {
+  ran_at?: string;
+  candidate?: { mitre_accuracy?: number; all_passed?: boolean };
+  baseline?: { mitre_accuracy?: number };
+  drop_pp?: number;
+  max_regression_pp?: number;
+  regressed?: boolean;
+  passed?: boolean;
+  /**
+   * Written only by `POST /{id}/evaluate-rule`. `/decide` answers HTTP
+   * 412 without it, which is why the Approve button could not succeed
+   * before the console had a caller for that route.
+   */
+  candidate_rule?: { passed?: boolean; ran_at?: string };
+}
+
+export interface DetectionProposal {
+  id: string;
+  tenant_id: string | null;
+  base_rule_id: string | null;
+  promoted_rule_id: string | null;
+  name: string;
+  description: string | null;
+  rule_language: string;
+  rule_body: string;
+  category: string;
+  severity: string;
+  confidence: number;
+  mitre_tactics: string[];
+  mitre_techniques: string[];
+  tags: string[];
+  status: DetectionProposalStatus;
+  eval_result: DetectionProposalEvalVerdict | Record<string, never>;
+  /** What this rule claims to catch, carried so the approval gate can replay it. */
+  positive_fixtures?: Array<Record<string, unknown>>;
+  /** What it claims to ignore. Empty means the proposal makes no such claim. */
+  negative_fixtures?: Array<Record<string, unknown>>;
+  review_comments: Array<{
+    actor_id: string;
+    actor_email?: string;
+    comment: string;
+    at: string;
+  }>;
+  proposed_by_id: string | null;
+  decided_by_id: string | null;
+  decision_comment: string | null;
+  decided_at: string | null;
+  /** WS-B4: git PR path — URL of the GitHub PR created on promotion. Author: Beenu - beenu@cyble.com */
+  github_pr_url: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DetectionEvalBaseline {
+  id: string;
+  tenant_id: string | null;
+  suite: string;
+  score: number;
+  payload: Record<string, unknown>;
+  is_active: boolean;
+  recorded_by_id: string | null;
+  created_at: string;
+}
+
+export const detectionProposalsApi = {
+  list: (params?: { status?: DetectionProposalStatus; limit?: number }) => {
+    const qs = new URLSearchParams();
+    if (params?.status) qs.set("status", params.status);
+    if (params?.limit !== undefined) qs.set("limit", String(params.limit));
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return request<DetectionProposal[]>(`/api/v1/detection-proposals${suffix}`);
+  },
+
+  get: (id: string) => request<DetectionProposal>(`/api/v1/detection-proposals/${id}`),
+
+  create: (proposal: {
+    name: string;
+    description?: string | null;
+    rule_language: string;
+    rule_body: string;
+    category: string;
+    severity?: string;
+    confidence?: number;
+    mitre_tactics?: string[];
+    mitre_techniques?: string[];
+    tags?: string[];
+    base_rule_id?: string | null;
+  }) =>
+    request<DetectionProposal>("/api/v1/detection-proposals", {
+      method: "POST",
+      body: JSON.stringify(proposal),
+    }),
+
+  comment: (id: string, comment: string) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/comment`, {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    }),
+
+  attachEval: (
+    id: string,
+    body: { eval_report: Record<string, unknown>; max_regression_pp?: number }
+  ) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/eval`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Run the candidate rule body against its own fixtures.
+   *
+   * This had no web client at all, and it is the gate `/decide` requires:
+   * approving returns HTTP 412 unless `eval_result.candidate_rule` exists,
+   * and this route is the only thing that writes that key. So the console
+   * rendered an Approve button that could not succeed, and the gate was
+   * reachable only by calling the API directly.
+   */
+  evaluateRule: (
+    id: string,
+    body: {
+      positive_fixtures: Array<Record<string, unknown>>;
+      negative_fixtures: Array<Record<string, unknown>>;
+    }
+  ) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/evaluate-rule`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /** Replay a candidate rule over real tenant events in the lake. */
+  backtestProposal: (id: string, body?: { days?: number; limit?: number }) =>
+    request<Record<string, unknown>>(`/api/v1/detection-proposals/${id}/backtest`, {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  // Triggers a synchronous run of `scripts/run_evals.py` server-side and
+  // returns the JSON report plus runner metadata. The rule editor calls this
+  // from "Propose for review" so the eval gate runs before the proposal is
+  // visible for approval. Subprocess takes ~5–15s on the 200-incident corpus.
+  runEval: (body?: {
+    use_active_baseline?: boolean;
+    max_regression_pp?: number;
+    timeout_seconds?: number;
+  }) =>
+    request<{
+      report: Record<string, unknown>;
+      exit_code: number;
+      duration_seconds: number;
+      ran_at: string;
+      script: string;
+    }>("/api/v1/detection-proposals/run-eval", {
+      method: "POST",
+      body: JSON.stringify(body ?? {}),
+    }),
+
+  decide: (id: string, body: { decision: "approve" | "reject"; comment?: string | null }) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  promote: (id: string) =>
+    request<DetectionProposal>(`/api/v1/detection-proposals/${id}/promote`, { method: "POST" }),
+
+  listBaselines: (suite?: string) => {
+    const suffix = suite ? `?suite=${encodeURIComponent(suite)}` : "";
+    return request<DetectionEvalBaseline[]>(`/api/v1/detection-proposals/baselines${suffix}`);
+  },
+
+  recordBaseline: (body: { suite: string; score: number; payload?: Record<string, unknown> }) =>
+    request<DetectionEvalBaseline>("/api/v1/detection-proposals/baselines", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+// ─── Detection Rule Tuning Workbench (PR-6 / v1.5 §W8) ───────────────────────
+//
+// The tuning workbench replaces the static /noise-tuning prototype with a live
+// projection of ``DetectionRule`` rows into analyst-actionable suggestions.
+// The backend is intentionally cheap — every projection is derived from
+// already-materialised fields (``fp_rate``, ``total_hits``, ``confidence``,
+// ``last_triggered``, ``status``) so a tenant with thousands of imported Sigma
+// rules can still triage without hammering the alerts table.
+//
+// Three verbs ship here:
+//   • ``list`` / ``summary`` — read-only projection (``rules:read``).
+//   • ``apply`` — mechanically tighten a rule (``rules:write``), bumps version.
+//   • ``dismiss`` / ``autoTune`` — record analyst intent (``rules:write``).
+//
+// See ``services/api/app/services/rule_tuning.py`` for the authoritative
+// wire shape; the types below mirror its Pydantic models 1:1.
+
+export type TuningSuggestion =
+  | "disable"
+  | "add_suppression"
+  | "raise_threshold"
+  | "tune_confidence"
+  | "review_stale"
+  | "healthy";
+
+export type TuningAction = "raise_threshold" | "add_suppression" | "disable" | "acknowledge";
+
+export interface TuningEntry {
+  rule_id: string;
+  name: string;
+  description: string | null;
+  category: string;
+  severity: string;
+  status: string;
+  enabled: boolean;
+  confidence: number;
+  /** Materialised false-positive rate in ``[0, 1]``. */
+  fp_rate: number;
+  total_hits: number;
+  /** ISO-8601 timestamp of the rule's last hit; ``null`` if it has never fired. */
+  last_triggered_at: string | null;
+  tags: string[];
+  mitre_tactics: string[];
+  mitre_techniques: string[];
+  version: number;
+  updated_at: string;
+
+  suggestion: TuningSuggestion;
+  /** Server-side ordering weight — already sorted descending in ``entries``. */
+  score: number;
+  reasons: string[];
+  auto_tune: boolean;
+  /** Set when an analyst has dismissed the rule from the default view. */
+  dismissed_at: string | null;
+  /** Most recent tuning action applied to this rule (``raise_threshold`` …). */
+  last_action: string | null;
+  last_action_at: string | null;
+}
+
+export interface TuningSummary {
+  total_rules: number;
+  actionable: number;
+  healthy: number;
+  disable_count: number;
+  add_suppression_count: number;
+  raise_threshold_count: number;
+  tune_confidence_count: number;
+  review_stale_count: number;
+  auto_tune_enabled: number;
+  /** Average ``fp_rate`` across classified rules, ``[0, 1]``. */
+  average_fp_rate: number;
+  /** Count of rules whose ``fp_rate`` is at or above the noisy threshold. */
+  high_fp_count: number;
+}
+
+export interface TuningFilters {
+  severity: string | null;
+  suggestion: string | null;
+  search: string | null;
+  enabled_only: boolean;
+  include_dismissed: boolean;
+  page: number;
+  page_size: number;
+}
+
+export interface TuningResponse {
+  entries: TuningEntry[];
+  summary: TuningSummary;
+  /** Echo of the filters that built this response. */
+  filters: TuningFilters;
+  total: number;
+  generated_at: string;
+}
+
+export interface TuningListParams {
+  severity?: string;
+  suggestion?: TuningSuggestion;
+  search?: string;
+  enabled_only?: boolean;
+  include_dismissed?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ApplyTuningRequest {
+  action: TuningAction;
+  note?: string | null;
+  /** Override threshold to set when ``action === 'raise_threshold'``. */
+  threshold?: number | null;
+  /** Free-text reason recorded with the suppression placeholder. */
+  suppression_reason?: string | null;
+}
+
+export interface DismissTuningRequest {
+  reason?: string | null;
+}
+
+export interface AutoTuneRequest {
+  enabled: boolean;
+}
+
+export const tuningApi = {
+  /**
+   * Fetch the rule tuning workbench feed.
+   *
+   * The ``summary`` block is computed across the *entire classified
+   * population* (not the current page), so the header tiles stay stable
+   * as analysts paginate. Dismissed rules are excluded by default — pass
+   * ``include_dismissed: true`` when auditing what's been hidden.
+   */
+  list: (params: TuningListParams = {}) =>
+    request<TuningResponse>("/api/v1/detection/tuning", {
+      params: params as Record<string, string | number | boolean>,
+    }),
+
+  /**
+   * Cheap summary-only endpoint. Used by the sidebar badge and the
+   * upcoming /console dashboard tile so they don't have to fetch the
+   * full feed just to render counts.
+   */
+  summary: () => request<TuningSummary>("/api/v1/detection/tuning/summary"),
+
+  /**
+   * Mechanically apply a tuning suggestion. ``raise_threshold``,
+   * ``add_suppression``, and ``disable`` mutate the rule and bump
+   * ``DetectionRule.version``; ``acknowledge`` is a no-op + audit. The
+   * server returns the re-projected entry so the UI can refresh in place.
+   */
+  apply: (ruleId: string, body: ApplyTuningRequest) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/apply`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Hide a rule from the default workbench view without touching its
+   * semantics. Dismissed rules reappear with ``include_dismissed: true``.
+   */
+  dismiss: (ruleId: string, body: DismissTuningRequest = {}) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/dismiss`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  /**
+   * Flip the per-rule ``auto_tune`` opt-in flag. Stored under
+   * ``suppression_config.auto_tune`` so future automated tuners know
+   * they're allowed to touch the rule. Flipping does *not* trigger any
+   * immediate mutation.
+   */
+  autoTune: (ruleId: string, enabled: boolean) =>
+    request<TuningEntry>(`/api/v1/detection/tuning/${ruleId}/auto_tune`, {
+      method: "POST",
+      body: JSON.stringify({ enabled } satisfies AutoTuneRequest),
+    }),
+};
+
+// ─── AI Copilot ──────────────────────────────────────────────────────────────
+
+export type CopilotRole = "user" | "assistant" | "system";
+
+export interface CopilotMessage {
+  id: string;
+  role: CopilotRole;
+  content: string;
+  /** When the message was created (ISO string). */
+  createdAt: string;
+  /** Optional citations to backend resources the assistant referenced. */
+  citations?: Array<{
+    label: string;
+    href?: string;
+    kind?: "alert" | "case" | "rule" | "asset" | "doc";
+  }>;
+  /** Optional structured suggestions the UI can render as buttons. */
+  suggestions?: string[];
+}
+
+export interface CopilotConversation {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+export interface CopilotChatRequest {
+  conversationId?: string;
+  message: string;
+  /** Optional context the user is currently looking at. */
+  context?: {
+    alertId?: string;
+    caseId?: string;
+    entity?: string;
+    page?: string;
+  };
+}
+
+export interface CopilotChatResponse {
+  conversationId: string;
+  reply: CopilotMessage;
+}
+
+export const copilotApi = {
+  listConversations: () =>
+    request<{ conversations: CopilotConversation[] }>("/api/v1/copilot/conversations"),
+
+  getConversation: (id: string) =>
+    request<{ id: string; title: string; messages: CopilotMessage[] }>(
+      `/api/v1/copilot/conversations/${id}`
+    ),
+
+  /** One-shot chat call. UI should support optimistic append + rollback. */
+  chat: (req: CopilotChatRequest) =>
+    request<CopilotChatResponse>("/api/v1/copilot/chat", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  /**
+   * Stream a chat response as NDJSON (one JSON object per line, with
+   * `{ delta?: string, done?: boolean, citations?, suggestions? }`).
+   * Callers should consume via `Response.body.getReader()`.
+   */
+  streamChat: (req: CopilotChatRequest, signal?: AbortSignal) =>
+    apiFetch("/api/v1/copilot/chat/stream", {
+      method: "POST",
+      body: JSON.stringify(req),
+      signal,
+    }),
+};
+
+// ─── Ambient Copilot (contextual actions) ───────────────────────────────────
+//
+// Phase 4A. Each page (alerts/cases/detections/playbooks) renders a small
+// row of buttons that call into `services/agents` with a tightly-scoped
+// system prompt. The result is rendered inline next to the entity the user
+// is looking at — no full Copilot conversation required.
+//
+// Endpoints live on the agents service (port 8001 / AGENTS_BASE), not on
+// the main API, because they share the same LangChain/MITRE plumbing as the
+// investigation orchestrator.
+
+export type ContextualPage = "alerts" | "cases" | "detections" | "playbooks";
+
+export interface ContextualSuggestion {
+  label: string;
+  action?: string | null;
+  href?: string | null;
+}
+
+export interface ContextualActionDescriptor {
+  key: string;
+  label: string;
+  description: string;
+  icon?: string | null;
+}
+
+export interface ContextualActionsCatalogue {
+  pages: Record<ContextualPage, ContextualActionDescriptor[]>;
+}
+
+export interface ContextualActionRequest {
+  page: ContextualPage;
+  action: string;
+  entity_id: string;
+  entity?: Record<string, unknown> | null;
+  question?: string | null;
+  case_id?: string | null;
+}
+
+export interface ContextualActionResponse {
+  id: string;
+  page: ContextualPage;
+  action: string;
+  entity_id: string;
+  title: string;
+  /** Markdown body. */
+  content: string;
+  /** 0-1 confidence. `0` when the LLM was not configured. */
+  confidence: number;
+  suggestions: ContextualSuggestion[];
+  citations: Array<Record<string, unknown>>;
+  model: string;
+  elapsed_ms: number;
+  fallback: boolean;
+  created_at: string;
+}
+
+/**
+ * One streamed NDJSON frame from `/action/stream`. The first frame is a
+ * header (no `delta`/`done`), subsequent frames carry `delta`, and the
+ * final frame has `done: true` plus suggestions + confidence.
+ */
+export interface ContextualStreamFrame {
+  /** Header frame fields. */
+  title?: string;
+  page?: ContextualPage;
+  action?: string;
+  entity_id?: string;
+  model?: string;
+  fallback?: boolean;
+  /** Body frame fields. */
+  delta?: string;
+  /** Footer frame fields. */
+  done?: boolean;
+  suggestions?: ContextualSuggestion[];
+  confidence?: number;
+  /** Error frame. */
+  error?: string;
+  /**
+   * Whether asking again could succeed. `false` means the deployment has no
+   * model configured, which no retry reaches — the frame used to say
+   * "Streaming failed. Please try again." for that case too.
+   */
+  retryable?: boolean;
+}
+
+export const contextualApi = {
+  /** Catalogue of supported (page, action) pairs. */
+  listActions: () =>
+    request<ContextualActionsCatalogue>("/api/v1/contextual/actions", {
+      baseUrl: AGENTS_BASE,
+    }),
+
+  /** One-shot contextual call. Returns a fully-formed Markdown response. */
+  run: (req: ContextualActionRequest) =>
+    request<ContextualActionResponse>("/api/v1/contextual/action", {
+      method: "POST",
+      body: JSON.stringify(req),
+      baseUrl: AGENTS_BASE,
+    }),
+
+  /**
+   * Streaming variant. Returns the raw `Response` so the caller can read
+   * NDJSON frames via `response.body.getReader()`. See
+   * {@link ContextualStreamFrame} for the per-line shape.
+   */
+  stream: (req: ContextualActionRequest, signal?: AbortSignal) =>
+    apiFetch("/api/v1/contextual/action/stream", {
+      method: "POST",
+      baseUrl: AGENTS_BASE,
+      body: JSON.stringify(req),
+      signal,
+    }),
+};
+
+// Re-export base URLs so dev tooling and tests can introspect them.
+// Production callers should prefer the typed functions above.
+export const __apiBases = {
+  api: API_BASE,
+  agents: AGENTS_BASE,
+  actions: ACTIONS_BASE,
+  fusion: FUSION_BASE,
+  threatintel: THREATINTEL_BASE,
+  enrichment: ENRICHMENT_BASE,
+  realtime: REALTIME_BASE,
+  ws: WS_BASE,
+} as const;
+
+// ─── Web Push & Responder PWA ────────────────────────────────────────────────
+//
+// Phase 4B. The mobile responder PWA subscribes to Web Push so on-call
+// engineers get paged for P0 alerts and "agent needs your approval"
+// events without keeping the browser tab open. Subscriptions are stored
+// per-tenant on the realtime gateway, which fans events out from Kafka.
+
+export interface PushSubscriptionPayload {
+  endpoint: string;
+  keys: {
+    p256dh: string;
+    auth: string;
+  };
+  expirationTime?: number | null;
+}
+
+export interface PushSubscribeRequest {
+  subscription: PushSubscriptionPayload;
+  user_agent?: string;
+  user_id?: string | null;
+  topics?: string[];
+}
+
+export interface PushSubscribeResponse {
+  id: string;
+  vapid_public_key: string;
+  topics: string[];
+}
+
+export interface PushPublicKeyResponse {
+  /** VAPID public key as a URL-safe base64 string. */
+  public_key: string;
+  enabled: boolean;
+}
+
+export type OnCallStatus = "available" | "busy" | "snoozed" | "offline";
+
+export interface OnCallSnapshot {
+  user_id: string;
+  user_email: string | null;
+  user_name: string | null;
+  status: OnCallStatus;
+  rotation: string | null;
+  schedule_ref: string | null;
+  note: string | null;
+  /** ISO-8601 timestamp the current snooze ends (null otherwise). */
+  until: string | null;
+  updated_at: string;
+}
+
+export type ApprovalStatus = "pending" | "approved" | "denied" | "expired";
+
+export interface ApprovalRequest {
+  id: string;
+  tenant_id: string;
+  run_id: string | null;
+  case_id: string | null;
+  alert_id: string | null;
+  requested_by: string;
+  required_user_id: string | null;
+  required_topic: string | null;
+  title: string;
+  summary: string;
+  risk_level: "low" | "medium" | "high" | "critical";
+  action: Record<string, unknown>;
+  status: ApprovalStatus;
+  decided_by_id: string | null;
+  decided_at: string | null;
+  decision_comment: string | null;
+  expires_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const responderApi = {
+  /** Fetch the VAPID public key the SW will subscribe with. */
+  getPublicKey: () => request<PushPublicKeyResponse>("/api/v1/push/public-key"),
+
+  /** Register a new Web Push subscription for this device. */
+  subscribe: (req: PushSubscribeRequest) =>
+    request<PushSubscribeResponse>("/api/v1/push/subscribe", {
+      method: "POST",
+      body: JSON.stringify(req),
+    }),
+
+  /** Tear down an existing subscription (e.g. on sign-out). */
+  unsubscribe: (endpoint: string) =>
+    request<{ removed: boolean }>("/api/v1/push/unsubscribe", {
+      method: "POST",
+      body: JSON.stringify({ endpoint }),
+    }),
+
+  /** Send a test page to all of the caller's registered devices. */
+  testNotify: () =>
+    request<{ sent: number }>("/api/v1/push/test", {
+      method: "POST",
+    }),
+
+  /** Snapshot of every user's on-call status (admin view). */
+  listOnCall: () => request<{ items: OnCallSnapshot[] }>("/api/v1/oncall"),
+
+  /** Current caller's on-call snapshot. */
+  getOnCall: () => request<OnCallSnapshot>("/api/v1/oncall/me"),
+
+  /** Toggle the caller's own on-call status (optionally for a window).
+   *
+   * Pass ``snooze_minutes`` together with ``status: 'snoozed'`` to defer
+   * paging temporarily — the backend computes ``until`` from that window.
+   */
+  setOnCall: (
+    status: OnCallStatus,
+    options?: {
+      snooze_minutes?: number | null;
+      note?: string | null;
+      rotation?: string | null;
+      schedule_ref?: string | null;
+    }
+  ) =>
+    request<OnCallSnapshot>("/api/v1/oncall/me", {
+      method: "PUT",
+      body: JSON.stringify({
+        status,
+        snooze_minutes: options?.snooze_minutes ?? null,
+        note: options?.note ?? null,
+        rotation: options?.rotation ?? null,
+        schedule_ref: options?.schedule_ref ?? null,
+      }),
+    }),
+
+  /** Pending agent approval requests visible to me. */
+  listApprovals: (params?: {
+    status?: ApprovalStatus;
+    mine?: boolean;
+    risk_level?: ApprovalRequest["risk_level"];
+    page?: number;
+    page_size?: number;
+  }) =>
+    request<{
+      items: ApprovalRequest[];
+      total: number;
+      page: number;
+      page_size: number;
+      pages: number;
+    }>("/api/v1/approvals", {
+      params: {
+        status: params?.status ?? "pending",
+        ...(params?.mine ? { mine: "true" } : {}),
+        ...(params?.risk_level ? { risk_level: params.risk_level } : {}),
+        ...(params?.page ? { page: params.page } : {}),
+        ...(params?.page_size ? { page_size: params.page_size } : {}),
+      },
+    }),
+
+  /** Single approval (for the deep-linked notification view). */
+  getApproval: (id: string) => request<ApprovalRequest>(`/api/v1/approvals/${id}`),
+
+  /** Approve a pending agent action. */
+  approve: (id: string, comment?: string) =>
+    request<ApprovalRequest>(`/api/v1/approvals/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ decision: "approve", comment: comment ?? null }),
+    }),
+
+  /** Deny a pending agent action with a required reason. */
+  deny: (id: string, reason: string) =>
+    request<ApprovalRequest>(`/api/v1/approvals/${id}/decide`, {
+      method: "POST",
+      body: JSON.stringify({ decision: "deny", comment: reason }),
+    }),
+
+  /** Snooze an alert for the on-call rotation.
+   *
+   * Pass either ``durationMinutes`` (relative window) or ``until`` (absolute
+   * ISO-8601 timestamp). The alert re-surfaces in the queue once the window
+   * elapses.
+   */
+  snoozeAlert: (
+    alertId: string,
+    options: { durationMinutes?: number; until?: string; reason?: string }
+  ) =>
+    request<Alert>(`/api/v1/alerts/${alertId}/snooze`, {
+      method: "POST",
+      body: JSON.stringify({
+        duration_minutes: options.durationMinutes ?? null,
+        until: options.until ?? null,
+        reason: options.reason ?? null,
+      }),
+    }),
+};
+
+// ─── WebAuthn / Passkey authentication (Phase 4B) ───────────────────────────
+//
+// The mobile responder uses passkeys instead of passwords. The flow is the
+// standard WebAuthn registration + authentication ceremony backed by
+// services/api/app/api/v1/endpoints/passkeys.py. Browsers handle the
+// platform UI; the helpers below just shuttle JSON between the SimpleWebAuthn
+// browser library and our backend.
+
+export interface PasskeyCredential {
+  id: string;
+  device_name: string;
+  created_at: string;
+  last_used_at: string | null;
+  transports: string[];
+}
+
+export const passkeyApi = {
+  /** Begin registration for the currently logged-in user. */
+  registerBegin: (deviceName: string) =>
+    request<{
+      publicKey: Record<string, unknown>;
+      challenge: string;
+      device_name_default: string;
+    }>("/api/v1/passkeys/register/begin", {
+      method: "POST",
+      body: JSON.stringify({ device_name: deviceName }),
+    }),
+
+  /** Submit the platform attestation to persist the new credential. */
+  registerFinish: (challenge: string, credential: Record<string, unknown>) =>
+    request<PasskeyCredential>("/api/v1/passkeys/register/finish", {
+      method: "POST",
+      body: JSON.stringify({ challenge, credential }),
+    }),
+
+  /** Begin a passwordless login (email is optional / hint only). */
+  authenticateBegin: (email?: string) =>
+    request<{ publicKey: Record<string, unknown>; challenge: string }>(
+      "/api/v1/passkeys/authenticate/begin",
+      {
+        method: "POST",
+        body: JSON.stringify({ email: email ?? null }),
+      }
+    ),
+
+  /** Verify the assertion and return a JWT pair. */
+  authenticateFinish: (challenge: string, credential: Record<string, unknown>) =>
+    request<{
+      access_token: string;
+      refresh_token: string;
+      token_type: string;
+      expires_in: number;
+    }>("/api/v1/passkeys/authenticate/finish", {
+      method: "POST",
+      body: JSON.stringify({ challenge, credential }),
+    }),
+
+  /** Active credentials for the current user. */
+  list: () => request<{ items: PasskeyCredential[] }>("/api/v1/passkeys/credentials"),
+
+  /** Soft-revoke one of my credentials. */
+  delete: (id: string) => request<void>(`/api/v1/passkeys/credentials/${id}`, { method: "DELETE" }),
+};
+
+// ─── Autonomy policy (Tier 1.3 — configurable autonomy guardrails) ──────────
+//
+// Three-tier confidence cutoffs per agent action: at or above ``auto`` the
+// agent executes silently, between ``auto`` and ``review`` it queues for an
+// analyst, between ``review`` and ``escalation`` it pages on-call, and below
+// ``escalation`` it refuses. The admin UI in
+// ``apps/web/src/components/settings/AutonomyPolicy.tsx`` reads + writes
+// these thresholds; the agent re-reads them on the next investigation.
+
+export interface AutonomyThresholdTriple {
+  auto: number;
+  review: number;
+  escalation: number;
+}
+
+export type AutonomyBlastRadius =
+  "read" | "low" | "medium" | "high" | "critical" | "custom" | "unknown";
+
+export interface AutonomyActionPolicy {
+  action: string;
+  blast_radius: AutonomyBlastRadius;
+  thresholds: AutonomyThresholdTriple;
+  default_thresholds: AutonomyThresholdTriple;
+  overridden: boolean;
+  override_source?: string | null;
+  last_updated_at?: string | null;
+  last_updated_by?: string | null;
+  last_reason?: string | null;
+  /**
+   * Whether this verb reaches a vendor without a human, resolved by the API
+   * from the autonomy tier and the capability contract — the control that
+   * actually gates execution. Optional so an older API blanks the posture
+   * rather than letting the console infer one from the thresholds, which is
+   * the defect this field exists to retire.
+   */
+  effective_auto_execute?: boolean;
+  /** The same question at the top of the tier ladder. */
+  auto_executes_at_any_tier?: boolean;
+  /** Capability it resolves to in the action registry, null when none does. */
+  capability?: string | null;
+  executable?: boolean;
+  effective_tier?: string;
+  effective_reason?: string;
+}
+
+/** The control that gates execution, as reported by the API. */
+export interface AutonomyEffective {
+  tier: string;
+  tier_label: string;
+  tier_source: string;
+  max_automatic_impact: string | null;
+  auto_executing_actions: string[];
+  high_blast_auto_executing: string[];
+  unimplemented_actions: string[];
+  thresholds_are_advisory: boolean;
+  advisory_note: string;
+}
+
+export interface AutonomyPolicyResponse {
+  tenant_id: string;
+  actions: AutonomyActionPolicy[];
+  effective?: AutonomyEffective;
+}
+
+export interface AutonomyThresholdUpdate {
+  auto: number;
+  review: number;
+  escalation: number;
+  reason?: string | null;
+}
+
+export interface AutonomyThresholdUpdateResponse {
+  action: string;
+  thresholds: AutonomyThresholdTriple;
+  updated_at: string;
+  updated_by: string;
+}
+
+export const autonomyPolicyApi = {
+  /** Effective policy (defaults + DB overrides) for the calling tenant. */
+  list: () => request<AutonomyPolicyResponse>("/api/v1/autonomy-policy"),
+
+  /** Upsert one action's three-tier thresholds. */
+  update: (action: string, payload: AutonomyThresholdUpdate) =>
+    request<AutonomyThresholdUpdateResponse>(
+      `/api/v1/autonomy-policy/${encodeURIComponent(action)}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      }
+    ),
+
+  /** Clear a tenant override and revert the action to the hard-coded default. */
+  reset: (action: string) =>
+    request<void>(`/api/v1/autonomy-policy/${encodeURIComponent(action)}`, { method: "DELETE" }),
+
+  /** Which alert classes this tenant is measuring rather than acting on. */
+  shadowMode: () => request<ShadowModeResponse>("/api/v1/autonomy-policy/shadow-mode"),
+
+  /** Start or stop measuring one alert class. */
+  setShadowMode: (alertClass: string, enabled: boolean) =>
+    request<ShadowModeEntry>(
+      `/api/v1/autonomy-policy/shadow-mode/${encodeURIComponent(alertClass)}`,
+      { method: "PUT", body: JSON.stringify({ enabled }) }
+    ),
+
+  /** Capabilities this tenant has earned, or that an operator overruled into place. */
+  grants: () => request<GrantListResponse>("/api/v1/autonomy-policy/grants"),
+
+  /**
+   * Ask for a capability. A refusal is a 200 with `granted: false` and the
+   * reasons: being told no by a safety control is the control working, and
+   * surfacing it as an error invites a client to retry it.
+   */
+  requestGrant: (payload: PromotionRequestBody) =>
+    request<PromotionResponse>("/api/v1/autonomy-policy/grants", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Hand a capability back. Audited as a revocation, not as a demotion. */
+  revokeGrant: (params: { scope_kind: string; scope_key: string; capability: string }) =>
+    request<void>(`/api/v1/autonomy-policy/grants?${new URLSearchParams(params).toString()}`, {
+      method: "DELETE",
+    }),
+
+  /** Rolling agreement between the agent and this tenant's own analysts. */
+  agreement: (params?: { scope_kind?: string; scope_key?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.scope_kind) query.set("scope_kind", params.scope_kind);
+    if (params?.scope_key) query.set("scope_key", params.scope_key);
+    const suffix = query.toString();
+    return request<AgreementResponse>(
+      `/api/v1/autonomy-policy/agreement${suffix ? `?${suffix}` : ""}`
+    );
+  },
+};
+
+// ─── Shadow mode and rolling agreement (gap-closure Phase 2.1 / 2.2) ─────────
+//
+// Every rate below is `number | null`, and `null` means there was no
+// denominator. It renders as "not measured", never as 0: a zero in the
+// agreement column says the agent was wrong every time, and "it was never
+// asked" is a different fact calling for a different response. The counts
+// travel with the rates for the same reason — 100% over four answers is not
+// the claim 100% over four hundred is.
+
+export interface ShadowModeEntry {
+  alert_class: string;
+  enabled: boolean;
+  enabled_at?: string | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
+}
+
+export interface ShadowModeResponse {
+  tenant_id: string;
+  entries: ShadowModeEntry[];
+}
+
+export interface AgreementWindow {
+  resolved: number;
+  labelled: number;
+  unlabeled: number;
+  answered: number;
+  abstained: number;
+  agreed: number;
+  malicious_support: number;
+  malicious_caught: number;
+  agreement_rate: number | null;
+  malicious_recall: number | null;
+  abstention_rate: number | null;
+}
+
+export interface AgreementScope {
+  key: string;
+  window: AgreementWindow;
+}
+
+export interface AgreementThresholds {
+  min_decisions: number;
+  min_malicious: number;
+  min_agreement: number;
+  min_malicious_recall: number;
+  max_abstention_rate: number;
+  window_days: number;
+  demotion_agreement: number;
+  demotion_malicious_recall: number;
+  drift_sample: number;
+  drift_min_answered: number;
+}
+
+// ─── Evidence-gated autonomy (gap-closure Phase 2.3) ────────────────────────
+//
+// `source` and `is_override` are both carried because the distinction has to
+// survive without anyone inferring it. An override is autonomy a human
+// overruled a refusal to grant, and six months later "was this earned" must
+// be answerable from the row rather than reconstructed from the numbers.
+
+export type GrantState = "shadow" | "granted" | "demoted";
+export type GrantSource = "earned" | "operator_override";
+
+export interface AutonomyGrant {
+  id: string;
+  scope_kind: string;
+  scope_key: string;
+  capability: string;
+  state: GrantState;
+  source: GrantSource;
+  is_override: boolean;
+  evidence?: Record<string, unknown> | null;
+  granted_at?: string | null;
+  demoted_at?: string | null;
+  demoted_reason?: string | null;
+  override_reason?: string | null;
+}
+
+export interface GrantListResponse {
+  tenant_id: string;
+  grants: AutonomyGrant[];
+  /** Grants this request's reconciliation pass demoted. */
+  demoted_now: Array<Record<string, unknown>>;
+}
+
+export interface PromotionRequestBody {
+  scope_kind: string;
+  scope_key: string;
+  capability: string;
+  override?: boolean;
+  override_reason?: string | null;
+}
+
+export interface PromotionResponse {
+  granted: boolean;
+  state: GrantState;
+  source: GrantSource;
+  is_override: boolean;
+  /** What to fix on a refusal; what was waived on an override. */
+  refusals: string[];
+  evidence: Record<string, unknown>;
+  changed: boolean;
+}
+
+export interface AgreementResponse {
+  tenant_id: string;
+  scope_kind: string;
+  scope_key: string;
+  window: AgreementWindow;
+  /**
+   * The trailing slice of the most recent decisions, scored on its own. A
+   * window average is where a gradual decline hides, so any surface showing
+   * one has to show both or it is showing the flattering half.
+   */
+  recent: AgreementWindow;
+  window_start: string;
+  window_end: string;
+  thresholds: AgreementThresholds;
+  reconciled: number;
+  by_alert_class: AgreementScope[];
+  by_rule: AgreementScope[];
+  by_source: AgreementScope[];
+  by_model: AgreementScope[];
+}
+
+// ─── Analyst override feedback loop (Tier 1.5) ───────────────────────────────
+//
+// When an analyst corrects an AI verdict, the API:
+//   1. updates the alert's ``disposition``
+//   2. writes the lesson into ``aisoc_institutional_memory`` (so future
+//      investigations of similar alerts pull this up)
+//   3. surfaces *retroactive candidates* — past alerts in the same tenant
+//      sharing the same coarse signature that would now flip disposition.
+//
+// The analyst can then bulk-apply the new disposition to those candidates
+// via ``POST /api/v1/feedback/redisposition/apply``.
+
+export type AnalystVerdict = "true_positive" | "false_positive" | "benign" | "escalate";
+
+export interface AlertOverrideRequest {
+  alert_id: string;
+  /** The AI-generated verdict being overridden. */
+  original_verdict: string;
+  /** Analyst's corrected verdict. */
+  corrected_verdict: AnalystVerdict;
+  /** Optional free-text justification surfaced in institutional memory. */
+  reason?: string;
+}
+
+export interface RedispositionCandidate {
+  alert_id: string;
+  title: string;
+  severity: string;
+  current_disposition: string | null;
+  proposed_disposition: AnalystVerdict;
+  event_time: string;
+}
+
+export interface AlertOverrideResponse {
+  alert_id: string;
+  corrected_verdict: AnalystVerdict;
+  recorded_at: string;
+  /** Stable institutional-memory key, only present when a signature was derivable. */
+  memory_key: string | null;
+  redisposition_candidates: RedispositionCandidate[];
+}
+
+export interface RedispositionApplyRequest {
+  alert_ids: string[];
+  new_disposition: AnalystVerdict;
+  /**
+   * Blast-radius control: sha256 over the exact alert set + disposition,
+   * mirroring the server's compute_confirmation_token. Required — apply
+   * fails validation without it.
+   */
+  confirmation_token: string;
+}
+
+/** Mirror of the server's canonical token (sorted ids joined, hashed).
+ *  Uses WebCrypto when available (secure context) and a pure-JS SHA-256
+ *  fallback otherwise — the console is often served over plain HTTP on a
+ *  LAN address, where crypto.subtle is undefined. */
+export async function computeRedispositionToken(
+  alertIds: string[],
+  newDisposition: string
+): Promise<string> {
+  const canonical = [...alertIds].sort().join("|") + "=>" + newDisposition;
+  if (globalThis.crypto?.subtle) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+    return Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+  return sha256Hex(canonical);
+}
+
+/* Compact SHA-256 (public-domain style), fallback for insecure contexts. */
+function sha256Hex(ascii: string): string {
+  const K = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+  ];
+  const rotr = (x: number, n: number) => (x >>> n) | (x << (32 - n));
+  const bytes = Array.from(new TextEncoder().encode(ascii));
+  const bitLen = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  const hi = Math.floor(bitLen / 0x100000000);
+  const lo = bitLen >>> 0;
+  bytes.push((hi >>> 24) & 0xff, (hi >>> 16) & 0xff, (hi >>> 8) & 0xff, hi & 0xff);
+  bytes.push((lo >>> 24) & 0xff, (lo >>> 16) & 0xff, (lo >>> 8) & 0xff, lo & 0xff);
+  let h = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+  ];
+  const w = new Array<number>(64);
+  for (let i = 0; i < bytes.length; i += 64) {
+    for (let j = 0; j < 16; j++) {
+      w[j] =
+        (bytes[i + j * 4] << 24) |
+        (bytes[i + j * 4 + 1] << 16) |
+        (bytes[i + j * 4 + 2] << 8) |
+        bytes[i + j * 4 + 3];
+    }
+    for (let j = 16; j < 64; j++) {
+      const s0 = rotr(w[j - 15], 7) ^ rotr(w[j - 15], 18) ^ (w[j - 15] >>> 3);
+      const s1 = rotr(w[j - 2], 17) ^ rotr(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+      w[j] = (w[j - 16] + s0 + w[j - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, hh] = h;
+    for (let j = 0; j < 64; j++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const t1 = (hh + S1 + ch + K[j] + w[j]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const t2 = (S0 + maj) >>> 0;
+      hh = g;
+      g = f;
+      f = e;
+      e = (d + t1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (t1 + t2) >>> 0;
+    }
+    h = h.map((x, k) => (x + [a, b, c, d, e, f, g, hh][k]) >>> 0);
+  }
+  return h.map((x) => x.toString(16).padStart(8, "0")).join("");
+}
+
+export interface RedispositionApplyResponse {
+  updated: number;
+  new_disposition: AnalystVerdict;
+}
+
+export interface OverrideEntry {
+  key: string;
+  tags: string[];
+  reason: string | null;
+  created_at: string | null;
+  value: Record<string, unknown>;
+}
+
+export interface OverrideSummary {
+  total_overrides: number;
+  false_positive_corrections: number;
+  true_positive_corrections: number;
+  benign_corrections: number;
+  escalate_corrections: number;
+}
+
+export const feedbackApi = {
+  /** Persist an analyst correction and get retroactive re-disposition candidates back. */
+  submitOverride: (payload: AlertOverrideRequest) =>
+    request<AlertOverrideResponse>("/api/v1/feedback/alert-override", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Bulk-apply a new disposition to past alerts the analyst confirmed. */
+  applyRedisposition: (payload: RedispositionApplyRequest) =>
+    request<RedispositionApplyResponse>("/api/v1/feedback/redisposition/apply", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** List analyst overrides the agent has 'learned' from for this tenant. */
+  listOverrides: (limit = 100) =>
+    request<OverrideEntry[]>("/api/v1/feedback/overrides", {
+      params: { limit: String(limit) },
+    }),
+
+  /** Counts of dispositions for the FPR card on the SOC dashboard. */
+  summary: () => request<OverrideSummary>("/api/v1/feedback/summary"),
+};
+
+// ─── Deployment & AI (air-gap + LLM provider snapshot) ───────────────────────
+//
+// Read-only operator visibility for "where will my AI calls actually go?" and
+// "is air-gap actually engaged on this pod?". Both endpoints are unauthenticated
+// snapshots that mirror the same code paths the runtime uses to gate egress
+// (``app.core.airgap.is_host_allowed_for_airgap``) and pick the LLM transport
+// (``services/agents/app/api/explain.py``), so the indicator the operator sees
+// in the Settings → "Deployment & AI" panel cannot drift from runtime behaviour.
+
+export interface AirgapStatus {
+  /** True when AISOC_AIRGAPPED is set; the egress gate is enforcing. */
+  enabled: boolean;
+  /** Operator-supplied AISOC_AIRGAP_ALLOWLIST entries. */
+  allowlist: string[];
+  /** Always-allowed private/internal suffixes (.local, .internal, ...). */
+  implicit_private_suffixes: string[];
+  /** Human-readable summary suitable for audit reports. */
+  policy: string;
+}
+
+export type LlmProvider =
+  | "openai"
+  | "anthropic"
+  | "azure-openai"
+  | "local-ollama"
+  | "local-vllm"
+  | "local-litellm"
+  | "custom"
+  | "none";
+
+export type LlmEffectivePath = "live" | "fallback";
+
+export type LlmRecentHealth = "healthy" | "degraded" | "unknown";
+
+export interface LlmStatus {
+  /** Stable provider id classified from the configured base URL. */
+  provider: LlmProvider;
+  /** LLM_MODEL / OPENAI_MODEL / AISOC_LLM_MODEL — empty string when unset. */
+  model: string;
+  /** Configured base URL (LLM_BASE_URL or OPENAI_BASE_URL). Empty when unset. */
+  base_url: string;
+  /** Hostname extracted from base_url (lowercased), or "" when no base_url. */
+  host: string;
+  /**
+   * Whether ``OPENAI_API_KEY`` / ``LLM_API_KEY`` is set. The key itself is
+   * never returned — even partially redacted.
+   */
+  key_set: boolean;
+  /** Mirrors AirgapStatus.enabled. */
+  airgap_enabled: boolean;
+  /**
+   * Whether the configured LLM host would be permitted by the egress gate at
+   * request time. Always true when air-gap is OFF or no LLM is configured.
+   */
+  airgap_compliant: boolean;
+  /** Best-effort "this is clearly a local LLM" hint for the UI badge. */
+  is_local: boolean;
+  /**
+   * Which branch the Explain endpoint would actually take right now:
+   * ``live`` = real LLM call, ``fallback`` = deterministic OCSF/MITRE summary.
+   */
+  effective_path: LlmEffectivePath;
+  /** Operator-readable explanation of the current state. */
+  policy_note: string;
+  /**
+   * Whether the provider is actually *answering*, from the outcomes of the
+   * calls this pod already made — not a probe, and not a latency figure.
+   *
+   * Everything above describes configuration, which is why a deployment
+   * timing out on every call used to render the emerald "Live" pill. Three
+   * states, and ``unknown`` is a real one: a pod that has observed no call
+   * has not earned a green badge.
+   */
+  recent_health: LlmRecentHealth;
+  /** Observed chat-completions calls in the recent window (this pod only). */
+  recent_calls: number;
+  /** How many of those failed. */
+  recent_failures: number;
+  /** Operator-readable summary of the window, including what to do about it. */
+  recent_note: string;
+}
+
+// ─── BYOK per-tenant LLM credentials (WS-H2) ────────────────────────────────
+//
+// Mirrors ``services/api/app/api/v1/endpoints/llm_credentials.py``. The
+// plaintext API key is *write-only*; the server stores it vault-encrypted
+// and only ever returns ``has_api_key: bool`` so the UI can render
+// "credential set / not set" without round-tripping the secret.
+//
+// Provider invariants enforced server-side and surfaced in the UI:
+//   - ``local-ollama`` / ``local-vllm`` / ``local-litellm`` / ``custom``
+//     require a ``base_url``.
+//   - ``openai`` / ``anthropic`` / ``azure-openai`` require an ``api_key``
+//     (on first write; rotation-only PUTs may pass ``api_key: null``).
+//
+// The provider list is a *strict subset* of the read-side ``LlmProvider``
+// — ``none`` is never a writable choice.
+
+export type LlmWritableProvider =
+  | "openai"
+  | "anthropic"
+  | "azure-openai"
+  | "local-ollama"
+  | "local-vllm"
+  | "local-litellm"
+  | "custom";
+
+export interface LlmCredentialUpsert {
+  provider: LlmWritableProvider;
+  /** Required for local + custom providers. Optional for hosted SaaS. */
+  base_url?: string | null;
+  /** Optional model override (e.g. "gpt-4o-mini"). */
+  model?: string | null;
+  /**
+   * Plaintext API key. Server vault-encrypts before persistence. Pass
+   * ``null`` (or omit) on a rotation-only PUT to keep the existing
+   * ciphertext untouched.
+   */
+  api_key?: string | null;
+  /** Free-form provider-specific settings (e.g. ``{ "temperature": 0.2 }``). */
+  settings?: Record<string, unknown> | null;
+  enabled?: boolean;
+}
+
+export interface LlmCredentialView {
+  provider: LlmWritableProvider;
+  base_url: string | null;
+  model: string | null;
+  /** True iff a vault-encrypted ciphertext is currently stored. */
+  has_api_key: boolean;
+  settings: Record<string, unknown>;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  /** Last time the API key was rotated (set/changed). Null if never. */
+  last_rotated_at: string | null;
+}
+
+/**
+ * Where the local model is actually running, as Ollama reports it.
+ *
+ * Distinct from `LlmStatus`, which describes *configuration*. A GPU
+ * reservation is a request: a model can still land on the CPU for want of
+ * VRAM or a usable driver, so this is the outcome rather than the intent.
+ */
+export interface LlmRuntime {
+  placement: "gpu" | "partial" | "cpu" | "no_model" | "unknown" | "unreachable" | "not_local";
+  detail: string;
+  base_url: string;
+  /** What an operator can do about the answer. Never empty for a CPU verdict. */
+  options: string[];
+  /** Absent, not zero, when nothing is loaded — "not measured" is not "zero". */
+  model?: string;
+  vram_bytes?: number;
+  total_bytes?: number;
+}
+
+export const llmApi = {
+  /** Ask the model where it is running. Reports, never changes. */
+  runtime: () => request<LlmRuntime>("/api/v1/llm/runtime"),
+};
+
+export interface LlmCredentialTestResult {
+  outcome: "ok" | "refused" | "unreachable" | "unverified";
+  detail: string;
+  provider: string;
+  model?: string;
+  latency_ms?: number;
+}
+
+/**
+ * The chat models a custom OpenAI-compatible endpoint listed at ``/models``.
+ *
+ * ``listed`` is every distinct id the endpoint returned and ``excluded`` the
+ * ones judged not chat-capable (image, audio, embedding and similar), so the
+ * selector can say how much it filtered. Any outcome other than ``ok`` comes
+ * with an empty ``models``: the hand-typed id is the fallback, never a guess.
+ */
+export interface LlmModelDiscoveryResult {
+  outcome: "ok" | "refused" | "unreachable" | "unverified";
+  detail: string;
+  models: { id: string; name?: string | null }[];
+  listed: number;
+  excluded: number;
+  truncated: boolean;
+}
+
+export const deploymentApi = {
+  /** Live air-gap policy snapshot for this pod. Safe to poll. */
+  getAirgapStatus: () => request<AirgapStatus>("/api/v1/airgap/status"),
+
+  /** Live LLM provider snapshot. Mirrors the egress gate's classification. */
+  getLlmStatus: () => request<LlmStatus>("/api/v1/llm/status"),
+
+  /**
+   * Read the tenant's BYOK credential. Returns ``null`` when no credential
+   * is configured (the platform falls back to env-var defaults in that case).
+   */
+  getLlmCredential: () => request<LlmCredentialView | null>("/api/v1/llm/credentials"),
+
+  /** Create or update the tenant's BYOK credential. */
+  upsertLlmCredential: (payload: LlmCredentialUpsert) =>
+    request<LlmCredentialView>("/api/v1/llm/credentials", {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Hard-delete the credential. Returns 204 on success. */
+  deleteLlmCredential: () => request<void>("/api/v1/llm/credentials", { method: "DELETE" }),
+
+  /**
+   * Make one real call with the saved credential and report what happened.
+   *
+   * The routes above validate shape and never talk to the provider, so a
+   * revoked key used to surface as triage quietly falling back. `unverified`
+   * is a success-adjacent outcome: an air-gapped deployment refuses the
+   * egress rather than attempting it, which is the policy working.
+   */
+  testLlmCredential: () =>
+    request<LlmCredentialTestResult>("/api/v1/llm/credentials/test", {
+      method: "POST",
+    }),
+
+  /**
+   * List the chat models a ``custom`` endpoint serves.
+   *
+   * Works before the form is saved: ``base_url`` and ``api_key`` are used for
+   * this one request and never stored. Omit ``api_key`` to use the stored key,
+   * which the server sends only to the stored base URL.
+   */
+  discoverLlmModels: (payload: { base_url?: string | null; api_key?: string | null }) =>
+    request<LlmModelDiscoveryResult>("/api/v1/llm/credentials/models", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+};
+
+// ─── Reports / Executive digest (WS-G2) ─────────────────────────────────────
+
+export interface DigestPeriod {
+  start: string;
+  end: string;
+  label: string;
+}
+
+export interface SeveritySplit {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  info: number;
+}
+
+export interface AlertSummary {
+  total: number;
+  new: number;
+  resolved: number;
+  open_at_period_end: number;
+  severity: SeveritySplit;
+}
+
+export interface CaseSummary {
+  opened: number;
+  closed: number;
+  open_at_period_end: number;
+  sla_breached: number;
+}
+
+export interface MttSummary {
+  mttd_hours: number | null;
+  mttr_hours: number | null;
+  mttc_hours: number | null;
+}
+
+export interface TacticHighlight {
+  tactic: string;
+  count: number;
+  delta_from_prior: number;
+}
+
+export interface TopSourceHighlight {
+  connector_type: string;
+  count: number;
+}
+
+export interface HighRiskAlertHighlight {
+  alert_id: string;
+  title: string;
+  severity: string;
+  ai_score: number | null;
+  mitre_tactics: string[];
+  event_time: string;
+}
+
+export interface AutomationSummary {
+  total_decisions: number;
+  auto_executed: number;
+  escalated: number;
+  review_pending: number;
+}
+
+export interface DigestRecommendation {
+  severity: "info" | "warning" | "critical" | string;
+  title: string;
+  body: string;
+}
+
+export interface ExecutiveDigest {
+  tenant_id: string;
+  period: DigestPeriod;
+  headline: string;
+  alerts: AlertSummary;
+  cases: CaseSummary;
+  mtt: MttSummary;
+  top_tactics: TacticHighlight[];
+  top_sources: TopSourceHighlight[];
+  high_risk_alerts: HighRiskAlertHighlight[];
+  automation: AutomationSummary;
+  recommendations: DigestRecommendation[];
+}
+
+export interface WeeklyDigestParams {
+  /** ISO timestamp for the start of the window. Defaults to now-7d on the API. */
+  period_start?: string;
+  /** ISO timestamp for the end of the window. Defaults to now on the API. */
+  period_end?: string;
+}
+
+export const reportsApi = {
+  /**
+   * Fetch the executive weekly digest for the current tenant as structured
+   * JSON suitable for rendering an interactive panel in the web UI.
+   */
+  weeklyDigest: (params: WeeklyDigestParams = {}) =>
+    request<ExecutiveDigest>("/api/v1/reports/digest/weekly", {
+      params: { format: "json", ...params },
+    }),
+
+  /**
+   * Fetch the print-ready HTML representation of the weekly digest as a string.
+   * Pairs naturally with `URL.createObjectURL(new Blob([html], …))` so the UI
+   * can pop a new tab and let the browser's native "Save as PDF" produce the
+   * board-ready document — no server-side PDF dependency required.
+   *
+   * Goes through the shared `request()` plumbing so it inherits the same auth
+   * (cookie + optional localStorage bearer) and tenant header treatment as the
+   * JSON variant.
+   */
+  weeklyDigestHtml: async (params: WeeklyDigestParams = {}): Promise<string> => {
+    const search = new URLSearchParams({ format: "html" });
+    if (params.period_start) search.set("period_start", params.period_start);
+    if (params.period_end) search.set("period_end", params.period_end);
+
+    const response = await apiFetch(`/api/v1/reports/digest/weekly?${search.toString()}`, {
+      headers: { Accept: "text/html" },
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /reports/digest/weekly`,
+        response.status,
+        detail
+      );
+    }
+    return response.text();
+  },
+};
+
+// ─── Cost dashboard (WS-H1) ─────────────────────────────────────────────────
+
+export interface DashboardPeriod {
+  /** ISO timestamp marking the start of the rolling window (inclusive). */
+  start: string;
+  /** ISO timestamp marking the end of the window (exclusive, i.e. now()). */
+  end: string;
+  /** Width of the window in days, derived from start/end. */
+  window_days: number;
+  /** Human-readable label, e.g. "Apr 9 – May 9, 2026". */
+  label: string;
+}
+
+export interface CostHeadline {
+  /**
+   * **Measured** LLM cost in USD — what the gateway reported it charged.
+   * Only meaningful when ``measured_call_count > 0``: a zero there means
+   * nothing measured this window, which is not the same as a free one.
+   */
+  total_cost_usd: number;
+  /** Calls the measured sum was computed over. 0 ⇒ render "not measured". */
+  measured_call_count: number;
+  /** List-price estimate for calls the gateway did not price. Label it. */
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  /** Calls nothing could price at all. */
+  unpriced_call_count: number;
+  /** Sum of prompt + completion tokens. */
+  total_tokens: number;
+  /** Total LLM API call count (one row in aisoc_run_costs ≈ one call). */
+  total_calls: number;
+  /** Distinct investigation_runs that produced cost in the window. */
+  total_runs: number;
+  /** Mean measured cost per run; null when nothing was measured. */
+  avg_cost_per_run_usd: number | null;
+}
+
+export interface CostBucket {
+  /** Calendar day in UTC, ISO ``YYYY-MM-DD``. */
+  day: string;
+  /** Measured cost for the day; see ``measured_call_count``. */
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  total_tokens: number;
+  call_count: number;
+}
+
+export interface ModelBreakdown {
+  /** Lowercased model id as requested — usually an ``aisoc-<role>`` alias. */
+  model: string;
+  /** What the gateway resolved that alias to, e.g. ``ollama/qwen2:1.5b``. */
+  resolved_model: string | null;
+  runs: number;
+  calls: number;
+  total_prompt_tokens: number;
+  total_completion_tokens: number;
+  /** Measured cost; see ``measured_call_count``. */
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  unpriced_call_count: number;
+  /**
+   * What this volume would have cost on the public list price. Read it with
+   * ``imputed_is_estimable``: false means the model has no published price
+   * and this is 0 because there is nothing to compute, not because it is free.
+   */
+  imputed_public_cost_usd: number;
+  imputed_is_estimable: boolean;
+  /** Tokens the imputation had to skip, so partial coverage is visible. */
+  unpriced_tokens: number;
+  avg_latency_ms: number | null;
+}
+
+export interface TopCostCase {
+  case_id: string;
+  runs: number;
+  total_cost_usd: number;
+  measured_call_count: number;
+  estimated_cost_usd: number;
+  estimated_call_count: number;
+  total_tokens: number;
+}
+
+export interface ActionCount {
+  /** ``cases:read``, ``alerts:write``, etc. — straight from audit_log.action. */
+  action: string;
+  count: number;
+}
+
+export interface ByokSavings {
+  /** True iff the current LLM provider is loopback / private (BYOK active). */
+  is_byok_active: boolean;
+  /** Provider id from /llm/status (e.g. ``openai``, ``local-ollama``). */
+  provider: string;
+  /** Measured cost — what the gateway reported. See ``recorded_is_measured``. */
+  recorded_cost_usd: number;
+  /** False when nothing in the window was measured, so 0 means "unknown". */
+  recorded_is_measured: boolean;
+  /**
+   * Re-priced using public list pricing (BYOK-neutral baseline). There is no
+   * default rate: applying one to a gateway alias is what produced savings
+   * figures for spend that never happened.
+   */
+  imputed_public_cost_usd: number;
+  /** False => no model in the window has a published price; render "—". */
+  imputed_is_estimable: boolean;
+  /** Tokens excluded from the imputation because nothing prices them. */
+  unpriced_tokens: number;
+  /**
+   * Estimated savings vs hosted: equals imputed_public_cost on BYOK,
+   * ``max(imputed - recorded, 0)`` otherwise. Meaningless unless
+   * ``imputed_is_estimable``.
+   */
+  savings_usd: number;
+}
+
+export interface StorageTierProjection {
+  tier: string;
+  retention_days: number;
+  resident_gb: number;
+  rate_usd_per_gb_month: number;
+  monthly_usd: number;
+}
+
+/**
+ * ADR-0005 / 6b — projected storage cost beside the measured LLM spend.
+ *
+ * A projection, never a bill: it runs the committed storage cost model over
+ * one measurement (the uncompressed bytes this tenant's events occupied in
+ * the lake) at reference list prices. `measured` is the field that matters —
+ * when it is false every money field is `null`, not `0`, because the lake
+ * runs in the `full` profile and a confident zero for a tenant nobody
+ * measured reads as free storage.
+ */
+export interface StorageCostProjection {
+  measured: boolean;
+  /** Why there is no projection. Null when there is one. */
+  unmeasured_reason: string | null;
+  raw_bytes_measured: number | null;
+  events_measured: number | null;
+  raw_tb_per_day: number | null;
+  monthly_usd: number | null;
+  usd_per_raw_tb_ingested: number | null;
+  tiers: StorageTierProjection[];
+  compression_ratio: number;
+  disclaimer: string;
+}
+
+export interface CostDashboard {
+  tenant_id: string;
+  period: DashboardPeriod;
+  headline: CostHeadline;
+  daily_costs: CostBucket[];
+  by_model: ModelBreakdown[];
+  top_cases: TopCostCase[];
+  action_counts: ActionCount[];
+  byok_savings: ByokSavings;
+  storage: StorageCostProjection;
+}
+
+/**
+ * Query parameters for the cost-dashboard endpoint. Declared as a `type`
+ * (not interface) so it satisfies the request helper's
+ * `Record<string, string | number | boolean | undefined>` constraint.
+ */
+export type CostDashboardParams = {
+  /**
+   * Rolling window in days. The API clamps to ``[1, 365]`` and defaults
+   * to 30 — leaving this unset is the right call for the default view.
+   */
+  window_days?: number;
+};
+
+export const costsApi = {
+  /**
+   * WS-H1 — fetch the cost dashboard snapshot for the current tenant.
+   *
+   * Backs the admin cost dashboard at ``apps/web/src/app/(admin)/costs``.
+   * Requires the ``reports:read`` permission server-side (granted to
+   * tenant_admin / soc_lead / soc_analyst / threat_hunter / viewer), so
+   * the page is gated by the same role bar that protects the executive
+   * digest.
+   */
+  dashboard: (params: CostDashboardParams = {}) =>
+    request<CostDashboard>("/api/v1/costs/dashboard", { params }),
+};
+
+// ─── Audit log / compliance bundle helpers ──────────────────────────────────
+
+/**
+ * Filters accepted by the audit-log export endpoint. Mirrors the query
+ * parameters supported by ``GET /api/v1/audit/export`` so the UI layer can
+ * forward whatever the analyst is currently filtering on without translation.
+ */
+export type AuditExportFilters = {
+  action?: string;
+  resource?: string;
+  actor_id?: string;
+  search?: string;
+  /** Hard cap to keep a single export bounded — defaults to API max (10 000). */
+  limit?: number;
+};
+
+function buildAuditExportSearch(
+  filters: AuditExportFilters,
+  format: "csv" | "html"
+): URLSearchParams {
+  const search = new URLSearchParams({ format });
+  if (filters.action) search.set("action", filters.action);
+  if (filters.resource) search.set("resource", filters.resource);
+  if (filters.actor_id) search.set("actor_id", filters.actor_id);
+  if (filters.search) search.set("search", filters.search);
+  if (typeof filters.limit === "number" && filters.limit > 0) {
+    search.set("limit", String(filters.limit));
+  }
+  return search;
+}
+
+export const auditApi = {
+  /**
+   * WS-H3 — download the (filtered) audit trail as RFC 4180 CSV. Returns the
+   * raw CSV body so the UI can wrap it in a Blob and trigger a download via
+   * an anchor click. Going through ``fetch`` (instead of a plain anchor) lets
+   * us forward the bearer token from localStorage and surface an
+   * ``ApiError`` if the export is rejected (e.g. missing audit_log:read).
+   */
+  exportCsv: async (
+    filters: AuditExportFilters = {}
+  ): Promise<{ body: string; filename: string }> => {
+    const response = await apiFetch(`/api/v1/audit/export?${buildAuditExportSearch(filters, "csv")}`, {
+      headers: { Accept: "text/csv" },
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /audit/export?format=csv`,
+        response.status,
+        detail
+      );
+    }
+    const filename = parseFilenameFromContentDisposition(
+      response.headers.get("Content-Disposition"),
+      `aisoc-audit-${timestampSlug()}.csv`
+    );
+    const body = await response.text();
+    return { body, filename };
+  },
+
+  /**
+   * WS-H3 — fetch the print-ready HTML bundle of the (filtered) audit trail.
+   * Mirrors ``reportsApi.weeklyDigestHtml``: pop the result into a new tab and
+   * let the browser's native "Save as PDF" produce the compliance binder, no
+   * server-side weasyprint dependency required.
+   */
+  exportHtml: async (
+    filters: AuditExportFilters = {}
+  ): Promise<{ html: string; filename: string }> => {
+    const response = await apiFetch(`/api/v1/audit/export?${buildAuditExportSearch(filters, "html")}`, {
+      headers: { Accept: "text/html" },
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new ApiError(
+        `API ${response.status} ${response.statusText} — /audit/export?format=html`,
+        response.status,
+        detail
+      );
+    }
+    const filename = parseFilenameFromContentDisposition(
+      response.headers.get("Content-Disposition"),
+      `aisoc-audit-${timestampSlug()}.html`
+    );
+    const html = await response.text();
+    return { html, filename };
+  },
+};
+
+/** Parse ``filename="…"`` out of a Content-Disposition header. */
+function parseFilenameFromContentDisposition(header: string | null, fallback: string): string {
+  if (!header) return fallback;
+  // Match RFC 6266 filename="…" — quoted form is what FastAPI emits for us.
+  const match = header.match(/filename="([^"]+)"/i);
+  return match ? match[1] : fallback;
+}
+
+/** ``20260509T234501Z`` style slug for client-side filenames. */
+function timestampSlug(): string {
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, "0");
+  return (
+    `${now.getUTCFullYear()}` +
+    `${pad(now.getUTCMonth() + 1)}` +
+    `${pad(now.getUTCDate())}` +
+    `T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`
+  );
+}
+
+// ─── Saved views (per-user filter + column presets) ──────────────────────────
+//
+// Workstream F3 — analyst quality-of-life. Lets each user park a filter +
+// column preset on a list page (alerts, cases, investigations, playbooks)
+// and reload it with one click. One preset per ``(user, view_type)`` can be
+// flagged ``is_default``; the UI auto-applies it on first load.
+//
+// The wire format mirrors ``services/api/app/api/v1/endpoints/saved_views.py``
+// 1:1: opaque ``filters`` and ``columns`` blobs are owned by the page
+// rendering them, so callers cast to whatever shape they need (e.g.
+// ``AlertFilters`` for the alerts page) without round-tripping through this
+// type. That keeps the saved-views API a *generic* preset store rather than
+// a tight coupling between every list page and this client.
+
+/** Pages that support saved views — must match the backend allowlist. */
+export type SavedViewType = "alerts" | "cases" | "investigations" | "playbooks";
+
+/** A saved-view row as returned by the API. */
+export interface SavedView {
+  id: string;
+  view_type: SavedViewType;
+  name: string;
+  /** Page-specific filter blob — opaque to this client. */
+  filters: Record<string, unknown>;
+  /** Optional column override. ``null`` means "use page defaults". */
+  columns: unknown[] | Record<string, unknown> | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Body for ``POST /saved-views``. */
+export interface SavedViewCreateRequest {
+  view_type: SavedViewType;
+  name: string;
+  filters?: Record<string, unknown>;
+  columns?: unknown[] | Record<string, unknown> | null;
+  is_default?: boolean;
+}
+
+/** Body for ``PATCH /saved-views/{id}`` — every field is optional. */
+export interface SavedViewUpdateRequest {
+  name?: string;
+  filters?: Record<string, unknown>;
+  /** Pass ``null`` to clear a previously-saved column override. */
+  columns?: unknown[] | Record<string, unknown> | null;
+  is_default?: boolean;
+}
+
+export const savedViewsApi = {
+  /**
+   * List the caller's presets for one list page. Sorted by
+   * ``is_default DESC, updated_at DESC`` server-side, so the default
+   * preset (if any) lands first.
+   */
+  list: (viewType: SavedViewType) =>
+    request<SavedView[]>("/api/v1/saved-views", {
+      params: { view_type: viewType },
+    }),
+
+  /** Create a new preset. Returns the freshly-stamped row. */
+  create: (payload: SavedViewCreateRequest) =>
+    request<SavedView>("/api/v1/saved-views", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Patch a preset in place — rename, retune filters, toggle default. */
+  update: (id: string, payload: SavedViewUpdateRequest) =>
+    request<SavedView>(`/api/v1/saved-views/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+
+  /** Delete a preset. Returns ``{}`` on the 204 response. */
+  delete: (id: string) =>
+    request<Record<string, never>>(`/api/v1/saved-views/${id}`, {
+      method: "DELETE",
+    }),
+};
+
+// ─── Realtime / WebSocket helpers ────────────────────────────────────────────
+
+export interface RealtimeTicket {
+  token: string;
+  expires_in: number;
+  tenant_id: string;
+}
+
+export const realtimeApi = {
+  /**
+   * Mint a short-lived (≤60s), audience-scoped HS256 ticket for the realtime
+   * WS/SSE edge (Issue #239). This authenticated call uses the caller's session
+   * Bearer token (attached automatically by `request`); the API derives the
+   * tenant server-side, so the browser never chooses its own tenant. The
+   * returned `token` is appended as `?token=` to the WS/SSE URL immediately
+   * before connecting and re-fetched on every (re)connect since it expires fast.
+   */
+  ticket: () => request<RealtimeTicket>("/api/v1/realtime/ticket", { method: "POST" }),
+
+  /**
+   * Returns a ready-to-open WebSocket URL for the given channel, with a freshly
+   * minted ticket attached as `?token=`. Async because it must authenticate
+   * (mint a ticket) first — the realtime service rejects tokenless upgrades.
+   * The tenant is derived from the verified ticket claim server-side, so we no
+   * longer pass (untrusted) `tenant_id` in the query string.
+   */
+  async channelUrl(channel: "alerts" | "cases" | "agents" | "insights" | "all"): Promise<string> {
+    const { token } = await realtimeApi.ticket();
+    return `${wsOrigin()}/ws/${channel}?token=${encodeURIComponent(token)}`;
+  },
+
+  /**
+   * Returns a ready-to-open SSE URL with a freshly minted ticket attached as
+   * `?token=`. Mirrors `channelUrl` for the EventSource transport.
+   */
+  async sseUrl(): Promise<string> {
+    const { token } = await realtimeApi.ticket();
+    const base = REALTIME_BASE || "";
+    return `${base}/sse?token=${encodeURIComponent(token)}`;
+  },
+
+  /**
+   * Health endpoint of the realtime gateway, useful for status pages.
+   * Uses the dedicated `/api/v1/realtime/healthz` proxy path so it works
+   * same-origin behind the Cloudflare Tunnel.
+   */
+  health: () =>
+    request<{ status: string; clients: number }>("/api/v1/realtime/healthz", {
+      baseUrl: REALTIME_BASE,
+    }),
+};
+
+export default {
+  alerts: alertsApi,
+  entityRisk: entityRiskApi,
+  cases: casesApi,
+  metrics: metricsApi,
+  connectors: connectorsApi,
+  inbox: inboxApi,
+  oauth: oauthApi,
+  threatIntel: threatIntelApi,
+  agents: agentsApi,
+  hunt: huntApi,
+  savedHunts: savedHuntsApi,
+  nlQuery: nlQueryApi,
+  graph: graphApi,
+  detection: detectionApi,
+  detectionProposals: detectionProposalsApi,
+  tuning: tuningApi,
+  copilot: copilotApi,
+  contextual: contextualApi,
+  ledger: ledgerApi,
+  realtime: realtimeApi,
+  responder: responderApi,
+  passkey: passkeyApi,
+  autonomyPolicy: autonomyPolicyApi,
+  feedback: feedbackApi,
+  deployment: deploymentApi,
+  reports: reportsApi,
+  costs: costsApi,
+  savedViews: savedViewsApi,
+};
+
+// ─── API keys ────────────────────────────────────────────────────────────────
+//
+// The settings panel used to mint an `aisoc_live_…` secret in the browser with
+// `crypto.getRandomValues` and report "API key created". That string
+// authenticated nothing, so a user would wire it into a CI pipeline or a
+// forwarder and get silent 401s — while believing they held a working
+// credential. The real CRUD backend has existed at `/api/v1/api-keys` all
+// along; it simply had no client binding.
+
+export interface ApiKeyRecord {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  is_active: boolean;
+  expires_at: string | null;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+/** Create response. `key` is the raw secret and is returned exactly once. */
+export interface CreatedApiKey extends Omit<ApiKeyRecord, "is_active" | "last_used_at"> {
+  key: string;
+}
+
+export interface CreateApiKeyInput {
+  name: string;
+  scopes?: string[];
+  expires_in_days?: number | null;
+}
+
+export const apiKeysApi = {
+  list: () => request<ApiKeyRecord[]>("/api/v1/api-keys"),
+
+  create: (data: CreateApiKeyInput) =>
+    request<CreatedApiKey>("/api/v1/api-keys", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  update: (id: string, data: Partial<CreateApiKeyInput>) =>
+    request<ApiKeyRecord>(`/api/v1/api-keys/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+
+  revoke: (id: string) => request<void>(`/api/v1/api-keys/${id}`, { method: "DELETE" }),
+};
+
+// ─── SCIM credentials ────────────────────────────────────────────────────────
+//
+// `apps/docs/docs/operations/scim.md` told administrators to "mint one from
+// the console". The CRUD backend at `/api/v1/scim-tokens` had existed since
+// the SCIM surface shipped and the console had no binding to it at all — not
+// a panel, not a client function, not a string containing "scim" anywhere
+// under `apps/web/src` — so the only way to obtain a credential was the curl
+// command two paragraphs further down.
+
+export interface ScimTokenRecord {
+  id: string;
+  name: string;
+  /** Display prefix. The secret itself is stored as a digest and never returned. */
+  prefix: string;
+  org_id: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  rotated_from_id: string | null;
+  active: boolean;
+}
+
+/** Create and rotate both return the raw secret, exactly once. */
+export interface CreatedScimToken extends ScimTokenRecord {
+  token: string;
+}
+
+export const scimTokensApi = {
+  list: () => request<ScimTokenRecord[]>("/api/v1/scim-tokens"),
+
+  create: (data: { name: string; expires_in_days?: number | null }) =>
+    request<CreatedScimToken>("/api/v1/scim-tokens", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Both secrets work for `grace_hours`, so the replacement can be pasted
+   * into the identity provider without a failed sync in between. Zero
+   * revokes the old one at once, which is the right trade after a
+   * disclosure and the wrong one otherwise.
+   */
+  rotate: (id: string, grace_hours: number) =>
+    request<CreatedScimToken>(`/api/v1/scim-tokens/${id}/rotate`, {
+      method: "POST",
+      body: JSON.stringify({ grace_hours }),
+    }),
+
+  revoke: (id: string) => request<void>(`/api/v1/scim-tokens/${id}`, { method: "DELETE" }),
+};
+
+// ─── Replay evaluation (gap-closure Phase 1.4) ───────────────────────────────
+//
+// Wraps `services/api/app/api/v1/endpoints/evaluations.py`: measure triage
+// against a tenant's own analysts, on their own closed findings.
+//
+// Every field the console needs to show sample sizes beside the headline is
+// on the summary, not buried in `score`. That is deliberate on both sides: a
+// headline accuracy rendered without the count behind it is the single most
+// misleading thing this surface could print, so the two travel together
+// through the wire shape rather than by a convention the UI has to remember.
+//
+// `headline_accuracy` is `null` when the window held too few malicious cases
+// for a headline to mean anything, and `headline_withheld_reason` carries the
+// sentence explaining that. Null is not zero: a zero in an accuracy column
+// says the agent got every answer wrong, which is a different fact with a
+// different remedy.
+
+export type ReplayEvaluationStatus = "queued" | "running" | "completed" | "failed";
+
+export interface ReplayEvaluationSummary {
+  id: string;
+  status: ReplayEvaluationStatus;
+  error: string | null;
+  connector_id: string;
+  vendor: string;
+  window_start: string;
+  window_end: string;
+  train_fraction: number;
+  bootstrap_seed: number;
+  bootstrap_resamples: number;
+  findings_read: number;
+  findings_labelled: number;
+  decisions_recorded: number;
+  graded: number;
+  malicious_support: number;
+  headline_accuracy: number | null;
+  headline_withheld_reason: string | null;
+  malicious_recall: number | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  is_terminal: boolean;
+}
+
+export interface ReplayEvaluationDetail extends ReplayEvaluationSummary {
+  /** The full `ReplayScore.as_dict()`. */
+  score: Record<string, unknown> | null;
+  /** Split point, frozen-context provenance, attempted writes, envelope gaps. */
+  method: Record<string, unknown> | null;
+  /** The artefact stored when the run completed, not a re-render. */
+  report_markdown: string | null;
+}
+
+export interface ReplayableConnectorInfo {
+  connector_type: string;
+  vendor: string;
+  label: string;
+}
+
+export interface ReplayCapabilities {
+  connectors: ReplayableConnectorInfo[];
+  default_window_days: number;
+  default_train_fraction: number;
+  default_bootstrap_seed: number;
+  default_bootstrap_resamples: number;
+  /** Below this many malicious cases no headline accuracy is printed. */
+  min_malicious_for_headline: number;
+  max_findings: number;
+}
+
+export interface StartReplayInput {
+  connector_id: string;
+  since?: string;
+  until?: string;
+  train_fraction?: number;
+  limit?: number;
+}
+
+export type ReplayExportFormat = "markdown" | "json" | "pdf";
+
+export const evaluationsApi = {
+  capabilities: () => request<ReplayCapabilities>("/api/v1/evaluations/replay/capabilities"),
+
+  list: (limit = 50) =>
+    request<ReplayEvaluationSummary[]>("/api/v1/evaluations/replay", {
+      params: { limit },
+    }),
+
+  get: (id: string) => request<ReplayEvaluationDetail>(`/api/v1/evaluations/replay/${id}`),
+
+  decisions: (id: string, limit = 2000) =>
+    request<Array<Record<string, unknown>>>(`/api/v1/evaluations/replay/${id}/decisions`, {
+      params: { limit },
+    }),
+
+  start: (data: StartReplayInput) =>
+    request<ReplayEvaluationSummary>("/api/v1/evaluations/replay", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Where a download points. Built rather than fetched because the browser
+   * does the download, and the route already sets `Content-Disposition`.
+   *
+   * `exclude_latency` is offered on every format: the two wall-clock figures
+   * are the only part of the report that does not reproduce between runs, so
+   * an operator diffing two exports wants them gone.
+   */
+  exportUrl: (id: string, format: ReplayExportFormat, excludeLatency = false): string =>
+    `${API_BASE}/api/v1/evaluations/replay/${id}/export` +
+    `?format=${format}&exclude_latency=${excludeLatency ? "true" : "false"}`,
+};
+
+// ─── Case depth (depth 9.3 / parity 5.6 remainder) ───────────────────────────
+
+export interface BulkTriageChange {
+  set_status?: string;
+  set_severity?: string;
+  assign_to?: string;
+  unassign?: boolean;
+}
+
+export interface BulkTriageResult {
+  matched_count: number;
+  updated_count: number;
+  changes: Record<string, unknown>;
+}
+
+export interface AnalystWorkloadRow {
+  analyst: string;
+  total: number;
+  open_cases: number;
+  closed_cases: number;
+  open_high_or_critical: number;
+  overdue: number;
+  /**
+   * `null` when the analyst has closed nothing in the window. The console
+   * must render that as "no data" and never as `0.0`, which reads as
+   * "instant" — the exact confusion that left two console figures wrong for
+   * months.
+   */
+  mean_hours_to_close: number | null;
+  /** How many closed cases the mean above was taken over. */
+  mean_over_cases: number;
+}
+
+export interface AnalystWorkload {
+  since: string;
+  computed_at: string;
+  analysts: AnalystWorkloadRow[];
+  unassigned: { open_cases: number; open_high_or_critical: number };
+}
+
+/**
+ * One war room row, as `GET /api/v1/war-rooms/cases/{id}` returns it.
+ *
+ * `last_synced_at: null` means the sweep has never run for this room — a
+ * different fact from "ran and had nothing to say", and the panel renders
+ * them differently. `last_error` is empty on success; a room that has
+ * silently stopped mirroring is worse than one that was never opened, so
+ * the reason is surfaced rather than swallowed.
+ */
+export interface WarRoom {
+  id: string;
+  case_id: string;
+  provider: string;
+  channel_id: string;
+  channel_name: string;
+  channel_url: string;
+  state: string;
+  opened_by: string;
+  last_synced_at: string | null;
+  last_error: string;
+}
+
+// Depth 9.4 — case war rooms. #1315 shipped WarRoomPanel importing this
+// client without adding it, so the component could not typecheck; added by
+// the merge train against the server's own response models.
+export const warRoomApi = {
+  forCase: (caseId: string) => request<WarRoom[]>(`/api/v1/war-rooms/cases/${encodeURIComponent(caseId)}`),
+
+  /** Open fails loudly by design: the analyst pressed a button, so a vendor
+   *  refusal surfaces as the vendor's own sentence rather than a quiet retry. */
+  open: (caseId: string, provider: 'slack' | 'teams') =>
+    request<WarRoom>(`/api/v1/war-rooms/cases/${encodeURIComponent(caseId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ provider }),
+    }),
+};
+
+export const caseDepthApi = {
+  /**
+   * Apply one triage decision to many alerts.
+   *
+   * `maxCount` is a preflight the caller states: a larger match is refused
+   * with a 409 carrying the real figure and **nothing is written**, so the
+   * first call is a dry run. The bar surfaces that count and asks again
+   * rather than retrying silently with a bigger number.
+   */
+  bulkTriage: (alertIds: string[], change: BulkTriageChange, maxCount: number, comment = '') =>
+    request<BulkTriageResult>('/api/v1/case-depth/alerts/bulk-triage', {
+      method: 'POST',
+      body: JSON.stringify({ alert_ids: alertIds, max_count: maxCount, comment, ...change }),
+    }),
+
+  mergeAlerts: (primaryId: string, duplicateIds: string[], reason = '') =>
+    request<{ primary_id: string; merged_ids: string[]; case_id: string | null }>(
+      '/api/v1/case-depth/alerts/merge',
+      {
+        method: 'POST',
+        body: JSON.stringify({ primary_id: primaryId, duplicate_ids: duplicateIds, reason }),
+      },
+    ),
+
+  mergeCases: (primaryId: string, duplicateIds: string[], reason = '') =>
+    request<{ primary_id: string; merged_ids: string[]; case_id: string | null }>(
+      '/api/v1/case-depth/cases/merge',
+      {
+        method: 'POST',
+        body: JSON.stringify({ primary_id: primaryId, duplicate_ids: duplicateIds, reason }),
+      },
+    ),
+
+  workload: (days = 30) =>
+    request<AnalystWorkload>('/api/v1/case-depth/workload', { params: { days: String(days) } }),
+
+  customFields: () =>
+    request<
+      Array<{
+        id: string;
+        key: string;
+        label: string;
+        help_text: string;
+        field_type: string;
+        choices: string[];
+        required: boolean;
+        position: number;
+        active: boolean;
+      }>
+    >('/api/v1/case-depth/custom-fields'),
+
+  caseCustomValues: (caseId: string) =>
+    request<
+      Array<{
+        key: string;
+        label: string;
+        field_type: string;
+        value: string;
+        required: boolean;
+        updated_by: string;
+        updated_at: string | null;
+      }>
+    >(`/api/v1/case-depth/cases/${caseId}/custom-values`),
+
+  setCaseCustomValues: (caseId: string, values: Record<string, string>) =>
+    request<unknown>(`/api/v1/case-depth/cases/${caseId}/custom-values`, {
+      method: 'PUT',
+      body: JSON.stringify({ values }),
+    }),
+};
+
+// ── Access review (depth plan wave 2, 1.2) ─────────────────────────────────
+//
+// Read-only. Every route below computes or reads findings; none of them
+// changes a vendor object, and the only write is a reviewer acknowledging a
+// finding, which is state about the review rather than about the estate.
+
+export interface AccessReviewFinding {
+  id: string;
+  run_id: string;
+  kind: string;
+  provider: string;
+  principal_id: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  title: string;
+  detail: string;
+  /** The object a person should go and change. Never empty. */
+  object_hint: string;
+  recommendation: string;
+  /** Null when usage was not measured, or when no built-in role is smaller. */
+  best_fit_role: string | null;
+  evidence: Record<string, unknown>;
+  /**
+   * False when no usage data backed this finding. Usage-dependent kinds are
+   * suppressed entirely in that case, so a false here marks the weaker
+   * non-usage findings for what they are.
+   */
+  usage_measured: boolean;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_note: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+export interface AccessReviewProviderState {
+  provider: string;
+  run_state: "nothing_reviewed" | "no_findings" | "findings" | "failed";
+  reviewed_principals: number;
+  usage_measured_for: number;
+  finding_count: number;
+  window_start: string | null;
+  window_end: string | null;
+  note: string | null;
+  last_run_at: string | null;
+}
+
+export interface AccessReviewSummary {
+  /**
+   * `never_run` is a distinct state from a run that found nothing, and the
+   * page renders them differently on purpose: an estate nobody looked at
+   * must not read as an estate with nothing wrong.
+   */
+  state: "never_run" | "reviewed";
+  open_findings: number;
+  providers: AccessReviewProviderState[];
+  note?: string;
+}
+
+export interface AccessReviewKind {
+  kind: string;
+  title: string;
+  severity: string;
+  object_hint: string;
+  recommendation: string;
+  needs_usage: boolean;
+}
+
+export const accessReviewApi = {
+  async kinds(): Promise<{ kinds: AccessReviewKind[] }> {
+    return request<{ kinds: AccessReviewKind[] }>("/api/v1/access-review/kinds");
+  },
+
+  async summary(provider?: string): Promise<AccessReviewSummary> {
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    return request<AccessReviewSummary>(`/api/v1/access-review/summary${query}`);
+  },
+
+  async findings(params: {
+    provider?: string;
+    kind?: string;
+    includeAcknowledged?: boolean;
+  } = {}): Promise<{ items: AccessReviewFinding[]; count: number }> {
+    const search = new URLSearchParams();
+    if (params.provider) search.set("provider", params.provider);
+    if (params.kind) search.set("kind", params.kind);
+    if (params.includeAcknowledged) search.set("include_acknowledged", "true");
+    const query = search.toString();
+    return request<{ items: AccessReviewFinding[]; count: number }>(
+      `/api/v1/access-review/findings${query ? `?${query}` : ""}`,
+    );
+  },
+
+  async run(provider: string): Promise<AccessReviewSummary & { run_id: string }> {
+    return request<AccessReviewSummary & { run_id: string }>(
+      `/api/v1/access-review/run?provider=${encodeURIComponent(provider)}`,
+      { method: "POST" },
+    );
+  },
+
+  async acknowledge(findingId: string, note: string): Promise<AccessReviewFinding> {
+    return request<AccessReviewFinding>(
+      `/api/v1/access-review/findings/${encodeURIComponent(findingId)}/acknowledge`,
+      { method: "POST", body: JSON.stringify({ note }) },
+    );
+  },
+};

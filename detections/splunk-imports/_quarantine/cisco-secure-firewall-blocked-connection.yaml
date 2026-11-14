@@ -1,0 +1,49 @@
+id: splunk-security-content-17e9b764-3a2b-4d36-9751-32d13ce4718b
+name: Cisco Secure Firewall - Blocked Connection
+description: The following analytic detects a blocked connection event by identifying
+  a "Block" value in the action field. It leverages logs from Cisco Secure Firewall
+  Threat Defense devices. This activity is significant as it can identify attempts
+  from users or applications initiating network connection to explicitly or implicitly
+  blocked range or zones. If confirmed malicious, attackers could be attempting to
+  perform a forbidden action on the network such as data exfiltration, lateral movement,
+  or network disruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  - T1046
+  - T1110
+  - T1203
+  - T1595.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`cisco_secure_firewall` EventType=ConnectionEvent action IN ("Block
+    with reset", "Block", "blocked")
+
+    | stats count min(_time) as firstTime max(_time) as lastTime by src, dest, dest_port,
+    transport, rule, url, EVE_Process, action
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `cisco_secure_firewall___blocked_connection_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 17e9b764-3a2b-4d36-9751-32d13ce4718b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___blocked_connection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,22 @@
+id: slack-audit
+name: Slack Enterprise Audit Logs Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Slack Enterprise Grid Audit Logs. Pulls workspace and org-level audit events
+  (logins, channel changes, file shares, app installs). Requires the
+  auditlogs:read scope on an Org-level Slack app.
+author: AiSOC Core Team
+tags: [saas, slack, audit, collaboration]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/slack_audit.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [access_token]
+  properties:
+    access_token:
+      type: string
+      description: "OrgLevel OAuth bot token with the auditlogs:read scope, issued from a Slack Enterprise Grid app."
+      secret: true

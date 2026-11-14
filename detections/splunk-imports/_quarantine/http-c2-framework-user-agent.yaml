@@ -1,0 +1,41 @@
+id: splunk-security-content-229dc225-6abe-4d28-89fd-edf874086162
+name: HTTP C2 Framework User Agent
+description: This Splunk query analyzes web logs to identify and categorize user agents,
+  detecting various types of c2 frameworks. This activity can signify malicious actors
+  attempting to interact with hosts on the network using known default configurations
+  of command and control tools.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  categories:
+  - network
+references:
+- https://github.com/BC-SECURITY/Malleable-C2-Profiles
+- https://www.keysight.com/blogs/en/tech/nwvs/2021/07/28/koadic-c3-command-control-decoded
+- https://github.com/mthcht/awesome-lists/blob/main/Lists/suspicious_http_user_agents_list.csv
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats  `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Web\n  WHERE Web.http_user_agent != null\n\
+    \  BY Web.http_user_agent Web.http_method, Web.url,\n     Web.url_length Web.src,\
+    \ Web.dest\n| `drop_dm_object_name(\"Web\")`\n| lookup suspicious_c2_user_agents\
+    \ c2_user_agent AS http_user_agent OUTPUT tool, description\n| where isnotnull(tool)\n\
+    | stats count min(firstTime) as first_seen max(lastTime) as last_seen\n  BY tool\
+    \ url http_user_agent\n     src dest description\n| `security_content_ctime(first_seen)`\n\
+    | `security_content_ctime(last_seen)`\n| `http_c2_framework_user_agent_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 229dc225-6abe-4d28-89fd-edf874086162
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/http_c2_framework_user_agent.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,46 @@
+id: splunk-security-content-b8f7ed6b-0556-4c84-bffd-839c262b0278
+name: Windows Access Token Winlogon Duplicate Handle In Uncommon Path
+description: The following analytic detects a process attempting to duplicate the
+  handle of winlogon.exe from an uncommon or public source path. This is identified
+  using Sysmon EventCode 10, focusing on processes targeting winlogon.exe with specific
+  access rights and excluding common system paths. This activity is significant because
+  it may indicate an adversary trying to escalate privileges by leveraging the high-privilege
+  tokens associated with winlogon.exe. If confirmed malicious, this could allow the
+  attacker to gain elevated access, potentially leading to full system compromise
+  and persistent control over the affected host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1134.001
+  categories:
+  - endpoint
+references:
+- https://docs.microsoft.com/en-us/windows/win32/api/handleapi/nf-handleapi-duplicatehandle
+- https://attack.mitre.org/techniques/T1134/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=10  TargetImage IN("*\\system32\\winlogon.exe*",
+    "*\\SysWOW64\\winlogon.exe*") AND GrantedAccess = 0x1040 AND NOT (SourceImage
+    IN("C:\\Windows\\*", "C:\\Program File*", "%systemroot%\\*")) | stats count min(_time)
+    as firstTime max(_time) as lastTime by CallTrace EventID GrantedAccess Guid Opcode
+    ProcessID SecurityID SourceImage SourceProcessGUID SourceProcessId TargetImage
+    TargetProcessGUID TargetProcessId UserID dest granted_access parent_process_exec
+    parent_process_guid parent_process_id parent_process_name parent_process_path
+    process_exec process_guid process_id process_name process_path signature signature_id
+    user_id vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_access_token_winlogon_duplicate_handle_in_uncommon_path_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b8f7ed6b-0556-4c84-bffd-839c262b0278
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_access_token_winlogon_duplicate_handle_in_uncommon_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

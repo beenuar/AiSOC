@@ -1,0 +1,43 @@
+id: splunk-security-content-884a5f59-eec7-4f4a-948b-dbde18225fdc
+name: AWS Detect Users with KMS keys performing encryption S3
+description: The following analytic identifies users with KMS keys performing encryption
+  operations on S3 buckets. It leverages AWS CloudTrail logs to detect the `CopyObject`
+  event where server-side encryption with AWS KMS is specified. This activity is significant
+  as it may indicate unauthorized or suspicious encryption of data, potentially masking
+  exfiltration or tampering efforts. If confirmed malicious, an attacker could be
+  encrypting sensitive data to evade detection or preparing it for exfiltration, posing
+  a significant risk to data integrity and confidentiality.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - cloud
+references:
+- https://rhinosecuritylabs.com/aws/s3-ransomware-part-1-attack-vector/
+- https://github.com/d1vious/git-wild-hunt
+- https://www.youtube.com/watch?v=PgzNib37g0M
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=CopyObject requestParameters.x-amz-server-side-encryption=\"\
+    aws:kms\"\n  | rename requestParameters.bucketName AS bucketName, requestParameters.x-amz-copy-source\
+    \ AS src_file, requestParameters.key AS dest_file\n  | rename user_name as user\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY signature\
+    \ dest user\n       user_agent src vendor_account\n       vendor_region vendor_product\
+    \ bucketName\n       src_file dest_file\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `aws_detect_users_with_kms_keys_performing_encryption_s3_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 884a5f59-eec7-4f4a-948b-dbde18225fdc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_detect_users_with_kms_keys_performing_encryption_s3.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,75 @@
+id: chronicle-detection-rules-hacktool-sharp-successor-execution
+name: hacktool_sharp_successor_execution
+description: hacktool_sharp_successor_execution
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule hacktool_sharp_successor_execution {\n\n  meta:\n    author = \"Georg Lauenstein\
+    \ - suresecure GmbH, Mohamed Abdelfattah - suresecure GmbH\"\n    description\
+    \ = \"SharpSuccessor is a .NET-based post-exploitation tool designed to weaponize\
+    \ the BadSuccessor attack discovered by Yuval Gordon (@YuG0rd) from Akamai. It\
+    \ allows a low-privileged user with 'CreateChild' permissions over any Organizational\
+    \ Unit (OU) in an Active Directory domain to escalate privileges to Domain Administrator.\
+    \ This detection rule identifies execution patterns or behavioral indicators linked\
+    \ to SharpSuccessor activity, which may signal privilege escalation attempts in\
+    \ Active Directory environments.\"\n    rule_id = \"mr_be51aa7d-b4b8-4d8c-9998-0aa3194e98c3\"\
+    \n    rule_name = \"Hacktool - SharpSuccessor Execution\"\n    tactic = \"TA0004\"\
+    \n    technique = \"T1068\"\n    references = \"https://academy.bluraven.io/blog/detecting-badsuccessor,\
+    \ https://github.com/logangoins/SharpSuccessor\"\n    type = \"alert\"\n    platform\
+    \ = \"Windows, EDR\"\n    data_source = \"Microsoft Sysmon, Windows Security Event\
+    \ Log, Microsoft Defender XDR\"\n    severity = \"High\"\n    priority = \"High\"\
+    \n\n  events:\n\n    (\n      $sharp_successor_execution.metadata.event_type =\
+    \ \"PROCESS_LAUNCH\"\n      and (\n            $sharp_successor_execution.src.process.file.full_path\
+    \ = \"SharpSuccessor.exe\" nocase or\n            $sharp_successor_execution.target.asset.software.description\
+    \ = \"SharpSuccessor\" nocase or\n            $sharp_successor_execution.target.process.file.full_path\
+    \ = /\\\\SharpSuccessor\\.exe/ nocase or\n            $sharp_successor_execution.principal.process.file.full_path\
+    \ = /\\\\SharpSuccessor\\.exe/ nocase or\n            $sharp_successor_execution.target.process.command_line\
+    \ = /SharpSuccessor/ nocase\n          )\n    )\n    or\n    ( // Microsoft-Windows-Security-Auditing\
+    \ -- EventCode: 4673\n      $sharp_successor_execution.metadata.event_type = \"\
+    SERVICE_UNSPECIFIED\"\n      and (\n            $sharp_successor_execution.metadata.description\
+    \ = \"A privileged service was called\" and\n            $sharp_successor_execution.target.process.command_line\
+    \ = /SharpSuccessor/ nocase\n          )\n    )\n\n    // Capture the hostname\
+    \ where the event occurred\n    $sharp_successor_execution.principal.hostname\
+    \ = $hostname\n\n  match:\n    $hostname over 10m\n\n  outcome:\n    $risk_score\
+    \ = 65\n    $event_count = count_distinct($sharp_successor_execution.metadata.id)\n\
+    \    $principal_process_pid = array_distinct($sharp_successor_execution.principal.process.pid)\n\
+    \    $principal_process_command_line = array_distinct($sharp_successor_execution.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($sharp_successor_execution.principal.process.file.sha256)\n\
+    \    $principal_process_file_full_path = array_distinct($sharp_successor_execution.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($sharp_successor_execution.principal.process.product_specific_process_id)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($sharp_successor_execution.principal.process.parent_process.product_specific_process_id)\n\
+    \    $target_process_pid = array_distinct($sharp_successor_execution.target.process.pid)\n\
+    \    $target_process_command_line = array_distinct($sharp_successor_execution.target.process.command_line)\n\
+    \    $target_process_file_sha256 = array_distinct($sharp_successor_execution.target.process.file.sha256)\n\
+    \    $target_process_file_full_path = array_distinct($sharp_successor_execution.target.process.file.full_path)\n\
+    \    $target_process_product_specific_process_id = array_distinct($sharp_successor_execution.target.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($sharp_successor_execution.principal.user.userid)\n\
+    \n  condition:\n      $sharp_successor_execution\n}"
+  chronicle_rule_name: hacktool_sharp_successor_execution
+provenance:
+  source: chronicle/detection-rules
+  source_id: hacktool_sharp_successor_execution
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/hacktool_sharp_successor_execution.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

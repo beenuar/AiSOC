@@ -1,0 +1,47 @@
+id: hunt-oauth-app-mass-consent
+name: OAuth application mass-consent across users
+description: |
+  Consent phishing relies on tricking individual users into granting an
+  attacker-controlled OAuth app broad mailbox/Drive scopes. When a single new
+  ApplicationId is consented to by 5+ users in a 24h window — especially with
+  Mail.Read, Files.Read.All, or offline_access — that pattern is almost always
+  malicious unless coordinated by IT.
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1528
+  - hunt.identity
+  - threat.consent-phishing
+log_sources:
+  - m365_audit
+schedule:
+  enabled: true
+  interval_minutes: 360
+  jitter_seconds: 120
+hypothesis:
+  question: |
+    Did the same new ApplicationId receive consent from 5 or more distinct
+    users in 24 hours, where the consented scopes include Mail.Read,
+    Files.Read.All, or offline_access?
+  indicators:
+    - field: source
+      equals: m365_audit
+    - field: Workload
+      equals: AzureActiveDirectory
+    - field: Operation
+      equals: "Consent to application."
+    - field: ConsentedScopes
+      contains_any: ["Mail.Read", "Files.Read.All", "offline_access"]
+    - field: distinct_users_per_app_24h
+      gte: 5
+expected:
+  positive_incident_id: INC-HUNT-003
+  positive_template_id: hunt-oauth-app-mass-consent
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-003-NEG
+references:
+  - https://attack.mitre.org/techniques/T1528/
+author: AiSOC
+created: '2026-05-05'
+modified: '2026-05-05'

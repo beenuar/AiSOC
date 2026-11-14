@@ -1,0 +1,5 @@
+{
+  "authorization_header": "Bearer eyJhbGciOiJub25lIn0.eyJzdWIiOiJhZG1pbiJ9.",
+  "authorization_header_jwt_alg": "none",
+  "host": "api.corp.com"
+}

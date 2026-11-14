@@ -1,0 +1,4 @@
+{
+  "default_action": "Allow",
+  "operation_name": "vaults/write-x"
+}

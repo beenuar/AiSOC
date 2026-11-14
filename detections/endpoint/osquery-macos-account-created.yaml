@@ -1,0 +1,24 @@
+id: det-endpoint-287
+name: macOS Local User Account Created
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Local User
+  Account Created'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1136.001
+- tlp.white
+category: endpoint
+log_source:
+  product: osquery
+  service: processes
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ANY ["sysadminctl -addUser", "dscl . -create /Users/", "createhomedir -u "]
+false_positives:
+- IT administrator provisioning new user
+playbook: tpl-account-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

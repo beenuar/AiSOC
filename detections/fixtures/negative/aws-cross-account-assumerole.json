@@ -1,0 +1,5 @@
+{
+  "event_name": "AssumeRole",
+  "user_arn": "arn:aws:sts::111111111111:assumed-role/internal",
+  "user_arn_external_account": false
+}

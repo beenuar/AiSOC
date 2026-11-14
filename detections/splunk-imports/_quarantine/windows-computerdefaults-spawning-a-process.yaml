@@ -1,0 +1,47 @@
+id: splunk-security-content-697eb4c0-1008-4c3c-b5ae-7bd9b39adbd6
+name: Windows ComputerDefaults Spawning a Process
+description: The following analytic detects the spawning of ComputerDefaults.exe,
+  a Windows system process used to manage default application associations. While
+  normally legitimate, this process can be exploited by attackers to bypass User Account
+  Control (UAC) and execute unauthorized code with elevated privileges. Detection
+  focuses on abnormal execution patterns, unusual parent-child process relationships,
+  or deviations from standard paths. Such behavior may indicate attempts to modify
+  system defaults or run malicious scripts undetected. Monitoring ComputerDefaults.exe
+  is critical to identify potential security threats, prevent privilege escalation,
+  and maintain system integrity by distinguishing normal operations from suspicious
+  activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://www.recordedfuture.com/research/from-castleloader-to-castlerat-tag-150-advances-operations
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=ComputerDefaults.exe\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_computerdefaults_spawning_a_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 697eb4c0-1008-4c3c-b5ae-7bd9b39adbd6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_computerdefaults_spawning_a_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

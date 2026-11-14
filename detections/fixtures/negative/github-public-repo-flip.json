@@ -1,0 +1,7 @@
+{
+  "action": "repo.access",
+  "actor": "user@corp.com",
+  "previous_visibility": "public",
+  "public_repo": false,
+  "repo": "example-org/internal-tooling"
+}

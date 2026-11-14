@@ -1,0 +1,29 @@
+id: orca
+name: Orca Security Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Orca Security cloud-native application protection platform. Pulls open
+  alerts across workload, container, cloud configuration, identity, and
+  data-risk surfaces from the unified /api/alerts REST endpoint. One
+  connector instance covers every Orca surface.
+author: AiSOC Core Team
+tags: [cloud, cnapp, cspm, cwpp, ciem, dspm, orca]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/orca.py
+license: MIT
+min_aisoc_version: "7.1.0"
+config_schema:
+  type: object
+  required: [api_token]
+  properties:
+    api_token:
+      type: string
+      description: Orca Security API token
+      secret: true
+    api_url:
+      type: string
+      description: >
+        Orca API base URL. Defaults to https://api.orcasecurity.io.
+        Override only if your tenant lives on a region-specific endpoint.
+      default: "https://api.orcasecurity.io"

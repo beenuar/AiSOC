@@ -1,0 +1,58 @@
+id: splunk-security-content-0175f0b7-728d-4038-bbf1-1c30d6ee3d31
+name: Windows WBAdmin File Recovery From Backup
+description: 'The following analytic identifies the execution of wbadmin.exe with
+  arguments indicative of restoring files from an existing backup.
+
+  WBAdmin is a legitimate Windows Backup utility used for creating, managing, and
+  restoring backups. However, adversaries may abuse it to restore specific files (e.g.,
+  sensitive credentials, configuration files, or malware stagers) from prior backups
+  to regain access or re-establish persistence after cleanup or encryption events.
+
+  Monitoring this behavior is important because restoring individual files from a
+  system backup outside of approved recovery workflows may indicate an attacker attempting
+  to retrieve deleted or encrypted data, recover previously dropped payloads, or access
+  prior system states as part of post-compromise activity.
+
+  If confirmed malicious, this action could enable attackers to regain operational
+  footholds, extract sensitive data, or restore tampered components, undermining remediation
+  and containment efforts.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1490
+  - T1565.001
+  categories:
+  - endpoint
+references:
+- https://lolbas-project.github.io/lolbas/Binaries/Wbadmin/
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wbadmin-start-recovery
+- https://redmondmag.com/articles/2025/07/18/restoring-a-file-from-a-windows-image-backup.aspx
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    (Processes.process_name=wbadmin.exe OR Processes.original_file_name=WBADMIN.EXE)\n\
+    Processes.process = \"*start*\"\nProcesses.process = \"*recovery*\"\nProcesses.process\
+    \ = \"*itemtype:file*\"\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process Processes.parent_process_exec\n   Processes.parent_process_guid\
+    \ Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \   Processes.process Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id\n   Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_wbadmin_file_recovery_from_backup_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0175f0b7-728d-4038-bbf1-1c30d6ee3d31
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_wbadmin_file_recovery_from_backup.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

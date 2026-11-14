@@ -1,0 +1,79 @@
+{
+  "id": "cloud-iam-overpriv-v1",
+  "name": "Cloud: Over-Privileged IAM \u2014 Detach & Review",
+  "description": "Triggered when IAM Access Analyzer flags an over-privileged role. Detaches the policy and opens an owner-review ticket.",
+  "version": "1.0.0",
+  "tags": [
+    "cloud-misconfig",
+    "cloud",
+    "aws",
+    "iam",
+    "mitre.t1078.004"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "medium",
+      "high"
+    ],
+    "tags": [
+      "cloud-misconfig"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "detach",
+      "name": "Detach over-privileged policy",
+      "type": "http",
+      "params": {
+        "url": "${AWS_URL}/iam/{{alert.role}}/policies/{{alert.policy}}",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate access usage",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify role owner",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Policy {{alert.policy}} detached from {{alert.role}}. Re-add only the minimum needed.",
+        "webhook_env": "SLACK_CLOUD_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Owner-review ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P3",
+        "title_template": "IAM over-priv: {{alert.role}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+id: det-identity-049
+name: User Denied Push Then Approved Within 60s
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'User Denied Push
+  Then Approved Within 60s'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1621
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "mfa_state_change"
+    AND previous_state == "deny"
+    AND current_state == "approve"
+    AND seconds_between < 60
+false_positives:
+- Misclick on first prompt
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-stop-ransomware-and-vidar-ransomware-detection
+name: stop_ransomware_and_vidar_ransomware_detection
+description: stop_ransomware_and_vidar_ransomware_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule stop_ransomware_and_vidar_ransomware_detection {\n meta:\n\
+    \    author = \"Ariel Millahuel\"\n    description = \"This rule detects the behavior\
+    \ of a combination between STOP Ransomware and Vidar Ransomware. Both threats\
+    \ are used in combination in order to steal information after a phishing attack\
+    \ was succesfully executed  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/eLntKUKd5pKY\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, T1059\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\") and (($selection1.target.process.file.full_path\
+    \ = \"cmd.exe\" and (re.regex($selection1.target.process.command_line, `/c taskkill\
+    \ /im 5\\.exe /f & erase C:\\\\Users.*\\\\AppData\\\\Local\\\\Temp.*\\\\5\\.exe\
+    \ & exit`) or re.regex($selection1.target.process.command_line, `/c taskkill /im\
+    \ .*\\.exe /f & erase C:\\\\Users.*\\\\AppData\\\\Local\\\\Temp.*.*\\.exe & exit`)))\
+    \ or ($selection1.target.process.file.full_path = \"icacls.exe\" and re.regex($selection1.target.process.command_line,\
+    \ `icacls C:\\\\Users.*\\\\AppData\\\\Local.*\\\\deny .*S-1-1-0:\\(Ol\\)\\(Cl\\\
+    )\\(DE,DC\\)`))))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: stop_ransomware_and_vidar_ransomware_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: stop_ransomware_and_vidar_ransomware_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/stop_ransomware_and_vidar_ransomware_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

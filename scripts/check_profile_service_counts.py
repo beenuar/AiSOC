@@ -1,0 +1,540 @@
+#!/usr/bin/env python3
+"""Gate: the published compose-profile service counts match the compose file.
+
+Five documents publish how many services each profile starts, and until this
+gate existed nothing compared any of them to ``docker-compose.yml``. That is
+the shape this repository keeps paying for: a number copied into prose goes
+stale silently, and a reader has no way to tell a current figure from one that
+was true two releases ago. ADR-0006 found exactly this while editing the same
+table for a different reason: the published ``full`` count was 30, which is
+every profile at once rather than what ``make up-full`` starts.
+
+Derived from the YAML rather than from ``docker compose config``, for two
+reasons. CI has no Docker daemon in the jobs that would want to run this, and
+``docker compose`` resolves ``.env``, so the answer would depend on the
+caller's environment rather than on the tree.
+
+What it checks, in both directions:
+
+  1. Every documented count equals the count the compose file implies.
+  2. Every profile a document names still exists in the compose file, so a
+     renamed profile fails as a stale reference rather than passing because
+     nothing matched it.
+  3. ``actions`` is reachable from the ``chatops`` profile, because
+     ``slack-bot`` declares a dependency on it and a compose file whose
+     dependency is outside the profile fails to render at all. ADR-0007 moved
+     ``actions`` out of every profile list to satisfy this, and "it is in no
+     list" is precisely the state a future edit would undo by adding one back.
+
+Run:  python3 scripts/check_profile_service_counts.py
+      python3 scripts/check_profile_service_counts.py --inventory
+      python3 scripts/check_profile_service_counts.py --self-test
+
+Exit codes: 0 clean, 1 a published count is wrong, 2 the scan could not run.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested
+
+self_test_if_requested(__file__)
+
+REPO_ROOT = repo_root()
+COMPOSE = REPO_ROOT / "docker-compose.yml"
+
+#: The production stack. It `include`s the base and then differs from it
+#: deliberately — `kafka-ui` browses every topic with no authentication of its
+#: own and is moved off the `full` profile there — so its `full` count is one
+#: lower. Scanned and reported beside the development figures rather than left
+#: for an operator to discover: two stacks that differ by design should differ
+#: on the page too.
+PROD_COMPOSE = REPO_ROOT / "docker-compose.prod.yml"
+
+#: One-shot containers that run to completion and exit. Counted separately
+#: because "long-running services" is the figure the documents publish, and
+#: folding a container that exits into it would overstate what is resident.
+ONE_SHOT: frozenset[str] = frozenset({"ollama-pull"})
+
+#: Where a count is published, and how to find it. Each entry is
+#: ``(path, profile, regex)`` where the regex has one group holding the
+#: number. Deliberately a list of exact sites rather than a search for any
+#: integer near the word "services": a gate that guesses which numbers are
+#: claims would either miss the one that matters or flag prose forever.
+# Prose in this repository writes small counts as words as often as digits
+# ("the sixteen CORE containers"), and a gate that could only read digits
+# could not watch those sentences at all — which is how
+# `apps/docs/docs/installation.md` sat at "fourteen" while every registered
+# digit site was correct. The range covers the profile counts plus headroom;
+# anything outside it is reported rather than silently skipped.
+_NUMBER_WORDS: dict[str, int] = {
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12,
+    "thirteen": 13,
+    "fourteen": 14,
+    "fifteen": 15,
+    "sixteen": 16,
+    "seventeen": 17,
+    "eighteen": 18,
+    "nineteen": 19,
+    "twenty": 20,
+    "twenty-one": 21,
+    "twenty-two": 22,
+    "twenty-three": 23,
+    "twenty-four": 24,
+}
+
+
+def _as_count(raw: str) -> int | None:
+    """A captured claim as an integer, whether written in digits or words."""
+    text = raw.strip().lower()
+    if text.isdigit():
+        return int(text)
+    return _NUMBER_WORDS.get(text)
+
+
+CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
+    # Three figures that had drifted to 10, fifteen and fifteen against a
+    # compose file supporting neither. Registered rather than merely
+    # corrected: an unregistered figure is one nobody notices going stale,
+    # which is how all three got there.
+    # The contributor guide at the repository root. Both figures are in its
+    # opening "get it running" block, which is the first thing a reader runs,
+    # so a stale one there is wrong before anything else can be.
+    ("AGENTS.md", "core", r"CORE profile: (\d+) long-running services"),
+    ("AGENTS.md", "prod:full", r"adds the rest \((\d+) services"),
+    ("install.sh", "core", r"Starting the (\d+)-service CORE stack"),
+    # The installation page's Requirements table, where the memory figure is
+    # justified *by* the container count ("steady-state RSS across the N CORE
+    # containers"). It read "fourteen" for as long as connectors and actions
+    # had been in CORE: written as a word, so neither the digit-based claim
+    # sites nor the unregistered-figure sweep below could see it. This is the
+    # entry that makes the word form watchable.
+    (
+        "apps/docs/docs/installation.md",
+        "core",
+        r"Steady-state RSS across the ([a-z-]+|\d+) CORE containers",
+    ),
+    ("apps/docs/docs/deployment/walkthrough.mdx", "core", r"starts the (\d+) CORE services"),
+    ("Makefile", "core", r"`missing` on all (\d+) first-party services"),
+    # The production deployment page. `prod:full` is a separate figure from
+    # `full` because the production stack deliberately does not start kafka-ui,
+    # and a reader comparing the two pages would otherwise find a discrepancy
+    # with nothing explaining it.
+    ("apps/docs/docs/deployment/docker.md", "core", r"CORE is (\d+) long-running services here"),
+    ("apps/docs/docs/deployment/docker.md", "prod:full", r"`--profile full`\s*\n?is (\d+) rather than"),
+    ("apps/docs/docs/deployment/docker.md", "full", r"is \d+ rather than (\d+), the difference being"),
+    # The architecture page. Unregistered until now, and the only place
+    # publishing a service count that this gate did not know about — so it
+    # sat at 14 for as long as `connectors` and `actions` had been in CORE
+    # while all eight registered sites stayed correct. An unregistered
+    # figure is one nobody notices going stale.
+    ("docs/architecture/README.md", "core", r"\| \*\*core\*\* \| `make up` \| (\d+) \|"),
+    ("docs/architecture/README.md", "full", r"\| \*\*full\*\* \| `make up-full` \| (\d+) \|"),
+    ("docs/architecture/README.md", "core", r"CORE count is \*\*(\d+) long-running"),
+    ("README.md", "core", r"\|\s*\*\*core\*\*\s*\|\s*`make up`\s*\|\s*(\d+)\s*\|"),
+    ("README.md", "full", r"\|\s*\*\*full\*\*\s*\|\s*`make up-full`\s*\|\s*(\d+)\s*\|"),
+    ("README.md", "core", r"\|\s*\*\*demo\*\*\s*\|\s*`make up && make demo`\s*\|\s*(\d+)\s*\|"),
+    (
+        "apps/docs/docs/architecture.md",
+        "core",
+        r"\|\s*\*\*core\*\*\s*\|\s*`make up`\s*\|\s*(\d+)\s*\|",
+    ),
+    (
+        "apps/docs/docs/architecture.md",
+        "full",
+        r"\|\s*\*\*full\*\*\s*\|\s*`make up-full`\s*\|\s*(\d+)\s*\|",
+    ),
+    (
+        "apps/docs/docs/architecture.md",
+        "core",
+        r"CORE is (\d+) long-running containers",
+    ),
+    (
+        "apps/docs/docs/architecture.md",
+        "full",
+        r"`full` is (\d+) long-running containers",
+    ),
+    # The repository-overview page, which carries the service map a reader
+    # navigating the code actually consults. It listed `connectors` and
+    # `actions` under `full` long after both moved into CORE; registering the
+    # counts beside that table is what makes the next such move fail here.
+    (
+        "apps/docs/docs/architecture/overview.md",
+        "core",
+        r"CORE is (\d+) long-running services",
+    ),
+    (
+        "apps/docs/docs/architecture/overview.md",
+        "full",
+        r"`full` is (\d+) long-running services",
+    ),
+    (
+        "apps/docs/docs/quickstart.md",
+        "core",
+        r"CORE is (\d+) long-running services",
+    ),
+    (
+        "apps/docs/docs/quickstart.md",
+        "full",
+        r"and `full` is (\d+)",
+    ),
+    (
+        "docs/audit/REPOSITORY_REALITY.md",
+        "core",
+        r"CORE profile: (\d+) long-running services",
+    ),
+    # The depth plan's progress file. It republishes both counts in its
+    # re-derived-figures table and in a deviation explaining why the `full`
+    # baseline was not taken on a host that size, so both are claims and
+    # both are registered. Registered when written rather than after it
+    # drifted, which is the only time registering is cheap.
+    (
+        "DEPTH_PROGRESS.md",
+        "core",
+        r"\*\*PASS\*\* -- (\d+) services healthy",
+    ),
+    (
+        "DEPTH_PROGRESS.md",
+        "full",
+        r"The `full` profile is (\d+) services",
+    ),
+    # The five below went unchecked until ADR-0007 moved CORE to 16 and they
+    # kept saying 14. Two of them are the landing page and the FAQ, so the
+    # wrong number was the one a reader met first.
+    ("ROADMAP.md", "core", r"CORE is (\d+) long-running services"),
+    (
+        "apps/web/public/screenshots/README.md",
+        "core",
+        r"CORE: (\d+) long-running services",
+    ),
+    ("apps/web/src/app/page.tsx", "core", r"core profile brings up (\d+) services"),
+    (
+        "apps/web/src/components/landing/sections/Faq.tsx",
+        "core",
+        r"core profile brings up (\d+) services",
+    ),
+    (
+        "docs/testing/CLEAN_INSTALL.md",
+        "core",
+        r"CORE profile, (\d+) long-running services",
+    ),
+    # Two live CORE figures written as words, which neither half of this gate
+    # could see. The validator reads a word form, but only at a site this
+    # list names; `unregistered_mentions` below is what would have found
+    # them, and it matches digits only. So a sentence that spells the number
+    # out is invisible to both halves at once — the same blind spot that let
+    # `installation.md` sit at "fourteen" while every digit site was correct,
+    # reappearing in the one place nobody looked next.
+    #
+    # Registered individually rather than by teaching the sweep word forms,
+    # which was measured before being rejected: it finds ten word-form
+    # mentions in this tree and only these two are profile figures. The other
+    # eight count Python services with a lock, services defaulting a dev-mode
+    # flag, and services exposing `/metrics` — all correct sentences, and a
+    # gate that flags correct content is one somebody switches off.
+    #
+    # `doctor.sh` is also the only registered site this gate reads that the
+    # sweep could never reach whatever pattern it used, because the sweep
+    # only opens `.md`, `.mdx`, `.ts` and `.tsx`.
+    (
+        "scripts/doctor.sh",
+        "core",
+        r"CORE runs ([a-z-]+|\d+) services",
+    ),
+    (
+        "apps/web/src/components/ui/CapabilityUnavailable.tsx",
+        "core",
+        r"CORE is ([a-z-]+|\d+) services",
+    ),
+)
+
+
+#: Where a service count may be *mentioned* without being a claim about a
+#: profile. Each entry is a path, and every one is a deliberate decision that
+#: the number there is not the CORE or `full` figure.
+COUNT_MENTION_EXEMPT: frozenset[str] = frozenset(
+    {
+        # Records what each release changed, including counts that were correct
+        # then and are not now. Rewriting them would be revisionism.
+        "CHANGELOG.md",
+        "RELEASES.md",
+        # An ADR states the count at the moment it was decided, as its own
+        # evidence. ADR-0006 says 11 and ADR-0007 says 14 to 16; both are true
+        # of the day they were written.
+        "docs/decisions",
+        # Historical prototype subtree, not this product.
+        "plans",
+        # Counts source directories, not running containers.
+        "docs/architecture/SYSTEM_DESIGN.md",
+        # Counts what that deployment target runs, which is not a profile of
+        # this compose file.
+        "infra/railway/README.md",
+    }
+)
+
+#: Finds a sentence that looks like it publishes a profile's service count.
+#: Deliberately narrow: it wants the number adjacent to the word services, not
+#: any integer in the vicinity.
+COUNT_MENTION = re.compile(r"\b(\d+)\s+(?:long-running\s+)?(?:services|containers)\b")
+
+
+class ScanError(RuntimeError):
+    """The compose file could not be read or parsed."""
+
+
+def unregistered_mentions() -> list[str]:
+    """Files publishing a service count that no CLAIM_SITES entry validates.
+
+    The list above is deliberately exact, and the reasoning is sound: a gate
+    that guessed which integers were claims would flag prose forever. But it
+    left the gate blind in the direction things actually move. Nothing noticed
+    when five surfaces kept saying 14 after ADR-0007 took CORE to 16, including
+    the landing page and the FAQ, because a figure added to a file this list
+    does not name is a figure this gate never reads.
+
+    So the exactness stays for *validating* a number, and this asks the
+    complementary question: does anything publish a count we are not checking?
+    A new surface must either join CLAIM_SITES or be exempted on purpose.
+    """
+    registered = {rel for rel, _profile, _pattern in CLAIM_SITES}
+    findings: list[str] = []
+    for path in sorted(REPO_ROOT.rglob("*")):
+        if path.is_dir() or path.suffix not in {".md", ".mdx", ".tsx", ".ts"}:
+            continue
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        if rel in registered or any(rel == e or rel.startswith(f"{e}/") for e in COUNT_MENTION_EXEMPT):
+            continue
+        if any(part in {"node_modules", ".git", ".next", "dist"} for part in path.parts):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            if "profile" not in line.lower() and "make up" not in line and "CORE" not in line:
+                continue
+            match = COUNT_MENTION.search(line)
+            if match:
+                findings.append(f"{rel}:{line_no} publishes '{match.group(0)}' and no CLAIM_SITES entry validates it")
+    return findings
+
+
+def _parse_services(text: str) -> dict[str, list[str] | None]:
+    """Service name to its declared profile list, or ``None`` for no list.
+
+    Hand-parsed rather than via PyYAML because several gates here run on a
+    bare interpreter before any ``pip install``, and ``gate_toolkit`` exists
+    to keep that true. The shape being read is narrow: two-space-indented
+    service keys under a top-level ``services:``, and a ``profiles:`` key
+    four spaces in, in either inline (``["a", "b"]``) or block (``- a``)
+    form. Both forms appear in this file, and either may carry a Compose Spec
+    merge tag (``!override``) in the production overlay — untagged, that line
+    read as "no profiles declared" and the gate counted a service the
+    production stack does not start.
+    """
+    services: dict[str, list[str] | None] = {}
+    in_services = False
+    current: str | None = None
+    collecting_block: bool = False
+
+    for raw in text.splitlines():
+        if re.match(r"^services:\s*$", raw):
+            in_services = True
+            continue
+        if not in_services:
+            continue
+        # A new top-level key ends the services block.
+        if raw and not raw.startswith((" ", "\t")) and not raw.startswith("#"):
+            break
+
+        service = re.match(r"^  ([A-Za-z0-9][A-Za-z0-9._-]*):\s*$", raw)
+        if service:
+            current = service.group(1)
+            services.setdefault(current, None)
+            collecting_block = False
+            continue
+
+        if current is None:
+            continue
+
+        inline = re.match(r"^    profiles:\s*(?:![a-z]+\s+)?\[(.*)\]\s*$", raw)
+        if inline:
+            services[current] = re.findall(r"[A-Za-z0-9._-]+", inline.group(1))
+            collecting_block = False
+            continue
+
+        if re.match(r"^    profiles:\s*(?:![a-z]+\s*)?$", raw):
+            services[current] = []
+            collecting_block = True
+            continue
+
+        if collecting_block:
+            item = re.match(r"^      -\s*([A-Za-z0-9._-]+)\s*$", raw)
+            if item:
+                bucket = services[current]
+                if bucket is None:  # pragma: no cover - set to [] just above
+                    bucket = services[current] = []
+                bucket.append(item.group(1))
+                continue
+            collecting_block = False
+
+    return services
+
+
+def _profile_members(services: dict[str, list[str] | None], profile: str) -> set[str]:
+    """Services a ``--profile <profile>`` run starts.
+
+    A service with no ``profiles:`` key is started by every run, which is the
+    compose semantic ADR-0007 relies on. ``core`` is spelled as a profile here
+    for symmetry with the documents, and means "no named profile".
+    """
+    members = {name for name, profiles in services.items() if not profiles}
+    if profile != "core":
+        members |= {name for name, profiles in services.items() if profiles and profile in profiles}
+    return members
+
+
+def _long_running(members: set[str]) -> int:
+    return len(members - ONE_SHOT)
+
+
+def _declared_profiles(services: dict[str, list[str] | None]) -> set[str]:
+    return {p for profiles in services.values() if profiles for p in profiles}
+
+
+def _production_services(base: dict[str, list[str] | None]) -> dict[str, list[str] | None]:
+    """The base service set with the production file's profile overrides applied.
+
+    Computed rather than shelled out to ``docker compose config``, because a
+    gate that needs a Docker daemon is a gate that skips on the runners that
+    do not have one — and a skip here reports nothing while looking green.
+
+    Only ``profiles:`` is applied, because that is the only key that changes
+    *which* services a run starts. The production file's other overrides change
+    how a service is configured, which the counts do not describe.
+    """
+    if not PROD_COMPOSE.is_file():
+        return base
+    overrides = _parse_services(PROD_COMPOSE.read_text(encoding="utf-8"))
+    merged = dict(base)
+    for name, profiles in overrides.items():
+        # `_parse_services` returns None for a service that names no profiles,
+        # which in the overlay means "not overridden" rather than "no profile".
+        if profiles is not None:
+            merged[name] = profiles
+    return merged
+
+
+def scan() -> tuple[dict[str, int], dict[str, set[str]], list[str]]:
+    """Returns (counts by profile, members by profile, errors)."""
+    if not COMPOSE.is_file():
+        raise ScanError(f"no compose file at {COMPOSE}")
+    text = COMPOSE.read_text(encoding="utf-8")
+    services = _parse_services(text)
+    if not services:
+        raise ScanError(f"parsed zero services out of {COMPOSE}; the format this gate reads has changed")
+
+    errors: list[str] = []
+    profiles = ("core", *sorted(_declared_profiles(services)))
+    members = {p: _profile_members(services, p) for p in profiles}
+    counts = {p: _long_running(members[p]) for p in profiles}
+
+    # The production stack, under `prod:` keys so a claim site can name either
+    # and the two cannot be confused for one another.
+    prod_services = _production_services(services)
+    for profile in profiles:
+        prod_members = _profile_members(prod_services, profile)
+        members[f"prod:{profile}"] = prod_members
+        counts[f"prod:{profile}"] = _long_running(prod_members)
+
+    for rel, profile, pattern in CLAIM_SITES:
+        path = REPO_ROOT / rel
+        if not path.is_file():
+            errors.append(f"{rel}: published a profile count and the file is gone")
+            continue
+        if profile not in counts:
+            errors.append(f"{rel}: names profile {profile!r}, which no service in docker-compose.yml declares")
+            continue
+        found = re.search(pattern, path.read_text(encoding="utf-8"))
+        if found is None:
+            errors.append(
+                f"{rel}: the {profile!r} count this gate watches is no longer there "
+                f"(pattern {pattern!r}). Either the figure moved, in which case update "
+                f"CLAIM_SITES, or it was deleted and the entry is stale."
+            )
+            continue
+        published = _as_count(found.group(1))
+        if published is None:
+            errors.append(
+                f"{rel}: matched {found.group(1)!r} for the {profile!r} count, which is neither a number nor a number word this gate knows"
+            )
+            continue
+        if published != counts[profile]:
+            errors.append(
+                f"{rel}: publishes {published} services for the {profile!r} profile; "
+                f"docker-compose.yml has {counts[profile]} long-running "
+                f"({', '.join(sorted(members[profile] - ONE_SHOT))})"
+            )
+
+    # slack-bot depends on actions, and compose refuses to render a file whose
+    # dependency sits outside the profile being started. ADR-0007 satisfies
+    # this by putting actions in no profile at all; a later edit adding it
+    # back to a list would break `--profile chatops` for everyone.
+    if "chatops" in members and "actions" in services and "actions" not in members["chatops"]:
+        errors.append(
+            "actions is not reachable from the chatops profile, and slack-bot depends on it; "
+            "`docker compose --profile chatops` will refuse to render"
+        )
+
+    # Asks the tree about the list, having just asked the list about the tree.
+    # Without this the gate can only be wrong about files it already knows.
+    errors.extend(unregistered_mentions())
+
+    return counts, members, errors
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--inventory", action="store_true", help="print the per-profile membership and exit 0")
+    args = parser.parse_args(argv)
+
+    try:
+        counts, members, errors = scan()
+    except ScanError as exc:
+        print(f"profile-service-counts: {exc}", file=sys.stderr)
+        return 2
+
+    if args.inventory:
+        for profile in sorted(counts):
+            print(f"{profile:12s} {counts[profile]:3d}  {', '.join(sorted(members[profile]))}")
+        return 0
+
+    if errors:
+        print("PROFILE SERVICE COUNT GATE FAILED:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+
+    print(
+        f"profile-service-counts: OK, core {counts['core']}, full {counts.get('full', 0)}, "
+        f"{len(CLAIM_SITES)} published figures agree with docker-compose.yml"
+    )
+    # Printed every run rather than only when it differs: a figure that appears
+    # only on disagreement is one nobody knows the value of.
+    print(
+        f"  production stack: core {counts.get('prod:core', 0)}, full {counts.get('prod:full', 0)}"
+        f" ({counts.get('full', 0) - counts.get('prod:full', 0)} fewer on full — kafka-ui is not run beside production data)"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

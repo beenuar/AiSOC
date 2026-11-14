@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cyble AiSOC — Platform Docs (v7.3.1)</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0e1a;
+    --surface: #111827;
+    --surface2: #1a2236;
+    --border: #1e2d47;
+    --accent: #3b82f6;
+    --accent-glow: rgba(59,130,246,0.15);
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-dim: #64748b;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --code-bg: #0d1424;
+    --heading: #f1f5f9;
+    --link: #60a5fa;
+    --tag-bg: #1e3a5f;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR ── */
+  #sidebar {
+    width: 260px;
+    min-width: 260px;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .sidebar-header {
+    padding: 20px 18px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    background: linear-gradient(135deg, var(--accent), #7c3aed);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+
+  .logo-text {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--heading);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-left: 42px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+
+  .version-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin-top: 10px;
+    padding: 3px 8px;
+    background: var(--accent-glow);
+    border: 1px solid rgba(59,130,246,0.3);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--accent);
+  }
+
+  .doc-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 10px;
+  }
+
+  .doc-nav::-webkit-scrollbar { width: 4px; }
+  .doc-nav::-webkit-scrollbar-track { background: transparent; }
+  .doc-nav::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .nav-section {
+    margin-bottom: 4px;
+  }
+
+  .nav-section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 8px 8px 4px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 9px 10px;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-size: 13.5px;
+    color: var(--text-muted);
+    border: 1px solid transparent;
+    text-decoration: none;
+  }
+
+  .nav-item:hover {
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .nav-item.active {
+    background: var(--accent-glow);
+    border-color: rgba(59,130,246,0.25);
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  .nav-icon {
+    font-size: 15px;
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+  }
+
+  .nav-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 8px 8px;
+  }
+
+  .sidebar-footer {
+    padding: 12px 16px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* ── MAIN CONTENT ── */
+  #main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .topbar {
+    height: 52px;
+    min-height: 52px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 24px;
+    gap: 12px;
+  }
+
+  .doc-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--heading);
+  }
+
+  .doc-path {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
+  }
+
+  .spacer { flex: 1; }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+
+  .status-pill.draft {
+    background: rgba(245,158,11,0.12);
+    border: 1px solid rgba(245,158,11,0.3);
+    color: var(--warning);
+  }
+
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+
+  #content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 36px 48px 72px;
+    max-width: 900px;
+  }
+
+  #content::-webkit-scrollbar { width: 5px; }
+  #content::-webkit-scrollbar-track { background: transparent; }
+  #content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* ── MARKDOWN STYLES ── */
+  #content h1 {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--heading);
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+    line-height: 1.2;
+  }
+
+  #content h2 {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--heading);
+    margin-top: 40px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.3px;
+  }
+
+  #content h3 {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--heading);
+    margin-top: 28px;
+    margin-bottom: 10px;
+  }
+
+  #content h4 {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-top: 20px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  #content p {
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 14px;
+    font-size: 14.5px;
+  }
+
+  #content a { color: var(--link); text-decoration: none; }
+  #content a:hover { text-decoration: underline; }
+
+  #content ul, #content ol {
+    padding-left: 22px;
+    margin-bottom: 14px;
+  }
+
+  #content li {
+    line-height: 1.7;
+    font-size: 14.5px;
+    margin-bottom: 4px;
+    color: var(--text);
+  }
+
+  #content li > ul, #content li > ol {
+    margin-top: 4px;
+    margin-bottom: 4px;
+  }
+
+  #content pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px 18px;
+    overflow-x: auto;
+    margin: 16px 0;
+    font-size: 12.5px;
+    line-height: 1.6;
+  }
+
+  #content pre::-webkit-scrollbar { height: 4px; }
+  #content pre::-webkit-scrollbar-thumb { background: var(--border); }
+
+  #content code {
+    font-family: 'SF Mono', 'Monaco', 'Cascadia Code', 'Fira Code', monospace;
+    color: #93c5fd;
+  }
+
+  #content p code, #content li code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12.5px;
+    color: #a5b4fc;
+  }
+
+  #content blockquote {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-glow);
+    padding: 12px 16px;
+    margin: 16px 0;
+    border-radius: 0 6px 6px 0;
+  }
+
+  #content blockquote p {
+    margin-bottom: 0;
+    color: var(--text);
+  }
+
+  #content table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 13.5px;
+  }
+
+  #content th {
+    background: var(--surface2);
+    color: var(--heading);
+    font-weight: 600;
+    padding: 10px 14px;
+    text-align: left;
+    border: 1px solid var(--border);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+  }
+
+  #content td {
+    padding: 9px 14px;
+    border: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  #content tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+  #content tr:hover td { background: rgba(59,130,246,0.05); }
+
+  #content hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 32px 0;
+  }
+
+  #content strong { color: var(--heading); font-weight: 600; }
+  #content em { color: var(--text-muted); }
+
+  /* Callout boxes for bold headers in lists */
+  .doc-meta {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    padding: 14px 18px;
+    background: var(--surface2);
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+
+  .doc-meta span { display: flex; align-items: center; gap: 5px; }
+
+  /* What's new banner */
+  .whats-new-banner {
+    background: linear-gradient(135deg, rgba(16,185,129,0.1), rgba(59,130,246,0.08));
+    border: 1px solid rgba(16,185,129,0.3);
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 28px;
+    font-size: 13px;
+  }
+
+  .whats-new-banner .wn-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    color: #10b981;
+    margin-bottom: 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+  }
+
+  .whats-new-banner ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .whats-new-banner li {
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-muted);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+  }
+
+  .whats-new-banner li::before {
+    content: "→";
+    color: #10b981;
+    font-size: 11px;
+    flex-shrink: 0;
+  }
+
+  .wn-tag {
+    display: inline-flex;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-right: 4px;
+    flex-shrink: 0;
+  }
+
+  .wn-tag.security { background: rgba(239,68,68,0.15); color: #f87171; }
+  .wn-tag.agent    { background: rgba(139,92,246,0.15); color: #a78bfa; }
+  .wn-tag.ui       { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .wn-tag.infra    { background: rgba(245,158,11,0.15); color: #fbbf24; }
+  .wn-tag.connector{ background: rgba(16,185,129,0.15); color: #34d399; }
+
+  /* Production info bar */
+  .prod-bar {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 28px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    align-items: center;
+  }
+
+  .prod-bar .pb-item {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .prod-bar .pb-val {
+    color: var(--heading);
+    font-weight: 600;
+  }
+
+  .prod-bar .pb-sep {
+    color: var(--border);
+    font-size: 16px;
+    line-height: 1;
+  }
+
+  /* Loading state */
+  #loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-muted);
+    padding: 60px 0;
+    font-size: 14px;
+  }
+
+  .spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Scroll to top button */
+  #scrolltop {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 38px;
+    height: 38px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 16px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+  }
+
+  #scrolltop.visible {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  #scrolltop:hover {
+    background: var(--border);
+    color: var(--text);
+  }
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <div class="logo-icon">🛡</div>
+      <span class="logo-text">Cyble AiSOC</span>
+    </div>
+    <div class="logo-sub">Platform Docs</div>
+    <div class="version-badge">
+      <span class="dot"></span> v7.3.1 · May 2026
+    </div>
+  </div>
+
+      <div class="doc-nav">
+        <div class="nav-section">
+          <div class="nav-section-label">▶ Live</div>
+          <a class="nav-item" href="https://tryaisoc.com" target="_blank" style="background:linear-gradient(135deg,rgba(59,130,246,0.18),rgba(124,58,237,0.18));border-color:rgba(59,130,246,0.45);color:#93c5fd">
+            <span class="nav-icon">🛡</span>
+            tryaisoc.com
+            <span style="margin-left:auto;font-size:10px;opacity:0.7">↗</span>
+          </a>
+          <a class="nav-item" href="https://github.com/beenuar/AiSOC" target="_blank">
+            <span class="nav-icon">⚙</span>
+            GitHub · beenuar/AiSOC
+            <span style="margin-left:auto;font-size:10px;opacity:0.5">↗</span>
+          </a>
+          <a class="nav-item" href="http://localhost:8479" target="_blank">
+            <span class="nav-icon">💻</span>
+            Local Console
+            <span style="margin-left:auto;font-size:10px;opacity:0.5">↗</span>
+          </a>
+          <a class="nav-item" href="http://localhost:8478/docs" target="_blank">
+            <span class="nav-icon">📐</span>
+            Local API docs
+            <span style="margin-left:auto;font-size:10px;opacity:0.5">↗</span>
+          </a>
+        </div>
+
+        <div class="nav-divider"></div>
+
+        <div class="nav-section">
+          <div class="nav-section-label">Documents</div>
+          <a class="nav-item active" onclick="loadDoc('master')" href="#">
+            <span class="nav-icon">📄</span>
+            Master Plan
+          </a>
+          <a class="nav-item" onclick="loadDoc('topology')" href="#">
+            <span class="nav-icon">🤖</span>
+            Agent Topology
+          </a>
+          <a class="nav-item" onclick="loadDoc('integrations')" href="#">
+            <span class="nav-icon">🔌</span>
+            Integration Matrix
+          </a>
+          <a class="nav-item" onclick="loadDoc('roadmap')" href="#">
+            <span class="nav-icon">🗓</span>
+            12-Month Roadmap
+          </a>
+          <a class="nav-item" onclick="loadDoc('readme')" href="#">
+            <span class="nav-icon">📖</span>
+            Platform README
+          </a>
+        </div>
+
+    <div class="nav-divider"></div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Master Plan Sections</div>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Executive Summary')" href="#">
+        <span class="nav-icon">⚡</span> Exec Summary
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Strategy')" href="#">
+        <span class="nav-icon">📊</span> Strategy &amp; Market
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Four Pillars')" href="#">
+        <span class="nav-icon">🏛</span> Four Pillars
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Technical Architecture')" href="#">
+        <span class="nav-icon">🔧</span> Architecture
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Integrations')" href="#">
+        <span class="nav-icon">🔗</span> Integrations
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('DX')" href="#">
+        <span class="nav-icon">👨‍💻</span> DX &amp; Builder
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Analyst Console')" href="#">
+        <span class="nav-icon">🖥</span> Analyst Console
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Pricing')" href="#">
+        <span class="nav-icon">💰</span> Pricing &amp; GTM
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Risks')" href="#">
+        <span class="nav-icon">⚠️</span> Risks
+      </a>
+      <a class="nav-item" onclick="loadDoc('master'); scrollToHeading('Taste Decisions')" href="#">
+        <span class="nav-icon">🎯</span> Direction Challenges
+      </a>
+    </div>
+  </div>
+
+  <div class="sidebar-footer">
+    Confidential · Internal use only
+  </div>
+</nav>
+
+<div id="main">
+  <div class="topbar">
+    <span class="doc-title" id="topbar-title">Master Plan</span>
+    <span class="doc-path" id="topbar-path">cyble-aisoc-plan.md</span>
+    <div class="spacer"></div>
+    <div class="status-pill draft" id="status-pill">
+      <span class="dot"></span> v7.3.1 · May 20, 2026
+    </div>
+  </div>
+
+  <div id="content">
+    <div id="loading">
+      <div class="spinner"></div>
+      Loading document...
+    </div>
+  </div>
+</div>
+
+<div id="scrolltop" onclick="scrollToTop()">↑</div>
+
+<script>
+const docs = {
+  master: {
+    title: 'Master Plan',
+    path: 'cyble-aisoc-plan.md',
+    url: 'cyble-aisoc-plan.md'
+  },
+  topology: {
+    title: 'Agent Topology',
+    path: 'architecture/agent-topology.md',
+    url: 'architecture/agent-topology.md'
+  },
+  integrations: {
+    title: 'Integration Matrix',
+    path: 'architecture/integration-matrix.md',
+    url: 'architecture/integration-matrix.md'
+  },
+  roadmap: {
+    title: '12-Month Roadmap',
+    path: 'roadmap/12-month.md',
+    url: 'roadmap/12-month.md'
+  },
+  readme: {
+    title: 'Platform README',
+    path: 'platform/README.md',
+    url: 'platform/README.md'
+  }
+};
+
+let currentDoc = null;
+const contentEl = document.getElementById('content');
+
+const WHATS_NEW_HTML = `
+<div class="whats-new-banner">
+  <div class="wn-header">🟢 What's new — 2026-05-20</div>
+  <ul>
+    <li><span class="wn-tag security">Security</span> Cross-tenant RBAC isolation CI tests added for alerts, threat-intel, and LLM credentials (PR #197)</li>
+    <li><span class="wn-tag security">Security</span> Connector <code>callback_url</code> SSRF CVE fixed; all outbound HTTP now proxied through <code>ssrf_guard.py</code></li>
+    <li><span class="wn-tag agent">Agent</span> <code>DetectAgent.process()</code> wired to FusionEngine via cross-service HTTP (PR #198)</li>
+    <li><span class="wn-tag agent">Agent</span> LangGraph investigator upgraded to v8.0 four-agent façade (DetectAgent → TriageAgent → Investigator → RespondAgent)</li>
+    <li><span class="wn-tag ui">UI</span> Console v1.5 shipped: Investigation Rail, Queue, Rule Tuning, Operations Funnel, Critical tier, global time-window, tenant switcher</li>
+    <li><span class="wn-tag connector">Connector</span> v8.0 wave-1 connectors live: Tines, Torq, Falco, PagerDuty, OpsGenie, Confluence Audit (50 total)</li>
+    <li><span class="wn-tag infra">Infra</span> Three-tier agent memory, L0–L4 automation maturity model, and MCP Server shipped</li>
+  </ul>
+</div>
+<div class="prod-bar">
+  <div class="pb-item">🏷 Version <span class="pb-val">v7.3.1</span></div>
+  <span class="pb-sep">·</span>
+  <div class="pb-item">🔜 Next <span class="pb-val">v8.0</span></div>
+  <span class="pb-sep">·</span>
+  <div class="pb-item">🔌 Connectors <span class="pb-val">50</span></div>
+  <span class="pb-sep">·</span>
+  <div class="pb-item">🤖 Agents <span class="pb-val">7</span></div>
+  <span class="pb-sep">·</span>
+  <div class="pb-item">🌐 <a href="https://tryaisoc.com" target="_blank" style="color:var(--accent)">tryaisoc.com</a></div>
+  <span class="pb-sep">·</span>
+  <div class="pb-item">⚙ <a href="https://github.com/beenuar/AiSOC" target="_blank" style="color:var(--accent)">beenuar/AiSOC</a></div>
+</div>
+`;
+
+marked.setOptions({
+  breaks: false,
+  gfm: true,
+  headerIds: true,
+  mangle: false
+});
+
+async function loadDoc(key) {
+  if (currentDoc === key) return;
+  currentDoc = key;
+
+  // Update sidebar active state
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event && event.currentTarget && event.currentTarget.classList.add('active');
+
+  // Update topbar
+  const doc = docs[key];
+  document.getElementById('topbar-title').textContent = doc.title;
+  document.getElementById('topbar-path').textContent = doc.path;
+
+  // Show loading
+  contentEl.innerHTML = '<div id="loading"><div class="spinner"></div>Loading document...</div>';
+
+  try {
+    const resp = await fetch(doc.url + '?t=' + Date.now());
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const md = await resp.text();
+    const isMain = key === 'master';
+    contentEl.innerHTML = (isMain ? WHATS_NEW_HTML : '') + marked.parse(md);
+    contentEl.scrollTop = 0;
+  } catch (e) {
+    contentEl.innerHTML = `<p style="color:var(--danger)">Failed to load: ${e.message}</p>
+      <p style="color:var(--text-muted)">Make sure the HTTP server is running from the AgenticSOC directory.</p>`;
+  }
+}
+
+function scrollToHeading(text) {
+  setTimeout(() => {
+    const headings = contentEl.querySelectorAll('h1,h2,h3');
+    for (const h of headings) {
+      if (h.textContent.toLowerCase().includes(text.toLowerCase())) {
+        h.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        break;
+      }
+    }
+  }, 300);
+}
+
+function scrollToTop() {
+  contentEl.scrollTop = 0;
+}
+
+// Scroll-to-top button visibility
+contentEl.addEventListener('scroll', () => {
+  const btn = document.getElementById('scrolltop');
+  if (contentEl.scrollTop > 400) {
+    btn.classList.add('visible');
+  } else {
+    btn.classList.remove('visible');
+  }
+});
+
+// Initial load
+loadDoc('master');
+</script>
+</body>
+</html>

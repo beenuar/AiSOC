@@ -1,0 +1,23 @@
+id: det-application-010
+name: Hard-Coded API Key Pattern Leaked in HTTP Request
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Hard-Coded API
+  Key Pattern Leaked in HTTP Request'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1552.001
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_body PATTERN_MATCH_ANY ["AKIA[0-9A-Z]{16}", "ghp_[A-Za-z0-9]{36}", "AIza[0-9A-Za-z\-_]{35}", "xox[baprs]-"]
+false_positives:
+- Allowlisted developer test traffic (src allowlist)
+playbook: tpl-secret-leak
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

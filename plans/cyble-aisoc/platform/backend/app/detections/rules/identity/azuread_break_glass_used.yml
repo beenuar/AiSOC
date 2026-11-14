@@ -1,0 +1,30 @@
+title: Azure AD Break-Glass Account Used
+id: aisoc-id-id-0013-breakglass
+status: stable
+description: |
+  Break-glass / emergency-access account signed in. These should
+  only be used during a real lockout event — any sign-in needs
+  immediate human review.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: azuread
+  service: signinlogs
+tags:
+  - attack.t1078.004
+  - attack.privilege_escalation
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    event.category: 'authentication'
+  breakglass:
+    user.name|contains:
+      - 'breakglass'
+      - 'break-glass'
+      - 'emergencyaccess'
+      - 'emergency-access'
+      - 'ea-admin'
+  success:
+    event.outcome: 'success'
+  condition: selection and breakglass and success

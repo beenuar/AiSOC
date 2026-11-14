@@ -1,0 +1,58 @@
+id: mitre-car-car-2019-07-001
+name: Access Permission Modification
+description: 'Adversaries sometimes modify object access rights at the operating system
+  level. There are varying motivations behind this action -  they may not want some
+  files/objects to be changed on systems for persistence reasons and therefore provide
+  admin only rights; also, they may want files to be accessible with lower levels
+  of permissions.
+
+
+  Note - this analytic references file permissions, which are not currently in the
+  CAR data model.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: File
+detection:
+  implementations:
+  - name: Windows - Pseudocode
+    type: Pseudocode
+    code: 'log_name == "Security" AND
+
+      event_code == "4670" AND
+
+      object_type == "File" AND
+
+      subject_security_id != "NT AUTHORITY\SYSTEM"'
+  - name: Windows - Splunk
+    type: Splunk
+    code: index=__your_windows_security_log_index__ EventCode=4670 Object_Type="File"
+      Security_ID!="NT AUTHORITY\\SYSTEM"
+  - name: Linux - Pseudocode
+    type: Pseudocode
+    code: 'processes = search Process:Create
+
+      chmod_processes = filter processes where command_line == "chmod *"
+
+      output chmod_processes'
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon channel="Security" event_id=4670 object_type="File"
+      -user_id="S-1-5-18"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2019-07-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2019-07-001.yaml
+notes:
+  car_status: needs_implementation

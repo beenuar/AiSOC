@@ -1,0 +1,42 @@
+id: splunk-security-content-fc5531ae-62fd-4de6-9c36-b4afdae8ca95
+name: Kubernetes Nginx Ingress RFI
+description: The following analytic detects remote file inclusion (RFI) attacks targeting
+  Kubernetes Nginx ingress controllers. It leverages Kubernetes logs from the Nginx
+  ingress controller, parsing fields such as `remote_addr`, `request`, and `url` to
+  identify suspicious activity. This activity is significant because RFI attacks can
+  allow attackers to execute arbitrary code or access sensitive files on the server.
+  If confirmed malicious, this could lead to unauthorized access, data exfiltration,
+  or further compromise of the Kubernetes environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1212
+  categories:
+  - cloud
+references:
+- https://github.com/splunk/splunk-connect-for-kubernetes
+- https://www.invicti.com/blog/web-security/remote-file-inclusion-vulnerability/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`kubernetes_container_controller` | rex field=_raw "^(?<remote_addr>\S+)\s+-\s+-\s+\[(?<time_local>[^\]]*)\]\s\"(?<request>[^\"]*)\"\s(?<status>\S*)\s(?<body_bytes_sent>\S*)\s\"(?<http_referer>[^\"]*)\"\s\"(?<http_user_agent>[^\"]*)\"\s(?<request_length>\S*)\s(?<request_time>\S*)\s\[(?<proxy_upstream_name>[^\]]*)\]\s\[(?<proxy_alternative_upstream_name>[^\]]*)\]\s(?<upstream_addr>\S*)\s(?<upstream_response_length>\S*)\s(?<upstream_response_time>\S*)\s(?<upstream_status>\S*)\s(?<req_id>\S*)"
+    | rex field=request "^(?<http_method>\S+)?\s(?<url>\S+)\s" | rex field=url "(?<dest_ip>\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"
+    | search dest_ip=* | rename remote_addr AS src_ip, upstream_status as status,
+    proxy_upstream_name as proxy | eval phase="operate" | eval severity="medium" |
+    stats count min(_time) as firstTime max(_time) as lastTime by src_ip, dest_ip
+    status, url, http_method, host, http_user_agent, proxy, phase, severity | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `kubernetes_nginx_ingress_rfi_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: fc5531ae-62fd-4de6-9c36-b4afdae8ca95
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/kubernetes_nginx_ingress_rfi.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,8 @@
+{
+  "baseline_client_family_rarity": 0.994,
+  "clientAppUsed": "Exchange Web Services",
+  "operation": "New-InboxRule",
+  "result": "success",
+  "user": "priya.n@example.com",
+  "user_agent": "Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0; Pro)"
+}

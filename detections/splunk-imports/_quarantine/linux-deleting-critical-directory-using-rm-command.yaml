@@ -1,0 +1,47 @@
+id: splunk-security-content-33f89303-cc6f-49ad-921d-2eaea38a6f7a
+name: Linux Deleting Critical Directory Using RM Command
+description: The following analytic detects the deletion of critical directories on
+  a Linux machine using the `rm` command with argument rf. It leverages data from
+  Endpoint Detection and Response (EDR) agents, focusing on command-line executions
+  targeting directories like /boot, /var/log, /etc, and /dev. This activity is significant
+  because deleting these directories can severely disrupt system operations and is
+  often associated with destructive campaigns like Industroyer2. If confirmed malicious,
+  this action could lead to system instability, data loss, and potential downtime,
+  making it crucial for immediate investigation and response.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://www.welivesecurity.com/2022/04/12/industroyer2-industroyer-reloaded/
+- https://cert.gov.ua/article/39518
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ =rm\n    AND\n    Processes.process= \"* -rf *\"\n    AND\n    Processes.process\
+    \ IN (\"*/boot/*\", \"*/var/log/*\", \"*/etc/*\", \"*/dev/*\")\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_deleting_critical_directory_using_rm_command_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 33f89303-cc6f-49ad-921d-2eaea38a6f7a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_deleting_critical_directory_using_rm_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

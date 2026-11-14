@@ -1,0 +1,4 @@
+{
+  "auth_required": false,
+  "event_type": "http_request"
+}

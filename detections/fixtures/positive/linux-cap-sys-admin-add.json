@@ -1,0 +1,6 @@
+{
+  "added_caps": [
+    "CAP_SYS_ADMIN"
+  ],
+  "event_type": "container_create"
+}

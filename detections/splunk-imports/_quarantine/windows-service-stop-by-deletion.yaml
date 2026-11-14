@@ -1,0 +1,48 @@
+id: splunk-security-content-196ff536-58d9-4d1b-9686-b176b04e430b
+name: Windows Service Stop By Deletion
+description: The following analytic detects the use of `sc.exe` to delete a Windows
+  service. It leverages Endpoint Detection and Response (EDR) data, focusing on process
+  execution logs that capture command-line arguments. This activity is significant
+  because adversaries often delete services to disable security mechanisms or critical
+  system functions, aiding in evasion and persistence. If confirmed malicious, this
+  action could lead to the termination of essential security services, allowing attackers
+  to operate undetected and potentially escalate their privileges or maintain long-term
+  access to the compromised system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/a6f2ffe2-e6e2-4396-ae2e-04ea0143f2d8/
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1543.003/T1543.003.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process min(_time) as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n\
+    \  WHERE (\n        Processes.process_name = sc.exe\n        OR\n        Processes.original_file_name\
+    \ = sc.exe\n    )\n    Processes.process=\"* delete *\"\n  BY Processes.action\
+    \ Processes.dest Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_service_stop_by_deletion_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 196ff536-58d9-4d1b-9686-b176b04e430b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_stop_by_deletion.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

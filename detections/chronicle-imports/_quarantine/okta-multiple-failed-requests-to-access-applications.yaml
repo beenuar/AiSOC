@@ -1,0 +1,79 @@
+id: chronicle-detection-rules-okta-multiple-failed-requests-to-access-applications
+name: okta_multiple_failed_requests_to_access_applications
+description: okta_multiple_failed_requests_to_access_applications
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule okta_multiple_failed_requests_to_access_applications {\n\n  meta:\n   \
+    \ author = \"Google Cloud Security\"\n    description = \"Detects multiple failed\
+    \ requests to access applications\"\n    rule_id = \"mr_171cce33-0367-4c46-918d-c9fe813b4418\"\
+    \n    rule_name = \"Okta Multiple Failed Requests To Access Applications\"\n \
+    \   reference = \"https://sec.okta.com/sessioncookietheft\"\n    mitre_attack_tactic\
+    \ = \"Defense Evasion, Lateral Movement\"\n    mitre_attack_technique = \"Use\
+    \ Alternate Authentication Material: Web Session Cookie\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1550/004/\"\n    mitre_attack_version\
+    \ = \"v13.1\"\n    type = \"Hunt\"\n    data_source = \"Okta\"\n    severity =\
+    \ \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $login.metadata.product_name\
+    \ = \"Okta\"\n    $login.metadata.vendor_name = \"Okta\"\n    $login.metadata.event_type\
+    \ = \"USER_UNCATEGORIZED\"\n    $login.metadata.product_event_type = \"policy.evaluate_sign_on\"\
+    \n    $login.target.resource.resource_subtype = \"AppInstance\"\n    $login.security_result.action\
+    \ = \"CHALLENGE\"\n    $login.network.parent_session_id = $parentNetworkSessionId\n\
+    \n    $sso.metadata.event_type = \"USER_LOGIN\"\n    $sso.metadata.product_event_type\
+    \ = \"user.authentication.sso\"\n    $sso.security_result.action = \"ALLOW\"\n\
+    \    $sso.target.resource.resource_subtype = \"AppInstance\"\n    $sso.network.parent_session_id\
+    \ = $parentNetworkSessionId\n\n  match:\n    $parentNetworkSessionId over 15m\n\
+    \n  outcome:\n    $risk_score = max(\n        // Baseline\n        35 +\n    \
+    \    // Based on Okta Behavior Detection pattern analysis\n        if($login.security_result.description\
+    \ = /New Geo-Location=POSITIVE/, 10) +\n        if($login.security_result.description\
+    \ = /New Device=POSITIVE/, 20) +\n        if($login.security_result.description\
+    \ = /New IP=POSITIVE/, 5) +\n        if($login.security_result.description = /New\
+    \ City=POSITIVE/, 5) +\n        if($login.security_result.description = /New State=POSITIVE/,\
+    \ 10) +\n        if($login.security_result.description = /New Country=POSITIVE/,\
+    \ 10) +\n        if($login.security_result.description = /Velocity=POSITIVE/,\
+    \ 10) +\n        // Unauthorized target geographies\n        if($login.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Cuba\", 20) +\n        if($login.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Iran\", 20) +\n        if($login.target.ip_geo_artifact.location.country_or_region\
+    \ = \"North Korea\", 20) +\n        if($login.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Russia\", 20) +\n        if($login.target.ip_geo_artifact.location.country_or_region\
+    \ = \"Syria\", 20)\n    )\n    $mitre_attack_tactic = \"Defense Evasion, Lateral\
+    \ Movement\"\n    $mitre_attack_technique = \"Use Alternate Authentication Material:\
+    \ Web Session Cookie\"\n    $principal_user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $principal_ip = array_distinct($login.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($login.principal.location.city)\n   \
+    \ $security_result_summary = array_distinct($login.security_result.summary)\n\
+    \    $principal_user_managers_email_addresses = array_distinct($login.principal.user.managers.email_addresses)\n\
+    \    $principal_user_userid = array_distinct($login.principal.user.userid)\n \
+    \   $app_names = array_distinct($login.target.resource.name)\n    $dc_app_name\
+    \ = count_distinct($login.target.resource.name)\n    $security_result_description\
+    \ = array_distinct($login.security_result.description)\n\n  condition:\n    $login\
+    \ and $sso and $dc_app_name > 5\n}"
+  chronicle_rule_name: okta_multiple_failed_requests_to_access_applications
+provenance:
+  source: chronicle/detection-rules
+  source_id: okta_multiple_failed_requests_to_access_applications
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/okta/okta_multiple_failed_requests_to_access_applications.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

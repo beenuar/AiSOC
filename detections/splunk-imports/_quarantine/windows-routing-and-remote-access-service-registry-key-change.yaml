@@ -1,0 +1,50 @@
+id: splunk-security-content-a93df51e-e612-40b7-a105-33e288160575
+name: Windows Routing and Remote Access Service Registry Key Change
+description: 'This analytic identifies the modification of the Windows RemoteAccess
+  Registry Entry.
+
+  This technique can be used by malware, adversaries, threat actors and red teamers
+  to gain persistence on a system by tampering with the key to add a custom DLL to
+  be loaded.
+
+  This technique was also observed to be used by Gh0st RAT malware.
+
+  Upon seeing this behavior, it is recommended to review the system services events
+  especially the remote access services.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.ghost_rat
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-rrasm/22ad9f0e-4349-43e0-92b3-37f7a9c7ca41
+- https://s7d2.scene7.com/is/content/cylance/prod/cylance-web/en-us/resources/knowledge-center/resource-library/reports/Op_Dust_Storm_Report.pdf
+- https://www.sentinelone.com/blog/the-curious-case-of-gh0st-malware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Registry WHERE\n\n\
+    Registry.registry_path=\"*\\\\Services\\\\RemoteAccess\\\\RouterManagers\\\\Ip*\"\
+    \nRegistry.action=modified\n\nby Registry.action Registry.dest Registry.process_guid\n\
+    \   Registry.process_id Registry.registry_hive\n   Registry.registry_path Registry.registry_key_name\n\
+    \   Registry.registry_value_data Registry.registry_value_name\n   Registry.registry_value_type\
+    \ Registry.status\n   Registry.user Registry.vendor_product\n\n| `drop_dm_object_name(Registry)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_routing_and_remote_access_service_registry_key_change_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a93df51e-e612-40b7-a105-33e288160575
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_routing_and_remote_access_service_registry_key_change.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,27 @@
+title: Inbox Rule Forwards Mail to External Domain
+id: aisoc-id-em-0001-fwd-external
+status: stable
+description: |
+  Newly created mailbox rule forwards or redirects mail to a domain
+  outside the tenant. Classic post-compromise exfiltration pattern used
+  in BEC and OAuth-consent attacks.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: m365
+  service: exchange
+tags:
+  - attack.t1114.003
+  - attack.collection
+  - aisoc.email
+detection:
+  selection:
+    event.module: m365
+    email.operation|contains:
+      - 'New-InboxRule'
+      - 'Set-InboxRule'
+  forwards:
+    email.rule.forward_to|contains: '@'
+  external:
+    enrich.email.forward_external: true
+  condition: selection and forwards and external

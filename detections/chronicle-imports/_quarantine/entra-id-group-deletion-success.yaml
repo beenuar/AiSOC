@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-entra-id-group-deletion-success
+name: entra_id_group_deletion_success
+description: entra_id_group_deletion_success
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule entra_id_group_deletion_success {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Detects when a group is deleted.\"\n    rule_id\
+    \ = \"mr_d6a3162a-3ec5-45c1-a7cd-ff2988582924\"\n    rule_name = \"Entra ID Successful\
+    \ Group Deletion\"\n    type = \"alert\"\n    platform = \"azure\"\n    data_source\
+    \ = \"azure ad audit\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $group.metadata.event_type = \"GROUP_DELETION\"\n    $group.metadata.product_event_type\
+    \ = \"Delete group\"\n    $group.metadata.product_name = \"Azure AD Directory\
+    \ Audit\"\n    $group.metadata.vendor_name = \"Microsoft\"\n    $group.security_result.action\
+    \ = \"ALLOW\"\n    $group.principal.user.userid = $user\n\n  match:\n    $user\
+    \ over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($group.metadata.id)\n\
+    \    $user_agent = array_distinct($group.network.http.user_agent)\n    $principal_ip\
+    \ = array_distinct($group.principal.ip)\n    $principal_user_userid = array_distinct($group.principal.user.email_addresses)\n\
+    \    $group_name = array_distinct($group.target.resource.name)\n    $group_guid\
+    \ = array_distinct($group.target.resource.product_object_id)\n\n  condition:\n\
+    \    $group\n}"
+  chronicle_rule_name: entra_id_group_deletion_success
+provenance:
+  source: chronicle/detection-rules
+  source_id: entra_id_group_deletion_success
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/entra_id/entra_id_group_deletion_success.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

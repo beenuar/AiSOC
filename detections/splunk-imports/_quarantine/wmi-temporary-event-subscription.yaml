@@ -1,0 +1,41 @@
+id: splunk-security-content-38cbd42c-1098-41bb-99cf-9d6d2b296d83
+name: WMI Temporary Event Subscription
+description: The following analytic detects the creation of WMI temporary event subscriptions.
+  It leverages Windows Event Logs, specifically EventCode 5860, to identify these
+  activities. This detection is significant because attackers often use WMI to execute
+  commands, gather information, or maintain persistence within a compromised system.
+  If confirmed malicious, this activity could allow an attacker to execute arbitrary
+  code, escalate privileges, or persist in the environment. Analysts should review
+  the specific WMI queries and assess their intent, considering potential false positives
+  from legitimate administrative tasks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wmi`\nEventCode=5860\nTemporary\n| rex field=Message \"NotificationQuery\
+    \ =\\s+(?<query>[^;|^$]+)\"\n| search\n    query!=\"FROM Win32_ProcessStartTrace\
+    \ WHERE ProcessName = 'wsmprovhost.exe'\"\n    AND\n    query!=\"FROM __InstanceOperationEvent\
+    \ WHERE TargetInstance ISA 'AntiVirusProduct' OR TargetInstance ISA 'FirewallProduct'\
+    \ OR TargetInstance ISA 'AntiSpywareProduct'\"\n| stats count min(_time) as firstTime\n\
+    \              max(_time) as lastTime\n  by ComputerName, query\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `wmi_temporary_event_subscription_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 38cbd42c-1098-41bb-99cf-9d6d2b296d83
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wmi_temporary_event_subscription.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

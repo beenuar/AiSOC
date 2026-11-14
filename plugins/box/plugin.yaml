@@ -1,0 +1,27 @@
+id: box
+name: Box Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Box enterprise audit log connector. Polls the Box Events API
+  (/2.0/events?stream_type=admin_logs) for admin and security-relevant
+  events (login, shared-link creation, MFA / device-trust changes,
+  folder permission changes) and normalises them to the AiSOC alert
+  shape with severity derived from event type.
+author: AiSOC Core Team
+tags: [saas, box, file-sharing, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/box.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [access_token]
+  properties:
+    access_token:
+      type: string
+      description: >
+        Box developer/admin token. For production use a Custom App with
+        JWT or OAuth and the AdminEvents read scope; for proof-of-concept
+        a Developer Token from the Box Developer Console is accepted.
+      secret: true

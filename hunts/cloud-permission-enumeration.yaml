@@ -1,0 +1,41 @@
+id: hunt-cloud-permission-enumeration
+name: Identity enumerated its own permissions across many services
+description: |
+  Posture scanners sweep every service on a schedule and look identical to an attacker orienting. Which identity is doing it is the whole signal.
+version: 1.0.0
+severity: medium
+category: cloud
+tags:
+  - mitre.attack.t1069.003
+  - hunt.cloud
+log_sources:
+  - aws_cloudtrail
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did one identity make a burst of read-only describe or list calls across unrelated services?
+  indicators:
+    - field: "source"
+      equals: "aws_cloudtrail"
+    - field: "eventName"
+      regex: "^(Describe|List|Get)"
+    - field: "distinctServicesLast15Min"
+      gte: 12
+    - field: "performedByPipeline"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-030
+  positive_template_id: hunt-cloud-permission-enumeration
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-030-NEG
+  # The negative inverts performedByPipeline, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1069/003/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

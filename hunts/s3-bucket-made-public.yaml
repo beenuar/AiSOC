@@ -1,0 +1,39 @@
+id: hunt-s3-bucket-made-public
+name: Object storage bucket made publicly readable
+description: |
+  Bucket policies change constantly in an active estate. Whether the resulting policy grants anonymous read is the only part that matters.
+version: 1.0.0
+severity: high
+category: cloud
+tags:
+  - mitre.attack.t1530
+  - hunt.cloud
+log_sources:
+  - aws_cloudtrail
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a bucket policy changed to allow public access?
+  indicators:
+    - field: "source"
+      equals: "aws_cloudtrail"
+    - field: "eventName"
+      in: ["PutBucketPolicy", "PutBucketAcl", "DeletePublicAccessBlock"]
+    - field: "resultsInPublicAccess"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-047
+  positive_template_id: hunt-s3-bucket-made-public
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-047-NEG
+  # The negative inverts resultsInPublicAccess, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1530/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

@@ -1,0 +1,6 @@
+{
+  "attachment_encrypted": false,
+  "from": "user@corp.com",
+  "to": "external@partner.com",
+  "to_external": true
+}

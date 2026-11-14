@@ -1,0 +1,28 @@
+id: github-audit
+name: GitHub Audit Log Connector
+version: "1.0.0"
+plugin_type: connector
+description: >
+  GitHub Enterprise / Organization audit log connector. Streams org audit
+  events, lists secret-scanning alerts, and pulls user activity for security
+  investigations. Backed by the GitHub Audit Log API.
+author: AiSOC Core Team
+tags: [vcs, github, audit, identity, supply-chain]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/github-audit
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [org, token]
+  properties:
+    org:
+      type: string
+      description: "GitHub organization slug, e.g. acme-corp"
+    token:
+      type: string
+      description: "GitHub PAT or fine-grained token with read:audit_log scope"
+      secret: true
+    base_url:
+      type: string
+      description: "GitHub API base URL (override for GHES)"
+      default: "https://api.github.com"

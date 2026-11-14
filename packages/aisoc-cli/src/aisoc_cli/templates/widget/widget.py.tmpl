@@ -1,0 +1,50 @@
+"""
+$name — AiSOC dashboard widget plugin.
+
+Widgets are rendered inside the AiSOC dashboard / saved-views surface. The
+backend ``Widget.fetch_data()`` call returns a small typed payload that the
+frontend renderer turns into a card, chart, or table.
+"""
+from __future__ import annotations
+
+from typing import Any
+
+
+class Widget:
+    """Main widget class — AiSOC instantiates one per dashboard placement."""
+
+    widget_id = "$slug"
+
+    def __init__(self, config: dict[str, Any]) -> None:
+        self.config = config
+        self.title: str = str(config.get("title", "$name"))
+        self.refresh_interval_seconds: int = int(
+            config.get("refresh_interval_seconds", 60)
+        )
+
+    async def fetch_data(self, context: dict[str, Any]) -> dict[str, Any]:
+        """Return the data payload the dashboard should render.
+
+        Args:
+            context: Runtime context — ``tenant_id``, ``user_id``, ``time_range``.
+
+        Returns:
+            A dict with the shape::
+
+                {
+                    "type": "kpi" | "timeseries" | "table" | "list",
+                    "title": str,
+                    "data": Any,        # type-specific payload
+                    "refresh_interval_seconds": int,
+                }
+
+            ``data`` is widget-type-specific. KPI widgets return a single number,
+            timeseries return ``[{"t": iso8601, "v": number}, ...]``, etc.
+        """
+        # TODO: query the AiSOC API or directly run the widget's data source.
+        return {
+            "type": "kpi",
+            "title": self.title,
+            "data": {"value": 0, "label": "events"},
+            "refresh_interval_seconds": self.refresh_interval_seconds,
+        }

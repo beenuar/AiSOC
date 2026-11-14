@@ -1,0 +1,47 @@
+id: splunk-security-content-1a67f15a-f4ff-4170-84e9-08cf6f75d6f5
+name: DNS Query Length With High Standard Deviation
+description: The following analytic identifies DNS queries with unusually large lengths
+  by computing the standard deviation of query lengths and filtering those exceeding
+  two times the standard deviation. It leverages DNS query data from the Network_Resolution
+  data model, focusing on the length of the domain names being resolved. This activity
+  is significant as unusually long DNS queries can indicate data exfiltration or command-and-control
+  communication attempts. If confirmed malicious, this activity could allow attackers
+  to stealthily transfer data or maintain persistent communication channels within
+  the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Network_Resolution\n  WHERE NOT DNS.record_type\
+    \ IN (\"Pointer\",\"PTR\",\"SOA\", \"SRV\") DNS.query != *.\n  BY DNS.answer DNS.answer_count\
+    \ DNS.query\n     DNS.query_count DNS.reply_code_id DNS.src\n     DNS.vendor_product\
+    \ DNS.dest DNS.record_type\n| `drop_dm_object_name(\"DNS\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| eval tlds=split(query,\".\")\n| eval tld=mvindex(tlds,-1)\n\
+    | eval tld_len=len(tld)\n| search tld_len<=20\n| eval query_length = len(query)\n\
+    | table firstTime lastTime src dest query query_length record_type count record_type\n\
+    | eventstats stdev(query_length) AS stdev avg(query_length) AS avg p50(query_length)\
+    \ AS p50\n| where query_length>(avg+stdev*2)\n| eval z_score=(query_length-avg)/stdev\n\
+    | stats count values(query) as query values(dest) as dest avg(query_length) as\
+    \ avg_query_length values(record_type) as record_type min(firstTime) as firstTime\
+    \ latest(lastTime) as lastTime\n  BY src\n| `dns_query_length_with_high_standard_deviation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1a67f15a-f4ff-4170-84e9-08cf6f75d6f5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/dns_query_length_with_high_standard_deviation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

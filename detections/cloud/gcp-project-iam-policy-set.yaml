@@ -1,0 +1,24 @@
+id: det-cloud-206
+name: GCP Project IAM Policy Replaced
+description: SetIamPolicy replaces the whole binding set, so a grant and a revocation look identical in
+  the method name alone.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: cloudresourcemanager
+detection:
+  condition: |
+    method_name == "SetIamPolicy"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

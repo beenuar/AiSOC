@@ -1,0 +1,43 @@
+id: splunk-security-content-737e8baa-d44e-4fa9-8281-24056ed424c0
+name: Linux Auditd AI CLI Permission Override Activated
+description: 'This detection identifies when an AI command-line tool is launched in
+  an unsafe mode that bypasses normal safety checks and user approvals.
+
+  For instance, running claude --dangerously-skip-permissions skips all safety restrictions,
+  allowing the tool to operate freely, while gemini --yolo automatically approves
+  all actions without prompting the user.
+
+  These modes, often called permission overrides or YOLO mode, let the AI execute
+  commands, modify files, or perform tasks without confirmation.
+
+  Detecting their use is important to prevent unintended or potentially harmful operations.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1480
+  categories:
+  - endpoint
+references:
+- https://x.com/Mandiant/status/2031097693620081042?s=20
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` (proctitle = \"*gemini*\" AND proctitle IN (\"*--yolo*\"\
+    , \"*-y *\")) OR\n(proctitle = \"*claude*\" AND proctitle= \"*--dangerously-skip-permissions*\"\
+    )\n| rename host as dest\n| stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n  BY proctitle dest\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\
+    \ | `linux_auditd_ai_cli_permission_override_activated_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 737e8baa-d44e-4fa9-8281-24056ed424c0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_ai_cli_permission_override_activated.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

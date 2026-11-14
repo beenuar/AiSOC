@@ -1,0 +1,151 @@
+# The effective-permissions route, against real Postgres and real credentials.
+#
+# Why this exists
+# ---------------
+# GET /api/v1/identity/{principal_id}/effective-permissions bound
+# `get_current_user` and made no authorization decision at all. The tenant was
+# always derived from the credential, so this was never a cross-tenant defect —
+# but every role in the tenant reached it, `viewer` included, and so did an API
+# key scoped to something entirely unrelated, because a key's scopes are only
+# ever read by `require_permission` and this route never called it
+# (GHSA-q23c-9pj3-cw75). What comes back is an identity's allowed and denied
+# actions, resource ids and ARNs, and the policy chain behind them.
+#
+# Why live
+# --------
+# Roles and API-key scopes are rows. A constructed session object carries
+# whatever role it was built with, and no stand-in can show that a key's scopes
+# are consulted at all — which is the half of the report that is sharpest and
+# the half the reporter could only infer from reading the source. So this drives
+# the real ASGI application with its real auth dependencies against a real
+# database with the migration chain applied, and mints real credentials in it.
+#
+# No `paths:` filter. A path filter here would mean the gate skips on exactly
+# the pull request that reshapes the auth dependency it exists to protect.
+name: Identity authz (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs, never on `github.ref`
+  # alone: that shape cancels the run for the commit before it, and a check that
+  # was cancelled never graded the commit it is reported against.
+  group: identity-authz-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  identity-authz-live:
+    name: effective-permissions requires identity:read
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner: a superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, so grading authorization as the
+      # owner would also seed rows nothing else could reproduce.
+      IDENTITY_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      SUITE: ../../tests/isolation/test_effective_permissions_authz_live.py
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real application pulls in the real application's whole
+      # import chain, and a set that differs from the lock tests software
+      # nobody ships.
+      - name: Install the API from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: Mint a credential key for the vault
+        run: |
+          KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "AISOC_CREDENTIAL_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: A viewer and an unrelated API key are both refused
+        working-directory: services/api
+        env:
+          ISOLATION_IDENTITY_DSN: ${{ env.IDENTITY_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: python -m pytest "$SUITE" -v --tb=short
+
+      # The negative control, and it re-injects the real defect.
+      #
+      # `require_permission("identity:read")` is the whole fix. Putting
+      # `get_current_user` back is exactly what shipped, so it must make this
+      # suite fail. If it does not, the suite is not driving the production
+      # dependency and its green tick means nothing — which is worth failing the
+      # build over, because the alternative is a check that certifies an
+      # authorization control while being blind to it.
+      #
+      # The guard above the edit keeps this honest over time: if the dependency
+      # is ever reshaped so the string is not found, this control fails loudly
+      # rather than passing by editing nothing.
+      - name: The gate fails when the permission is removed
+        working-directory: services/api
+        env:
+          ISOLATION_IDENTITY_DSN: ${{ env.IDENTITY_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/api/v1/endpoints/effective_permissions.py
+          cp "$TARGET" /tmp/effective_permissions.bak
+          restore() { cp /tmp/effective_permissions.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/effective_permissions.py")
+          s = p.read_text()
+          needle = 'IdentityReader = Annotated[CurrentUser, Depends(require_permission("identity:read"))]'
+          if needle not in s:
+              print("FAIL: the permission this control removes is not there to remove.")
+              print("      The dependency has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "IdentityReader = Annotated[CurrentUser, Depends(get_current_user)]", 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the permission removed."
+            echo "      It is not grading the production dependency."
+            exit 1
+          fi
+          echo "OK: removing the permission makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q

@@ -1,0 +1,59 @@
+id: splunk-security-content-fc2a024a-18c1-4d31-9480-7f04cf3ff293
+name: MCP Filesystem Server Suspicious Extension Write
+description: This detection identifies attempts to create executable or script files
+  through MCP filesystem server connections. Threat actors leveraging LLM-based tools
+  may attempt to write malicious executables, scripts, or batch files to disk for
+  persistence or code execution. The detection prioritizes files written to system
+  directories or startup locations which indicate higher likelihood of malicious intent.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/8377
+- https://cymulate.com/blog/cve-2025-53109-53110-escaperoute-anthropic/
+- https://www.splunk.com/en_us/blog/security/securing-ai-agents-model-context-protocol.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`mcp_server` method IN (\"write_file\", \"create_file\") direction=inbound\n\
+    | spath output=file_path path=params.path\n| spath output=file_content path=params.content\n\
+    | eval dest=host\n| eval file_extension=lower(mvindex(split(file_path, \".\"),\
+    \ -1))\n| where file_extension IN (\n    \"exe\", \"dll\", \"ps1\", \"bat\", \"\
+    cmd\", \"vbs\", \"js\", \"scr\", \"msi\", \"hta\", \"wsf\", \"wsh\", \"pif\",\
+    \ \"com\", \"cpl\",\n    \"sh\", \"bash\", \"zsh\", \"ksh\", \"csh\", \"tcsh\"\
+    , \"fish\",\n    \"py\", \"pl\", \"rb\", \"php\", \"lua\", \"awk\",\n    \"so\"\
+    , \"dylib\", \"bin\", \"elf\", \"run\", \"AppImage\",\n    \"deb\", \"rpm\", \"\
+    pkg\", \"dmg\",\n    \"plist\", \"service\", \"timer\", \"socket\", \"conf\"\n\
+    \    )\n| eval\n    file_path_lower=lower(file_path),\n    is_system_path = if(match(file_path_lower,\
+    \ \"(windows|system32|syswow64|program files|/usr|/bin|/sbin|/lib|/lib64|/etc|/opt)\"\
+    ), 1, 0),\n    is_startup_path = if(match(file_path_lower, \"(startup|autorun|cron\\\
+    .d|crontab|launchd|launchagents|launchdaemons|systemd|init\\.d|rc\\.d|rc\\.local|profile\\\
+    .d|bashrc|zshrc|bash_profile)\"), 1, 0),\n    is_hidden_unix = if(match(file_path,\
+    \ \"/\\.[^/]+$\"), 1, 0),\n    content_length=len(file_content)\n| stats count\
+    \ min(_time) as firstTime max(_time) as lastTime values(file_path) as file_paths\
+    \ values(file_extension) as extensions max(is_system_path) as targets_system_path\
+    \ max(is_startup_path) as targets_startup_path max(is_hidden_unix) as targets_hidden_file\
+    \ avg(content_length) as avg_content_size by dest, method\n| eval\n    targets_system_path=if(isnull(targets_system_path),\
+    \ 0, targets_system_path),\n    targets_startup_path=if(isnull(targets_startup_path),\
+    \ 0, targets_startup_path),\n    targets_hidden_file=if(isnull(targets_hidden_file),\
+    \ 0, targets_hidden_file)\n| sort - targets_startup_path, - targets_system_path,\
+    \ - targets_hidden_file, - count\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | table dest firstTime lastTime count method extensions file_paths targets_system_path\
+    \ targets_startup_path targets_hidden_file avg_content_size\n| `mcp_filesystem_server_suspicious_extension_write_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fc2a024a-18c1-4d31-9480-7f04cf3ff293
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/mcp_filesystem_server_suspicious_extension_write.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

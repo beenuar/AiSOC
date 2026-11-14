@@ -1,0 +1,29 @@
+id: cortex-xsiam
+name: Palo Alto Cortex XSIAM Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Palo Alto Networks Cortex XSIAM — pulls correlated incidents and supports XQL
+  queries over the platform's data lake. Endpoint isolation is exposed as an
+  agent action.
+author: AiSOC Core Team
+tags: [siem, xsiam, palo-alto, cortex]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cortex_xsiam.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tenant_fqdn, api_key_id, api_key]
+  properties:
+    tenant_fqdn:
+      type: string
+      description: Found in the XSIAM console under Settings → API Keys.
+    api_key_id:
+      type: string
+      description: API Key ID
+      secret: true
+    api_key:
+      type: string
+      description: API Key
+      secret: true

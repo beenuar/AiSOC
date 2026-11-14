@@ -1,0 +1,66 @@
+id: splunk-security-content-dc167f8b-3f9d-4460-9c98-8b6e703fd628
+name: Windows EventLog Recon Activity Using Log Query Utilities
+description: This analytic detects EventLog reconnaissance activity using utilities
+  such as `wevtutil.exe`, `wmic.exe`, PowerShell cmdlets like `Get-WinEvent`, or WMI
+  queries targeting `Win32_NTLogEvent`. It leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on process names and command-line arguments.
+  These tools are often used by adversaries to extract usernames, IP addresses, session
+  data, and event information for credential access or situational awareness during
+  lateral movement. While these utilities are legitimate, execution with specific
+  arguments or targeting sensitive logs like `Security`, `PowerShell`, or specific
+  EventIDs (e.g., 4624, 4778) can indicate malicious intent. If confirmed malicious,
+  this behavior could allow an attacker to extract sensitive info and potentially
+  have leveraged access or move laterally.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1654
+  categories:
+  - endpoint
+references:
+- http://blog.talosintelligence.com/2022/09/lazarus-three-rats.html
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-144a
+- https://www.group-ib.com/blog/apt41-world-tour-2021/
+- https://labs.withsecure.com/content/dam/labs/docs/f-secureLABS-tlp-white-lazarus-threat-intel-report2.pdf
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.diagnostics/get-winevent
+- https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.management/get-eventlog
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wevtutil
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.process)\
+    \ as process\n  min(_time) as firstTime max(_time) as lastTime\n  from datamodel=Endpoint.Processes\n\
+    \  where (\n    (\n      (\n        Processes.process_name IN (\"powershell.exe\"\
+    , \"pwsh.exe\", \"powershell_ise.exe\")\n        OR\n        Processes.original_file_name\
+    \ IN (\"PowerShell.EXE\", \"pwsh.dll\", \"powershell_ise.EXE\")\n      )\n   \
+    \   Processes.process IN (\"*Get-WinEvent*\", \"*Get-EventLog*\", \"*EventLogQuery*\"\
+    , \"*.ReadEvent(*\")\n    )\n    OR\n    (\n      (\n        Processes.process_name\
+    \ = wevtutil.exe\n        OR\n        Processes.original_file_name = wevtutil.exe\n\
+    \      )\n      Processes.process IN (\"* qe *\", \"* query-events *\")\n    )\n\
+    \    OR\n    (\n      (\n        Processes.process_name = wmic.exe\n        OR\n\
+    \        Processes.original_file_name = wmic.exe\n      )\n      Processes.process\
+    \ IN (\"*ntevent*\")\n    )\n    OR\n    (\n      Processes.process=\"*Win32_NTLogEvent*\"\
+    \n      Processes.process=\"*EventCode*\"\n    )\n    OR\n    (\n      Processes.process\
+    \ IN (\"*PsLogList*\", \"*Eventquery*\")\n    )\n  )\n  by\n    Processes.action\
+    \ Processes.dest Processes.original_file_name Processes.parent_process Processes.parent_process_exec\n\
+    \    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name\n\
+    \    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid\n\
+    \    Processes.process_hash Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name\n    Processes.process_path Processes.user Processes.user_id\
+    \ Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_eventlog_recon_activity_using_log_query_utilities_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: dc167f8b-3f9d-4460-9c98-8b6e703fd628
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_eventlog_recon_activity_using_log_query_utilities.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

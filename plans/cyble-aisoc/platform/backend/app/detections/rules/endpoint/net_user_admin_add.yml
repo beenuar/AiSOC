@@ -1,0 +1,32 @@
+title: Local Administrator Added via net.exe
+id: aisoc-id-ep-0020-net-admin-add
+status: stable
+description: |
+  net.exe or net1.exe used to add a user to the local Administrators
+  group — common post-compromise persistence step.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1136.001
+  - attack.persistence
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name:
+      - 'net.exe'
+      - 'net1.exe'
+  args:
+    process.command_line|contains:
+      - 'localgroup administrators'
+      - 'localgroup "Remote Desktop Users"'
+      - 'localgroup "Backup Operators"'
+  add_action:
+    process.command_line|contains:
+      - ' /add'
+      - ' /a'
+  condition: selection and args and add_action

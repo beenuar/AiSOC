@@ -1,0 +1,55 @@
+id: wazuh
+name: Wazuh Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Wazuh — open-source XDR/SIEM. Pulls alerts from the Wazuh indexer
+  (OpenSearch-compatible) above a configurable rule-level threshold and
+  collapses the 0-15 rule-level ladder onto AiSOC's four-tier severity
+  taxonomy (info | low | medium | high) so detection and fusion logic
+  stays vendor-agnostic.
+author: AiSOC Core Team
+tags: [siem, xdr, wazuh, opensource, hids, fim]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/wazuh.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [indexer_url, username, password]
+  properties:
+    indexer_url:
+      type: string
+      description: >
+        Base URL of the Wazuh **indexer** (NOT the dashboard or manager).
+        Default port is 9200. Example: https://wazuh.example.com:9200
+    username:
+      type: string
+      description: >
+        Indexer user with read access to wazuh-alerts-*. Create a dedicated
+        read-only role in production rather than reusing the kibanaserver or
+        admin accounts.
+    password:
+      type: string
+      description: "Indexer user password."
+      secret: true
+    index_pattern:
+      type: string
+      description: "Override only if you have re-templated the default Wazuh index naming."
+      default: "wazuh-alerts-*"
+    min_rule_level:
+      type: integer
+      description: >
+        Drop alerts with rule.level below this value at ingest. Default 7
+        keeps low-signal noise (informational decoder hits, sshd success
+        events) out of the lake; lower to 3 for full audit coverage.
+      default: 7
+      minimum: 0
+      maximum: 15
+    verify_tls:
+      type: boolean
+      description: >
+        Verify TLS certificate when calling the indexer. Disable only for
+        self-signed lab clusters; production deployments must install the
+        CA chain instead.
+      default: true

@@ -1,0 +1,5 @@
+{
+  "backup_dst_in_allowlist": false,
+  "destination": "external-account-999",
+  "event_type": "Backup.Export"
+}

@@ -1,0 +1,42 @@
+id: hunt-impossible-travel-sign-in
+name: Successful sign-ins from locations too far apart to travel between
+description: |
+  A VPN egress in another region produces the same geography as impossible travel and is the single largest source of false positives in this pattern.
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1078.004
+  - hunt.identity
+log_sources:
+  - okta
+  - azure_ad
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did one account sign in successfully from two locations that could not both be true?
+  indicators:
+    - field: "source"
+      equals: "okta"
+    - field: "outcome"
+      equals: "SUCCESS"
+    - field: "impliedTravelSpeedKph"
+      gte: 900
+    - field: "viaCorporateVpn"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-054
+  positive_template_id: hunt-impossible-travel-sign-in
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-054-NEG
+  # The negative inverts viaCorporateVpn, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1078/004/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

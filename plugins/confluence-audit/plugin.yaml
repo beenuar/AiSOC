@@ -1,0 +1,29 @@
+id: confluence_audit
+name: Atlassian Confluence Audit
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Atlassian Confluence Cloud audit-trail connector. Pulls page, space,
+  permission, and user/group audit events via the Confluence Cloud REST
+  API. Requires an Atlassian Cloud API token; the calling user needs
+  site-admin access to read the full audit log.
+author: AiSOC Core Team
+tags: [saas, atlassian, confluence, audit, wiki, permissions]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/confluence_audit.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [site_url, email, api_token]
+  properties:
+    site_url:
+      type: string
+      description: "Confluence site URL (e.g. https://yourorg.atlassian.net)"
+    email:
+      type: string
+      description: "Atlassian Cloud account email (paired with the API token)"
+    api_token:
+      type: string
+      description: "Atlassian Cloud API token (id.atlassian.com → Security → API tokens)"
+      secret: true

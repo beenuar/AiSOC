@@ -1,0 +1,38 @@
+id: splunk-security-content-977da0c0-c7d5-45de-8b7e-f79e959ca13d
+name: Windows Product Key Registry Query
+description: 'This Analytic detects the execution of a process attempting to access
+  the registry for product key recovery purposes.
+
+  This behavior could be significant as it might indicate potential malware activity
+  or attempts to bypass security measures or data exfiltration.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1012
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/py.blankgrabber
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode=4663\nobject_file_path=\"*\\\\SOFTWARE\\\
+    \\Microsoft\\\\Windows NT\\\\CurrentVersion\\\\SoftwareProtectionPlatform\"\n\
+    | stats count min(_time) as firstTime max(_time) as lastTime\n    by object_file_name\
+    \ object_file_path process_name\n       process_path process_id EventCode dest\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_product_key_registry_query_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 977da0c0-c7d5-45de-8b7e-f79e959ca13d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_product_key_registry_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

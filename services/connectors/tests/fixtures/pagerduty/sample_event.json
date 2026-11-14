@@ -1,0 +1,63 @@
+{
+  "incidents": [
+    {
+      "id": "PT4KHLK",
+      "incident_number": 1234,
+      "title": "Database CPU > 95%",
+      "status": "triggered",
+      "urgency": "high",
+      "priority": {"name": "P1"},
+      "created_at": "2099-01-01T12:00:00Z",
+      "service": {"summary": "Production Postgres"},
+      "html_url": "https://acme.pagerduty.com/incidents/PT4KHLK",
+      "assignments": [
+        {"assignee": {"summary": "alice@example.com"}}
+      ]
+    },
+    {
+      "id": "PT4KHLM",
+      "incident_number": 1235,
+      "title": "Low-urgency disk space warning",
+      "status": "acknowledged",
+      "urgency": "low",
+      "priority": {"name": "P4"},
+      "created_at": "2099-01-01T12:01:00Z",
+      "service": {"summary": "Backups service"},
+      "assignments": []
+    },
+    {
+      "id": "PT4KHLN",
+      "incident_number": 1236,
+      "title": "Resolved page",
+      "status": "resolved",
+      "urgency": "high",
+      "priority": {"name": "P1"},
+      "created_at": "2099-01-01T11:58:00Z",
+      "service": {"summary": "Production Postgres"}
+    }
+  ],
+  "records": [
+    {
+      "id": "01H1234567ABCDEF",
+      "action": "api_key.create",
+      "execution_time": "2099-01-01T12:02:00Z",
+      "actor": {"email": "owner@example.com"},
+      "method": {"type": "browser", "source_ip": "10.0.0.10"}
+    },
+    {
+      "id": "01H1234567ABCDEG",
+      "action": "user.role_changed",
+      "execution_time": "2099-01-01T12:03:00Z",
+      "actor": {"email": "owner@example.com"},
+      "method": {"type": "api"}
+    },
+    {
+      "id": "01H1234567ABCDEH",
+      "action": "service.update",
+      "execution_time": "2099-01-01T12:04:00Z",
+      "actor": {"email": "ops@example.com"},
+      "method": {"type": "api"}
+    }
+  ],
+  "more": false
+}

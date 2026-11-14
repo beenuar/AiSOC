@@ -1,0 +1,70 @@
+{
+  "name": "aisoc",
+  "version": "0.1.0",
+  "description": "AiSOC wedge CLI — triage a batch of security alerts to verdicts in under 60 seconds, offline and deterministic. Part of the open-source AiSOC project.",
+  "keywords": [
+    "soc",
+    "security",
+    "siem",
+    "alert-triage",
+    "detection-engineering",
+    "sigma",
+    "incident-response",
+    "aisoc",
+    "cli"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "aisoc": "dist/cli.js"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "TELEMETRY.md"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "gen:fixtures": "node scripts/gen-fixtures.mjs",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "smoke": "node dist/cli.js triage --demo --no-telemetry"
+  },
+  "dependencies": {
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@aisoc/report-card": "workspace:*",
+    "@types/node": "^26.6.5",
+    "tsup": "^8.3.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "directory": "packages/aisoc-lite"
+  },
+  "homepage": "https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-lite#readme",
+  "bugs": {
+    "url": "https://github.com/beenuar/AiSOC/issues"
+  }
+}

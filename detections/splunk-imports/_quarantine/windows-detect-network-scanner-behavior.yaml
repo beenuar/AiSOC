@@ -1,0 +1,51 @@
+id: splunk-security-content-78e678d2-bf64-4fe6-aa52-2f7b11dddee7
+name: Windows Detect Network Scanner Behavior
+description: The following analytic detects when an application is used to connect
+  a large number of unique ports/targets within a short time frame. Network enumeration
+  may be used by adversaries as a method of discovery, lateral movement, or remote
+  execution. This analytic may require significant tuning depending on the organization
+  and applications being actively used, highly recommended to pre-populate the filter
+  macro prior to activation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1595.001
+  - T1595.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1595
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count values(All_Traffic.action)
+    as action values(All_Traffic.dest) as dest values(All_Traffic.dest_port) as dest_port
+    values(All_Traffic.dest_ip) as dest_ip values(All_Traffic.dvc) as dvc values(All_Traffic.direction)
+    as direction values(All_Traffic.protocol) as protocol values(All_Traffic.protocol_version)
+    as protocol_version values(All_Traffic.src_port) as src_port values(All_Traffic.transport)
+    as transport dc(All_Traffic.dest_port) as port_count dc(All_Traffic.dest) as dest_count
+    min(_time) as firstTime max(_time) as lastTime values(All_Traffic.process_id)
+    as process_id from datamodel=Network_Traffic.All_Traffic where sourcetype=XmlWinEventLog
+    All_Traffic.app = "*\\*" All_Traffic.dest_port < 32000 NOT All_Traffic.dest_port
+    IN (8443,8080,5353,3268,443,389,88,80,53,25) by All_Traffic.app All_Traffic.src
+    All_Traffic.src_ip All_Traffic.user All_Traffic.vendor_product _time span=5m |
+    `drop_dm_object_name(All_Traffic)` | rex field=app ".*\\\(?<process_name>.*)$"
+    | where port_count > 10 OR dest_count > 10 | stats latest(src) as src, latest(src_ip)
+    as src_ip, max(dest_count) as dest_count, max(port_count) as port_count, latest(dest_port)
+    as dest_port, min(firstTime) as firstTime, max(lastTime) as lastTime, max(count)
+    as count by user,app,process_name | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_detect_network_scanner_behavior_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 78e678d2-bf64-4fe6-aa52-2f7b11dddee7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_detect_network_scanner_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

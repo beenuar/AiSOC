@@ -1,0 +1,39 @@
+id: splunk-security-content-9b1a5385-0c31-4c39-9753-dc26b8ce64c2
+name: Windows Steal Authentication Certificates Certificate Issued
+description: The following analytic identifies the issuance of a new certificate by
+  Certificate Services - AD CS, detected via Event ID 4887. This event logs the requester
+  user context, DNS hostname of the requesting machine, and the request time. Monitoring
+  this activity is crucial as it can indicate potential misuse of authentication certificates.
+  If confirmed malicious, an attacker could use the issued certificate to impersonate
+  users, escalate privileges, or maintain persistence within the environment. This
+  detection helps in identifying and correlating suspicious certificate-related activities
+  for further investigation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://specterops.io/wp-content/uploads/sites/3/2022/06/Certified_Pre-Owned.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`  EventCode=4887\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest, name, Requester,\n       action,\
+    \ Attributes, Subject\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_steal_authentication_certificates_certificate_issued_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9b1a5385-0c31-4c39-9753-dc26b8ce64c2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_steal_authentication_certificates_certificate_issued.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

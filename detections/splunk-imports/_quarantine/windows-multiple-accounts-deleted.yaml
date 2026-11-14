@@ -1,0 +1,39 @@
+id: splunk-security-content-49c0d4d6-c55d-4d3a-b3d5-7709fafed70d
+name: Windows Multiple Accounts Deleted
+description: The following analytic detects the deletion of more than five unique
+  Windows accounts within a 10-minute period, using Event Code 4726 from the Windows
+  Security Event Log. It leverages the `wineventlog_security` dataset, segmenting
+  data into 10-minute intervals to identify suspicious account deletions. This activity
+  is significant as it may indicate an attacker attempting to erase traces of their
+  actions. If confirmed malicious, this could lead to unauthorized access removal,
+  hindering incident response and forensic investigations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  - T1078
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1098/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4726 status=success\n  | bucket span=10m\
+    \ _time\n  | stats count dc(user) as unique_users values(user) as user values(dest)\
+    \ as dest\n    BY EventCode signature _time\n       src_user SubjectDomainName\
+    \ TargetDomainName\n       Logon_ID\n  | where unique_users > 5\n  | `windows_multiple_accounts_deleted_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 49c0d4d6-c55d-4d3a-b3d5-7709fafed70d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_multiple_accounts_deleted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,27 @@
+title: Mshta Executes Remote HTA or Script
+id: aisoc-id-ep-0027-mshta-remote
+status: stable
+description: |
+  mshta.exe used to execute a remote URL or script — a well-known
+  LOLBin technique to bypass application control and download
+  attacker payloads.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: process_creation
+tags:
+  - attack.t1218.005
+  - attack.defense_evasion
+  - aisoc.endpoint
+  - aisoc.lolbas
+detection:
+  selection:
+    process.name|endswith: '\mshta.exe'
+  remote:
+    process.command_line|contains:
+      - 'http://'
+      - 'https://'
+      - 'javascript:'
+      - 'vbscript:'
+  condition: selection and remote

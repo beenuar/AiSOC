@@ -1,0 +1,4 @@
+{
+  "event_type": "http_request",
+  "path": "prefix-/etc/emond.d/rules/-suffix"
+}

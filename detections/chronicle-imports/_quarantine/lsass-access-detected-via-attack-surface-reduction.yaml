@@ -1,0 +1,34 @@
+id: chronicle-detection-rules-lsass-access-detected-via-attack-surface-reduction
+name: lsass_access_detected_via_attack_surface_reduction
+description: lsass_access_detected_via_attack_surface_reduction
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule lsass_access_detected_via_attack_surface_reduction {\n meta:\n\
+    \    author = \"Markus Neis\"\n    description = \"Detects Access to LSASS Process\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/jgYfMr0VH05h\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/08/26\"\n    product = \"windows_defender\"\
+    \n    mitre = \"credential_access, t1003\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1121\" and re.regex($selection.target.file.full_path, `.*\\\\lsass\\.exe`))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: lsass_access_detected_via_attack_surface_reduction
+provenance:
+  source: chronicle/detection-rules
+  source_id: lsass_access_detected_via_attack_surface_reduction
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows_defender/lsass_access_detected_via_attack_surface_reduction.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

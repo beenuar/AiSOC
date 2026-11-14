@@ -1,0 +1,35 @@
+title: Sensitive File or Backup Accessed Externally
+id: aisoc-id-ws-0008-sensitive-file
+status: stable
+description: |
+  Public request to known sensitive files (.git/config, .env,
+  .DS_Store, *.bak, *.sql, web.config). Common reconnaissance step
+  before exploitation.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1083
+  - attack.t1595
+  - attack.discovery
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  files:
+    url.path|endswith:
+      - '.git/config'
+      - '.git/HEAD'
+      - '.env'
+      - '.DS_Store'
+      - '.bak'
+      - '.sql'
+      - '.sql.gz'
+      - 'web.config'
+      - 'phpinfo.php'
+      - 'id_rsa'
+  external:
+    enrich.flow.src_external: true
+  condition: selection and files and external

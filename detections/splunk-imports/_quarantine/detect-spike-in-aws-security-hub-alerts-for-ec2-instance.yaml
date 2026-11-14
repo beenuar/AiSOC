@@ -1,0 +1,41 @@
+id: splunk-security-content-2a9b80d3-6340-4345-b5ad-290bf5d0d222
+name: Detect Spike in AWS Security Hub Alerts for EC2 Instance
+description: The following analytic identifies a spike in the number of AWS Security
+  Hub alerts for an EC2 instance within a 4-hour interval. It leverages AWS Security
+  Hub findings data, calculating the average and standard deviation of alerts to detect
+  anomalies. This activity is significant for a SOC as a sudden increase in alerts
+  may indicate potential security incidents or misconfigurations requiring immediate
+  attention. If confirmed malicious, this could signify an ongoing attack, leading
+  to unauthorized access, data exfiltration, or disruption of services on the affected
+  EC2 instance.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`aws_securityhub_finding` \"Resources{}.Type\"=AWSEC2Instance\n  |\
+    \ bucket span=4h _time\n  | stats count AS alerts values(Title) as Title values(Types{})\
+    \ as Types values(vendor_account) as vendor_account values(vendor_region) as vendor_region\
+    \ values(severity) as severity\n    BY _time dest\n  | eventstats avg(alerts)\
+    \ as total_alerts_avg, stdev(alerts) as total_alerts_stdev\n  | eval threshold_value\
+    \ = 3\n  | eval isOutlier=if(alerts > total_alerts_avg+(total_alerts_stdev * threshold_value),\
+    \ 1, 0)\n  | search isOutlier=1\n  | table _time dest alerts Title Types vendor_account\
+    \ vendor_region severity isOutlier total_alerts_avg\n  | `detect_spike_in_aws_security_hub_alerts_for_ec2_instance_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a9b80d3-6340-4345-b5ad-290bf5d0d222
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_spike_in_aws_security_hub_alerts_for_ec2_instance.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

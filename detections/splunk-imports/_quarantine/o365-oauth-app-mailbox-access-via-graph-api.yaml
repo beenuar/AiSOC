@@ -1,0 +1,42 @@
+id: splunk-security-content-9db0d5b0-4058-4cb7-baaf-77d8143539a2
+name: O365 OAuth App Mailbox Access via Graph API
+description: The following analytic detects when emails are accessed in Office 365
+  Exchange via the Microsoft Graph API using the client ID '00000003-0000-0000-c000-000000000000'.
+  It leverages the 'MailItemsAccessed' operation within the Exchange workload, focusing
+  on OAuth-authenticated applications. This activity is significant as unauthorized
+  access to emails can lead to data breaches and information theft. If confirmed malicious,
+  attackers could exfiltrate sensitive information, compromise user accounts, and
+  further infiltrate the organization's network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1114.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1114/002/
+- https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in
+- https://learn.microsoft.com/en-us/graph/permissions-reference
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange Operation=MailItemsAccessed\
+    \ AppId=* AppId=00000003-0000-0000-c000-000000000000\n  | fillnull\n  | stats\
+    \ count earliest(_time) as firstTime latest(_time) as lastTime values(ClientIPAddress)\
+    \ as src\n    BY user ClientAppId OperationCount\n       AppId vendor_account\
+    \ vendor_product\n       dest signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_oauth_app_mailbox_access_via_graph_api_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9db0d5b0-4058-4cb7-baaf-77d8143539a2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_oauth_app_mailbox_access_via_graph_api.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

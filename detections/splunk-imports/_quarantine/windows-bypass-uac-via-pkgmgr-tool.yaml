@@ -1,0 +1,47 @@
+id: splunk-security-content-cce58e2c-988a-4319-9390-0daa9eefa3cd
+name: Windows Bypass UAC via Pkgmgr Tool
+description: The following analytic detects the execution of the deprecated 'pkgmgr.exe'
+  process with an XML input file, which is unusual and potentially suspicious. This
+  detection leverages Endpoint Detection and Response (EDR) telemetry, focusing on
+  process execution details and command-line arguments. The significance lies in the
+  deprecated status of 'pkgmgr.exe' and the use of XML files, which could indicate
+  an attempt to bypass User Account Control (UAC). If confirmed malicious, this activity
+  could allow an attacker to execute commands with elevated privileges, leading to
+  potential system compromise and unauthorized changes.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.002
+  categories:
+  - endpoint
+references:
+- https://asec.ahnlab.com/en/17692/
+- https://www.blackberry.com/us/en/solutions/endpoint-security/ransomware-protection/warzone#:~:text=Warzone%20RAT%20(AKA%20Ave%20Maria)%20is%20a%20remote%20access%20trojan,is%20as%20an%20information%20stealer.
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where  Processes.process_name
+    = pkgmgr.exe Processes.process = "*.xml*" NOT(Processes.parent_process_path IN("*:\\windows\\system32\\*",
+    "*:\\windows\\syswow64\\*", "*:\\Program Files*")) by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_bypass_uac_via_pkgmgr_tool_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: cce58e2c-988a-4319-9390-0daa9eefa3cd
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_bypass_uac_via_pkgmgr_tool.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

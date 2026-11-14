@@ -1,0 +1,59 @@
+{
+  "_description": "Kubernetes privilege escalation: a namespace-scoped ServiceAccount in the `experiments` namespace is bound to the `cluster-admin` ClusterRole by `dev-onboard@example.com` at 02:14 UTC (outside change-management window), then the SA immediately lists `secrets` in `kube-system`. Three audit events from the apiserver. Routes through the `k8s_audit` connector profile.",
+  "_usage": "aisoc submit examples/alerts/kubernetes-privesc.json   # real ingest\nbasoc-sandbox demo --scenario kubernetes-privesc   # offline simulator",
+  "_mitre_techniques": ["T1098", "T1078"],
+  "_severity": "critical",
+  "events": [
+    {
+      "uuid": "k8s-001",
+      "kind": "Event",
+      "apiVersion": "audit.k8s.io/v1",
+      "stage": "ResponseComplete",
+      "verb": "create",
+      "user": {"username": "dev-onboard@example.com", "groups": ["system:authenticated"]},
+      "objectRef": {
+        "resource": "serviceaccounts",
+        "namespace": "experiments",
+        "name": "debug-runner",
+        "apiVersion": "v1"
+      },
+      "requestReceivedTimestamp": "2026-06-22T02:14:00.001Z",
+      "stageTimestamp": "2026-06-22T02:14:00.045Z",
+      "annotations": {"authorization.k8s.io/decision": "allow"}
+    },
+    {
+      "uuid": "k8s-002",
+      "kind": "Event",
+      "apiVersion": "audit.k8s.io/v1",
+      "stage": "ResponseComplete",
+      "verb": "create",
+      "user": {"username": "dev-onboard@example.com", "groups": ["system:authenticated"]},
+      "objectRef": {
+        "resource": "clusterrolebindings",
+        "name": "debug-runner-cluster-admin",
+        "apiVersion": "rbac.authorization.k8s.io/v1"
+      },
+      "requestObject": {
+        "subjects": [{"kind": "ServiceAccount", "name": "debug-runner", "namespace": "experiments"}],
+        "roleRef": {"kind": "ClusterRole", "name": "cluster-admin", "apiGroup": "rbac.authorization.k8s.io"}
+      },
+      "requestReceivedTimestamp": "2026-06-22T02:14:42.103Z",
+      "stageTimestamp": "2026-06-22T02:14:42.198Z"
+    },
+    {
+      "uuid": "k8s-003",
+      "kind": "Event",
+      "apiVersion": "audit.k8s.io/v1",
+      "stage": "ResponseComplete",
+      "verb": "list",
+      "user": {"username": "system:serviceaccount:experiments:debug-runner", "groups": ["system:authenticated", "system:serviceaccounts:experiments"]},
+      "objectRef": {
+        "resource": "secrets",
+        "namespace": "kube-system",
+        "apiVersion": "v1"
+      },
+      "requestReceivedTimestamp": "2026-06-22T02:16:18.022Z",
+      "stageTimestamp": "2026-06-22T02:16:18.044Z"
+    }
+  ]
+}

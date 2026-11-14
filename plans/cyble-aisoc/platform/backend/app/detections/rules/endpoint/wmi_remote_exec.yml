@@ -1,0 +1,25 @@
+title: Remote Execution via WMI process call create
+id: aisoc-id-ep-0021-wmi-remote
+status: stable
+description: |
+  wmic.exe used with /node: and "process call create" — lateral
+  movement technique used by many ransomware operators.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1047
+  - attack.lateral_movement
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'wmic.exe'
+  remote_call:
+    process.command_line|contains: '/node:'
+  exec_call:
+    process.command_line|contains: 'process call create'
+  condition: selection and remote_call and exec_call

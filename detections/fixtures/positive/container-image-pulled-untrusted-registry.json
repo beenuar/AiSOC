@@ -1,0 +1,7 @@
+{
+  "image": "ghcr.io/external/payload:latest",
+  "image_registry_in_allowlist": false,
+  "namespace": "production",
+  "object_resource": "pods",
+  "verb": "create"
+}

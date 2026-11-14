@@ -1,0 +1,7 @@
+{
+  "bytes_out": 50000,
+  "dst_port": 21,
+  "protocol": "TCP",
+  "src_host": "filexfer-01",
+  "src_in_allowlist": true
+}

@@ -1,0 +1,44 @@
+id: splunk-security-content-71e1fb89-dd5f-4691-8523-575420de4630
+name: AWS Multiple Users Failing To Authenticate From Ip
+description: The following analytic identifies a single source IP failing to authenticate
+  into the AWS Console with 30 unique valid users within 10 minutes. It leverages
+  CloudTrail logs to detect multiple failed login attempts from the same IP address.
+  This behavior is significant as it may indicate a Password Spraying attack, where
+  an adversary attempts to gain unauthorized access or elevate privileges by trying
+  common passwords across many accounts. If confirmed malicious, this activity could
+  lead to unauthorized access, data breaches, or further exploitation within the AWS
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://www.whiteoaksecurity.com/blog/goawsconsolespray-password-spraying-tool/
+- https://softwaresecuritydotblog.wordpress.com/2019/09/28/how-to-protect-against-credential-stuffing-on-aws/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=ConsoleLogin action=failure\n  | bucket span=10m\
+    \ _time\n  | rename user_name as user\n  | stats  dc(user) AS unique_accounts\
+    \ values(user) as user values(user_agent) as user_agent\n    BY _time, src, signature,\n\
+    \       dest, vendor_account, vendor_region,\n       vendor_product\n  | where\
+    \ unique_accounts>30\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_multiple_users_failing_to_authenticate_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 71e1fb89-dd5f-4691-8523-575420de4630
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_multiple_users_failing_to_authenticate_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

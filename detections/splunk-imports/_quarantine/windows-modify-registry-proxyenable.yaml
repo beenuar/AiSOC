@@ -1,0 +1,43 @@
+id: splunk-security-content-b27f20bd-ef20-41d1-a1e9-25dedd5bf2f5
+name: Windows Modify Registry ProxyEnable
+description: The following analytic detects modifications to the Windows registry
+  key "ProxyEnable" to enable proxy settings. It leverages data from the Endpoint.Registry
+  datamodel, specifically monitoring changes to the "Internet Settings\ProxyEnable"
+  registry path. This activity is significant as it is commonly exploited by malware
+  and adversaries to establish proxy communication, potentially connecting to malicious
+  Command and Control (C2) servers. If confirmed malicious, this could allow attackers
+  to redirect network traffic through a proxy, facilitating unauthorized communication
+  and data exfiltration, thereby compromising the security of the affected host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.darkgate
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\Internet Settings\\ProxyEnable"  Registry.registry_value_data = 0x00000001
+    by Registry.action Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_modify_registry_proxyenable_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b27f20bd-ef20-41d1-a1e9-25dedd5bf2f5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_proxyenable.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,58 @@
+# RFC 5424 / RFC 3164 syslog.
+#
+# Used by the syslog listener (UDP and TCP) in services/ingest for lines
+# that carry no vendor key/value payload. CEF and LEEF lines are projected
+# through cef-syslog.yaml and leef-syslog.yaml instead, because those carry
+# a vendor, a product and a severity of their own and projecting them
+# through this template would throw all three away.
+#
+# Class 1007 Process Activity, in category 1 (System Activity). A bare
+# syslog line is a daemon saying something about itself, and nothing more
+# specific is honest without knowing the daemon — the per-event catalogue
+# is what reaches a narrower class later.
+#
+# It is deliberately NOT 2001 Security Finding, which is what every other
+# push template here uses. The promoter promotes category 2
+# unconditionally, so filing a firewall's routine daemon chatter as a
+# finding would turn every line into an alert — precisely the noise this
+# platform exists to remove. A detection rule is what turns one of these
+# into an alert. CEF and LEEF lines do land at 2001, because a device
+# emitting those has already decided the line is a security event.
+#
+# References:
+#   https://datatracker.ietf.org/doc/html/rfc5424
+#   https://datatracker.ietf.org/doc/html/rfc3164
+id: syslog
+vendor_name: Syslog
+product_name: Syslog
+class_uid: 1007
+class_name: Process Activity
+activity_id: 1
+field_map:
+  hostname: device.hostname
+  app_name: actor.process.name
+  proc_id: actor.process.pid
+  msg_id: metadata.event_code
+  message: message
+  facility: metadata.labels.facility
+  format: metadata.labels.syslog_format
+  raw: raw_data
+severity_field: severity
+# The syslog ladder runs most-severe-first and OCSF's runs the other way,
+# so this is a reversal rather than a rescale. emerg/alert/crit all reach
+# OCSF 5 (Critical): collapsing a device's own top three tiers into one is
+# a loss, but into `high` would be a second one, and 5 is the tier each of
+# them means.
+severity_map:
+  emerg: 6
+  alert: 5
+  crit: 5
+  err: 4
+  warning: 3
+  notice: 2
+  info: 1
+  debug: 1
+time_field: timestamp
+message_field: message
+constants:
+  source_type: syslog

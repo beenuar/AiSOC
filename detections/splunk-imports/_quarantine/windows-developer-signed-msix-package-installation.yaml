@@ -1,0 +1,44 @@
+id: splunk-security-content-2c0427aa-982c-4e97-bc33-bddeda4fd095
+name: Windows Developer-Signed MSIX Package Installation
+description: This detection identifies the installation of developer-signed MSIX packages
+  that lack Microsoft Store signatures. All malicious MSIX packages observed in recent
+  threat campaigns (including those from FIN7, Zloader/Storm-0569, and FakeBat/Storm-1113)
+  were developer-signed rather than Microsoft Store signed. Microsoft Store apps have
+  specific publisher IDs containing '8wekyb3d8bbwe' or 'cw5n1h2txyewy', while developer-signed
+  packages lack these identifiers. This detection focuses on EventID 855 from the
+  Microsoft-Windows-AppXDeployment-Server/Operational logs, which indicates a completed
+  package installation.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.005
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/threat-intelligence/msix-installers/
+- https://learn.microsoft.com/en-us/windows/win32/appxpkg/troubleshooting
+- https://www.advancedinstaller.com/msix-installation-or-launching-errors-and-fixes.html
+- https://redcanary.com/blog/threat-detection/code-signing-certificates/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_appxdeploymentserver` EventCode=855 NOT PackageMoniker\
+    \ IN (\"*8wekyb3d8bbwe*\",\"*cw5n1h2txyewy*\")\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime values(PackageMoniker) as PackageMoniker\n\
+    \    BY dvc EventCode user_id\n  | rename dvc as dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_developer_signed_msix_package_installation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2c0427aa-982c-4e97-bc33-bddeda4fd095
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_developer_signed_msix_package_installation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

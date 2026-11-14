@@ -1,0 +1,45 @@
+id: splunk-security-content-b686d0bd-cca7-44ca-ae07-87f6465131d9
+name: O365 Service Principal Privilege Escalation
+description: This detection identifies when an Azure Service Principal elevates privileges
+  by adding themself to a new app role assignment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://splunkbase.splunk.com/app/4055
+- https://github.com/mvelazc0/BadZure
+- https://www.splunk.com/en_us/blog/security/hunting-m365-invaders-navigating-the-shadows-of-midnight-blizzard.html
+- https://posts.specterops.io/microsoft-breach-what-happened-what-should-azure-admins-do-da2b7e674ebc
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation="Add app role assignment to service
+    principal." "Actor{}.ID"=ServicePrincipal ResultStatus=Success | spath path=ModifiedProperties{}
+    output=targetResources | eval src="NA" | stats min(_time) as _time values(eval(mvfilter(match(targetResources,
+    "AppRole.Value")))) as appRole, values(eval(mvfilter(match(targetResources, "ServicePrincipal.DisplayName"))))
+    as targetServicePrincipal values(object) as targetAppContext values(user_agent)
+    as user_agent values(user) as servicePrincipal values(UserId) as servicePrincipalId
+    by Operation InterSystemsId tenant_id user dest src vendor_account vendor_product
+    signature | spath input=appRole path=NewValue output=appRole | spath input=targetServicePrincipal
+    path=NewValue output=targetServicePrincipal | where servicePrincipal=targetServicePrincipal
+    | fillnull | stats earliest(_time) as firstTime latest(_time) as lastTime by servicePrincipal
+    servicePrincipalId appRole targetAppContext user_agent tenant_id InterSystemsId
+    user dest src vendor_account vendor_product signature | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_service_principal_privilege_escalation_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b686d0bd-cca7-44ca-ae07-87f6465131d9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_service_principal_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

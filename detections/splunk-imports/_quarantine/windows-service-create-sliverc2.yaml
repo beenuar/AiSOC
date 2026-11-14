@@ -1,0 +1,41 @@
+id: splunk-security-content-89dad3ee-57ec-43dc-9044-131c4edd663f
+name: Windows Service Create SliverC2
+description: The following analytic detects the creation of a Windows service named
+  "Sliver" with the description "Sliver Implant," indicative of SliverC2 lateral movement
+  using the PsExec module. It leverages Windows EventCode 7045 from the System Event
+  log to identify this activity. This behavior is significant as it may indicate an
+  adversary's attempt to establish persistence or execute commands remotely. If confirmed
+  malicious, this activity could allow attackers to maintain control over the compromised
+  system, execute arbitrary code, and further infiltrate the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://github.com/BishopFox/sliver/blob/71f94928bf36c1557ea5fbeffa161b71116f56b2/client/command/exec/psexec.go#LL61C5-L61C16
+- https://www.microsoft.com/en-us/security/blog/2022/08/24/looking-for-the-sliver-lining-hunting-for-emerging-command-and-control-frameworks/
+- https://regex101.com/r/DWkkXm/1
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_system` EventCode=7045 ServiceName=\"sliver\"\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY Computer EventCode\
+    \ ImagePath\n       ServiceName ServiceType\n  | rename Computer as dest\n  |\
+    \ `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_service_create_sliverc2_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 89dad3ee-57ec-43dc-9044-131c4edd663f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_service_create_sliverc2.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

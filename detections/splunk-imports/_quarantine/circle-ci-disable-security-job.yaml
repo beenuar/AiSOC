@@ -1,0 +1,43 @@
+id: splunk-security-content-4a2fdd41-c578-4cd4-9ef7-980e352517f2
+name: Circle CI Disable Security Job
+description: The following analytic detects the disabling of security jobs in CircleCI
+  pipelines. It leverages CircleCI log data, renaming and extracting fields such as
+  job names, workflow IDs, user information, commit messages, URLs, and branches.
+  The detection identifies mandatory jobs for each workflow and checks if they were
+  executed. This activity is significant because disabling security jobs can allow
+  malicious code to bypass security checks, leading to potential data breaches, system
+  downtime, and reputational damage. If confirmed malicious, this could result in
+  unauthorized code execution and compromised pipeline integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1554
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`circleci`\n  | rename vcs.committer_name as user vcs.subject as commit_message\
+    \ vcs.url as url workflows.* as *\n  | stats values(job_name) as job_names\n \
+    \   BY workflow_id workflow_name user\n       commit_message url branch\n  | lookup\
+    \ mandatory_job_for_workflow workflow_name OUTPUTNEW job_name AS mandatory_job\n\
+    \  | search mandatory_job=*\n  | eval mandatory_job_executed=if(like(job_names,\
+    \ \"%\".mandatory_job.\"%\"), 1, 0)\n  | where mandatory_job_executed=0\n  | eval\
+    \ phase=\"build\"\n  | rex field=url \"(?<repository>[^\\/]*\\/[^\\/]*)$\"\n \
+    \ | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `circle_ci_disable_security_job_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4a2fdd41-c578-4cd4-9ef7-980e352517f2
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/circle_ci_disable_security_job.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,49 @@
+{
+  "name": "@aisoc/sdk",
+  "version": "4.0.0",
+  "description": "TypeScript client SDK for AiSOC — a hand-written client over docs/openapi.yaml, checked against it by scripts/check_sdk_surface.py",
+  "keywords": ["aisoc", "soc", "security", "client", "sdk"],
+  "license": "MIT",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": ["dist", "src"],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "openapi-fetch": "^0.17.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "openapi-typescript": "^7.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "peerDependencies": {
+    "typescript": ">=5.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "directory": "packages/sdk-ts"
+  },
+  "homepage": "https://beenuar.github.io/AiSOC/",
+  "bugs": {
+    "url": "https://github.com/beenuar/AiSOC/issues"
+  }
+}

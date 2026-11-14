@@ -1,0 +1,4 @@
+{
+  "method_name": "v1.compute.securityPolicies.insert",
+  "principal_email": "admin@example.com"
+}

@@ -1,0 +1,186 @@
+name: Agent service auth and closure grants (live)
+
+# Two suites that need real Postgres with every migration applied, because
+# both defects they cover are invisible to a fake connection: one is a service
+# credential the API must accept and scope to one tenant, and the other is a
+# query against a table that does not exist, which a double answers happily.
+#
+# Fix-pass items 1.1 and 1.4.
+
+on:
+  pull_request:
+    paths:
+      - "services/api/app/api/v1/deps.py"
+      - "services/api/app/api/v1/endpoints/agent_tools.py"
+      - "services/api/migrations/**"
+      - "services/agents/app/closure/**"
+      - "services/agents/app/tools/**"
+      - "services/agents/app/hunt/**"
+      - "tests/isolation/test_agent_service_auth_live.py"
+      - "tests/isolation/test_closure_grant_live.py"
+      - "tests/isolation/test_closure_authorization_live.py"
+      - "services/agents/app/investigator/ledger.py"
+      - "services/agents/app/memory/institutional.py"
+      - "services/agents/app/workers/**"
+      - "tests/isolation/test_api_to_connectors_auth.py"
+      - "services/api/app/api/v1/endpoints/federated.py"
+      - "services/api/app/services/case_fanout.py"
+      - "services/api/app/core/connectors_auth.py"
+      - "services/connectors/app/api/router.py"
+      - ".github/workflows/agent-auth-live.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agent-auth-live:
+    name: A service credential reaches the API and is scoped to one tenant
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, which would let the tenant
+      # assertions pass for the wrong reason.
+      LIVE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # Each service's own lockfile, not a hand-curated pip list. A set that
+      # differs from the lock means the job tests software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The suites skip themselves when their DSN is unset, so this asserts the
+      # DSN is set rather than trusting the run. A skipped live suite reports
+      # the same word as a passing one.
+      - name: The agents service reaches the API as a service, for one tenant
+        working-directory: services/api
+        env:
+          ISOLATION_AGENT_AUTH_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_agent_service_auth_live.py -v --tb=short -rs
+
+      - name: Install connectors from its lockfile
+        working-directory: services/connectors
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+
+      # Needs both services installed: the API's `_query_one_backend` on one
+      # side, and the real connectors application started on a loopback socket
+      # on the other. `ci.yml`'s API job installs only the API's lockfile, so
+      # this cannot live in `services/api/tests/`.
+      - name: Every API-to-connectors call carries a credential and a tenant
+        working-directory: services/api
+        env:
+          ISOLATION_CROSS_SERVICE: "1"
+        run: python -m pytest ../../tests/isolation/test_api_to_connectors_auth.py -v --tb=short -rs
+
+      # Runs in no workflow at all before this. The claim row "Analyst
+      # dispositions are point-in-time during a replay" cited a workflow that
+      # skips it, and the suite skips itself unless the DSN says postgres --
+      # so it had never executed anywhere. `DISPOSITIONS_CUTOFF_LIVE_REQUIRED`
+      # turns its own skip into a failure, which is what makes this job
+      # evidence rather than a green tick.
+      - name: Analyst dispositions are point-in-time during a replay
+        working-directory: services/api
+        env:
+          DATABASE_URL: ${{ env.LIVE_DSN }}
+          DISPOSITIONS_CUTOFF_LIVE_REQUIRED: "1"
+        run: python -m pytest ../../tests/isolation/test_recent_dispositions_cutoff_live.py -v --tb=short -rs
+
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: An earned auto-close grant is readable by the closure policy
+        working-directory: services/agents
+        env:
+          ISOLATION_CLOSURE_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_closure_grant_live.py -v --tb=short -rs
+
+      # Closure remediation Phase 1. Two modules disagreed about who asks
+      # permission before an alert closes, and the disagreement is resolved by
+      # SQL, so a fake connection cannot see it: the offline double answers
+      # both sides happily and cannot run the `CASE` expression that is the
+      # actual closure.
+      #
+      # Two DSNs on purpose. The code under test connects as the runtime role,
+      # where RLS is forced — a superuser ignores every policy and would let
+      # the cross-tenant assertions pass for the wrong reason. Fixtures write
+      # rows for several tenants at once and read them back, which under those
+      # same policies needs the owner.
+      - name: Every automatic closure passes the authorization chokepoint
+        working-directory: services/agents
+        env:
+          ISOLATION_CLOSURE_AUTHZ_DSN: ${{ env.LIVE_DSN }}
+          # aisoc-db-role: owner — fixtures only. The suite seeds scratch tenants, policy rows for several tenants at once and the *global* kill-switch row, whose own WITH CHECK (tenant_id = current_tenant_id()) makes it uninsertable by any non-owner. The code under test reads ISOLATION_CLOSURE_AUTHZ_DSN above, which is the runtime role, so every assertion is still judged under forced RLS
+          ISOLATION_CLOSURE_AUTHZ_ADMIN_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+        run: python -m pytest ../../tests/isolation/test_closure_authorization_live.py -v --tb=short -rs
+
+      - name: A tenant can opt itself into retro-hunts
+        working-directory: services/api
+        env:
+          ISOLATION_RETRO_HUNT_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_retro_hunt_settings_live.py -v --tb=short -rs
+
+      - name: KEV exposure answers from scanner data, end to end
+        working-directory: services/api
+        env:
+          ISOLATION_KEV_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_kev_exposure_has_data_live.py -v --tb=short -rs
+
+      - name: A revoked session cannot hold the graph WebSocket open
+        working-directory: services/api
+        env:
+          ISOLATION_WS_AUTH_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_graph_ws_revocation_live.py -v --tb=short -rs
+
+      - name: An unverified email claim cannot take over an account
+        working-directory: services/api
+        env:
+          ISOLATION_SSO_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_sso_account_binding_live.py -v --tb=short -rs
+
+      - name: No suite may report success having skipped
+        run: |
+          set -euo pipefail
+          if [ -z "${LIVE_DSN}" ]; then
+            echo "::error::LIVE_DSN is empty, so the live suites skipped and this job proved nothing."
+            exit 1
+          fi
+          echo "LIVE_DSN was set, and the cross-service step sets ISOLATION_CROSS_SERVICE,"
+          echo "so none of the seven suites took its skip path."

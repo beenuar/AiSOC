@@ -1,0 +1,52 @@
+id: splunk-security-content-5796b570-ad12-44df-b1b5-b7e6ae3aabb0
+name: VMware Server Side Template Injection Hunt
+description: 'The following analytic identifies potential server-side template injection
+  attempts related to CVE-2022-22954.
+
+  It detects suspicious URL patterns containing "deviceudid" and keywords like "java.lang.ProcessBuilder"
+  or "freemarker.template.utility.ObjectConstructor" using web or proxy logs within
+  the Web Datamodel.
+
+  This activity is significant as it may indicate an attempt to exploit a known vulnerability
+  in VMware, potentially leading to remote code execution.
+
+  If confirmed malicious, attackers could gain unauthorized access, execute arbitrary
+  code, and compromise the affected system, posing a severe security risk.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.cisa.gov/uscert/ncas/alerts/aa22-138b
+- https://github.com/wvu/metasploit-framework/blob/master/modules/exploits/linux/http/vmware_workspace_one_access_cve_2022_22954.rb
+- https://github.com/sherlocksecurity/VMware-CVE-2022-22954
+- https://www.vmware.com/security/advisories/VMSA-2022-0011.html
+- https://attackerkb.com/topics/BDXyTqY1ld/cve-2022-22954/rapid7-analysis
+- https://twitter.com/wvuuuuuuuuuuuuu/status/1519476924757778433
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n         count min(_time)\
+    \ as firstTime\n               max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\
+    \nWeb.http_method=\"GET\"\nWeb.url=\"*deviceudid=*\"\nWeb.url IN (\n    \"*freemarker.template.utility.ObjectConstructor*\"\
+    ,\n    \"*java.lang.ProcessBuilder*\"\n)\nBY Web.http_user_agent Web.status\n\
+    \   Web.http_method Web.url Web.url_length\n   Web.src Web.dest\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `vmware_server_side_template_injection_hunt_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5796b570-ad12-44df-b1b5-b7e6ae3aabb0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/vmware_server_side_template_injection_hunt.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

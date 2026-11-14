@@ -1,0 +1,26 @@
+title: Unapproved Third-Party Script Loaded on Checkout Page
+id: aisoc-vt-ret-0002-magecart-script-injection
+status: experimental
+description: |
+  Storefront checkout page loaded a JavaScript resource from a domain
+  not on the tenant's approved CDN/tag-manager list. Primary Magecart
+  / web-skimming detection: skimmers inject card-grabbing JS via
+  third-party tag managers or compromised CDN paths.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: web
+  service: rasp
+tags:
+  - attack.t1189
+  - attack.initial_access
+  - aisoc.vertical.retail
+  - aisoc.compliance.pci
+detection:
+  selection:
+    event.module: web.rasp
+    event.action: 'script.loaded'
+    page.classification: 'checkout'
+  filter:
+    script.origin_in_allowlist: true
+  condition: selection and not filter

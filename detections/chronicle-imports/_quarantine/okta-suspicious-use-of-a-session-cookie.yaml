@@ -1,0 +1,67 @@
+id: chronicle-detection-rules-okta-suspicious-use-of-a-session-cookie
+name: okta_suspicious_use_of_a_session_cookie
+description: okta_suspicious_use_of_a_session_cookie
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule okta_suspicious_use_of_a_session_cookie {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects when an adversary attempts to\
+    \ reuse a stolen web session cookie in a different device that has a different\
+    \ OS, IP, Browser or User Agent.\"\n    rule_id = \"mr_913cbc7a-86c9-46a4-b822-023b4aa17106\"\
+    \n    rule_name = \"Okta Suspicious Use Of A Session Cookie\"\n    reference =\
+    \ \"https://sec.okta.com/sessioncookietheft\"\n    mitre_attack_tactic = \"Credential\
+    \ Access\"\n    mitre_attack_technique = \"Steal Web Session Cookie\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1539/\"\n    mitre_attack_version =\
+    \ \"v13.1\"\n    type = \"Alert\"\n    data_source = \"Okta\"\n    severity =\
+    \ \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $login.metadata.product_name\
+    \ = \"Okta\"\n    $login.metadata.vendor_name = \"Okta\"\n    $login.metadata.event_type\
+    \ = \"USER_UNCATEGORIZED\"\n    $login.metadata.product_event_type = \"policy.evaluate_sign_on\"\
+    \n    (\n        $login.security_result.action = \"ALLOW\" or\n        $login.security_result.action\
+    \ = \"ALLOW_WITH_MODIFICATION\" or\n        $login.security_result.action = \"\
+    CHALLENGE\"\n    )\n    $login.principal.user.userid = $userid\n    $login.security_result.detection_fields[\"\
+    dtHash\"] = $dtHash\n\n  match:\n    $userid, $dtHash over 1h\n\n  outcome:\n\
+    \    $risk_score = max(35)\n    $mitre_attack_tactic = \"Credential Access\"\n\
+    \    $mitre_attack_technique = \"Steal Web Session Cookie\"\n    $target_os =\
+    \ array_distinct($login.network.http.parsed_user_agent.os)\n    $dc_target_os\
+    \ = count_distinct($login.network.http.parsed_user_agent.os)\n    $target_browser\
+    \ = array_distinct($login.network.http.parsed_user_agent.browser)\n    $dc_target_browser\
+    \ = count_distinct($login.network.http.parsed_user_agent.browser)\n    $target_user_agent\
+    \ = array_distinct($login.network.http.user_agent)\n    $principal_ip = array_distinct($login.principal.ip)\n\
+    \    $dc_principal_ip = count_distinct($login.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($login.principal.location.city)\n   \
+    \ $dc_principal_ip_city = count_distinct($login.principal.location.city)\n   \
+    \ $security_result_summary = array_distinct($login.security_result.summary)\n\
+    \    $principal_user_managers_email_addresses = array_distinct($login.principal.user.managers.email_addresses)\n\
+    \    $principal_user_userid = array_distinct($login.principal.user.userid)\n\n\
+    \  condition:\n    $login and $dc_principal_ip > 1 and ($dc_target_browser > 1\
+    \ or $dc_target_os > 1)\n}"
+  chronicle_rule_name: okta_suspicious_use_of_a_session_cookie
+provenance:
+  source: chronicle/detection-rules
+  source_id: okta_suspicious_use_of_a_session_cookie
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/okta/okta_suspicious_use_of_a_session_cookie.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

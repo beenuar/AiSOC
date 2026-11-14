@@ -1,0 +1,278 @@
+name: Performance + cost
+
+# Phase 6 (world-class program) — two cheap, non-flaky gates:
+#
+#   throughput — runs the fusion hot-path throughput harness over a
+#                deterministic synthetic corpus and asserts a GENEROUS
+#                regression floor, derived from the figure the page publishes
+#                for that harness (20x below it). It fires only on a
+#                catastrophic regression (e.g. an I/O call slipping onto the
+#                promote hot path), never on runner jitter. It is a regression
+#                floor, not a production SLO.
+#   cost-model — regenerates the storage $/TB worked example and fails if the
+#                committed docs/decisions/storage-cost-model.json is stale, so
+#                the number ADR-0005 cites can never silently drift.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/fusion/app/services/promoter.py'
+      - 'services/fusion/app/models/**'
+      - 'services/demo-producer/**'
+      - 'scripts/perf/**'
+      - 'scripts/check_perf_results.py'
+      - 'docs/perf/results/**'
+      - 'apps/docs/docs/operations/performance.md'
+      - 'scripts/storage_cost_model.py'
+      - 'docs/decisions/storage-cost-model.json'
+      - '.github/workflows/perf.yml'
+  pull_request:
+    paths:
+      - 'services/fusion/app/services/promoter.py'
+      - 'services/fusion/app/models/**'
+      - 'services/demo-producer/**'
+      - 'scripts/perf/**'
+      - 'scripts/check_perf_results.py'
+      - 'docs/perf/results/**'
+      - 'apps/docs/docs/operations/performance.md'
+      - 'scripts/storage_cost_model.py'
+      - 'docs/decisions/storage-cost-model.json'
+      - '.github/workflows/perf.yml'
+  schedule:
+    # 04:20 UTC daily. The end-to-end job below builds and boots the whole
+    # spine, which is too slow to sit on every pull request.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: perf-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  throughput:
+    name: Fusion hot-path throughput (regression floor)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install promoter deps
+        run: pip install --quiet pydantic pydantic-settings structlog
+      # Derived from the published figure, not picked. The page's hot-path
+      # section measured 140,692 events/s, so:
+      #
+      #   floor = 7,000 events/s  -> 20.1x below the published rate
+      #
+      # The previous `1000` sat 140x below it, under a comment claiming a
+      # ">200x margin below the measured number" — a measured number that
+      # appeared nowhere, so nobody could check either figure or say what
+      # regression the gate would catch. This is the only throughput gate that
+      # runs on a pull request (the end-to-end job below is nightly), so it was
+      # also the one that mattered most.
+      #
+      # 20x is wider than the 8x the end-to-end job uses, deliberately: this is
+      # a single-threaded Python microbenchmark and a shared, throttled runner
+      # is further from an 18-core laptop on that than on a container pipeline
+      # whose ceiling is a broker. Still bounded, and bounded by the claim.
+      #
+      # tests/test_perf_gate_is_related_to_the_claims.py parses this file and
+      # the published page and fails if the ratio drifts, in either direction.
+      - name: Run throughput harness (generous floor)
+        run: |
+          python3 scripts/perf/throughput_harness.py --events 20000 --assert-floor 7000 --json | tee /tmp/throughput.json
+      - name: Publish throughput summary
+        if: always()
+        run: |
+          {
+            echo "## Fusion hot-path throughput"
+            echo ""
+            echo '```json'
+            cat /tmp/throughput.json 2>/dev/null || echo "{}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  published-results:
+    name: Published perf results carry hardware, date and the not-an-SLO label
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Self-test the gate before trusting it
+        run: python3 scripts/check_perf_results.py --self-test
+      - name: Check every committed result
+        run: python3 scripts/check_perf_results.py
+      # The harnesses are not gates, so check_gate_coverage.py does not
+      # inventory them and nothing else would notice their self-tests
+      # rotting. They are cheap and they assert the two properties the
+      # published figures rest on.
+      - name: Self-test the load harness and the chaos test
+        run: |
+          python3 scripts/perf/load_harness.py --self-test
+          python3 scripts/chaos/fusion_restart.py --self-test
+
+  end-to-end:
+    name: End-to-end load harness (Compose spine, generous floor)
+    # Nightly and on demand only. The pull-request trigger above runs the two
+    # cheap jobs; this one boots Kafka, Postgres, ingest and fusion.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: '1.26'
+          cache: false
+
+      - name: Self-test the harness before measuring anything with it
+        run: python3 scripts/perf/load_harness.py --self-test
+
+      # `services/demo-producer` is its own Go module and the repository root
+      # has no `go.mod`, so building from the workspace root cannot resolve a
+      # module at all — `go: go.mod file not found in current directory or any
+      # parent directory`. It has never worked: it shipped in #933 and this
+      # job runs on the nightly schedule only, so the first execution that was
+      # not skipped, on 2026-09-28, was also the first failure. The module
+      # itself is fine; ci.yml's `Go — Build & Vet` matrix compiles it on every
+      # pull request by cd-ing into it first, which is the convention here.
+      - name: Build the producer
+        run: go build -o /tmp/demo-producer .
+        working-directory: services/demo-producer
+
+      - name: Bring up the spine
+        run: |
+          set -euo pipefail
+          python3 scripts/ensure_env.py
+          docker compose up -d postgres redis zookeeper kafka ingest-worker fusion api
+          for _ in $(seq 1 60); do
+            if docker compose ps --format '{{.Name}} {{.Health}}' | grep -q 'aisoc-api healthy'; then break; fi
+            sleep 10
+          done
+          docker compose ps
+
+      - name: Mint an ingest credential
+        id: token
+        run: |
+          set -euo pipefail
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet | tail -1 | tr -d '\r')"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      # The thresholds are derived from the published compose **steady-state**
+      # figures, not picked. That page measured 80.1 alerts/s and a 1,091 ms
+      # p95, and calls steady state "the row to plan against"; saturation is a
+      # backlog measurement, so a floor set from it would describe the queue
+      # rather than the pipeline.
+      #
+      #   floor   = 11 events/s   -> 7.3x below the published 80.1 alerts/s
+      #   ceiling = 21,000 ms      -> 19.2x above the published 1,091 ms p95
+      #
+      # Deliberately generous: a shared, throttled GitHub runner is not the
+      # machine those figures came off, and a gate tuned close to a measurement
+      # flaps and gets switched off within a week. But bounded, and bounded
+      # *by the claim*: the previous `5` and `120000` sat 16x below and 110x
+      # above the published numbers, which is a constant that relates to
+      # nothing -- when the published figure moves, it does not, and nobody can
+      # say what regression it would have caught.
+      #
+      # tests/test_perf_gate_is_related_to_the_claims.py parses both this file
+      # and the published page and fails if the ratio drifts, in either
+      # direction.
+      - name: Measure, with a generous regression floor
+        env:
+          AISOC_INGEST_TOKEN: ${{ steps.token.outputs.token }}
+          AISOC_PRODUCER_BIN: /tmp/demo-producer
+        run: |
+          python3 scripts/perf/load_harness.py \
+            --target compose --events 4000 --workers 4 --batch 25 \
+            --target-eps 60 --drain-timeout 420 \
+            --assert-eps-floor 11 --assert-p95-ceiling-ms 21000 --assert-no-loss \
+            --out /tmp/perf-e2e.json
+
+      # Two measurement tools shipped with no caller at all (fix-pass item
+      # 5.8), so the three-stage split they exist to publish had never been
+      # computed from a real run. `load_profiles.py` describes the sustained,
+      # diurnal and spike shapes the burst harness cannot produce;
+      # `throughput_claims.py` separates ingest from the alert path, which
+      # differ by two orders of magnitude -- quoting one figure as "the
+      # throughput" understates the product or misrepresents it depending which
+      # stage it came from.
+      #
+      # They could not be pointed at a real run because the harness recorded
+      # none of the context they require; it now records the load's shape
+      # (batch size, workers, host count, commit) and `--from-harness`
+      # translates it.
+      #
+      # `--allow unqualified-throughput` is the one known gap, stated rather
+      # than absorbed: the harness does not measure what fraction of pushed
+      # events the rule engine evaluated, and an ingest rate published without
+      # that beside it reads as "every event was fully analysed". The problem is
+      # still printed every run. Remove the flag when the harness reports
+      # detection coverage.
+      - name: Grade the run against the published claims
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/load_profiles.py --list
+          python3 scripts/perf/throughput_claims.py \
+            --from-harness /tmp/perf-e2e.json --check \
+            --allow unqualified-throughput
+
+
+      - name: Publish the run
+        if: always()
+        run: |
+          {
+            echo "## End-to-end load harness"
+            echo ""
+            echo "Not a production SLO. A GitHub runner is shared, throttled hardware."
+            echo ""
+            echo '```json'
+            cat /tmp/perf-e2e.json 2>/dev/null || echo '{}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Spine logs on failure
+        if: failure()
+        run: docker compose logs --tail=120 fusion ingest-worker kafka || true
+
+  cost-model:
+    name: Storage $/TB cost model (drift gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Verify committed storage cost model is current
+        run: python3 scripts/storage_cost_model.py --check
+      - name: Publish cost summary
+        if: always()
+        run: |
+          {
+            echo "## Storage \$/TB cost model"
+            echo ""
+            echo '```'
+            python3 scripts/storage_cost_model.py 2>/dev/null || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

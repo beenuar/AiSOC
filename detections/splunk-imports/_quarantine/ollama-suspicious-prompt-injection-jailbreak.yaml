@@ -1,0 +1,51 @@
+id: splunk-security-content-aac5df6f-9151-4da6-bdb2-5691aa6e376f
+name: Ollama Suspicious Prompt Injection Jailbreak
+description: Detects potential prompt injection or jailbreak attempts against Ollama
+  API endpoints by identifying requests with abnormally long response times. Attackers
+  often craft complex, layered prompts designed to bypass AI safety controls, which
+  typically result in extended processing times as the model attempts to parse and
+  respond to these malicious inputs. This detection monitors /api/generate and /api/chat
+  endpoints for requests exceeding 30 seconds, which may indicate sophisticated jailbreak
+  techniques, multi-stage prompt injections, or attempts to extract sensitive information
+  from the model.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1059
+  categories:
+  - application
+references:
+- https://github.com/rosplk/ta-ollama
+- https://github.com/OWASP/www-project-ai-testing-guide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`ollama_server` "GIN" ("*/api/generate*" OR "*/v1/chat/completions*")
+    | rex field=_raw "\|\s+(?<status_code>\d+)\s+\|\s+(?<response_time>[\d\.]+[a-z]+)\s+\|\s+(?<src_ip>[\:\da-f\.]+)\s+\|\s+(?<http_method>\w+)\s+\"(?<uri_path>[^\"]+)\""
+    | rex field=response_time "^(?:(?<minutes>\d+)m)?(?<seconds>[\d\.]+)s$" | eval
+    response_time_seconds=if(isnotnull(minutes), tonumber(minutes)*60+tonumber(seconds),
+    tonumber(seconds)) | eval src=src_ip | where response_time_seconds > 30 | bin
+    _time span=10m | stats count as long_request_count, avg(response_time_seconds)
+    as avg_response_time, max(response_time_seconds) as max_response_time, values(uri_path)
+    as uri_path, values(status_code) as status_codes by _time, src, host | where long_request_count
+    > 170 | eval avg_response_time=round(avg_response_time, 2) | eval max_response_time=round(max_response_time,
+    2) | eval severity=case( long_request_count > 50 OR max_response_time > 55, "critical",
+    long_request_count > 20 OR max_response_time > 40, "high", 1=1, "medium" ) | eval
+    attack_type="Potential Prompt Injection / Jailbreak" | table _time, host, src,
+    uri_path, long_request_count, avg_response_time, max_response_time, status_codes,
+    severity, attack_type | `ollama_suspicious_prompt_injection_jailbreak_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: aac5df6f-9151-4da6-bdb2-5691aa6e376f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/ollama_suspicious_prompt_injection_jailbreak.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

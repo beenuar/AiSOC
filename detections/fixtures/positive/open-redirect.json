@@ -1,0 +1,4 @@
+{
+  "host": "app.corp.com",
+  "request_uri": "/login?next=http://evil.tld/phish"
+}

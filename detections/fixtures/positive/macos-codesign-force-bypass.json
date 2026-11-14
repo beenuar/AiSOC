@@ -1,0 +1,5 @@
+{
+  "argv": "--force --deep",
+  "event_type": "exec",
+  "process_path": "head-/codesign"
+}

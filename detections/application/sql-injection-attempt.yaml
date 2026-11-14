@@ -1,0 +1,23 @@
+id: det-application-001
+name: SQL Injection Attempt in HTTP Query
+description: Detects HTTP requests containing common SQL injection payload patterns in query strings or
+  POST bodies. Strong indicator of automated probing or active exploitation against web applications.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    request_uri PATTERN_MATCH_ANY ["UNION SELECT", "OR '1'='1", "; DROP TABLE", "1=1--", "sleep\(", "benchmark\("]
+false_positives:
+- Security-research / pen-test traffic (allowlist src)
+playbook: tpl-webattack
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

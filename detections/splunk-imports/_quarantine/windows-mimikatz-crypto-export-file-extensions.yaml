@@ -1,0 +1,43 @@
+id: splunk-security-content-3a9a6806-16a8-4cda-8d73-b49d10a05b16
+name: Windows Mimikatz Crypto Export File Extensions
+description: The following analytic detects the creation of files with extensions
+  commonly associated with the Mimikatz Crypto module. It leverages the Endpoint.Filesystem
+  data model to identify specific file names indicative of certificate export activities.
+  This behavior is significant as it may indicate the use of Mimikatz to export cryptographic
+  keys, which is a common tactic for credential theft. If confirmed malicious, this
+  activity could allow an attacker to exfiltrate sensitive cryptographic material,
+  potentially leading to unauthorized access and further compromise of the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1649
+  categories:
+  - endpoint
+references:
+- https://github.com/gentilkiwi/mimikatz/blob/master/mimikatz/modules/kuhl_m_crypto.c#L628-L645
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_name\
+    \ IN (\"*.keyx.rsa.pvk\",\"*sign.rsa.pvk\",\"*sign.dsa.pvk\",\"*dsa.ec.p8k\",\"\
+    *dh.ec.p8k\", \"*.pfx\", \"*.der\")\n  BY Filesystem.action Filesystem.dest Filesystem.file_access_time\n\
+    \     Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time\n\
+    \     Filesystem.file_name Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n\
+    | `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `drop_dm_object_name(Filesystem)`\n| `windows_mimikatz_crypto_export_file_extensions_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3a9a6806-16a8-4cda-8d73-b49d10a05b16
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_mimikatz_crypto_export_file_extensions.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

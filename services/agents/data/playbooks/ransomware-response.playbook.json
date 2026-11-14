@@ -1,0 +1,70 @@
+{
+  "id": "ransomware-response-v1",
+  "name": "Ransomware Response",
+  "description": "Immediate containment and investigation workflow for ransomware detections.",
+  "version": "1.0.0",
+  "tags": ["ransomware", "malware", "critical"],
+  "trigger": {
+    "on": "alert",
+    "severity": ["critical"],
+    "tags": ["ransomware"]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "steps": [
+    {
+      "id": "isolate",
+      "name": "Isolate affected host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host"
+      },
+      "on_failure": "abort",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "enrich-ioc",
+      "name": "Enrich malware IOCs",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.file_hash"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 30
+    },
+    {
+      "id": "investigate",
+      "name": "Run AI Forensic Investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 180
+    },
+    {
+      "id": "create-ticket",
+      "name": "Create P1 incident ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "RANSOMWARE DETECTED: {{alert.host}}"
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 20
+    },
+    {
+      "id": "notify-oncall",
+      "name": "Page on-call team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "service_key_env": "PD_RANSOMWARE_KEY",
+        "message_template": "Ransomware detected on {{alert.host}}. Host isolated. Ticket created."
+      },
+      "on_failure": "continue",
+      "timeout_seconds": 10
+    }
+  ]
+}

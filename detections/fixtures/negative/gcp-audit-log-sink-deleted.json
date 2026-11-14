@@ -1,0 +1,4 @@
+{
+  "method_name": "google.logging.v2.ConfigServiceV2.CreateSink",
+  "principal_email": "admin@example.com"
+}

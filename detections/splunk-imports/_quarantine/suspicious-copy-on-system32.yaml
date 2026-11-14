@@ -1,0 +1,64 @@
+id: splunk-security-content-ce633e56-25b2-11ec-9e76-acde48001122
+name: Suspicious Copy on System32
+description: 'The following analytic detects potentially suspicious file copy operations
+  targeting the
+
+  System32 or SysWow64 directories as source, often indicative of malicious activity.
+
+  It leverages data from Endpoint Detection and Response (EDR) agents,
+
+  focusing on activity initiated by command-line tools like cmd.exe or PowerShell.
+
+  This behavior is significant as it may indicate an attempt to evade defenses by
+  copying
+
+  an existing binary from the system directory and renaming it.
+
+  If confirmed malicious, this activity could allow an attacker to execute
+
+  code undetected and potentially leading to system compromise or further lateral
+  movement
+
+  within the network.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://www.hybrid-analysis.com/sample/8da5b75b6380a41eee3a399c43dfe0d99eeefaa1fd21027a07b1ecaa4cd96fdd?environmentId=120
+- https://www.microsoft.com/en-us/security/blog/2023/05/24/volt-typhoon-targets-us-critical-infrastructure-with-living-off-the-land-techniques/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime from datamodel=Endpoint.Processes where\nProcesses.parent_process_name\
+    \ IN (\n  \"cmd.exe\",\n  \"powershell.exe\",\n  \"pwsh.exe\",\n  \"sqlps.exe\"\
+    ,\n  \"sqltoolsps.exe\"\n)\n(\n  Processes.process_name IN (\"copy.exe\", \"xcopy.exe\"\
+    )\n  OR\n  Processes.original_file_name IN (\"copy.exe\", \"xcopy.exe\")\n)\n\
+    Processes.process IN (\n  \"* \\\"C:\\\\Windows\\\\System32\\\\*\",\n  \"* \\\
+    'C:\\\\Windows\\\\System32\\\\*\",\n  \"* C:\\\\Windows\\\\System32\\\\*\",\n\
+    \  \"* \\\"C:\\\\Windows\\\\SysWow64\\\\*\",\n  \"* \\'C:\\\\Windows\\\\SysWow64\\\
+    \\*\",\n  \"* C:\\\\Windows\\\\SysWow64\\\\*\"\n)\nby Processes.action Processes.dest\
+    \ Processes.original_file_name\nProcesses.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\nProcesses.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\nProcesses.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\nProcesses.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\nProcesses.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `suspicious_copy_on_system32_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ce633e56-25b2-11ec-9e76-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_copy_on_system32.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

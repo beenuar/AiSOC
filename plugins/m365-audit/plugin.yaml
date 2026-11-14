@@ -1,0 +1,30 @@
+id: m365-audit
+name: Microsoft 365 Audit Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Microsoft 365 unified audit log (Azure AD, Exchange, SharePoint/OneDrive,
+  Teams, Power BI) via the Office 365 Management Activity API. Surfaces SaaS
+  data-access and configuration events with the same Azure AD app credentials
+  used by the Entra connector. Requires ActivityFeed.Read on the registered
+  app.
+author: AiSOC Core Team
+tags: [saas, microsoft, m365, office365, audit, exchange, sharepoint, teams]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/m365_audit.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tenant_id, client_id, client_secret]
+  properties:
+    tenant_id:
+      type: string
+      description: "Azure AD tenant ID (GUID)"
+    client_id:
+      type: string
+      description: "Application (Client) ID of the Azure AD app registration"
+    client_secret:
+      type: string
+      description: "Client secret for the Azure AD app registration"
+      secret: true

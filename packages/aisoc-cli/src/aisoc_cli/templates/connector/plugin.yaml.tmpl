@@ -1,0 +1,42 @@
+id: $slug
+name: $name
+version: 0.1.0
+plugin_type: connector
+tier: community
+description: >
+  $name pulls alerts/events from an upstream source and normalizes them
+  onto the AiSOC OCSF-aligned schema with the four-tier severity ladder
+  (info | low | medium | high).
+author: "$author"
+tags: [connector]
+license: MIT
+min_aisoc_version: "4.0.0"
+runtime: python
+entry_point: connector.py
+config_schema:
+  type: object
+  required: [base_url]
+  properties:
+    base_url:
+      type: string
+      description: "Upstream API base URL, e.g. https://api.example.com"
+    api_key:
+      type: string
+      description: "API key / bearer token. Stored encrypted in the credential vault."
+      secret: true
+    poll_interval_seconds:
+      type: integer
+      description: "How often the in-process scheduler should poll. Default 300s."
+      default: 300
+      minimum: 30
+      maximum: 3600
+    verify_tls:
+      type: boolean
+      description: "Verify TLS certs on the upstream. Disable only for dev."
+      default: true
+    page_size:
+      type: integer
+      description: "Records per upstream API page."
+      default: 100
+      minimum: 1
+      maximum: 10000

@@ -1,0 +1,45 @@
+id: splunk-security-content-e78a1037-4548-4072-bb1b-ad99ae416426
+name: O365 High Privilege Role Granted
+description: The following analytic detects when high-privilege roles such as "Exchange
+  Administrator," "SharePoint Administrator," or "Global Administrator" are granted
+  within Office 365. It leverages O365 audit logs to identify events where these roles
+  are assigned to any user or service account. This activity is significant for SOCs
+  as these roles provide extensive permissions, allowing broad access and control
+  over critical resources and data. If confirmed malicious, this could enable attackers
+  to gain significant control over O365 resources, access, modify, or delete critical
+  data, and compromise the overall security and functionality of the O365 environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/003/
+- https://learn.microsoft.com/en-us/azure/active-directory/roles/permissions-reference
+- https://learn.microsoft.com/en-us/microsoft-365/admin/add-users/about-exchange-online-admin-role?view=o365-worldwide
+- https://learn.microsoft.com/en-us/sharepoint/sharepoint-admin-role
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation="Add member to role." Workload=AzureActiveDirectory
+    | eval role_id = mvindex(''ModifiedProperties{}.NewValue'',2) | eval role_name
+    = mvindex(''ModifiedProperties{}.NewValue'',1) | where role_id IN ("29232cdf-9323-42fd-ade2-1d097af3e4de",
+    "f28a1f50-f6e7-4571-818b-6a12f2af6b6c", "62e90394-69f5-4237-9190-012177145e10")
+    | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by signature
+    dest user src vendor_account vendor_product ObjectId role_name role_id | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_high_privilege_role_granted_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e78a1037-4548-4072-bb1b-ad99ae416426
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_high_privilege_role_granted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

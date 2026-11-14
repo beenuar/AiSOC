@@ -1,0 +1,41 @@
+id: splunk-security-content-140504ae-5fe2-4d65-b2bc-a211813fbca6
+name: Okta ThreatInsight Threat Detected
+description: The following analytic identifies threats detected by Okta ThreatInsight,
+  such as password spraying, login failures, and high counts of unknown user login
+  attempts. It leverages Okta Identity Management logs, specifically focusing on security.threat.detected
+  events. This activity is significant for a SOC as it highlights potential unauthorized
+  access attempts and credential-based attacks. If confirmed malicious, these activities
+  could lead to unauthorized access, data breaches, and further exploitation of compromised
+  accounts, posing a significant risk to the organization's security posture.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - application
+references:
+- https://developer.okta.com/docs/reference/api/event-types/?q=security.threat.detected
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`okta` eventType = security.threat.detected\n  | rename client.geographicalContext.country\
+    \ as country, client.geographicalContext.state as state, client.geographicalContext.city\
+    \ as city\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY app src_ip dest\n       signature eventType displayMessage\n       client.device\
+    \ city state\n       country user_agent outcome.reason\n       outcome.result\
+    \ severity\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `okta_threatinsight_threat_detected_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 140504ae-5fe2-4d65-b2bc-a211813fbca6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_threatinsight_threat_detected.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

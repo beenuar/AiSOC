@@ -1,0 +1,5 @@
+{
+  "createvolumepermission": "all",
+  "event_name": "ModifySnapshotAttribute",
+  "snapshot_id": "snap-prod-pii"
+}

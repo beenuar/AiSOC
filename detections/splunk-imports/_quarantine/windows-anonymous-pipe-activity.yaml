@@ -1,0 +1,43 @@
+id: splunk-security-content-ee301e1e-cd81-4011-a911-e5f049b9e3d5
+name: Windows Anonymous Pipe Activity
+description: The following analytic detects the creation or connection of anonymous
+  pipes for inter-process communication (IPC) within a Windows environment. Anonymous
+  pipes are commonly used by legitimate system processes, services, and applications
+  to transfer data between related processes. However, adversaries frequently abuse
+  anonymous pipes to facilitate stealthy process injection, command-and-control (C2)
+  communication, credential theft, or privilege escalation. This detection monitors
+  for unusual anonymous pipe activity, particularly involving non-system processes,
+  unsigned executables, or unexpected parent-child process relationships. While legitimate
+  use cases exist—such as Windows services, software installers, or security tools—unusual
+  or high-frequency anonymous pipe activity should be investigated for potential malware,
+  persistence mechanisms, or lateral movement techniques.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1559
+  categories:
+  - endpoint
+references:
+- https://www.trendmicro.com/en_nl/research/24/k/earth-estries.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN (17,18) EventType IN ( "CreatePipe", "ConnectPipe")
+    PipeName="*Anonymous Pipe*" NOT( Image IN ("C:\\Program Files*", "C:\\Windows\\system32\\*","C:\\Windows\\syswow64\\*"))
+    | stats  min(_time) as firstTime max(_time) as lastTime count by dest EventCode
+    PipeName ProcessGuid ProcessId Image EventType | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_anonymous_pipe_activity_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: ee301e1e-cd81-4011-a911-e5f049b9e3d5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_anonymous_pipe_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

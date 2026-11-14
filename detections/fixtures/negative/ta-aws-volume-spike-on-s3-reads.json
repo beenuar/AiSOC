@@ -1,0 +1,7 @@
+{
+  "baseline_principal_volume_z": 0.3,
+  "eventName": "GetObject",
+  "eventSource": "s3.amazonaws.com",
+  "resource": "arn:aws:s3:::finance-exports",
+  "user": "svc-etl-nightly@example.com"
+}

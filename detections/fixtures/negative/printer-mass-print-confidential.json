@@ -1,0 +1,7 @@
+{
+  "doc_classification": "confidential",
+  "event_id": 307,
+  "page_count_per_user": 5,
+  "time_window_hours": 24,
+  "user": "user@corp.com"
+}

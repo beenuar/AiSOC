@@ -1,0 +1,44 @@
+id: splunk-security-content-83458004-db60-4170-857d-8572f16f070b
+name: Windows Admon Default Group Policy Object Modified
+description: The following analytic detects modifications to the default Group Policy
+  Objects (GPOs) in an Active Directory environment. It leverages Splunk's Admon to
+  monitor updates to the "Default Domain Policy" and "Default Domain Controllers Policy."
+  This activity is significant because changes to these default GPOs can indicate
+  an adversary with privileged access attempting to gain further control, establish
+  persistence, or deploy malware across multiple hosts. If confirmed malicious, such
+  modifications could lead to widespread policy enforcement changes, unauthorized
+  access, and potential compromise of the entire domain environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1484/
+- https://attack.mitre.org/techniques/T1484/001
+- https://www.trustedsec.com/blog/weaponizing-group-policy-objects-access/
+- https://adsecurity.org/?p=2716
+- https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/9.3.2411/get-windows-data/monitor-active-directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`admon` admonEventType=Update objectCategory=\"CN=Group-Policy-Container,CN=Schema,CN=Configuration,DC=*\"\
+    \ (displayName=\"Default Domain Policy\" OR displayName=\"Default Domain Controllers\
+    \ Policy\")\n  | stats min(_time) as firstTime max(_time) as lastTime values(gPCFileSysPath)\n\
+    \    BY dcName, displayName\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_admon_default_group_policy_object_modified_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 83458004-db60-4170-857d-8572f16f070b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_admon_default_group_policy_object_modified.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

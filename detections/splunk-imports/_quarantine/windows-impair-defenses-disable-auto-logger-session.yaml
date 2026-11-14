@@ -1,0 +1,47 @@
+id: splunk-security-content-dc6a5613-d024-47e7-9997-ab6477a483d3
+name: Windows Impair Defenses Disable Auto Logger Session
+description: The following analytic detects the disabling of an AutoLogger session
+  or one of its providers, by identifying changes to the Registry values "Start" and
+  "Enabled" part of the "\WMI\Autologger\" key path. It leverages data from the Endpoint.Registry
+  datamodel to monitor specific registry paths and values. This activity is significant
+  as attackers and adversaries can leverage this in order to evade defense and blind
+  EDRs and log ingest tooling. If confirmed malicious, this action could allow an
+  attacker to conceal their activities, making it harder to detect further malicious
+  actions and maintain persistence on the compromised endpoint.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/malwarebytes-news/2021/02/lazyscripter-from-empire-to-double-rat/
+- https://app.any.run/tasks/45f5d114-91ea-486c-ab01-41c4093d2861/
+- https://isc.sans.edu/diary/rss/28628
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+- https://learn.microsoft.com/en-us/windows/win32/etw/configuring-and-starting-an-autologger-session
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path="*\\WMI\\Autologger\\*"
+    (Registry.registry_value_name="Start" OR Registry.registry_value_name="Enabled")
+    Registry.registry_value_data ="0x00000000" by Registry.action Registry.dest Registry.process_guid
+    Registry.process_id Registry.registry_hive Registry.registry_path Registry.registry_key_name
+    Registry.registry_value_data Registry.registry_value_name Registry.registry_value_type
+    Registry.status Registry.user Registry.vendor_product | `drop_dm_object_name(Registry)`
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_impair_defenses_disable_auto_logger_session_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: dc6a5613-d024-47e7-9997-ab6477a483d3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defenses_disable_auto_logger_session.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

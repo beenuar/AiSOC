@@ -1,0 +1,17 @@
+id: $slug
+name: $name
+version: 0.1.0
+plugin_type: detection
+tier: community
+description: >
+  $name ships one or more AiSOC detection rules. Each rule lives in
+  ``rules/*.yaml`` and is validated by ``aisoc detection validate``.
+author: "$author"
+tags: [detection]
+license: MIT
+min_aisoc_version: "4.0.0"
+runtime: python
+entry_point: rules/
+config_schema:
+  type: object
+  properties: {}

@@ -1,0 +1,38 @@
+# CODEOWNERS — GitHub auto-requests reviews from these users/teams
+
+# Global fallback
+*                                   @beenuar
+
+# Governance & docs
+/SECURITY.md                        @beenuar
+/CODE_OF_CONDUCT.md                 @beenuar
+/CHANGELOG.md                       @beenuar
+/ROADMAP.md                         @beenuar
+/CONTRIBUTING.md                    @beenuar
+/README.md                          @beenuar
+/docs/                              @beenuar
+
+# Web application
+/apps/web/                          @beenuar
+
+# Python backend services
+/services/api/                      @beenuar
+/services/actions/                  @beenuar
+/services/fusion/                   @beenuar
+/services/agents/                   @beenuar
+/services/realtime/                 @beenuar
+
+# Go services
+/services/enrichment/               @beenuar
+/services/ingest/                   @beenuar
+/services/demo-producer/            @beenuar
+
+# Infra / DevOps
+/infra/                             @beenuar
+/.github/                           @beenuar
+
+# Plugin SDKs
+/packages/                          @beenuar
+
+# Detections (requires extra review)
+/detections/                        @beenuar

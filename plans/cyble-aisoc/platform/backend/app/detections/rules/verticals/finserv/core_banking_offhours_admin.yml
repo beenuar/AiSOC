@@ -1,0 +1,28 @@
+title: Core Banking Privileged Action Outside Change Window
+id: aisoc-vt-fin-0005-core-banking-offhours-admin
+status: experimental
+description: |
+  Administrative action (rate change, GL adjustment, account-open
+  override) on the core banking platform fired outside the approved
+  change-management window from the tenant's ITSM. High-fidelity
+  insider/abuse signal because legitimate ops on cores are scheduled.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: core_banking
+  service: admin
+tags:
+  - attack.t1078
+  - attack.persistence
+  - aisoc.vertical.finserv
+  - aisoc.compliance.sox
+detection:
+  selection:
+    event.module: core_banking.admin
+    event.action|startswith:
+      - 'rate.'
+      - 'gl.adjust'
+      - 'account.override'
+  filter:
+    change_window.active: true
+  condition: selection and not filter

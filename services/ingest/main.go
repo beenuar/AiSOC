@@ -1,0 +1,557 @@
+// AiSOC Ingest Service
+// Handles raw event ingestion, OCSF normalization, ATT&CK mapping, and Kafka publishing
+// Part of the AiSOC platform (MIT License)
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"syscall"
+	"time"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	configsnap "github.com/beenuar/aisoc/services/ingest/internal/config_snapshot"
+	"github.com/beenuar/aisoc/services/ingest/internal/envmode"
+	"github.com/beenuar/aisoc/services/ingest/internal/graph"
+	"github.com/beenuar/aisoc/services/ingest/internal/graph_ws"
+	"github.com/beenuar/aisoc/services/ingest/internal/handler"
+	"github.com/beenuar/aisoc/services/ingest/internal/inbox"
+	"github.com/beenuar/aisoc/services/ingest/internal/ingestauth"
+	"github.com/beenuar/aisoc/services/ingest/internal/kafkainput"
+	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
+	"github.com/beenuar/aisoc/services/ingest/internal/otlp"
+	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
+	"github.com/beenuar/aisoc/services/ingest/internal/server"
+	"github.com/beenuar/aisoc/services/ingest/internal/syslog"
+	"github.com/beenuar/aisoc/services/ingest/internal/telemetry"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+)
+
+func main() {
+	// Configure structured logging. Use the human-friendly console writer
+	// in any dev-class environment (development, dev, local, demo, test) —
+	// previously this exact-matched ENV == "development" only, so
+	// ENVIRONMENT=development (the alias the Python API treats as
+	// equivalent) silently flipped this service to JSON logs and made
+	// local debugging confusing. envmode.IsDevRuntime keeps both layers
+	// in lock-step.
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
+	if envmode.IsDevRuntime() {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
+
+	log.Info().Str("service", "ingest").Msg("Starting AiSOC Ingest Service")
+
+	// Tracing. `ingest` and `realtime` were the two uninstrumented ends of
+	// the Kafka spine, so a trace started at the API stopped at the
+	// pipeline boundary — exactly where the interesting latency is. No-ops
+	// unless OTEL_EXPORTER_OTLP_ENDPOINT is set, because emitting spans
+	// into a connection error is worse than emitting none.
+	tracingCtx := context.Background()
+	shutdownTracing, err := telemetry.Setup(tracingCtx)
+	if err != nil {
+		// Degraded, not fatal: ingest is the pipeline's front door and
+		// must not refuse traffic because a collector is unreachable.
+		log.Warn().Err(err).Msg("tracing disabled — exporter could not start")
+	}
+	defer func() {
+		if err := shutdownTracing(tracingCtx); err != nil {
+			log.Warn().Err(err).Msg("tracing shutdown incomplete; recent spans may be lost")
+		}
+	}()
+
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to load configuration")
+	}
+
+	// Initialize components
+	norm, err := normalizer.New(cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize normalizer")
+	}
+
+	pub, err := publisher.New(cfg)
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize Kafka publisher")
+	}
+	defer pub.Close()
+
+	h := handler.New(norm, pub, cfg)
+
+	// T1.1 (v8.0) — ingest-side graph writer. Runs in fan-out: failures in
+	// the graph writer NEVER block fusion ingest; the writer's queue is
+	// bounded and drops on full + emits a metric.
+	if cfg.GraphEnabled {
+		// Derived from the package's own retry window rather than written
+		// here, plus headroom for the final attempt. An independent
+		// number is how the retry came to be capped at a sixth of it.
+		gctx, gcancel := context.WithTimeout(context.Background(), graph.ConnectRetryWindow()+15*time.Second)
+		gw, err := graph.New(gctx, graph.Config{
+			URI:           cfg.Neo4jURI,
+			Username:      cfg.Neo4jUser,
+			Password:      cfg.Neo4jPassword,
+			Database:      cfg.Neo4jDatabase,
+			BatchSize:     cfg.GraphBatchSize,
+			FlushInterval: time.Duration(cfg.GraphFlushIntervalMs) * time.Millisecond,
+			QueueSize:     cfg.GraphQueueSize,
+			Publisher:     pub,
+		})
+		gcancel()
+		if err != nil {
+			// Soft fail: graph writer is opt-in. Ingest still runs without it.
+			log.Warn().Err(err).Msg("graph: writer disabled (Neo4j unreachable)")
+		} else {
+			defer func() { _ = gw.Close() }()
+			h.SetGraphWriter(gw)
+			log.Info().
+				Str("uri", cfg.Neo4jURI).
+				Str("schema_version", graph.SchemaVersion).
+				Int("batch_size", cfg.GraphBatchSize).
+				Int("flush_ms", cfg.GraphFlushIntervalMs).
+				Str("updates_topic", cfg.GraphUpdatesTopic).
+				Msg("graph: ingest-side writer enabled")
+
+			// T1.2 (v8.0) — config snapshots. Wired only when both the
+			// graph writer is up *and* the operator opts in. Falls back
+			// to in-memory cache when Redis is unhealthy; falls back to
+			// HTTPProvider against the connectors service when configured,
+			// otherwise NoopProvider (every snapshot returns
+			// ErrNotImplemented and we log skips). Failures NEVER block
+			// fusion ingest — same contract as T1.1.
+			if cfg.SnapshotEnabled {
+				ttl := time.Duration(cfg.SnapshotCacheTTLSecs) * time.Second
+				cacheCtx, cacheCancel := context.WithTimeout(context.Background(), 2*time.Second)
+				cache := configsnap.NewRedisCache(cacheCtx, configsnap.RedisConfig{
+					Addr: cfg.RedisAddr,
+					TTL:  ttl,
+				})
+				cacheCancel()
+				var provider configsnap.Provider
+				if cfg.SnapshotProviderURL != "" {
+					provider = configsnap.NewHTTPProvider(
+						cfg.SnapshotProviderURL,
+						time.Duration(cfg.SnapshotProviderTimeoutMs)*time.Millisecond,
+					)
+				} else {
+					provider = configsnap.NoopProvider{}
+				}
+				snapper, err := configsnap.New(configsnap.Config{
+					Provider: provider,
+					Cache:    cache,
+					TTL:      ttl,
+				})
+				if err != nil {
+					log.Warn().Err(err).Msg("snapshot: disabled (constructor failed)")
+				} else {
+					defer func() { _ = snapper.Close() }()
+					h.SetSnapshotApplier(snapper)
+					log.Info().
+						Str("provider_url", cfg.SnapshotProviderURL).
+						Dur("cache_ttl", ttl).
+						Msg("snapshot: T1.2 config snapshots enabled")
+				}
+			} else {
+				log.Info().Msg("snapshot: disabled (AISOC_SNAPSHOT_ENABLED!=true)")
+			}
+		}
+	} else {
+		log.Info().Msg("graph: writer disabled (AISOC_GRAPH_ENABLED!=true)")
+	}
+
+	// Workstream 6 — universal capture push paths.
+	//
+	// We need a Postgres pool to resolve inbox tokens and a YAML registry
+	// to find the matching template. Both are optional in dev (no
+	// DATABASE_DSN means /v1/inbox/* is disabled but /v1/ingest still
+	// works, so the connector path keeps running).
+	// One Postgres pool serves two consumers: the inbox token resolver and
+	// the /v1/ingest credential check. It is opened whenever DATABASE_DSN
+	// is set rather than only when the inbox is enabled, because turning
+	// the inbox off must not also remove the ability to authenticate a
+	// connector push.
+	var dbPool *pgxpool.Pool
+	if cfg.DatabaseDSN != "" {
+		poolCtx, poolCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		pool, err := pgxpool.New(poolCtx, cfg.DatabaseDSN)
+		poolCancel()
+		if err != nil {
+			log.Error().Err(err).
+				Msg("Failed to connect to Postgres; minted ingest tokens cannot be resolved and /v1/inbox/* is disabled")
+		} else {
+			defer pool.Close()
+			dbPool = pool
+		}
+	}
+
+	// /v1/ingest credential check. Before this the endpoint read a tenant
+	// out of a header and authenticated nothing, so anyone who could reach
+	// the port could write alerts into any tenant.
+	var (
+		tokenStore      *inbox.Store
+		tokenResolver   ingestauth.TokenResolver
+		tenantDirectory ingestauth.TenantDirectory
+	)
+	if dbPool != nil {
+		tokenStore = inbox.NewStore(dbPool)
+		tokenResolver = tokenStore
+		tenantDirectory = ingestauth.NewTenantDirectory(dbPool)
+	}
+	auth := ingestauth.New(tokenResolver, tenantDirectory, cfg.ServiceToken, cfg.TenantHeaderKey)
+	h.SetAuthenticator(auth)
+	if auth.Configured() {
+		log.Info().
+			Bool("minted_tokens", tokenResolver != nil).
+			Bool("service_token", cfg.ServiceToken != "").
+			Msg("ingest: /v1/ingest requires an authenticated, tenant-scoped credential")
+	} else {
+		// Loud, and at error: this deployment will refuse every push. A
+		// warning here would be indistinguishable from the ordinary
+		// startup chatter an operator scrolls past.
+		log.Error().
+			Msg("ingest: no credential source configured — /v1/ingest will refuse every request. " +
+				"Set DATABASE_DSN so minted push tokens resolve, or AISOC_SERVICE_TOKEN for service-to-service pushes")
+	}
+
+	var inboxHandler *inbox.Handler
+	if cfg.InboxEnabled && tokenStore != nil {
+		registry := inbox.NewRegistry()
+		// Embedded first — these ship in the binary and are the set the
+		// service is tested against. The on-disk directory is an operator
+		// override layered on top, and is allowed to be absent.
+		if err := registry.LoadEmbedded(); err != nil {
+			log.Error().Err(err).
+				Msg("Failed to load embedded inbox templates; /v1/inbox/* will return 503 for every template")
+		}
+		if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+			log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).
+				Msg("Failed to load inbox template overrides from disk")
+		}
+		log.Info().
+			Strs("templates", registry.IDs()).
+			Int64("max_body_bytes", cfg.InboxMaxBodyBytes).
+			Float64("rate_requests_per_second", cfg.InboxRateRequestsPerSecond).
+			Float64("rate_events_per_second", cfg.InboxRateEventsPerSecond).
+			Msg("inbox: universal-capture push paths enabled")
+		inboxHandler = inbox.NewHandler(tokenStore, registry, pub, cfg.InboxMaxBodyBytes).
+			WithLimiter(inbox.NewLimiter(
+				cfg.InboxRateRequestsPerSecond,
+				cfg.InboxRateRequestBurst,
+				cfg.InboxRateEventsPerSecond,
+				cfg.InboxRateEventBurst,
+			))
+	} else if !cfg.InboxEnabled {
+		log.Info().Msg("inbox: disabled via INBOX_ENABLED=false")
+	} else {
+		log.Info().Msg("inbox: skipped (no DATABASE_DSN)")
+	}
+
+	// T1.4 (v8.0) — graph-update WebSocket fan-out. Opt-in via
+	// AISOC_GRAPH_WS_ENABLED=true. The broadcaster owns a single
+	// Kafka consumer against GraphUpdatesTopic and fans envelopes
+	// out to subscribed WebSocket clients with per-tenant filtering.
+	// Failures NEVER block the ingest path — the Kafka publish side
+	// (T1.1) is independent and the broadcaster is consumer-only.
+	var graphWSServer *graph_ws.Server
+	var graphWSBroker *graph_ws.Broadcaster
+	if cfg.GraphWSEnabled {
+		// One state object shared by the source and the broadcaster: the
+		// errors kafka-go reports to its own logger and the ones the consume
+		// loop sees are the same subscription failing, and splitting them
+		// across two records is how half of them stay invisible.
+		graphWSHealth := graph_ws.NewSourceState(cfg.GraphUpdatesTopic, 0)
+		src, err := graph_ws.NewKafkaSource(graph_ws.KafkaSourceConfig{
+			Brokers: cfg.KafkaBrokers,
+			Topic:   cfg.GraphUpdatesTopic,
+			GroupID: cfg.GraphWSGroupID,
+			Health:  graphWSHealth,
+		})
+		if err != nil {
+			log.Warn().Err(err).Msg("graph_ws: disabled (Kafka source init failed)")
+		} else {
+			graphWSBroker = graph_ws.New(src, graph_ws.Options{
+				BufferSize: cfg.GraphWSSubscriberBuffer,
+				Health:     graphWSHealth,
+			})
+			graphWSServer = graph_ws.NewServer(graphWSBroker)
+			// Same authenticator /v1/ingest runs. The graph stream is
+			// tenant-owned data, so it is scoped by the credential and
+			// not by where the caller connected from.
+			graphWSServer.SetAuthenticator(auth)
+			// /readyz names this subscription and its state. A consumer
+			// detached from its topic behind a 200 that never mentions it is
+			// indistinguishable from an idle one.
+			h.RegisterSubscription("graph_ws", func() handler.SubscriptionStatus {
+				health := graphWSBroker.Health()
+				return handler.SubscriptionStatus{
+					Attached:     health.Attached,
+					NotResolving: health.NotResolving,
+					Detail:       health.Reason(),
+				}
+			})
+			log.Info().
+				Str("topic", cfg.GraphUpdatesTopic).
+				Int("buffer", cfg.GraphWSSubscriberBuffer).
+				Msg("graph_ws: T1.4 WebSocket broadcaster enabled")
+		}
+	} else {
+		log.Info().Msg("graph_ws: disabled (AISOC_GRAPH_WS_ENABLED!=true)")
+	}
+
+	// Depth plan 4.2 — the syslog listener. Off unless the operator asks
+	// for it, because binding 514 needs a decision they have to make.
+	//
+	// Needs the same two things the inbox needs (a token store to resolve
+	// the tenant, a template registry to normalise) plus a publisher, and
+	// refuses to start rather than listening without them: a bound socket
+	// that drops everything is indistinguishable from a working one.
+	var syslogListener *syslog.Listener
+	if cfg.SyslogEnabled {
+		switch {
+		case tokenStore == nil:
+			log.Error().Msg("syslog: not started — DATABASE_DSN is unset, so the configured ingest token cannot be resolved to a tenant")
+		case cfg.SyslogToken == "":
+			log.Error().Msg("syslog: not started — AISOC_SYSLOG_TOKEN is unset, so there is no tenant to attribute messages to. " +
+				"Mint one with POST /api/v1/inbox/tokens using the 'syslog' template")
+		default:
+			registry := inbox.NewRegistry()
+			if err := registry.LoadEmbedded(); err != nil {
+				log.Error().Err(err).Msg("syslog: not started — embedded templates failed to load")
+				break
+			}
+			if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+				log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).Msg("syslog: template overrides on disk could not be read")
+			}
+			sink, err := syslog.NewPublishingSink(tokenStore, registry, pub, cfg.SyslogToken)
+			if err != nil {
+				log.Error().Err(err).Msg("syslog: not started")
+				break
+			}
+			listener, err := syslog.New(syslog.Config{
+				UDPAddr:        cfg.SyslogUDPAddr,
+				TCPAddr:        cfg.SyslogTCPAddr,
+				BatchSize:      cfg.SyslogBatchSize,
+				FlushInterval:  time.Duration(cfg.SyslogFlushMs) * time.Millisecond,
+				MaxConnections: cfg.SyslogMaxConnections,
+			}, sink)
+			if err != nil {
+				// Not fatal: the HTTP ingest path is this service's
+				// primary job and must not refuse traffic because 514 was
+				// taken. Loud, though — the operator asked for a listener
+				// and does not have one.
+				log.Error().Err(err).Msg("syslog: listener disabled")
+				break
+			}
+			syslogListener = listener
+			udpAddr, tcpAddr := listener.Addrs()
+			// /readyz names this listener and its state. A receiver nobody
+			// is sending to and a receiver that failed to bind look the
+			// same from outside unless readiness says which.
+			h.RegisterSubscription("syslog", func() handler.SubscriptionStatus {
+				state := listener.Health()
+				bound := state.UDPBound || state.TCPBound
+				return handler.SubscriptionStatus{
+					Attached:     bound,
+					NotResolving: !bound,
+					Detail:       syslogDetail(state),
+				}
+			})
+			log.Info().
+				Str("udp", udpAddr).
+				Str("tcp", tcpAddr).
+				Int("batch_size", cfg.SyslogBatchSize).
+				Msg("syslog: listener accepting RFC 5424, RFC 3164, CEF and LEEF")
+		}
+	} else {
+		log.Info().Msg("syslog: disabled (AISOC_SYSLOG_ENABLED!=true)")
+	}
+
+	// Depth plan 4.2 — the OTLP logs receiver. Off unless the operator asks
+	// for it. It shares the HTTP port rather than binding one of its own,
+	// because an OpenTelemetry exporter is configured with a single
+	// endpoint URL and appends /v1/logs itself.
+	var otlpReceiver *otlp.Receiver
+	if cfg.OTLPEnabled {
+		if tokenStore == nil {
+			log.Error().Msg("otlp: not started — DATABASE_DSN is unset, so an exporter's ingest token cannot be resolved to a tenant")
+		} else {
+			registry := inbox.NewRegistry()
+			if err := registry.LoadEmbedded(); err != nil {
+				log.Error().Err(err).Msg("otlp: not started — embedded templates failed to load")
+			} else {
+				if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+					log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).Msg("otlp: template overrides on disk could not be read")
+				}
+				receiver, err := otlp.New(tokenStore, registry, pub)
+				if err != nil {
+					log.Error().Err(err).Msg("otlp: receiver disabled")
+				} else {
+					otlpReceiver = receiver
+					// /readyz names the receiver. An endpoint nobody is
+					// exporting to and one refusing every request look the
+					// same from outside unless readiness says which.
+					h.RegisterSubscription("otlp_logs", func() handler.SubscriptionStatus {
+						return handler.SubscriptionStatus{
+							Attached:     true,
+							NotResolving: false,
+							Detail:       receiver.Detail(),
+						}
+					})
+					log.Info().Str("path", "/v1/logs").Str("template", otlp.TemplateID).
+						Msg("otlp: logs receiver accepting protobuf and JSON")
+				}
+			}
+		}
+	} else {
+		log.Info().Msg("otlp: disabled (AISOC_OTLP_LOGS_ENABLED!=true)")
+	}
+
+	// Depth plan 4.2 — customer Kafka topics. One source per tenant; the
+	// tenant comes from each source's minted token and from nothing in the
+	// record.
+	var kafkaSources []*kafkainput.Source
+	if sources, err := kafkainput.ParseSources(cfg.KafkaInputSources); err != nil {
+		// Loud and specific. A malformed source list that started the
+		// service with the input silently off is the exact shape of defect
+		// this repository keeps finding.
+		log.Error().Err(err).Msg("kafka_input: no sources started — AISOC_KAFKA_INPUT_SOURCES could not be read")
+	} else if len(sources) > 0 {
+		if tokenStore == nil {
+			log.Error().Int("sources", len(sources)).
+				Msg("kafka_input: no sources started — DATABASE_DSN is unset, so their ingest tokens cannot be resolved to tenants")
+		} else {
+			registry := inbox.NewRegistry()
+			if err := registry.LoadEmbedded(); err != nil {
+				log.Error().Err(err).Msg("kafka_input: no sources started — embedded templates failed to load")
+			} else {
+				if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+					log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).Msg("kafka_input: template overrides on disk could not be read")
+				}
+				for _, sc := range sources {
+					src, err := kafkainput.NewSource(sc, tokenStore, registry, pub)
+					if err != nil {
+						log.Error().Err(err).Str("source", sc.Name).Msg("kafka_input: source disabled")
+						continue
+					}
+					kafkaSources = append(kafkaSources, src)
+					name := sc.Name
+					h.RegisterSubscription("kafka_input:"+name, func() handler.SubscriptionStatus {
+						health := src.Health()
+						return handler.SubscriptionStatus{
+							Attached:     health.Attached,
+							NotResolving: health.NotResolving || health.PermanentFailure,
+							Detail:       health.Detail(),
+						}
+					})
+					log.Info().Str("source", sc.Name).Str("topic", sc.Topic).Str("group", sc.GroupID).
+						Msg("kafka_input: consuming a customer topic")
+				}
+			}
+		}
+	} else {
+		log.Info().Msg("kafka_input: no sources configured (AISOC_KAFKA_INPUT_SOURCES is empty)")
+	}
+
+	srv := server.New(cfg, h, inboxHandler, graphWSServer, otlpReceiver)
+
+	// Graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	if graphWSBroker != nil {
+		graphWSBroker.Start(ctx)
+		defer graphWSBroker.Stop()
+	}
+
+	for _, src := range kafkaSources {
+		src.Start(ctx)
+		defer src.Stop()
+	}
+
+	if syslogListener != nil {
+		syslogListener.Start(ctx)
+		defer func() {
+			// Given its own short deadline rather than ctx: ctx is already
+			// cancelled by the time deferred shutdown runs, and a drain on
+			// a cancelled context publishes nothing.
+			drainCtx, drainCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			syslogListener.Stop(drainCtx)
+			drainCancel()
+		}()
+	}
+
+	// Drain VulnMatches → Kafka in a background goroutine
+	if norm.VulnMatches != nil {
+		go func() {
+			for match := range norm.VulnMatches {
+				pubCtx, pubCancel := context.WithTimeout(ctx, 5*time.Second)
+				if err := pub.PublishVulnMatch(pubCtx, match); err != nil {
+					log.Warn().Err(err).Str("cve", match.CVE).Msg("Failed to publish VulnMatch")
+				}
+				pubCancel()
+			}
+		}()
+	}
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		sig := <-sigCh
+		log.Info().Str("signal", sig.String()).Msg("Received shutdown signal")
+		cancel()
+	}()
+
+	log.Info().Int("port", cfg.HTTPPort).Msg("HTTP server listening")
+
+	if err := srv.Start(ctx); err != nil && err != http.ErrServerClosed {
+		log.Fatal().Err(err).Msg("Server error")
+	}
+
+	log.Info().Msg("Ingest service shut down gracefully")
+}
+
+// healthResponse is returned by the /health endpoint
+type healthResponse struct {
+	Status    string    `json:"status"`
+	Version   string    `json:"version"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// Version is set at build time via ldflags
+var Version = "dev"
+
+func init() {
+	// Set version in health check
+	_ = fmt.Sprintf("aisoc-ingest/%s", Version)
+}
+
+// syslogDetail turns listener state into the one sentence /readyz shows.
+//
+// "attached" alone would be a lie of omission for a receiver: a syslog
+// listener is legitimately silent for hours, so the detail carries what it
+// has bound, what it has received and what it last failed on — which is
+// what separates "nothing is being sent" from "everything is being dropped".
+func syslogDetail(state syslog.State) string {
+	if !state.UDPBound && !state.TCPBound {
+		return "no transport bound"
+	}
+	bound := make([]string, 0, 2)
+	if state.UDPBound {
+		bound = append(bound, "udp "+state.UDPAddr)
+	}
+	if state.TCPBound {
+		bound = append(bound, "tcp "+state.TCPAddr)
+	}
+	detail := fmt.Sprintf("listening on %s; received %d, rejected %d", strings.Join(bound, ", "), state.Received, state.Rejected)
+	if state.LastError != "" {
+		detail += "; last error: " + state.LastError
+	}
+	return detail
+}

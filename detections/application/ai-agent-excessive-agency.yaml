@@ -1,0 +1,24 @@
+id: det-application-080
+name: AI Agent Took Action Beyond Its Granted Scope
+description: The agent invoked a capability outside the scope it was granted. Unlike a compromised user,
+  an agent has no intent to infer — a call outside its declared tool set is either a policy gap or someone
+  steering it.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    finding_type == "excessive_agency"
+false_positives:
+- Agent scope widened without the policy being updated to match
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

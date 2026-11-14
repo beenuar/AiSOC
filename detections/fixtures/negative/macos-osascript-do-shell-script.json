@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-do shell script-suffix",
+  "event_type": "http_request",
+  "process_path": "head-/osascript"
+}

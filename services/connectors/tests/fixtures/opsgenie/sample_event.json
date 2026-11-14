@@ -1,0 +1,65 @@
+{
+  "data": [
+    {
+      "id": "alert-001",
+      "tinyId": "1234",
+      "message": "Disk usage critical on prod-db-01",
+      "priority": "P1",
+      "status": "open",
+      "source": "Prometheus",
+      "owner": "soc-on-call@example.com",
+      "createdAt": "2099-01-01T12:00:00.000Z",
+      "updatedAt": "2099-01-01T12:00:30.000Z",
+      "alias": "disk-prod-db-01"
+    },
+    {
+      "id": "alert-002",
+      "tinyId": "1235",
+      "message": "Closed alert",
+      "priority": "P1",
+      "status": "closed",
+      "source": "Prometheus",
+      "owner": "soc-on-call@example.com",
+      "createdAt": "2099-01-01T11:55:00.000Z"
+    },
+    {
+      "id": "alert-003",
+      "tinyId": "1236",
+      "message": "Low priority info ping",
+      "priority": "P5",
+      "status": "open",
+      "source": "Datadog",
+      "owner": "monitoring@example.com",
+      "createdAt": "2099-01-01T12:01:00.000Z"
+    }
+  ],
+  "audit_records": [
+    {
+      "id": "audit-001",
+      "action": "ApiKeyCreated",
+      "user": "owner@example.com",
+      "userName": "Site Owner",
+      "email": "owner@example.com",
+      "ipAddress": "10.0.0.1",
+      "createdAt": "2099-01-01T12:02:00.000Z"
+    },
+    {
+      "id": "audit-002",
+      "action": "EscalationPolicyDeleted",
+      "user": "owner@example.com",
+      "userName": "Site Owner",
+      "email": "owner@example.com",
+      "ipAddress": "10.0.0.1",
+      "createdAt": "2099-01-01T12:03:00.000Z"
+    },
+    {
+      "id": "audit-003",
+      "action": "AlertAcknowledged",
+      "user": "soc-on-call@example.com",
+      "userName": "SOC",
+      "email": "soc-on-call@example.com",
+      "createdAt": "2099-01-01T12:04:00.000Z"
+    }
+  ],
+  "paging": {}
+}

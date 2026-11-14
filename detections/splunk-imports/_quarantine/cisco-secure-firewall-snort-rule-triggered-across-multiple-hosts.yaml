@@ -1,0 +1,43 @@
+id: splunk-security-content-a4c76d0a-56b6-44be-814b-939746c4d406
+name: Cisco Secure Firewall - Snort Rule Triggered Across Multiple Hosts
+description: This analytic identifies Snort intrusion signatures that have been triggered
+  by ten or more distinct internal IP addresses within a one-hour window. It leverages
+  Cisco Secure Firewall Threat Defense logs and focuses on the IntrusionEvent event
+  type to detect activity that may indicate broad targeting or mass exploitation attempts.
+  This behavior is often associated with opportunistic scanning, worm propagation,
+  or automated exploitation of known vulnerabilities across multiple systems. If confirmed
+  malicious, this could represent the early phase of a coordinated attack aiming to
+  gain a foothold on several hosts or move laterally across the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1105
+  - T1027
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=IntrusionEvent\n| bin _time span=1h\n\
+    | stats dc(src) as unique_src_ips, values(src) as src\n        min(_time) as firstTime\
+    \ max(_time) as lastTime\n        Values(dest) as dest\n        Values(dest_port)\
+    \ as dest_port\n        Values(rule) as rule\n        Values(transport) as transport\n\
+    \        Values(app) as app\n        by signature_id, signature class_desc MitreAttackGroups\
+    \ InlineResult InlineResultReason\n| where unique_src_ips >= 10\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cisco_secure_firewall___snort_rule_triggered_across_multiple_hosts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a4c76d0a-56b6-44be-814b-939746c4d406
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___snort_rule_triggered_across_multiple_hosts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

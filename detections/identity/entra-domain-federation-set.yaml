@@ -1,0 +1,25 @@
+id: det-identity-243
+name: Entra Domain Federation Settings Changed
+description: Federation settings decide which identity provider's assertions the tenant trusts, which
+  is the whole authentication decision.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1484.002
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Set federation settings on domain"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

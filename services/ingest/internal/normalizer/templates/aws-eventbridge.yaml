@@ -1,0 +1,40 @@
+# AWS EventBridge event template.
+#
+# EventBridge events arrive in a standard envelope (version, source,
+# detail-type, detail, ...) regardless of the producing service. The
+# detail field carries service-specific shape — GuardDuty, Security
+# Hub, Inspector, Macie, etc. We pull common identity / context fields
+# off the envelope and let the detail object pass through as evidence.
+#
+# Reference:
+#   https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-events.html
+id: aws-eventbridge
+vendor_name: AWS
+product_name: AWS EventBridge
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  id: finding.uid
+  detail-type: finding.title
+  source: finding.product.name
+  account: cloud.account.uid
+  region: cloud.region
+  detail.title: finding.title
+  detail.description: finding.description
+  detail.type: finding.types
+  detail.severity: severity
+  detail.findingArn: finding.related_events.id
+  detail.id: finding.related_events.uid
+severity_field: detail.severity
+severity_map:
+  INFORMATIONAL: 1
+  LOW: 2
+  MEDIUM: 3
+  HIGH: 4
+  CRITICAL: 5
+time_field: time
+message_field: detail-type
+constants:
+  source_type: aws-eventbridge
+  cloud.provider: AWS

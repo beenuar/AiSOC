@@ -1,0 +1,23 @@
+id: det-identity-260
+name: Entra Sign-In From An Anonymizing Or Hosting Network
+description: The ingest classification and its dataset version travel with the alert.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1090.003
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-signin
+detection:
+  condition: |
+    event_type == "azure.entra.signin.risky"
+    AND ip_class IN ["vpn", "tor_exit", "public_proxy", "hosting_provider"]
+false_positives:
+- Staff member travelling, on a corporate VPN, or using a client the tenant still permits
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

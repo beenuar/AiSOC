@@ -1,0 +1,4 @@
+{
+  "argv": "tar curl",
+  "syscall": "execve"
+}

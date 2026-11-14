@@ -1,0 +1,64 @@
+id: chronicle-detection-rules-hack-tool-user-agent
+name: hack_tool_user_agent
+description: hack_tool_user_agent
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule hack_tool_user_agent {\n meta:\n    author = \"Florian Roth\"\
+    \n    description = \"Detects suspicious user agent strings user by hack tools\
+    \ in proxy logs  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/zmMGplHFPuC2\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"proxy\"\n\n  events:\n\
+    (re.regex($selection.principal.application, `.*\\(hydra\\).*`) or re.regex($selection.principal.application,\
+    \ `.* arachni/.*`) or re.regex($selection.principal.application, `.* BFAC .*`)\
+    \ or re.regex($selection.principal.application, `.* brutus .*`) or re.regex($selection.principal.application,\
+    \ `.* cgichk .*`) or re.regex($selection.principal.application, `.*core-project/1\\\
+    .0.*`) or re.regex($selection.principal.application, `.* crimscanner/.*`) or re.regex($selection.principal.application,\
+    \ `.*datacha0s.*`) or re.regex($selection.principal.application, `.*dirbuster.*`)\
+    \ or re.regex($selection.principal.application, `.*domino hunter.*`) or re.regex($selection.principal.application,\
+    \ `.*dotdotpwn.*`) or $selection.principal.application = \"FHScan Core\" or re.regex($selection.principal.application,\
+    \ `.*floodgate.*`) or re.regex($selection.principal.application, `.*get-minimal.*`)\
+    \ or re.regex($selection.principal.application, `.*gootkit auto-rooter scanner.*`)\
+    \ or re.regex($selection.principal.application, `.*grendel-scan.*`) or re.regex($selection.principal.application,\
+    \ `.* inspath .*`) or re.regex($selection.principal.application, `.*internet ninja.*`)\
+    \ or re.regex($selection.principal.application, `.*jaascois.*`) or re.regex($selection.principal.application,\
+    \ `.* zmeu .*`) or re.regex($selection.principal.application, `.*masscan.*`) or\
+    \ re.regex($selection.principal.application, `.* metis .*`) or re.regex($selection.principal.application,\
+    \ `.*morfeus fucking scanner.*`) or re.regex($selection.principal.application,\
+    \ `.*n-stealth.*`) or re.regex($selection.principal.application, `.*nsauditor.*`)\
+    \ or re.regex($selection.principal.application, `.*pmafind.*`) or re.regex($selection.principal.application,\
+    \ `.*security scan.*`) or re.regex($selection.principal.application, `.*springenwerk.*`)\
+    \ or re.regex($selection.principal.application, `.*teh forest lobster.*`) or re.regex($selection.principal.application,\
+    \ `.*toata dragostea.*`) or re.regex($selection.principal.application, `.* vega/.*`)\
+    \ or re.regex($selection.principal.application, `.*voideye.*`) or re.regex($selection.principal.application,\
+    \ `.*webshag.*`) or re.regex($selection.principal.application, `.*webvulnscan.*`)\
+    \ or re.regex($selection.principal.application, `.* whcc/.*`) or re.regex($selection.principal.application,\
+    \ `.* Havij`) or re.regex($selection.principal.application, `.*absinthe.*`) or\
+    \ re.regex($selection.principal.application, `.*bsqlbf.*`) or re.regex($selection.principal.application,\
+    \ `.*mysqloit.*`) or re.regex($selection.principal.application, `.*pangolin.*`)\
+    \ or re.regex($selection.principal.application, `.*sql power injector.*`) or re.regex($selection.principal.application,\
+    \ `.*sqlmap.*`) or re.regex($selection.principal.application, `.*sqlninja.*`)\
+    \ or re.regex($selection.principal.application, `.*uil2pn.*`) or $selection.principal.application\
+    \ = \"ruler\" or $selection.principal.application = \"Mozilla/5.0 (Windows; U;\
+    \ Windows NT 5.1; pt-PT; rv:1.9.1.2) Gecko/20090729 Firefox/3.5.2 (.NET CLR 3.5.30729)\"\
+    )\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: hack_tool_user_agent
+provenance:
+  source: chronicle/detection-rules
+  source_id: hack_tool_user_agent
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/proxy/hack_tool_user_agent.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

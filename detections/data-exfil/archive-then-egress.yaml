@@ -1,0 +1,25 @@
+id: det-data-exfil-004
+name: Archive Tool Then Large Egress Within 15 Minutes
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Archive Tool
+  Then Large Egress Within 15 Minutes'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1560.001
+- mitre.attack.t1041
+- tlp.white
+category: data-exfil
+log_source:
+  product: edr
+  service: correlated
+detection:
+  condition: |
+    archive_seen_within_minutes < 15
+    AND egress_bytes > 100000000
+false_positives:
+- Backup tool that compresses then ships (allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

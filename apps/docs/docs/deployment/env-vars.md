@@ -1,0 +1,653 @@
+---
+sidebar_position: 4
+---
+
+# Environment Variables
+
+This page is the source of truth for every environment variable AiSOC reads at runtime. Each section maps to a single service, mirroring the layout of [`services/`](https://github.com/beenuar/AiSOC/tree/main/services) in the repo.
+
+If you spot drift between this page and the code, please open a PR — the matching config files are linked at the top of every section.
+
+---
+
+## API service (`services/api`)
+
+Source: [`services/api/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/config.py)
+
+The API uses bare environment variable names (no prefix). Booleans accept `true` / `false`; lists accept comma-separated strings.
+
+### Application
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APP_NAME` | `AiSOC API` | Display name in OpenAPI docs |
+| `APP_VERSION` | _resolved, see below_ | The running release. Reported by `GET /health`, by `GET /api/v1/system/version`, and as `info.version` in the OpenAPI document — one fact, three surfaces. The API serves `/health`, not `/healthz` |
+| `VERSION` | — | **Not read.** `Settings.VERSION` is a read-only alias for `APP_VERSION`, not a field, so a bare `VERSION` variable in the environment is ignored. It is deliberately unbindable: `VERSION` is a name the release workflow already exports for its own purposes, and nothing but the build arg and the tree should be able to move the version a process reports |
+| `ENV` / `ENVIRONMENT` | `development` | One of `development`, `staging`, `production` |
+| `DEBUG` | `false` | Enables verbose error responses — never enable in production |
+| `API_PREFIX` | `/api/v1` | Mount point for the versioned API |
+| `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+#### How the version resolves
+
+`APP_VERSION` has no literal default. When it is not set explicitly it is
+resolved, in this order:
+
+1. **`AISOC_VERSION`** in the environment. Images stamp this from the
+   `AISOC_VERSION` build arg, which the publish workflow fills from the
+   repo-root `VERSION` file. A container has no repository to read, so this
+   is the only path that can work inside one.
+2. **The repo-root `VERSION` file**, found by walking up from the module.
+   This is the source-checkout path — running from a clone, the test suite,
+   and the OpenAPI export. The walk is bounded and only accepts a file whose
+   contents look like a release, because from inside a container it can
+   otherwise reach `/VERSION`, which exists on some base images and means
+   something unrelated.
+3. **The literal string `"unknown"`** when neither declared one.
+
+That third case is the point, and it is why this row no longer shows a
+number. `APP_VERSION` used to default to `0.1.0`, which is not a neutral
+placeholder: it parses as a version, sorts below every tag that has ever
+shipped, and renders in a console tile as though it had been measured. A
+v22.2.0 deployment reported `0.1.0` on `/health`, published `0.1.0` as
+`info.version` and logged it at startup — three surfaces agreeing, all
+wrong, which is exactly why it went unnoticed for twenty-two majors. An
+operator comparing a deployment against a release tag could not tell "this
+is very old" from "nobody told me". `"unknown"` cannot be mistaken for
+either.
+
+### Security and tokens
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SECRET_KEY` | `change-me-in-production-at-least-32-chars` | **Required in production.** Signs primary access/refresh JWTs. `make env` generates one into `.env`; the connectors service must see the same value. Generate by hand with `openssl rand -hex 32`. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Lifetime of an access token |
+| `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
+| `ALGORITHM` | `HS256` | JWT signing algorithm |
+| `AISOC_CREDENTIAL_KEY` | _empty_ | **Required outside a development environment.** Fernet key encrypting connector credentials at rest. What an empty value does depends on `ENVIRONMENT`: in a dev-class environment (`development`, `dev`, `local`, `demo`, `test`) the vault generates an **ephemeral** process-local key and logs a warning, so saved credentials do not survive a restart; anywhere else it **raises** and refuses to start the vault, because silently encrypting under a throwaway key is worse than refusing. A non-empty but invalid value raises in every environment, and every connector save then answers HTTP 500 — which is why `.env.example` ships it empty rather than as a placeholder. `make env` writes a real one. |
+| `AISOC_CREDENTIAL_KEY_ROTATION_FROM` | _empty_ | Comma-separated previous keys, accepted for decryption only, for zero-downtime rotation. |
+| `AISOC_SERVICE_TOKEN` | _empty_ | Shared bearer for service-to-service calls. The API **sends** it when proxying the connector catalog and "Test connection" to `services/connectors`, which **verifies** it — so a value set on one side only is a 401 the wizard reports as a failed connection test. `make env` generates one and compose passes it to both. |
+| `AISOC_CONNECTORS_SERVICE_TOKEN` | _empty_ | Per-service override for the above, if you would rather not share one secret. |
+| `AISOC_CONSOLE_URL` | `http://localhost:3000` | Base URL `make bootstrap` prints as the sign-in address. Set it to the address operators actually browse to — any non-localhost deployment otherwise prints the wrong one beside a credential shown exactly once. |
+| `POSTGRES_PASSWORD` | _empty_ | Postgres **owner** role. Owns every table and applies the migration chain; no service connects as it. `make env` generates one. |
+| `AISOC_APP_DB_PASSWORD` | _empty_ | Postgres **runtime** role (`aisoc_app`), DML only so the row-level-security policies apply to it. `make env` generates one. |
+| `REDIS_PASSWORD` | _empty_ | Redis AUTH password. `REDIS_URL` references it rather than repeating it, so rotating one rotates both. `make env` generates one. |
+| `CLICKHOUSE_PASSWORD` | _empty_ | ClickHouse event-lake password, referenced the same way by `CLICKHOUSE_URL`. `make env` generates one. |
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | The API validates connector `base_url`s at create/update and webhook destinations at create, update and delivery through the SSRF guard. `true` re-admits RFC1918 / link-local destinations (never loopback, never cloud metadata) for on-prem systems. One `.env` value reaches `api`, `connectors` and `agents` in compose. |
+| `AISOC_SSRF_ALLOW_HOSTS` | — | Comma-separated **exact** hostnames the guard admits (no wildcards, no CIDR). Use it to permit one named internal SIEM or webhook without opening every private range. The cloud-metadata block list cannot be overridden by it. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny on top of the built-in cloud-metadata block list. |
+
+:::info A published default cannot satisfy a production guard
+
+The four datastore passwords above used to ship in `.env.example` as
+`aisoc_dev_secret`, `aisoc_app_dev_secret`, `redis_dev_secret` and
+`clickhouse_dev_secret`. `docker-compose.prod.yml` guarded each with
+`${VAR:?… the development default is a published literal}`, but Compose's `:?`
+rejects an **unset or empty** variable and cannot look at a value — so every
+one of those guards accepted the exact literal its own message named.
+
+They ship empty and generated now, and `docker-compose.prod.yml` runs a
+`preflight-secrets` service ahead of everything else that refuses any value
+published in this repository. An existing `.env` is not rewritten by
+`make env`, so a deployment that already holds one of these will be told at
+startup rather than silently keeping it.
+
+:::
+
+### Migration runner
+
+Source: [`services/api/app/scripts/run_migrations.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/scripts/run_migrations.py)
+
+The migration runner is invoked by deploy orchestrators (Fly's `release_command`, Render's `preDeployCommand`, the Kubernetes `Job` in the Helm chart) the moment a new API VM boots. It races against Postgres becoming reachable — these knobs control how that race is handled.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_MIGRATIONS_REQUIRED` | `1` (required) | **Default is safe — leave it alone for production.** When set to `0` / `false` / `no` / `off`, the runner exits `0` instead of `1` if it cannot reach Postgres after exhausting its retry budget (6 attempts, exponential back-off, ~31 s total). This is for *demo* environments where the API code deploy must not be held hostage by a Postgres outage — the running app keeps serving the last-good schema and dataset, and the deploy log carries a loud `MIGRATION SKIPPED` line for an operator to chase. A *hard* migration failure (Postgres reachable, SQL statement failed) still aborts the deploy regardless of this flag — a schema-change PR with a bad migration must always get human attention. |
+
+The Fly demo (`infra/fly/api/fly.toml`) sets `AISOC_MIGRATIONS_REQUIRED = "0"` and pairs it with a shell wrapper in `release_command` that uses a `/tmp/aisoc-migrations-ok` sentinel to decide whether to also run `seed_demo` — a soft-failed migration run skips the seeder (which would just hit the same connect failure through SQLAlchemy and crash the deploy anyway).
+
+### Audit log
+
+Source: [`services/api/app/services/audit.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit.py), [`services/api/app/core/trusted_proxy.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/trusted_proxy.py), [`services/api/app/services/audit_redaction.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/audit_redaction.py). Background: [Security operations → Audit logging](../operations/security#audit-logging).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_TRUSTED_PROXIES` | _empty_ | Comma-separated list of CIDRs (e.g. `10.0.0.0/8,192.168.0.0/16`) for trusted ingress / load balancer hops. When empty, `X-Forwarded-For` is **ignored** and `actor_ip` is the direct TCP peer — set this in production so the audit log records the real client IP without being spoofable from the public side. |
+| `AISOC_AUDIT_MAX_CHANGES_BYTES` | `65536` | Hard cap on the serialized `changes` payload stored per audit row. Over-sized values are replaced with a `{ "_truncated": true, "_size": <bytes> }` marker. Set higher only if you genuinely need richer diffs and have provisioned the storage. |
+
+### SIEM disposition writeback
+
+Source: [`services/api/app/services/siem_writeback.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/services/siem_writeback.py). Background: [Integrations → SIEM writeback](../integrations/siem-writeback).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_SIEM_WRITEBACK_ENABLED` | `1` (on) | Master switch for projecting an AiSOC verdict back onto the vendor finding that produced the alert. |
+| `AISOC_SIEM_WRITEBACK_EXECUTE` | `0` (**off**) | **Whether a vendor is actually called.** With this off every attempt is dispatched as a dry run, recorded with `executed=false` and reported as `mode: "dry_run"`. The asymmetry is deliberate: a writeback that did not happen costs one duplicated triage, and one that happened unexpectedly silently closed findings in your system of record. Anything that is not an explicit `1`/`true`/`yes`/`on` — including a typo — is read as a dry run. |
+| `AISOC_SIEM_WRITEBACK_CLOSE_CASE` | `0` (**off**) | Whether a closing verdict may resolve the linked case so the existing Jira / ServiceNow fan-out projects the real status. Separate from the execute flag because a case is a unit of work with an owner, not a queue item. |
+| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret the agents worker presents on `POST /alerts/{id}/source-writeback`. **Fails closed:** when unset there is no service path at all and an unauthenticated caller is refused, rather than an empty secret matching an absent header. |
+
+### Passkeys (WebAuthn)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PASSKEY_RP_ID` | `localhost` | Relying-party ID — must match the eTLD+1 of the PWA origin (no scheme, no port) |
+| `PASSKEY_RP_NAME` | `AiSOC` | Display name shown in the OS passkey prompt |
+| `PASSKEY_RP_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Comma-separated list of allowed origins |
+| `PASSKEY_CHALLENGE_TTL_SECONDS` | `300` | Lifetime of a single ceremony challenge |
+
+### SSO — OIDC
+
+Source: [`services/api/app/auth/oidc.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/auth/oidc.py)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OIDC_ISSUER` | — | OIDC issuer URL (used for `.well-known/openid-configuration` discovery) |
+| `OIDC_CLIENT_ID` | — | OAuth client ID |
+| `OIDC_CLIENT_SECRET` | — | OAuth client secret (omit if PKCE-only) |
+| `OIDC_REDIRECT_URI` | — | Redirect URI registered with the IdP |
+| `OIDC_SCOPES` | `openid profile email` | Space-separated scope list |
+| `OIDC_PKCE` | `true` | Enable PKCE for the authorization code flow |
+| `JWT_SECRET` | `changeme-insecure-default` | **Required in production.** Signs SSO-issued session JWTs. |
+| `JWT_ALGORITHM` | `HS256` | SSO JWT signing algorithm |
+| `JWT_EXPIRE_MINUTES` | `480` | SSO JWT lifetime |
+
+### SSO — SAML 2.0
+
+Source: [`services/api/app/auth/saml.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/auth/saml.py)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SAML_SP_ACS_URL` | `http://localhost:8000/auth/saml/acs` | SP Assertion Consumer Service URL |
+| `SAML_SP_ENTITY_ID` | — | Service provider entity ID |
+| `SAML_SP_PRIVATE_KEY` | — | PEM-encoded SP signing key |
+| `SAML_SP_CERT` | — | PEM-encoded SP certificate |
+| `SAML_IDP_ENTITY_ID` | — | IdP entity ID |
+| `SAML_IDP_SSO_URL` | — | IdP single sign-on URL |
+| `SAML_IDP_SLO_URL` | — | IdP single logout URL |
+| `SAML_IDP_CERT` | — | PEM-encoded IdP certificate |
+| `SAML_DEBUG` | `false` | Verbose SAML logging — disable in production |
+
+### Database, cache, queue
+
+**Two Postgres roles, and the distinction is a security control.** `DATABASE_URL`
+is the role every service connects as: `aisoc_app`, which holds
+`SELECT / INSERT / UPDATE / DELETE` and nothing else, so the schema's
+row-level-security policies apply to it. `DATABASE_MIGRATION_URL` is the owner,
+read by the migration runner and by nothing else. Running the services as the
+owner — which every deployment surface did until `061_runtime_app_role.sql` —
+leaves all 92 RLS policies filtering nothing, because a superuser ignores them
+even under `FORCE ROW LEVEL SECURITY`. See
+[Security → Multi-tenant isolation](../operations/security#the-role-the-services-connect-as).
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@localhost:5432/aisoc` | Async Postgres DSN for the **runtime** role. DML only. |
+| `DATABASE_MIGRATION_URL` | unset → falls back to `DATABASE_URL` | Async Postgres DSN for the **owner**. Read by `python -m app.scripts.run_migrations` and by the four alembic chains below, all of which need DDL. |
+
+#### The four services that manage their own schema
+
+`honeytokens`, `osquery-tls`, `purple-team` and `ueba` run their own alembic
+chain rather than the API's SQL runner, and until now each applied it as
+whatever DSN the operator supplied — so their migration and runtime
+credentials were the same one. Pointing such a service at the owner turned off
+row-level security for the twelve tables those chains own, and nothing
+objected.
+
+Each now reads a migration credential first and falls back to the runtime one
+with a warning on stderr:
+
+| Service | Migration DSN (owner) | Runtime DSN |
+|---------|-----------------------|-------------|
+| `honeytokens` | `HONEYTOKEN_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `HONEYTOKEN_DATABASE_URL` |
+| `osquery-tls` | `AISOC_OSQUERY_TLS_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `AISOC_OSQUERY_TLS_DATABASE_URL` |
+| `purple-team` | `PURPLE_TEAM_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `PURPLE_TEAM_DATABASE_URL` |
+| `ueba` | `UEBA_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL` | `DATABASE_URL`, then `UEBA_DATABASE_URL` |
+
+Two things changed alongside, both of which an operator can observe:
+
+- **The unprefixed `DATABASE_URL` now reaches all four.** `honeytokens`,
+  `purple-team` and `osquery-tls` previously read only their prefixed
+  spelling, while `docker-compose.yml` set the unprefixed one — so the
+  variable was inert and each fell back to a default naming the *owner*. The
+  prefixed spelling still works; the unprefixed one wins when both are set.
+- **Each chain keeps its own alembic version table** (`alembic_version_ueba`
+  and so on). They share one database in the default deployment and used to
+  share one `alembic_version`, so the second chain to run believed it was
+  already at head — measured: after `ueba` reached `0002`, `honeytokens
+  alembic upgrade head` ran zero migrations and `purple-team` failed applying
+  its RLS revision to tables that had never been created. An existing
+  deployment is adopted automatically on the next `alembic upgrade`: the
+  recorded version is copied into the per-chain table when, and only when,
+  that chain's own tables are already present.
+
+##### Who runs the chain
+
+Nothing did. All four container commands were a plain `uvicorn`, so on the
+documented quickstart these services booted against empty schemas with none
+of their policies installed, and every command in that sequence reported
+success. The only documented invocation was a manual step, in a page whose
+"start the stack" step did not start three of the four services.
+
+Each image now runs `python -m app._migrate` before its server. That module:
+
+- resolves the owner DSN by the precedence in the table above — it runs
+  `alembic` as a subprocess so `env.py` stays the single answer to *which
+  credential*, rather than a second copy of the rule here;
+- takes a shared transaction-scoped advisory lock inside the upgrade
+  (`MIGRATION_LOCK_KEY` in each `env.py`), so four chains starting at once
+  against one database queue instead of deadlocking on catalog locks;
+- reads the applied revision back and compares it to head. `alembic upgrade
+  head` exits 0 when it applies **nothing**, which is exactly what happened
+  when the chains shared a version table — so an exit code is not evidence,
+  and the module refuses to start the server unless the version table
+  actually holds head;
+- provides no way to skip. A service that cannot reach head does not serve.
+
+`AISOC_APP_DB_PASSWORD` is passed to all four for the same reason the API
+gets it: the postgres init hook fires only on an empty data directory, so an
+existing volume never reaches it and the runtime role would have no
+credential to authenticate with.
+
+Two CI gates keep this true:
+`scripts/check_service_migration_bootstrap.py` asserts every service with an
+`alembic.ini` ships the module, keeps it identical to the others, invokes it
+from its `CMD`, and carries both an owner DSN and a healthcheck;
+`scripts/check_orm_migration_parity.py` asserts no model declares a column
+its migrations do not create.
+| `AISOC_APP_DB_PASSWORD` | `aisoc_app_dev_secret` in compose; unset elsewhere | Password applied to the runtime role, by the postgres init hook on a fresh volume and by the migration runner on every run. Unset leaves the role's credential alone. |
+| `DATABASE_POOL_SIZE` | `20` | SQLAlchemy pool size |
+| `DATABASE_MAX_OVERFLOW` | `10` | SQLAlchemy max overflow |
+| `REDIS_URL` | `redis://localhost:6379/0` | Redis DSN |
+| `REDIS_POOL_SIZE` | `20` | Redis connection pool size |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Comma-separated broker list (canonical name; `KAFKA_BROKERS` is honored as a back-compat alias) |
+| `KAFKA_TOPIC_EVENTS` | `aisoc.normalized_events` | Topic for normalized events |
+| `KAFKA_TOPIC_ALERTS` | `aisoc.alerts` | Topic for emitted alerts |
+
+### Search and graph
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENSEARCH_URL` | `http://localhost:9200` | OpenSearch base URL |
+| `ES_URL` | — | Deployment-wide Elasticsearch cluster for scheduled hunts. Optional: the normal path is a per-tenant **Elastic connector** added from the console, whose endpoint and secret are vault-encrypted. Set this only if one cluster serves every tenant. |
+| `ES_API_KEY` | — | API key paired with `ES_URL`. Both must be set for the fallback to apply. |
+| `NEO4J_URI` | `bolt://localhost:7687` | Neo4j Bolt URI |
+| `NEO4J_USER` | `neo4j` | Neo4j user |
+| `NEO4J_PASSWORD` | — | Neo4j password |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant base URL |
+| `CLICKHOUSE_HOST` / `CLICKHOUSE_PORT` / `CLICKHOUSE_DATABASE` / `CLICKHOUSE_USER` / `CLICKHOUSE_PASSWORD` | `localhost` / `9000` / `aisoc` / `default` / — | ClickHouse connection details |
+
+### Realtime, demo, and feature toggles
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REALTIME_BASE_URL` | `http://realtime:8086` | Internal URL the API uses to fan out push events |
+| `REALTIME_INTERNAL_TOKEN` | — | Shared secret with the realtime service for internal RPC |
+| `AISOC_CORS_ORIGINS` | _(uses service default)_ | Canonical, repo-wide, comma-separated CORS allow-list. Applies to every API, agent, ingest, enrichment, realtime, UEBA, honeytoken, purple-team, and connectors process. See [CORS configuration](#cors-configuration) below for the full rules. |
+| `CORS_ORIGINS` | `http://localhost:3000,http://localhost:3001` | Legacy alias kept for backwards compatibility. `AISOC_CORS_ORIGINS` takes precedence when both are set. |
+| `OTEL_ENDPOINT` | — | OTLP collector endpoint |
+| `MAX_TENANTS` | `1000` | Hard cap for multi-tenant deployments |
+| `DEFAULT_TENANT_PLAN` | `starter` | Default plan for newly provisioned tenants |
+| `AISOC_PLUGINS_DIR` | `/opt/aisoc/plugins` | Filesystem path the plugin loader scans |
+| `PLUGIN_TRUST_MODE` | `warn` | `disabled` skips signature checks, `warn` records `signature_status` but loads anyway, `strict` rejects unsigned/invalid plugins (including OCI installs). See [Operations → Security → OCI install hardening](../operations/security#oci-install-hardening-h-3). |
+| `PLUGIN_TRUSTED_KEYS_DIR` | `/etc/aisoc/plugin-keys` | Directory of Ed25519 public keys (`*.pem`/`*.pub`) that are allowed to sign plugins. |
+| `AISOC_DEMO_MODE` | `false` | When `true`, mutating requests outside the demo tenant return 403 |
+| `AISOC_DEMO_TENANT` | `demo` | Tenant slug allowed to write in demo mode |
+| `AISOC_DEMO_BANNER` | `Demo data resets daily at 00:00 UTC. All write actions are disabled.` | Banner text rendered by the web app |
+| `AISOC_DISABLE_KAFKA` / `AISOC_DISABLE_CLICKHOUSE` / `AISOC_DISABLE_NEO4J` / `AISOC_DISABLE_QDRANT` | `false` | Skip the corresponding subsystem at boot — endpoints that need it return 503. There is no OpenSearch equivalent: the API service holds no OpenSearch client. OpenSearch belongs to `services/threatintel`, configured with `OPENSEARCH_HOST` / `OPENSEARCH_PORT`. |
+
+---
+
+## Agents service (`services/agents`)
+
+Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/services/agents/app)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENAI_API_KEY` | — | Provider key. With the bundled gateway running, the *gateway* uses this to reach the upstream model; AiSOC itself authenticates with `LITELLM_MASTER_KEY`. |
+| `LLM_GATEWAY_URL` | `http://litellm:4000/v1` (set by compose) | In-network URL of the bundled LiteLLM gateway. Both resolvers read it for any `aisoc-<role>` alias — an alias resolves nowhere else. A concrete `AISOC_MODEL_PIN_<ROLE>` is left pointing at its provider. |
+| `LITELLM_MASTER_KEY` | `sk-aisoc-local` in compose | Bearer AiSOC sends when it routes to the gateway itself. Resolved *with* the URL, so a provider key is never sent to the gateway (it rejects one). |
+| `AISOC_LITELLM_REQUEST_TIMEOUT` | `60` (seconds, set by compose) | How long the gateway waits on one generation before giving up. Raise it when the bundled local model is doing CPU-only inference and long generations are timing out; the Settings → Deployment & AI panel reports **Degraded** when recent calls are failing, which is the signal to turn this up. Compose must always pass a value — an unset variable resolves to `None` inside the gateway, which then serves `/health/liveliness` 200 while failing every completion. |
+| `AISOC_INVESTIGATION_MAX_SECONDS` | `120` | Wall-clock budget for one investigation, on **both** the auto-triage path and the console's manual "Investigate with agent". A run that exceeds it is closed as `failed` with the reason, in the run store and in the `investigation_runs` row. |
+| `AISOC_INVESTIGATION_STALE_AFTER_SECONDS` | `3 × AISOC_INVESTIGATION_MAX_SECONDS`, floor 300 | When a background sweep closes an `investigation_runs` row abandoned by a process that exited mid-run. Derived from the budget above so the two cannot disagree; set it only if you need a different margin. |
+| `AISOC_INVESTIGATION_REAP_INTERVAL_SECONDS` | `60` | How often that sweep runs. |
+| `AISOC_INVESTIGATION_REAPER_DISABLE` | unset (sweep on) | Set to `1` to turn the sweep off. Leaving it off means a run orphaned by a restart stays `running` in the ledger forever. |
+| `OPENAI_BASE_URL` / `LLM_BASE_URL` | — | Explicit override. Outranks `LLM_GATEWAY_URL` for every role; you own the key pairing when you set it. |
+| `AISOC_MODEL_PIN_<ROLE>` | `aisoc-<role>` | Per-role model. Set a concrete provider model to call a provider directly with no gateway. Roles: `triage`, `recon`, `investigation`, `copilot`, `summary`, `report`, `nl`. |
+| `OPENAI_MODEL` | `aisoc-summary` | BYOK / "explain this alert" path **only** — never a task role's model. Ships as an alias because the default deployment routes through the gateway, which 400s anything `infra/litellm/config.yaml` does not define. |
+| `AISOC_EMBEDDING_BASE_URL` / `AISOC_EMBEDDING_MODEL` | — / `text-embedding-3-large` | MITRE RAG embeddings. Deliberately outside the gateway, whose model list is chat aliases only. |
+| `DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for the Investigation Ledger |
+| `QDRANT_URL` | `http://localhost:6333` | Vector store for case memory and RAG |
+| `ENRICHMENT_SERVICE_URL` | `http://enrichment:8011` | URL of the enrichment service (Go) |
+| `API_SERVICE_URL` / `API_URL` | `http://api:8000` | URL of the FastAPI service |
+| `REALTIME_URL` | `http://realtime:8086` | Realtime service URL for streaming agent traces |
+| `REALTIME_INTERNAL_TOKEN` / `INTERNAL_TOKEN` | — | Shared secret matching the API/realtime services |
+| `PLAYBOOK_STORE_DIR` | `/data/playbooks` | Filesystem path for executable playbook DSL files |
+| `PLAYBOOK_PACK_ROOT` | `/data/playbook-packs` | Root directory for community playbook packs |
+| `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
+| `AISOC_ATTCK_CDN_FETCH` | _off_ | Allow the startup corpus load to fetch the full ATT&CK bundle from `raw.githubusercontent.com` when no file is present at `ATTCK_DATA_PATH`. Off by default: the lifespan runs on every start, so leaving it on would make an unconfigured deployment — including an air-gapped one — reach the internet before serving a request. With it off the service loads the bundled snapshot. |
+| `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
+| `AISOC_VERSION` | _resolved; see [How the version resolves](#how-the-version-resolves)_ | Stamped into the image from the build arg of the same name. Reported as `service.version` in OTel resource attributes, and it is the first source the running-version resolver consults, so a trace and `/health` name the same release. It previously defaulted to the literal `4.0.0` here while the health endpoint defaulted to `0.1.0` — two stale literals, so one process reported two different versions of itself depending on which surface you asked. |
+| `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP collector endpoint |
+| `OTEL_EXPORTER` | `otlp` | One of `otlp`, `jaeger`, `console` |
+| `AISOC_SSRF_ALLOWED_SCHEMES` | `http,https` | Comma-separated list of URL schemes allowed for outbound `http_request` and `notify` playbook steps. Anything else is rejected. |
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | When `true`, lets playbook steps reach RFC1918 / link-local destinations (never loopback, never cloud metadata). Leave off in production; enable only for self-hosted webhooks on a private network. Compose passes one `.env` value to every service that runs the guard — this one, `api` and `connectors` — so the three processes cannot disagree. |
+| `AISOC_SSRF_ALLOW_HOSTS` | — | Comma-separated **exact** hostnames to admit (no wildcards, no CIDR ranges). A named host skips the IP-range checks, so a single internal webhook or SIEM can be admitted without opening every private range. The cloud-metadata block list still applies — nothing can admit `169.254.169.254` or its siblings. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
+| `AISOC_SIEM_WRITEBACK_ENABLED` | `1` | Whether the triage worker asks the API to project a verdict onto the finding that raised the alert. Off means nothing is attempted. |
+| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret the agents service presents to the API: the writeback route, identity context, and the context bundle's incident-context fetch (graph identity/asset/cloud/business/threat dimensions) all resolve it before the shared `AISOC_SERVICE_TOKEN`. **Unset disables each service path loudly** — the writeback posts nothing with a warning, and the bundle marks the dimension *unavailable* rather than dialing toward a guaranteed 401, so "no credential" never reads as "no business context". |
+| `AISOC_SIEM_WRITEBACK_TIMEOUT_S` | `20` | Timeout for the writeback call. A timeout is a skipped writeback, never a failed triage. |
+
+---
+
+## Connectors service (`services/connectors`)
+
+Source: [`services/connectors/app/`](https://github.com/beenuar/AiSOC/tree/main/services/connectors/app)
+
+Every connector egress path — the stateless "Test connection" route, resource
+reads and scheduled polls — goes through the SSRF guard in this process
+(GHSA-cq4g-g6wp-4m2w), so a tenant-controlled `base_url` cannot reach cloud
+metadata, loopback or internal services. The guard reads the same variables
+in every service that runs it, and compose delivers them to `api`,
+`connectors` and `agents` from one `.env` value:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_SSRF_ALLOW_PRIVATE` | `false` | `true` re-admits connectors on RFC1918 / link-local ranges — the on-prem SIEM case. Never admits loopback or cloud metadata. |
+| `AISOC_SSRF_ALLOW_HOSTS` | — | Comma-separated **exact** hostnames to admit (no wildcards, no CIDR). A named host skips the IP-range checks; the cloud-metadata block list still applies and cannot be overridden. |
+| `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny on top of the built-in block list. |
+
+The service's port, auth and Kafka variables are set by compose and documented
+inline in `docker-compose.yml`; the connector-specific credentials (Splunk,
+CrowdStrike, …) are entered per connector instance in the console and stored
+vault-encrypted, not read from the environment.
+
+---
+
+## Realtime service (`services/realtime`)
+
+Source: [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8086` | TCP port for the WebSocket and push endpoints |
+| `LOG_LEVEL` | `info` | Pino log level (`trace`, `debug`, `info`, `warn`, `error`) |
+| `REDIS_URL` | `redis://localhost:6379/4` | Redis connection used for the push subscription store |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers — the realtime service consumes the fused-alerts topic to push to clients |
+| `KAFKA_TOPIC_FUSED` | `aisoc.alerts.fused` | Topic with fused alerts that should reach connected SOC clients |
+| `VAPID_PUBLIC_KEY` | — | VAPID public key for Web Push — generate with `npx web-push generate-vapid-keys` |
+| `VAPID_PRIVATE_KEY` | — | VAPID private key — keep in a secret manager |
+| `VAPID_SUBJECT` | `mailto:soc@example.com` | Contact email or URL surfaced to push services |
+| `INTERNAL_TOKEN` | — | Must match the API's `REALTIME_INTERNAL_TOKEN` (used by the API to fan out push events) |
+
+---
+
+## MCP server (`services/mcp`)
+
+Source: [`services/mcp/src/config.ts`](https://github.com/beenuar/AiSOC/blob/main/services/mcp/src/config.ts)
+
+The MCP server runs as a sidecar that exposes Investigation Ledger tools to LLM clients (Claude Desktop, Cursor, Copilot, …) via the Model Context Protocol.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_URL` | `http://localhost:8081` | Base URL of the AiSOC API |
+| `AISOC_API_URL` | falls back to `AISOC_URL` | Override the API URL independently if the API and web app live on separate hosts |
+| `AISOC_API_KEY` | — | Long-lived API key (preferred for server-to-server use) |
+| `AISOC_TOKEN` | — | Short-lived JWT (alternative to `AISOC_API_KEY`) |
+| `AISOC_TIMEOUT_MS` | `20000` | HTTP timeout for outbound calls to the AiSOC API |
+| `AISOC_MCP_VERBOSE` | `0` | Set to `1` to log every tool invocation to stderr |
+
+---
+
+## Ingest service (`services/ingest`)
+
+Source: [`services/ingest/internal/config/config.go`](https://github.com/beenuar/AiSOC/blob/main/services/ingest/internal/config/config.go)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HTTP_PORT` | `8080` | HTTP listener port |
+| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Comma-separated broker list (canonical; `KAFKA_BROKERS` accepted as alias) |
+| `KAFKA_TOPIC` | `security.events` | Topic for normalized events |
+| `REDIS_ADDR` | `localhost:6379` | Redis address (for dedup and rate limiting) |
+| `DATABASE_DSN` | `postgres://aisoc:aisoc@localhost:5432/aisoc?sslmode=disable` | Postgres DSN |
+| `ATTCK_DATA_PATH` | — | Path to MITRE ATT&CK STIX bundle for technique tagging |
+| `NORMALIZER_MODE` | `auto` | `auto`, `strict`, or `passthrough` |
+| `MAX_BATCH_SIZE` | `1000` | Max events flushed per batch |
+| `WORKER_COUNT` | `4` | Number of normalization workers |
+| `TENANT_HEADER_KEY` | `X-AiSOC-Tenant` | HTTP header that carries the tenant slug |
+| `JWT_SECRET` | — | **Required outside `ENV=development`.** HMAC secret used to verify ingest tokens. |
+| `METRICS_PORT` | `9090` | Prometheus exporter port |
+| `SHODAN_API_KEY` | — | Optional — enables Shodan enrichment when paired with `SHODAN_ENRICH_ENABLED=true` |
+| `SHODAN_ENRICH_ENABLED` | `false` | Toggle Shodan IP enrichment |
+| `SHODAN_CACHE_EXPIRY_SECS` | `86400` | Cache TTL for Shodan lookups |
+| `VULN_CORREL_ENABLED` | `false` | Toggle CVE correlation against ingested events |
+| `VULN_KAFKA_TOPIC` | `security.vulnerabilities` | Topic for emitted vulnerability findings |
+| `NVD_API_KEY` | — | NVD API key (raises NVD rate limits when set) |
+
+---
+
+## UEBA service (`services/ueba`)
+
+Source: [`services/ueba/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/ueba/app/core/config.py)
+
+Every variable in this section accepts **both** an unprefixed name (e.g. `DATABASE_URL`, `KAFKA_BOOTSTRAP_SERVERS`) and the legacy `UEBA_`-prefixed name (e.g. `UEBA_DATABASE_URL`, `UEBA_KAFKA_BOOTSTRAP_SERVERS`). When both are set, the **unprefixed form wins** — this matches the convention used by every other Python service in the repo and the `services/ueba` section of `docker-compose.yml`, which exports unprefixed names.
+
+The table below shows the canonical (unprefixed) name first and the legacy alias second. New deployments should prefer the unprefixed form. (See PR [#135](https://github.com/beenuar/AiSOC/pull/135) for the implementation and [Issue #134](https://github.com/beenuar/AiSOC/issues/134) for the original report.)
+
+| Variable | Legacy alias | Default | Description |
+|----------|--------------|---------|-------------|
+| `DATABASE_URL` | `UEBA_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for baselines and anomalies |
+| `KAFKA_BOOTSTRAP_SERVERS` | `UEBA_KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka brokers |
+| `KAFKA_INPUT_TOPIC` | `UEBA_KAFKA_INPUT_TOPIC` | `security.events` | Topic the scorer consumes |
+| `KAFKA_OUTPUT_TOPIC` | `UEBA_KAFKA_OUTPUT_TOPIC` | `ueba.anomalies` | Topic the scorer emits to |
+| `KAFKA_CONSUMER_GROUP` | `UEBA_KAFKA_CONSUMER_GROUP` | `ueba-service` | Kafka consumer group ID |
+| `BASELINE_WINDOW_DAYS` | `UEBA_BASELINE_WINDOW_DAYS` | `30` | History window used to compute behavioural baselines |
+| `ANOMALY_THRESHOLD` | `UEBA_ANOMALY_THRESHOLD` | `3.0` | Z-score threshold for flagging an event as anomalous |
+| `PEER_GROUP_MIN_SIZE` | `UEBA_PEER_GROUP_MIN_SIZE` | `3` | Minimum peers required for peer-group analysis |
+| `SCORING_BATCH_SIZE` | `UEBA_SCORING_BATCH_SIZE` | `100` | Events processed per scoring batch |
+| `OTEL_ENDPOINT` | `UEBA_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP gRPC endpoint |
+| `SERVICE_NAME` | `UEBA_SERVICE_NAME` | `aisoc-ueba` | OTel service name |
+| `HOST` | `UEBA_HOST` | `0.0.0.0` | HTTP listener interface |
+| `PORT` | `UEBA_PORT` | `8004` | HTTP listener port |
+
+`services/ueba/alembic/env.py` no longer follows the same rule, deliberately. It reads `UEBA_DATABASE_MIGRATION_URL`, then `DATABASE_MIGRATION_URL`, and only then falls back to the runtime DSN — because `alembic upgrade` issues DDL and the runtime role holds none. See [The four services that manage their own schema](#the-four-services-that-manage-their-own-schema).
+
+---
+
+## Honeytokens service (`services/honeytokens`)
+
+Source: [`services/honeytokens/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/honeytokens/app/core/config.py)
+
+All variables use the `HONEYTOKEN_` prefix.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HONEYTOKEN_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for token metadata and triggers |
+| `HONEYTOKEN_ALERT_WEBHOOK_URL` | — | Webhook called when a token is tripped. **Unset is not "no alerting":** with no webhook the trip is pushed into the ingest spine (`INGEST_SERVICE_URL`, default `http://ingest-worker:8080`) and becomes an alert through the same path every other signal takes. Set this only when you want the trip delivered somewhere else *instead* |
+| `HONEYTOKEN_ALERT_WEBHOOK_SECRET` | — (empty) | HMAC-SHA256 secret for webhook signing, required whenever `HONEYTOKEN_ALERT_WEBHOOK_URL` is set. Empty by default **on purpose**: this once defaulted to the literal `changeme`, so every deployment signed its alerts with a public value and a verifier could not tell a real trip from a forged one. With a URL set and no secret the service refuses to send rather than sending unsigned |
+| `HONEYTOKEN_TOKEN_TTL_DAYS` | `365` | Default token expiry |
+| `HONEYTOKEN_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
+| `HONEYTOKEN_SERVICE_NAME` | `aisoc-honeytokens` | OTel service name |
+| `HONEYTOKEN_HOST` | `0.0.0.0` | HTTP listener interface |
+| `HONEYTOKEN_PORT` | `8005` | HTTP listener port |
+
+---
+
+## Purple Team service (`services/purple-team`)
+
+Source: [`services/purple-team/app/core/config.py`](https://github.com/beenuar/AiSOC/blob/main/services/purple-team/app/core/config.py)
+
+All variables use the `PURPLE_TEAM_` prefix.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PURPLE_TEAM_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for emulation runs and findings |
+| `PURPLE_TEAM_CALDERA_URL` | `http://localhost:8888` | Caldera server URL |
+| `PURPLE_TEAM_CALDERA_API_KEY` | `ADMIN123` | **Rotate before going live.** Caldera REST API key |
+| `PURPLE_TEAM_ART_REPO_PATH` | `/opt/atomic-red-team` | Filesystem path to the Atomic Red Team checkout |
+| `PURPLE_TEAM_ART_ATOMICS_PATH` | `/opt/atomic-red-team/atomics` | Path to the `atomics/` directory inside ART |
+| `PURPLE_TEAM_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
+| `PURPLE_TEAM_SERVICE_NAME` | `aisoc-purple-team` | OTel service name |
+| `PURPLE_TEAM_HOST` | `0.0.0.0` | HTTP listener interface |
+| `PURPLE_TEAM_PORT` | `8006` | HTTP listener port |
+
+---
+
+## Web app (`apps/web`)
+
+The console runs a Node process as well as serving a bundle, and the two read
+their configuration at different times. Getting this backwards is why setting
+"the right variables" on a self-hosted deployment could change nothing.
+
+### Read when the container starts
+
+Set these in `.env` or on the Deployment. They take effect on restart, with no
+rebuild. They are the addresses the console's **server** proxies browser
+requests to; the browser itself only ever talks to the console's own origin,
+which is why there is no CORS to configure.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AISOC_API_URL` | `http://api:8000` | Core API the console proxies `/api/v1/*` to |
+| `AISOC_AGENTS_URL` | `http://agents:8084` | Agents service (copilot, hunt, playbooks) |
+| `AISOC_REALTIME_URL` | `http://realtime:4000` | Realtime gateway for `/ws/*` and `/sse` |
+| `AISOC_DEMO_MODE` | `false` | Whether this deployment is a demo. Reported at `/api/runtime-config` |
+| `AISOC_MARKETING_HOME` | `false` | When `true`, `/` serves the project's marketing landing page. Default is the console: `/` redirects to `/login`, which routes onward (first run → setup wizard, signed in → dashboard) |
+| `AISOC_CONSOLE_BIND_ADDR` | `127.0.0.1` | Interface the console's host port publishes on |
+| `AISOC_BIND_ADDR` | `127.0.0.1` | Interface **every** host port publishes on, datastores included |
+
+### Fixed when the image is built
+
+`NEXT_PUBLIC_*` values are inlined into the JavaScript bundle by `next build`.
+Setting one on a container running a pulled image does nothing — it is not
+read at run time by anything. Change them with `--build-arg` and a rebuild, or
+leave them empty and let same-origin proxying handle it, which is the default.
+
+| Build arg | Default | Description |
+|-----------|---------|-------------|
+| `NEXT_PUBLIC_API_URL` | *(empty)* | Absolute API origin for the browser. Empty means same-origin; setting it opts into configuring CORS |
+| `NEXT_PUBLIC_WS_URL` | *(empty)* | Absolute WebSocket origin. Empty derives it from the page's own origin |
+| `NEXT_PUBLIC_DEMO_MODE` | *(empty)* | Compiles the image as a demo build. `AISOC_DEMO_MODE` overrides it at run time |
+| `NEXT_PUBLIC_MARKETING_HOME` | *(empty)* | Compiles the image with the marketing page at `/`. `AISOC_MARKETING_HOME` overrides it at run time |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | — | Must match the realtime service's `VAPID_PUBLIC_KEY` |
+
+See [Single-host deployment](./single-host.md) for the whole path end to end.
+
+---
+
+## CORS configuration
+
+CORS is configured the same way across every AiSOC service — Python (FastAPI), Go (`ingest`, `enrichment`), and TypeScript (`realtime`) — by reading a single environment variable. This is the variable to set when you put AiSOC behind a custom domain or want to restrict cross-origin access in production.
+
+### Variables
+
+| Variable | Priority | Description |
+|----------|----------|-------------|
+| `AISOC_CORS_ORIGINS` | **1 (canonical)** | Comma-separated allow-list. Set this in every environment. |
+| `CORS_ORIGINS` | 2 (legacy alias) | Honoured when `AISOC_CORS_ORIGINS` is unset. Existing Helm charts and dev scripts that already use this keep working. |
+| _(none set)_ | 3 (default) | Each service falls back to local development origins only: `http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`. |
+
+:::note Deployed origins are never in the shipped default
+The default covers local development and nothing else. No deployment's public
+origin — including the one the maintainers host — ships in the allow-list, so a
+self-hosted install never trusts a third-party origin for credentialed
+cross-origin requests without its operator opting in. Set
+`AISOC_CORS_ORIGINS` to your own console origin for any deployment.
+:::
+
+Examples:
+
+```bash
+# Production, single console domain
+AISOC_CORS_ORIGINS=https://soc.example.com
+
+# Multiple consoles (analyst app + responder PWA on a subdomain)
+AISOC_CORS_ORIGINS=https://soc.example.com,https://responder.example.com
+
+# Local dev across the standard ports (matches the default)
+AISOC_CORS_ORIGINS=http://localhost:3000,http://localhost:3001
+```
+
+### Production safety guard
+
+The Python helper at [`services/api/app/core/cors.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/cors.py) (vendored byte-identical into every Python service) and the TypeScript guard in [`services/realtime/src/index.ts`](https://github.com/beenuar/AiSOC/blob/main/services/realtime/src/index.ts) both **refuse to start** if the allow-list contains `*` while `allow_credentials` is `true` and any of `AISOC_ENV`, `ENVIRONMENT`, or `APP_ENV` equals `production` or `prod`. This catches the canonical CORS misconfiguration (wildcard + cookies / `Authorization` headers) before the deploy goes live.
+
+Outside production the same combination logs a warning and silently disables credentials — local dev stays usable when someone exports `CORS_ORIGINS=*`.
+
+The `honeytokens`, `purple-team`, and `ueba` services run with `allow_credentials=false` by design (no session cookies cross-origin), so wildcard origins are allowed there even in production — useful when honeytoken trip pixels are fetched from arbitrary origins.
+
+### Go services (`ingest`, `enrichment`) and the realtime service (`realtime`)
+
+These services read the same `AISOC_CORS_ORIGINS` / `CORS_ORIGINS` pair and fall back to the same default allow-list. `ingest` and `enrichment` keep `AllowCredentials: false` (they are token-authenticated per request, not cookie-authenticated). The realtime service runs with credentials enabled because the SSE / WebSocket streams carry the console's session cookie; it enforces the same production wildcard guard as the Python helper.
+
+---
+
+## Example `.env` (full stack)
+
+```bash
+# --- API ---
+SECRET_KEY=$(openssl rand -hex 32)
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+# The runtime role: DML only, so row-level security applies to it.
+DATABASE_URL=postgresql+asyncpg://aisoc_app:$(openssl rand -hex 16)@localhost:5432/aisoc
+# The owner: DDL, read by the migration runner and nothing else.
+DATABASE_MIGRATION_URL=postgresql+asyncpg://aisoc:changeme@localhost:5432/aisoc
+# Applied to the runtime role when the chain is applied. Must match the
+# password in DATABASE_URL above.
+AISOC_APP_DB_PASSWORD=...
+REDIS_URL=redis://localhost:6379/0
+KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+OPENSEARCH_URL=http://localhost:9200
+QDRANT_URL=http://localhost:6333
+# Canonical, applies to every service. Legacy CORS_ORIGINS still works.
+AISOC_CORS_ORIGINS=http://localhost:3000
+
+# --- API: SSO (set both blocks if you actually use SSO) ---
+JWT_SECRET=$(openssl rand -hex 32)
+
+# --- Agents ---
+# The gateway reads OPENAI_API_KEY; AiSOC authenticates to the gateway with
+# LITELLM_MASTER_KEY. Routing is already wired — compose sets LLM_GATEWAY_URL
+# on api and agents, and both resolvers read it.
+OPENAI_API_KEY=sk-...
+LITELLM_MASTER_KEY=$(openssl rand -hex 32)
+ENRICHMENT_SERVICE_URL=http://enrichment:8011
+
+# --- Realtime ---
+VAPID_PUBLIC_KEY=...
+VAPID_PRIVATE_KEY=...
+VAPID_SUBJECT=mailto:soc@example.com
+INTERNAL_TOKEN=$(openssl rand -hex 32)
+REALTIME_INTERNAL_TOKEN=${INTERNAL_TOKEN}
+
+# --- MCP ---
+AISOC_URL=http://localhost:8000
+AISOC_API_KEY=...
+
+# --- Ingest ---
+HTTP_PORT=8080
+KAFKA_TOPIC=security.events
+DATABASE_DSN=postgres://aisoc:changeme@localhost:5432/aisoc?sslmode=disable
+JWT_SECRET=${JWT_SECRET}
+
+# --- UEBA / Honeytokens / Purple Team ---
+UEBA_DATABASE_URL=${DATABASE_URL}
+HONEYTOKEN_DATABASE_URL=${DATABASE_URL}
+HONEYTOKEN_ALERT_WEBHOOK_SECRET=$(openssl rand -hex 32)
+PURPLE_TEAM_DATABASE_URL=${DATABASE_URL}
+PURPLE_TEAM_CALDERA_API_KEY=...
+
+# --- Web ---
+# Where the console's server proxies to. Read at container start, so these
+# work on a pulled image; NEXT_PUBLIC_* would not, being compiled into the
+# bundle at build time.
+AISOC_API_URL=http://api:8000
+AISOC_AGENTS_URL=http://agents:8084
+AISOC_REALTIME_URL=http://realtime:4000
+# Publish the console beyond loopback. Required on any host you browse to
+# from another machine; put TLS in front of it.
+AISOC_CONSOLE_BIND_ADDR=0.0.0.0
+NEXT_PUBLIC_VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+```
+
+Before going to production, run through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) to make sure every secret has been rotated away from the example values above.

@@ -1,0 +1,165 @@
+# Cold-tier lake query jobs, against real Postgres (depth plan 4.3).
+#
+# The properties here are about concurrency and state, and a mocked
+# session answers whatever the test asked it to. Two API replicas must not
+# both start one cold scan; a terminal state must never be left; a job id
+# must be tenant-scoped.
+#
+# The claim test is deliberately *deterministic* rather than a race. An
+# `asyncio.gather` of five concurrent claims passes under a
+# SELECT-then-UPDATE implementation as well — measured, by subverting the
+# claim and watching that version stay green — so the two transactions are
+# interleaved explicitly and the first holds its lock while the second
+# reaches the same row.
+#
+# No `paths:` filter: a cross-tenant read guard must grade every pull
+# request.
+name: Lake query jobs (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lake-query-jobs-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lake-query-jobs-live:
+    name: One replica claims a cold scan, and a finished job stays finished
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. POSTGRES_USER (aisoc) is a
+      # superuser and ignores every RLS policy even under FORCE ROW LEVEL
+      # SECURITY, so a suite proving a job id is tenant-scoped while
+      # connected as it would pass with migration 111's policy deleted.
+      LAKE_JOB_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      # The owner, used only for migrations and to seed the fixture's two
+      # tenants — rows the runtime role is correctly not allowed to write.
+      LAKE_DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      SECRET_KEY: ci-lake-job-signing-secret-at-least-32-chars
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      # progress_ratio must be nullable. NOT NULL would force a zero where
+      # the honest answer is unknown, and a progress bar that renders a
+      # forced zero as 0% is as wrong as one that renders it as 100%.
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: progress_ratio is nullable
+        run: |
+          set -euo pipefail
+          nullable=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT is_nullable FROM information_schema.columns
+             WHERE table_name = 'lake_query_jobs' AND column_name = 'progress_ratio'")
+          if [ "$nullable" != "YES" ]; then
+            echo "FAIL: progress_ratio is '$nullable'; unknown progress has nowhere to go but a zero."
+            exit 1
+          fi
+          echo "OK: progress_ratio is nullable."
+
+      - name: The claim, the terminal states and the tenant predicate
+        working-directory: services/api
+        env:
+          ISOLATION_LAKE_JOB_DSN: ${{ env.LAKE_JOB_DSN }}
+          ISOLATION_LAKE_JOB_ADMIN_DSN: ${{ env.LAKE_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.LAKE_JOB_DSN }}
+        run: python -m pytest ../../tests/isolation/test_lake_query_jobs_live.py -v --tb=short
+
+      - name: The suite actually ran
+        working-directory: services/api
+        env:
+          ISOLATION_LAKE_JOB_DSN: ${{ env.LAKE_JOB_DSN }}
+          ISOLATION_LAKE_JOB_ADMIN_DSN: ${{ env.LAKE_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.LAKE_JOB_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_lake_query_jobs_live.py -q 2>&1 | tee /tmp/lakejob-run.txt
+          if grep -qE '[0-9]+ skipped' /tmp/lakejob-run.txt; then
+            echo "FAIL: a case skipped in the job whose whole purpose is to run it live."
+            exit 1
+          fi
+          if ! grep -qE '[0-9]+ passed' /tmp/lakejob-run.txt; then
+            echo "FAIL: no case reported as passed."
+            exit 1
+          fi
+
+      # The negative control.
+      #
+      # Remove the `status = 'queued'` predicate from the claim. Postgres
+      # then has nothing to re-evaluate after the row lock is released, so
+      # both interleaved transactions claim the same job and two replicas
+      # would both run the scan. The suite must go red.
+      - name: The gate fails when the claim stops re-checking the status
+        working-directory: services/api
+        env:
+          ISOLATION_LAKE_JOB_DSN: ${{ env.LAKE_JOB_DSN }}
+          ISOLATION_LAKE_JOB_ADMIN_DSN: ${{ env.LAKE_DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.LAKE_JOB_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/services/lake_query_runner.py /tmp/runner.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/lake_query_runner.py")
+          s = p.read_text()
+          needle = '        .where(LakeQueryJob.id == job_id, LakeQueryJob.status == "queued")\n'
+          if needle not in s:
+              print("negative control could not find the claim predicate; the claim has been "
+                    "reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "        .where(LakeQueryJob.id == job_id)\n", 1))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_lake_query_jobs_live.py::TestTheClaimIsAtomic::test_two_interleaved_transactions_produce_one_winner" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/runner.bak app/services/lake_query_runner.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: both transactions claimed the job and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: without the predicate both transactions claim the job and the suite goes red, as it must."

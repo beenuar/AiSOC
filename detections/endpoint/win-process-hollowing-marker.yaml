@@ -1,0 +1,24 @@
+id: det-endpoint-115
+name: Process Hollowing Marker (CreateProcess Suspended + Unmapped)
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Process Hollowing
+  Marker (CreateProcess Suspended + Unmapped)'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1055.012
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 8
+    AND create_remote_thread_target_process ENDSWITH_ANY ["explorer.exe", "svchost.exe", "lsass.exe"]
+false_positives:
+- EDR injection for protection (allow-listed)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

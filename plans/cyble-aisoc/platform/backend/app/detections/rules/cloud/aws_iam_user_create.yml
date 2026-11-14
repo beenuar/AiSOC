@@ -1,0 +1,23 @@
+title: AWS IAM User Created with Console Login
+id: aisoc-id-cl-0004-iam-user-create
+status: stable
+description: New IAM user paired with console login profile — common persistence pattern.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1136.003
+  - attack.persistence
+  - aisoc.cloud
+detection:
+  create_user:
+    event.module: aws
+    aws.event_source: 'iam.amazonaws.com'
+    event.action: 'CreateUser'
+  login_profile:
+    event.module: aws
+    aws.event_source: 'iam.amazonaws.com'
+    event.action: 'CreateLoginProfile'
+  condition: create_user or login_profile

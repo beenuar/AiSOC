@@ -1,0 +1,4 @@
+{
+  "operation_name": "Update application",
+  "permissions_added": "prefix-Directory.ReadWrite.All-suffix"
+}

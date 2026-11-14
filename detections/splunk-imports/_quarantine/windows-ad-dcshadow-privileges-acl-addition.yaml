@@ -1,0 +1,66 @@
+id: splunk-security-content-ae915743-1aa8-4a94-975c-8062ebc8b723
+name: Windows AD DCShadow Privileges ACL Addition
+description: This detection identifies an Active Directory access-control list (ACL)
+  modification event, which applies the minimum required extended rights to perform
+  the DCShadow attack.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484
+  - T1207
+  - T1222.001
+  categories:
+  - endpoint
+references:
+- https://www.labofapenetrationtester.com/2018/04/dcshadow.html
+- https://github.com/samratashok/nishang/blob/master/ActiveDirectory/Set-DCShadowPermissions.ps1
+- https://trustedsec.com/blog/a-hitchhackers-guide-to-dacl-based-detections-part-1-a
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 ObjectClass=domainDNS\n  | stats\
+    \ min(_time) as _time values(eval(if(OperationType==\"%%14675\",AttributeValue,null)))\
+    \ as old_value values(eval(if(OperationType==\"%%14674\",AttributeValue,null)))\
+    \ as new_value values(OperationType) as OperationType values(dest) as dest\n \
+    \   BY ObjectClass ObjectDN OpCorrelationID\n       src_user SubjectLogonId\n\
+    \  | rex field=old_value max_match=10000 \"\\((?P<old_values>.*?)\\)\"\n  | rex\
+    \ field=new_value max_match=10000 \"\\((?P<new_ace>.*?)\\)\"\n  | mvexpand new_ace\n\
+    \  | where NOT new_ace IN (old_values)\n  | rex field=new_ace \"(?P<aceType>.*?);(?P<aceFlags>.*?);(?P<aceAccessRights>.*?);(?P<aceObjectGuid>.*?);;(?P<aceSid>.*?)$\"\
+    \n  | search aceObjectGuid IN (\"9923a32a-3607-11d2-b9be-0000f87a36b2\",\"1131f6ab-9c07-11d1-f79f-00c04fc2dcd2\"\
+    ,\"1131f6ac-9c07-11d1-f79f-00c04fc2dcd2\")\n  | rex max_match=100 field=aceAccessRights\
+    \ \"(?P<AccessRights>[A-Z]{2})\"\n  | rex max_match=100 field=aceFlags \"(?P<aceFlags>[A-Z]{2})\"\
+    \n  | lookup msad_guid_lookup guid as aceObjectGuid OUTPUT displayName as ControlAccessRights\n\
+    \  | lookup ace_access_rights_lookup access_rights_string as AccessRights OUTPUT\
+    \ access_rights_value\n  | lookup ace_type_lookup ace_type_string as aceType OUTPUT\
+    \ ace_type_value\n  | lookup ace_flag_lookup flag_string as aceFlags OUTPUT flag_value\
+    \ as ace_flag_value ``` Optional SID resolution lookups\n  | lookup identity_lookup_expanded\
+    \ objectSid as aceSid OUTPUT downLevelDomainName as user\n  | lookup admon_groups_def\
+    \ objectSid as aceSid OUTPUT cn as group ```\n  | lookup builtin_groups_lookup\
+    \ builtin_group_string  as aceSid OUTPUT builtin_group_name as builtin_group\n\
+    \  | eval aceType=coalesce(ace_type_value,aceType), aceFlags=coalesce(ace_flag_value,\"\
+    This object only\"), aceAccessRights=if(aceAccessRights=\"CCDCLCSWRPWPDTLOCRSDRCWDWO\"\
+    ,\"Full control\",coalesce(access_rights_value,AccessRights)), aceControlAccessRights=coalesce(ControlAccessRights,aceObjectGuid),\
+    \ user=coalesce(user, group, builtin_group, aceSid)\n  | stats min(_time) as _time\
+    \ values(aceType) as aceType values(aceFlags) as aceFlags(inheritance) values(aceControlAccessRights)\
+    \ as aceControlAccessRights values(aceAccessRights) as aceAccessRights values(new_ace)\
+    \ as new_ace values(SubjectLogonId) as SubjectLogonId\n    BY ObjectClass ObjectDN\
+    \ src_user\n       user\n  | search (aceControlAccessRights=\"Add/Remove Replica\
+    \ In Domain\" AND aceControlAccessRights=\"Manage Replication Topology\" AND aceControlAccessRights=\"\
+    Replication Synchronization\") OR (aceControlAccessRights=\"9923a32a-3607-11d2-b9be-0000f87a36b2\"\
+    \ AND aceControlAccessRights=\"1131f6ab-9c07-11d1-f79f-00c04fc2dcd2\" AND aceControlAccessRights=\"\
+    1131f6ac-9c07-11d1-f79f-00c04fc2dcd2\")\n  | `windows_ad_dcshadow_privileges_acl_addition_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ae915743-1aa8-4a94-975c-8062ebc8b723
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_dcshadow_privileges_acl_addition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

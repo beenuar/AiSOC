@@ -1,0 +1,43 @@
+id: splunk-security-content-942548a3-0273-47a4-8dbd-e5202437395c
+name: O365 Application Available To Other Tenants
+description: The following analytic identifies the configuration of Azure Active Directory
+  Applications in a manner that allows authentication from external tenants or personal
+  accounts. This configuration can lead to inappropriate or malicious access of any
+  data or capabilities the application is allowed to access. This detection leverages
+  the O365 Universal Audit Log data source.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/
+- https://msrc.microsoft.com/blog/2023/03/guidance-on-potential-misconfiguration-of-authorization-of-multi-tenant-applications-that-use-azure-ad/
+- https://www.wiz.io/blog/azure-active-directory-bing-misconfiguration
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation
+    IN ("Add application.","Update application.") ModifiedProperties{}.Name=AvailableToOtherTenants
+    | eval result = case(match(mvindex(''ModifiedProperties{}.NewValue'',mvfind(''ModifiedProperties{}.Name'',"AvailableToOtherTenants")),"false"),"removed",true(),"added"),
+    object_name=mvindex(''Target{}.ID'', 3), signature=Operation, object_attrs = "AvailableToOtherTenants",
+    user = case(match(mvindex(''Actor{}.ID'',-1),"User"),mvindex(''Actor{}.ID'',0),match(mvindex(''Actor{}.ID'',-1),"ServicePrincipal"),mvindex(''Actor{}.ID'',3),true(),mvindex(''Actor{}.ID'',0))
+    | search result = "added" | fillnull | stats count min(_time) as firstTime max(_time)
+    as lastTime by signature dest user src vendor_account vendor_product object_attrs
+    object_name | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `o365_application_available_to_other_tenants_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 942548a3-0273-47a4-8dbd-e5202437395c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_application_available_to_other_tenants.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,49 @@
+id: splunk-security-content-c051b68c-60f7-4022-b3ad-773bec7a225b
+name: Windows Process Writing File to World Writable Path
+description: The following analytic identifies a process writing a .txt file to a
+  world writable path. This detection leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on file creation events within specific directories. This
+  activity is significant as adversaries often use such techniques to deliver payloads
+  to a system, which is uncommon for legitimate processes. If confirmed malicious,
+  this behavior could allow attackers to execute arbitrary code, escalate privileges,
+  or maintain persistence within the environment, posing a significant security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.005
+  categories:
+  - endpoint
+references:
+- https://research.splunk.com/endpoint/efbcf8ee-bc75-47f1-8985-a5c638c4faf0/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Filesystem where Filesystem.file_name=*.txt
+    Filesystem.file_path IN ("*\\Windows\\Tasks\\*", "*\\Windows\\Temp\\*", "*\\Windows\\tracing\\*",
+    "*\\Windows\\PLA\\Reports\\*", "*\\Windows\\PLA\\Rules\\*", "*\\Windows\\PLA\\Templates\\*",
+    "*\\Windows\\PLA\\Reports\\en-US\\*", "*\\Windows\\PLA\\Rules\\en-US\\*", "*\\Windows\\Registration\\CRMLog\\*",
+    "*\\Windows\\System32\\Tasks\\*", "*\\Windows\\System32\\Com\\dmp\\*", "*\\Windows\\System32\\LogFiles\\WMI\\*",
+    "*\\Windows\\System32\\Microsoft\\Crypto\\RSA\\MachineKeys\\*", "*\\Windows\\System32\\spool\\PRINTERS\\*",
+    "*\\Windows\\System32\\spool\\SERVERS\\*", "*\\Windows\\System32\\spool\\drivers\\color\\*",
+    "*\\Windows\\System32\\Tasks\\Microsoft\\Windows\\RemoteApp and Desktop Connections
+    Update\\*", "*\\Windows\\SysWOW64\\Tasks\\*", "*\\Windows\\SysWOW64\\Com\\dmp\\*",
+    "*\\Windows\\SysWOW64\\Tasks\\Microsoft\\Windows\\PLA\\*", "*\\Windows\\SysWOW64\\Tasks\\Microsoft\\Windows\\RemoteApp
+    and Desktop Connections Update\\*", "*\\Windows\\SysWOW64\\Tasks\\Microsoft\\Windows\\PLA\\System\\*")
+    by Filesystem.dest, Filesystem.user, Filesystem.file_name Filesystem.file_path
+    | `drop_dm_object_name("Filesystem")` | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `windows_process_writing_file_to_world_writable_path_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c051b68c-60f7-4022-b3ad-773bec7a225b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_process_writing_file_to_world_writable_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

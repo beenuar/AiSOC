@@ -1,0 +1,4 @@
+{
+  "env_ld_preload": "/tmp/-tail",
+  "syscall": "execve"
+}

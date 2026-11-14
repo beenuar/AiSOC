@@ -1,0 +1,699 @@
+"""Assemble structured data for the Investigation Rail on `/alerts`.
+
+The `/alerts` page in v1.5 shows an always-on right rail that surfaces
+*everything* an analyst needs to triage a single alert without bouncing
+between tabs:
+
+* A deterministic correlation **narrative** (already cached on the row
+  by the fusion service or lazily filled here — see
+  ``app/services/narrative_projection.py``).
+* **Related entities** grouped into four columns the analyst pivots
+  from (principal, network, workflow, tenant). Each entity carries
+  enough metadata for the frontend to deep-link into AttackGraphView
+  without an extra round trip.
+* A condensed **mini timeline** — at most ``MAX_TIMELINE_EVENTS``
+  recent events drawn from the alert's case ledger (if any) and the
+  audit log. Same data shape as the ledger's ``LedgerEvent`` so the
+  rail can reuse ``apps/web/src/components/cases/InvestigationLedger.tsx``
+  rendering primitives.
+* **Recommended actions** — read straight off ``Alert.ai_recommendations``
+  which the ResponderAgent populates at investigation-close time. The
+  endpoint normalises both the new structured shape and legacy
+  list-of-strings rows so old demos keep rendering.
+
+The assembler is deliberately *pure with respect to its DB session*:
+every read is `select(...)` + `await db.execute(...)`. No write paths.
+This keeps the lazy-fill flow in the alerts endpoint trivially
+restartable on failure — the rail data is a view, not a side-effect.
+
+AiSOC — open-source AI Security Operations Center (MIT License)
+Author: Beenu Arora <beenu@cyble.com>
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Iterable
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any, Final
+from urllib.parse import quote
+
+import structlog
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy import text as sa_text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.alert import Alert
+from app.models.audit import AuditLog
+from app.models.case import CaseTimeline
+
+logger = structlog.get_logger(__name__)
+
+# ─── Tunables ────────────────────────────────────────────────────────────────
+
+
+# How many timeline events the rail surfaces. The plan calls for "last
+# 6" — small enough to scan without scrolling, large enough to anchor
+# the analyst's mental model. Both case-timeline and audit-log sources
+# are merged then truncated.
+MAX_TIMELINE_EVENTS = 6
+
+
+# ─── Public Pydantic shapes ──────────────────────────────────────────────────
+
+
+class RelatedEntity(BaseModel):
+    """One pivotable entity attached to an alert.
+
+    The ``kind`` field is the *concrete* entity type (``host``, ``ip``,
+    ``user``, ``rule``, …) — the frontend keys icons and pivot routes
+    off it. The ``group`` field is the rail column the entity renders
+    under (``principal``, ``network``, ``workflow``, ``tenant``). One
+    entity belongs to exactly one group; we don't duplicate rows.
+    """
+
+    group: str = Field(description="Rail column: principal | network | workflow | tenant")
+    kind: str = Field(description="Concrete entity type: host | ip | user | rule | mitre | …")
+    value: str = Field(description="Canonical identifier rendered in the chip")
+    label: str | None = Field(default=None, description="Optional human-friendly label")
+    pivot: str | None = Field(
+        default=None,
+        description=("Frontend route to deep-link into AttackGraphView (or another workbench). When None the chip is informational only."),
+    )
+
+
+class MiniTimelineEvent(BaseModel):
+    """One event in the alert's condensed timeline.
+
+    Modelled after ``LedgerEvent`` in the ledger UI so the rail can
+    reuse the same row renderer. Fields the rail doesn't need
+    (``input_hash``/``output_hash``/``duration_ms``) are always
+    ``None``/``0`` for non-investigation events. The frontend knows
+    to hide those affordances when they're empty.
+    """
+
+    id: str
+    ts: datetime
+    kind: str = Field(description="audit | case_comment | status_change | investigation | …")
+    agent: str = Field(description="actor — system | analyst@… | agent-id")
+    summary: str = Field(description="One-line description, plain text")
+    payload: dict[str, Any] | None = Field(default=None)
+    duration_ms: int = 0
+
+
+class RecommendedAction(BaseModel):
+    """Structured action emitted by the ResponderAgent at investigation close.
+
+    Tolerates the legacy list-of-strings shape that older demo seeds
+    used (string → ``action`` with priority ``99`` and risk ``"low"``).
+    The plan calls for the structured shape; this is a migration aid.
+    """
+
+    priority: int = Field(default=99, ge=1)
+    action: str
+    rationale: str | None = None
+    risk: str = Field(default="low", description="low | medium | high")
+
+
+# ─── Internal helpers ────────────────────────────────────────────────────────
+
+
+def _norm_str(value: Any) -> str | None:
+    """Trim and discard empties. Returns ``None`` for non-strings."""
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def _from_blob(blob: Any, keys: Iterable[str]) -> str | None:
+    """Pull the first non-empty string at any of ``keys`` from a dict-ish blob."""
+    if not isinstance(blob, dict):
+        return None
+    for key in keys:
+        value = _norm_str(blob.get(key))
+        if value:
+            return value
+    return None
+
+
+def _dedup_strs(values: Iterable[Any]) -> list[str]:
+    """Stable dedup; case-insensitive but preserves first-seen casing."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in values:
+        s = _norm_str(v)
+        if not s:
+            continue
+        key = s.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(s)
+    return out
+
+
+# ─── Related entities ────────────────────────────────────────────────────────
+
+
+@dataclass(slots=True)
+class _EntityBucket:
+    """In-flight collector that dedups within a (group, kind, value) tuple."""
+
+    entities: list[RelatedEntity]
+    _seen: set[tuple[str, str, str]]
+
+    @classmethod
+    def empty(cls) -> _EntityBucket:
+        return cls(entities=[], _seen=set())
+
+    def add(
+        self,
+        *,
+        group: str,
+        kind: str,
+        value: str | None,
+        label: str | None = None,
+        pivot: str | None = None,
+    ) -> None:
+        v = _norm_str(value)
+        if not v:
+            return
+        key = (group, kind, v.lower())
+        if key in self._seen:
+            return
+        self._seen.add(key)
+        self.entities.append(RelatedEntity(group=group, kind=kind, value=v, label=label, pivot=pivot))
+
+
+def _graph_pivot(kind: str, value: str) -> str:
+    """Deep-link into the entity graph with the node pre-selected.
+
+    The route is ``/graph`` — ``apps/web/src/app/(app)/graph/page.tsx``. There
+    has never been an ``/attack-graph`` route, so the earlier prefix 404'd
+    before the query string mattered; ``tests/test_pivot_routes_resolve.py``
+    now checks this against the routes the console actually defines.
+
+    The value is encoded exactly as the federated-search helper encodes it
+    (``apps/web/src/components/federated/pivot.ts``), because an asset named
+    ``Finance & Legal`` otherwise truncates at the ampersand and pivots to a
+    different entity while looking like it worked. ``AttackGraphView`` splits
+    on the first colon after Next has decoded the parameter.
+    """
+    return f"/graph?entity={quote(f'{kind}:{value}', safe='')}"
+
+
+# Entity kinds the rail files under "network" rather than "principal".
+_NETWORK_KINDS: Final[frozenset[str]] = frozenset({"ip", "domain", "url"})
+
+# `type` values the fusion sink emits, mapped to the rail's kinds. Anything
+# outside this map is ignored rather than guessed at: an unrecognised kind
+# would build a `/graph?entity=<kind>:…` link the graph cannot resolve, which
+# is the class of defect the pivot-route test exists to prevent.
+_PIPELINE_ENTITY_KINDS: Final[dict[str, str]] = {
+    "host": "host",
+    "hostname": "host",
+    "device": "host",
+    "user": "user",
+    "username": "user",
+    "account": "user",
+    "asset": "asset",
+    "ip": "ip",
+    "ip_address": "ip",
+    "src_ip": "ip",
+    "domain": "domain",
+    "url": "url",
+}
+
+
+def _pipeline_entities(alert: Alert) -> list[tuple[str, str]]:
+    """Entities the fusion sink recorded, as ``(kind, value)`` pairs.
+
+    `services/fusion` writes `alerts.entities` as
+    ``[{"type": "host", "value": "WIN-01"}, …]`` and does **not** write
+    `affected_hosts` / `affected_users` / `affected_ips` — its INSERT does not
+    list those columns. Only `seed_demo.py` populates them. So every entity
+    pivot in the rail rendered for demo data and for nothing the real pipeline
+    produced, on every deployment.
+
+    Order is preserved and the caller's bucket dedups against the
+    denormalised columns, so a row that happens to carry both spellings
+    yields one chip rather than two.
+    """
+    raw = getattr(alert, "entities", None)
+    if not isinstance(raw, list):
+        return []
+    out: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        declared = _norm_str(item.get("type")) or ""
+        kind = _PIPELINE_ENTITY_KINDS.get(declared.lower())
+        value = _norm_str(item.get("value"))
+        if not kind or not value:
+            continue
+        key = (kind, value.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append((kind, value))
+    return out
+
+
+def build_related_entities(alert: Alert) -> list[RelatedEntity]:
+    """Produce the rail's Related Entities list from an ``Alert`` row.
+
+    The function is pure — no DB I/O, no clock reads. Same row →
+    same output. Pivot URLs use the same `?entity=…` query the
+    AttackGraphView already parses, so the rail "just works" when
+    the analyst clicks through.
+    """
+    bucket = _EntityBucket.empty()
+    raw_event = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    enrichment = alert.enrichment_data if isinstance(alert.enrichment_data, dict) else {}
+
+    # ── Principal ───────────────────────────────────────────────────────
+    # Hosts and users an analyst would isolate / disable. We promote
+    # the denormalised columns first, then the `entities` blob the fusion
+    # sink writes, then mine the raw event for fields the connector didn't
+    # curate into a top-level column.
+    for kind, value in _pipeline_entities(alert):
+        bucket.add(
+            group="network" if kind in _NETWORK_KINDS else "principal",
+            kind=kind,
+            value=value,
+            pivot=_graph_pivot(kind, value),
+        )
+    for host in _dedup_strs(alert.affected_hosts or ()):
+        bucket.add(
+            group="principal",
+            kind="host",
+            value=host,
+            pivot=_graph_pivot("host", host),
+        )
+    for user in _dedup_strs(alert.affected_users or ()):
+        bucket.add(
+            group="principal",
+            kind="user",
+            value=user,
+            pivot=_graph_pivot("user", user),
+        )
+    for asset in _dedup_strs(alert.affected_assets or ()):
+        bucket.add(
+            group="principal",
+            kind="asset",
+            value=asset,
+            pivot=_graph_pivot("asset", asset),
+        )
+
+    # ── Network ─────────────────────────────────────────────────────────
+    for ip in _dedup_strs(alert.affected_ips or ()):
+        bucket.add(
+            group="network",
+            kind="ip",
+            value=ip,
+            pivot=_graph_pivot("ip", ip),
+        )
+    dst_ip = _from_blob(raw_event, ("dst_ip", "destination_ip", "remote_ip"))
+    if dst_ip:
+        bucket.add(
+            group="network",
+            kind="ip",
+            value=dst_ip,
+            label="destination",
+            pivot=_graph_pivot("ip", dst_ip),
+        )
+    domain = _from_blob(raw_event, ("domain", "target_domain", "host_domain"))
+    if domain:
+        bucket.add(
+            group="network",
+            kind="domain",
+            value=domain,
+            pivot=_graph_pivot("domain", domain),
+        )
+    url = _from_blob(raw_event, ("url", "request_url", "uri"))
+    if url:
+        bucket.add(group="network", kind="url", value=url)
+
+    # ── Workflow ────────────────────────────────────────────────────────
+    # The "what" of the alert — rule name, MITRE coverage, tags that
+    # describe the detection logic. These pivot into detection
+    # tuning / coverage explorers rather than the entity graph.
+    rule_name = _from_blob(raw_event, ("rule_name", "rule", "detection")) or alert.connector_type
+    if rule_name:
+        bucket.add(group="workflow", kind="rule", value=rule_name)
+    for tactic_obj in alert.mitre_tactics or ():
+        if isinstance(tactic_obj, str):
+            name = _norm_str(tactic_obj)
+            if name:
+                bucket.add(group="workflow", kind="mitre_tactic", value=name)
+        elif isinstance(tactic_obj, dict):
+            tid = _norm_str(tactic_obj.get("id"))
+            tname = _norm_str(tactic_obj.get("name"))
+            display = tid or tname
+            if display:
+                bucket.add(
+                    group="workflow",
+                    kind="mitre_tactic",
+                    value=display,
+                    label=tname if (tname and tid) else None,
+                )
+    for tech_obj in alert.mitre_techniques or ():
+        if isinstance(tech_obj, str):
+            name = _norm_str(tech_obj)
+            if name:
+                bucket.add(group="workflow", kind="mitre_technique", value=name)
+        elif isinstance(tech_obj, dict):
+            tid = _norm_str(tech_obj.get("id") or tech_obj.get("technique_id"))
+            tname = _norm_str(tech_obj.get("name") or tech_obj.get("technique"))
+            display = tid or tname
+            if display:
+                bucket.add(
+                    group="workflow",
+                    kind="mitre_technique",
+                    value=display,
+                    label=tname if (tname and tid) else None,
+                    pivot=f"/detection/tuning?technique={tid}" if tid else None,
+                )
+
+    # ── Tenant ──────────────────────────────────────────────────────────
+    # Workspace / org-level pivots. The connector type lives here
+    # because "which data source did this fire on" is an
+    # organisational question, not a workflow one.
+    if alert.connector_type:
+        bucket.add(group="tenant", kind="connector", value=alert.connector_type)
+    if alert.case_id is not None:
+        bucket.add(
+            group="tenant",
+            kind="case",
+            value=str(alert.case_id),
+            pivot=f"/cases/{alert.case_id}",
+        )
+    # RBA promotion entity surfaces *which* identity drove this alert
+    # over its risk threshold — show it as a tenant-level pivot so
+    # analysts can navigate to the entity risk queue.
+    rba_block = enrichment.get("rba_top_promotion") if isinstance(enrichment, dict) else None
+    if isinstance(rba_block, dict):
+        rba_entity = _norm_str(rba_block.get("entity"))
+        if rba_entity:
+            bucket.add(
+                group="tenant",
+                kind="rba_entity",
+                value=rba_entity,
+                label="risk promotion",
+                pivot=f"/alerts?view=entities&entity={rba_entity}",
+            )
+
+    return bucket.entities
+
+
+# ─── Mini timeline ───────────────────────────────────────────────────────────
+
+
+def _audit_event(row: AuditLog) -> MiniTimelineEvent:
+    """Project an ``AuditLog`` row into the rail's timeline shape."""
+    payload: dict[str, Any] | None = None
+    if isinstance(row.changes, dict) and row.changes:
+        payload = dict(row.changes)
+    elif isinstance(row.metadata_, dict) and row.metadata_:
+        payload = dict(row.metadata_)
+    actor = row.actor_email or (str(row.actor_id) if row.actor_id else "system")
+    return MiniTimelineEvent(
+        id=str(row.id),
+        ts=row.created_at,
+        kind=row.action or "audit",
+        agent=actor,
+        summary=_summarise_audit(row),
+        payload=payload,
+    )
+
+
+def _summarise_audit(row: AuditLog) -> str:
+    """One-line audit summary that reads in the rail without payload exposure.
+
+    Audit rows are intentionally low-fidelity — they describe *what
+    happened*, not *why*. The rail's audience is a human analyst, so
+    we render a compact action-on-resource line and let the user click
+    through to the full ledger / case timeline for richer detail.
+    """
+    action = row.action or "audit"
+    if row.resource:
+        return f"{action} on {row.resource}".strip()
+    return action
+
+
+def _case_event(row: CaseTimeline) -> MiniTimelineEvent:
+    """Project a ``CaseTimeline`` row into the rail's timeline shape."""
+    actor = "system" if row.is_automated else (str(row.user_id) if row.user_id else "system")
+    payload: dict[str, Any] | None = None
+    if isinstance(row.event_metadata, dict) and row.event_metadata:
+        payload = dict(row.event_metadata)
+    return MiniTimelineEvent(
+        id=str(row.id),
+        ts=row.created_at,
+        kind=row.event_type or "case_event",
+        agent=actor,
+        summary=row.content or row.event_type or "case event",
+        payload=payload,
+    )
+
+
+async def build_mini_timeline(
+    db: AsyncSession,
+    alert: Alert,
+    *,
+    limit: int = MAX_TIMELINE_EVENTS,
+) -> list[MiniTimelineEvent]:
+    """Assemble the rail's mini-timeline for a single alert.
+
+    Sources, in priority order:
+
+    1. ``CaseTimeline`` rows for the alert's case (if any) — these are
+       the richest because they include analyst comments and agent
+       turn-by-turn decisions.
+    2. ``AuditLog`` rows whose ``resource == 'alert'`` and
+       ``resource_id == str(alert.id)`` — covers status/assignment
+       changes that don't go through a case.
+
+    Both feeds are merged, sorted newest-first, and capped at
+    ``limit``. The function is read-only and tenant-scoped at the
+    query level (case timeline already filters by case → tenant; audit
+    log we filter by ``tenant_id == alert.tenant_id`` defensively).
+    """
+    events: list[MiniTimelineEvent] = []
+
+    # ── Case timeline ───────────────────────────────────────────────────
+    if alert.case_id is not None:
+        case_q = (
+            select(CaseTimeline)
+            .where(CaseTimeline.case_id == alert.case_id, CaseTimeline.tenant_id == alert.tenant_id)
+            .order_by(CaseTimeline.created_at.desc())
+            .limit(limit)
+        )
+        case_rows = (await db.execute(case_q)).scalars().all()
+        events.extend(_case_event(row) for row in case_rows)
+
+    # ── Audit log ───────────────────────────────────────────────────────
+    # We query a slightly larger window so the merge step has enough
+    # rows to satisfy ``limit`` after we've already inserted case
+    # events. The audit table is indexed on (tenant_id, created_at),
+    # so this is cheap.
+    audit_q = (
+        select(AuditLog)
+        .where(
+            AuditLog.tenant_id == alert.tenant_id,
+            AuditLog.resource == "alert",
+            AuditLog.resource_id == str(alert.id),
+        )
+        .order_by(AuditLog.created_at.desc())
+        .limit(limit)
+    )
+    audit_rows = (await db.execute(audit_q)).scalars().all()
+    events.extend(_audit_event(row) for row in audit_rows)
+
+    # ── Merge + cap ─────────────────────────────────────────────────────
+    events.sort(key=lambda e: e.ts, reverse=True)
+    return events[:limit]
+
+
+# ─── Recommended actions ─────────────────────────────────────────────────────
+
+
+def build_recommended_actions(alert: Alert) -> list[RecommendedAction]:
+    """Normalise ``Alert.ai_recommendations`` for rendering in the rail.
+
+    The ResponderAgent emits a list of dicts of the form::
+
+        {"priority": 1, "action": "Isolate host …", "rationale": "…", "risk": "high"}
+
+    Older demo seeds wrote a list of bare strings. We accept both and
+    drop everything else (silently — the rail isn't the right surface
+    to surface a schema error). When no actions are present the rail
+    falls back to the analyst's own playbook.
+    """
+    raw = alert.ai_recommendations
+    if not isinstance(raw, list):
+        return []
+    out: list[RecommendedAction] = []
+    for idx, item in enumerate(raw):
+        if isinstance(item, str):
+            text = _norm_str(item)
+            if not text:
+                continue
+            out.append(RecommendedAction(priority=idx + 1, action=text))
+            continue
+        if not isinstance(item, dict):
+            continue
+        action = _norm_str(item.get("action"))
+        if not action:
+            continue
+        try:
+            priority = int(item.get("priority", idx + 1))
+        except (TypeError, ValueError):
+            priority = idx + 1
+        if priority < 1:
+            priority = 1
+        risk = _norm_str(item.get("risk")) or "low"
+        if risk.lower() not in {"low", "medium", "high"}:
+            risk = "low"
+        rationale = _norm_str(item.get("rationale"))
+        out.append(
+            RecommendedAction(
+                priority=priority,
+                action=action,
+                rationale=rationale,
+                risk=risk.lower(),
+            )
+        )
+    # Stable sort by priority so the rail renders in the order the
+    # agent intended even when sources are mixed.
+    out.sort(key=lambda a: a.priority)
+    return out
+
+
+# ─── Convenience composite ───────────────────────────────────────────────────
+
+
+class BusinessContextRail(BaseModel):
+    """What the tenant's business-context rules did to this alert, and the
+    verdict's cited impact statement — read from the auto-triage ledger event,
+    which is the only place the pairing is recorded.
+
+    ``None`` on the envelope means no rule fired (or the alert predates the
+    field), never "the measurement is zero": the agents side writes the keys
+    only when a rule matched, so absence here is honest absence.
+    """
+
+    matched_rule_ids: list[str] = Field(default_factory=list)
+    severity_before: str | None = None
+    severity_after: str | None = None
+    impact_statement: str | None = None
+    impact_citations: list[str] = Field(default_factory=list)
+
+
+async def fetch_business_context(db: AsyncSession, alert: Alert) -> BusinessContextRail | None:
+    """The latest auto-triage verdict event for this alert that carries
+    business-context keys.
+
+    ``investigation_runs.case_id`` is TEXT and holds ``str(alert_id)`` for
+    auto-triage runs (``investigation_events`` has no case/alert column of its
+    own, so the join goes through the run). Both tables are filtered by
+    tenant in the query — RLS stays defence-in-depth, not the control.
+    """
+    # `kind = 'triage_verdict'` is the literal the writer uses — the verdict
+    # INSERT in `services/agents/app/investigator/ledger.py` hardcodes it,
+    # with `agent` carrying `auto_triage:{tier}`. The first cut of this query
+    # filtered `kind LIKE 'auto_triage:%'`, a shape no real event has ever
+    # had, so the rail section could never render on a real deployment while
+    # every suite stayed green — the live test had seeded the assumed shape
+    # rather than the writer's. Found by the end-to-end QA slice; the literal
+    # is now pinned on both sides (the writer's recording-pool test and the
+    # live test here, naming the same string).
+    stmt = sa_text(
+        """
+        SELECT e.payload
+        FROM investigation_events e
+        JOIN investigation_runs r ON r.id = e.run_id
+        WHERE r.tenant_id = :tenant_id
+          AND e.tenant_id = :tenant_id
+          AND r.case_id = :alert_ref
+          AND e.kind = 'triage_verdict'
+          AND (e.payload -> 'business_context' IS NOT NULL
+               OR e.payload -> 'business_impact' IS NOT NULL)
+        ORDER BY e.created_at DESC
+        LIMIT 1
+        """
+    )
+    try:
+        row = (
+            await db.execute(
+                stmt,
+                {"tenant_id": alert.tenant_id, "alert_ref": str(alert.id)},
+            )
+        ).first()
+    except Exception:  # noqa: BLE001 — the rail must render without this leg
+        logger.warning("alert_rail.business_context_read_failed", alert_id=str(alert.id))
+        return None
+    if row is None:
+        return None
+    payload = row[0]
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(payload, dict):
+        return None
+    bc = payload.get("business_context") or {}
+    impact = payload.get("business_impact") or {}
+    if not bc and not impact:
+        return None
+    return BusinessContextRail(
+        matched_rule_ids=[str(r) for r in (bc.get("matched_rule_ids") or [])],
+        severity_before=(str(bc["severity_before"]) if bc.get("severity_before") is not None else None),
+        severity_after=(str(bc["severity_after"]) if bc.get("severity_after") is not None else None),
+        impact_statement=(str(impact["statement"]) if impact.get("statement") else None),
+        impact_citations=[str(c) for c in (impact.get("citations") or [])],
+    )
+
+
+class RailEnvelope(BaseModel):
+    """Composite payload returned alongside the alert detail response."""
+
+    related_entities: list[RelatedEntity]
+    mini_timeline: list[MiniTimelineEvent]
+    recommended_actions: list[RecommendedAction]
+    business_context: BusinessContextRail | None = None
+
+
+async def build_rail_envelope(db: AsyncSession, alert: Alert) -> RailEnvelope:
+    """Build the full rail envelope in a single helper.
+
+    Convenience wrapper for the alerts endpoint — avoids the caller
+    having to import three symbols. Keeping it tiny so each subroutine
+    stays individually unit-testable.
+    """
+    return RailEnvelope(
+        related_entities=build_related_entities(alert),
+        mini_timeline=await build_mini_timeline(db, alert),
+        recommended_actions=build_recommended_actions(alert),
+        business_context=await fetch_business_context(db, alert),
+    )
+
+
+__all__ = [
+    "MAX_TIMELINE_EVENTS",
+    "BusinessContextRail",
+    "MiniTimelineEvent",
+    "RailEnvelope",
+    "RecommendedAction",
+    "RelatedEntity",
+    "build_mini_timeline",
+    "build_rail_envelope",
+    "build_recommended_actions",
+    "build_related_entities",
+    "fetch_business_context",
+]

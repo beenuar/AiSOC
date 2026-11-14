@@ -1,0 +1,48 @@
+id: splunk-security-content-b38932ad-e663-4e90-bfdf-8446ee5b3f34
+name: Cisco Duo Admin Login Unusual Browser
+description: The following analytic identifies instances where a Duo admin logs in
+  using a browser other than Chrome, which is considered unusual based on typical
+  access patterns. Please adjust as needed to your environment. The detection leverages
+  Duo activity logs ingested via the Cisco Security Cloud App and filters for admin
+  login actions where the browser is not Chrome. By renaming and aggregating relevant
+  fields such as user, browser, IP address, and location, the analytic highlights
+  potentially suspicious access attempts that deviate from the norm. This behavior
+  is significant for a SOC because the use of an unexpected browser may indicate credential
+  compromise, session hijacking, or the use of unauthorized devices by attackers attempting
+  to evade detection. Detecting such anomalies enables early investigation and response,
+  helping to prevent privilege escalation, policy manipulation, or further compromise
+  of sensitive administrative accounts. The impact of this attack could include unauthorized
+  changes to security policies, user access, or the disabling of critical security
+  controls, posing a substantial risk to the organizations security posture.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_activity` \"action.name\"=admin_login NOT access_device.browser\
+    \ IN (Chrome)\n  | rename actor.name as user access_device.ip.address as src_ip\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY access_device.browser\
+    \ access_device.browser_version src_ip\n       access_device.location.city access_device.location.country\
+    \ access_device.location.state\n       access_device.os access_device.os_version\
+    \ actor.details\n       actor.type outcome.result user\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `cisco_duo_admin_login_unusual_browser_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b38932ad-e663-4e90-bfdf-8446ee5b3f34
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_admin_login_unusual_browser.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

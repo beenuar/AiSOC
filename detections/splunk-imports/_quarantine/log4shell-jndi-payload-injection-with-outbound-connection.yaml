@@ -1,0 +1,50 @@
+id: splunk-security-content-69afee44-5c91-11ec-bf1f-497c9a704a72
+name: Log4Shell JNDI Payload Injection with Outbound Connection
+description: The following analytic detects Log4Shell JNDI payload injections via
+  outbound connections. It identifies suspicious LDAP lookup functions in web logs,
+  such as `${jndi:ldap://PAYLOAD_INJECTED}`, and correlates them with network traffic
+  to known malicious IP addresses. This detection leverages the Web and Network_Traffic
+  data models in Splunk. Monitoring this activity is crucial as it targets vulnerabilities
+  in Java web applications using log4j, potentially leading to remote code execution.
+  If confirmed malicious, attackers could gain unauthorized access, execute arbitrary
+  code, and compromise sensitive data within the affected environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - application
+references:
+- https://www.lunasec.io/docs/blog/log4j-zero-day/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| from datamodel Web.Web
+
+    | rex field=_raw max_match=0 "[jJnNdDiI]{4}(\:|\%3A|\/|\%2F)(?<proto>\w+)(\:\/\/|\%3A\%2F\%2F)(\$\{.*?\}(\.)?)?(?<affected_host>[a-zA-Z0-9\.\-\_\$]+)"
+    | join affected_host type=inner [| tstats `security_content_summariesonly` count
+    min(_time) as firstTime max(_time) as lastTime from datamodel=Network_Traffic.All_Traffic
+    by All_Traffic.dest | `drop_dm_object_name(All_Traffic)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | rename dest AS affected_host]
+
+    | fillnull
+
+    | stats count by action, category, dest, dest_port, http_content_type, http_method,
+    http_referrer, http_user_agent, site, src, url, url_domain, user
+
+    | `log4shell_jndi_payload_injection_with_outbound_connection_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 69afee44-5c91-11ec-bf1f-497c9a704a72
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/log4shell_jndi_payload_injection_with_outbound_connection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

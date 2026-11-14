@@ -1,0 +1,49 @@
+id: hunt-cloud-iam-role-anomalous-assume
+name: Cross-account IAM role assume from a never-before-seen principal
+description: |
+  AWS sts:AssumeRole or GCP iam.serviceAccounts.getAccessToken from an external
+  account or principal that has not previously assumed the role, especially
+  when followed by privileged read/list calls in the assumed role's session,
+  is a strong indicator of cloud lateral movement (e.g. SCATTERED SPIDER,
+  LUCR-3 / Storm-0875).
+version: 1.0.0
+severity: high
+category: cloud
+tags:
+  - mitre.attack.t1078.004
+  - mitre.attack.t1098.001
+  - hunt.cloud
+  - threat.cloud-lateral
+log_sources:
+  - cloudtrail
+  - gcp_audit
+schedule:
+  enabled: true
+  interval_minutes: 30
+  jitter_seconds: 30
+hypothesis:
+  question: |
+    Did sts:AssumeRole (AWS) or iam.serviceAccounts.getAccessToken (GCP)
+    succeed from a sourceIPAddress or principal not seen against this role
+    in the last 30 days, followed within 5 minutes by privileged List* /
+    Get* / Describe* calls?
+  indicators:
+    - field: source
+      in: [cloudtrail, gcp_audit]
+    - field: eventName
+      in: [AssumeRole, GenerateAccessToken]
+    - field: principal_first_seen_against_role
+      equals: true
+    - field: privileged_calls_within_5min
+      gte: 3
+expected:
+  positive_incident_id: INC-HUNT-004
+  positive_template_id: hunt-cloud-iam-role-anomalous-assume
+  min_match_score: 0.75
+  negative_incident_id: INC-HUNT-004-NEG
+references:
+  - https://attack.mitre.org/techniques/T1078/004/
+  - https://attack.mitre.org/techniques/T1098/001/
+author: AiSOC
+created: '2026-05-05'
+modified: '2026-05-05'

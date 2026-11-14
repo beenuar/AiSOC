@@ -1,0 +1,23 @@
+title: Persistence via Run Registry Key
+id: aisoc-id-ep-0010-run-key
+status: stable
+description: |
+  Write to HKLM or HKCU Run/RunOnce keys — classic autostart
+  persistence.
+author: Cyble AiSOC
+level: medium
+logsource:
+  category: registry_set
+  product: windows
+tags:
+  - attack.t1547.001
+  - attack.persistence
+  - aisoc.endpoint
+detection:
+  selection:
+    registry.path|contains:
+      - '\Software\Microsoft\Windows\CurrentVersion\Run\'
+      - '\Software\Microsoft\Windows\CurrentVersion\RunOnce\'
+  condition: selection
+falsepositives:
+  - Vendor installers writing legitimate autostart entries.

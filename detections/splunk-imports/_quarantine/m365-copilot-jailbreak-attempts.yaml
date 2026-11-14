@@ -1,0 +1,49 @@
+id: splunk-security-content-b05a4f25-e07d-436f-ab03-f954afa922c0
+name: M365 Copilot Jailbreak Attempts
+description: Detects M365 Copilot jailbreak attempts through prompt injection techniques
+  including rule manipulation, system bypass commands, and AI impersonation requests
+  that attempt to circumvent built-in safety controls. The detection searches exported
+  eDiscovery prompt logs for jailbreak keywords like "pretend you are," "act as,"
+  "rules=," "ignore," "bypass," and "override" in the Subject_Title field, assigning
+  severity scores based on the manipulation type (score of 4 for amoral impersonation
+  or explicit rule injection, score of 3 for entity roleplay or bypass commands).
+  Prompts with a jailbreak score of 2 or higher are flagged, prioritizing the most
+  severe attempts to override AI safety mechanisms through direct instruction injection
+  or unauthorized persona adoption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - application
+references:
+- https://www.splunk.com/en_us/blog/artificial-intelligence/m365-copilot-log-analysis-splunk.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`m365_exported_ediscovery_prompt_logs`\n| search Subject_Title IN (\n\
+    \                            \"*act as*\",\n                            \"*bypass*\"\
+    ,\n                            \"*ignore*\",\n                            \"*override*\"\
+    ,\n                            \"*pretend you are*\",\n                      \
+    \      \"*rules=*\"\n                          )\n| eval user = Sender\n| eval\
+    \ jailbreak_score=case(\n                            match(Subject_Title, \"(?i)pretend\
+    \ you are.*amoral\"), 4,\n                            match(Subject_Title, \"\
+    (?i)act as.*entities\"), 3,\n                            match(Subject_Title,\
+    \ \"(?i)(ignore|bypass|override)\"), 3,\n                            match(Subject_Title,\
+    \ \"(?i)rules\\s*=\"), 4, 1=1, 1\n)\n| where jailbreak_score >= 2\n| table _time,\
+    \ user, Subject_Title, jailbreak_score, Workload, Size\n| sort -jailbreak_score,\
+    \ -_time\n| `m365_copilot_jailbreak_attempts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b05a4f25-e07d-436f-ab03-f954afa922c0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/m365_copilot_jailbreak_attempts.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

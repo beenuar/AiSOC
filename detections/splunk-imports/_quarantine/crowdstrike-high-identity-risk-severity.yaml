@@ -1,0 +1,39 @@
+id: splunk-security-content-0df524ad-6d78-4883-9987-d29418928103
+name: Crowdstrike High Identity Risk Severity
+description: The following analytic detects CrowdStrike alerts for High Identity Risk
+  Severity with a risk score of 70 or higher. These alerts indicate significant vulnerabilities
+  in user identities, such as suspicious behavior or compromised credentials. Promptly
+  investigating and addressing these alerts is crucial to prevent potential security
+  breaches and ensure the integrity and protection of sensitive information and systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/wp-content/uploads/2022/12/CrowdStrike-Falcon-Event-Streams-Add-on-Guide-v3.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`crowdstrike_identities` riskScoreSeverity=\"HIGH\" OR riskScore >=\
+    \ 0.70\n  | rename riskFactors{}.severity as severity, riskFactors{}.type as risk_type,\
+    \ roles{}.type as role_type, accounts{}.domain as domain, accounts{}.dn as dn,\
+    \ accounts{}.samAccountName as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY domain dn primaryDisplayName\n       risk_type severity\
+    \ riskScore\n       riskScoreSeverity user role_type\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `crowdstrike_high_identity_risk_severity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0df524ad-6d78-4883-9987-d29418928103
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/crowdstrike_high_identity_risk_severity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

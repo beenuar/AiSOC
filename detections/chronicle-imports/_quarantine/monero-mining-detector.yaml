@@ -1,0 +1,41 @@
+id: chronicle-detection-rules-monero-mining-detector
+name: monero_mining_detector
+description: monero_mining_detector
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule monero_mining_detector {\n meta:\n    author = \"Lee Archinal\"\
+    \n    description = \"This content detects activity relating to the Monero Cryptominer\
+    \  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/8O8jC7J18wzs\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/06/05\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Impact, attackt1496\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"11\" and (re.regex($selection1.target.file.full_path, `.*%Temp%\\\\kkk1\\\
+    .log`) or re.regex($selection1.target.file.full_path, `.*%Temp%\\\\pp2\\.log`)\
+    \ or re.regex($selection1.target.file.full_path, `.*%Temp%\\\\333\\.log`) or re.regex($selection1.target.file.full_path,\
+    \ `.*%Temp%\\\\kk4\\.log`) or re.regex($selection1.target.file.full_path, `.*%Temp%\\\
+    \\kk5\\.log`))) or ($selection1.metadata.product_event_type = \"1\" and $selection1.target.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\System32\\\\WindowsPowerShell\\\\v1.0\\\\powershell.exe\"\
+    \ and $selection1.target.process.command_line = \"powershell -nop -w hidden -ep\
+    \ bypass { \\\"IEX (New-Object Net.WebClient).downloadstring\\\"\"))\n\n  condition:\n\
+    \    $selection1\n}"
+  chronicle_rule_name: monero_mining_detector
+provenance:
+  source: chronicle/detection-rules
+  source_id: monero_mining_detector
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/monero_mining_detector.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

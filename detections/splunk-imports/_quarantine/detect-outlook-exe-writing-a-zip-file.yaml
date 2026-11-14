@@ -1,0 +1,68 @@
+id: splunk-security-content-a51bfe1a-94f0-4822-b1e4-16ae10145893
+name: Detect Outlook exe writing a zip file
+description: 'The following analytic identifies the execution of `outlook.exe` writing
+  a `.zip` file to the disk.
+
+  It leverages data from the Endpoint data model, specifically monitoring process
+  and filesystem activities.
+
+  This behavior can be significant as it may indicate the use of Outlook to deliver
+  malicious payloads or exfiltrate data via compressed files.
+
+  If confirmed malicious, this activity could lead to unauthorized data access, data
+  exfiltration, or the delivery of malware, potentially compromising the security
+  of the affected system and network.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - endpoint
+references:
+- https://www.paubox.com/news/hackers-exploit-corrupted-zip-and-office-files-to-bypass-email-security
+- https://docs.datadoghq.com/security/default_rules/def-000-14w/
+- https://theweborion.com/blog/zip-files/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  min(_time) as firstTime\n\
+    \  max(_time) as lastTime\n\nFROM datamodel=Endpoint.Processes where\n\nProcesses.process_name=outlook.exe\n\
+    \nby _time span=5m\n  Processes.action Processes.dest Processes.original_file_name\n\
+    \  Processes.parent_process Processes.parent_process_exec\n  Processes.parent_process_guid\
+    \ Processes.parent_process_id\n  Processes.parent_process_name Processes.parent_process_path\n\
+    \  Processes.process Processes.process_exec Processes.process_guid\n  Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n  Processes.process_name\
+    \ Processes.process_path\n  Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n\n| rename process_guid as malicious_id\n\
+    | rename parent_process_id as outlook_id\n\n| join malicious_id type=inner\n \
+    \ [\n    | tstats `security_content_summariesonly`\n      count values(Filesystem.file_path)\
+    \ as file_path\n            values(Filesystem.file_name) as file_name\n      FROM\
+    \ datamodel=Endpoint.Filesystem where\n\n      Filesystem.file_path=*.zip\n  \
+    \    Filesystem.file_path IN (\"*:\\\\Users*\", \"*\\\\AppData\\\\Local\\\\Temp*\"\
+    )\n      Filesystem.action=created\n\n      by _time span=5m\n         Filesystem.process_guid\
+    \ Filesystem.process_id\n         Filesystem.file_hash Filesystem.dest Filesystem.dvc\n\
+    \         Filesystem.signature Filesystem.signature_id\n\n    | `drop_dm_object_name(Filesystem)`\n\
+    \    | `security_content_ctime(firstTime)`\n    | `security_content_ctime(lastTime)`\n\
+    \n    | rename process_guid as malicious_id\n\n    | fields malicious_id outlook_id\
+    \ dest\n             file_path file_name\n             file_hash count file_id\n\
+    \  ]\n| table firstTime lastTime user malicious_id outlook_id\n        process_name\
+    \ parent_process_name file_name file_path\n        dest action original_file_name\
+    \ parent_process\n        parent_process_name parent_process_exec parent_process_guid\n\
+    \        parent_process_id parent_process_path process_exec\n        process_guid\
+    \ process_hash process_id process_integrity_level\n        process_name process_path\
+    \ user user_id vendor_product\n\n| where file_name != \"\"\n| `detect_outlook_exe_writing_a_zip_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a51bfe1a-94f0-4822-b1e4-16ae10145893
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_outlook_exe_writing_a_zip_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

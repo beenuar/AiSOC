@@ -1,0 +1,86 @@
+id: splunk-security-content-6a80300a-9f8a-4f22-bd3e-09ca577cfdfc
+name: Windows Privilege Escalation Suspicious Process Elevation
+description: 'The following analytic detects when a process running with low or medium
+  integrity from a user account spawns an elevated process with high or system integrity
+  in suspicious locations.
+
+  This behavior is identified using process execution data from Windows process monitoring.
+
+  This activity is significant as it may indicate a threat actor successfully elevating
+  privileges, which is a common tactic in advanced attacks.
+
+  If confirmed malicious, this could allow the attacker to execute code with higher
+  privileges, potentially leading to full system compromise and persistent access.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  - T1548
+  - T1134
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1068/
+- https://vuls.cert.org/confluence/display/Wiki/2021/06/21/Finding+Privilege+Escalation+Vulnerabilities+in+Windows+using+Process+Monitor
+- https://redcanary.com/blog/getsystem-offsec/
+- https://atomicredteam.io/privilege-escalation/T1134.001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \nfrom datamodel=Endpoint.Processes where\n\nProcesses.process_integrity_level\
+    \ IN (\"low\",\"medium\",\"high\")\nNOT Processes.user IN (\"*SYSTEM\",\"*LOCAL\
+    \ SERVICE\",\"*NETWORK SERVICE\",\"DWM-*\",\"*$\")\n\nby Processes.action Processes.dest\
+    \ Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\n\
+    \   Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\n\
+    \   Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name\n   Processes.process_path Processes.user Processes.user_id\n\
+    \   Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n| eval join_guid\
+    \ = process_guid,\n       integrity_level = CASE(\n            match(process_integrity_level,\"\
+    low\"),1,\n            match(process_integrity_level,\"medium\"),2,\n        \
+    \    match(process_integrity_level,\"high\"),3,\n            match(process_integrity_level,\"\
+    system\"),4,\n            true(),0\n        )\n| rename user as src_user,\n  \
+    \       parent_process* as orig_parent_process*,\n         process* as parent_process*\n\
+    \n| join max=0 dest join_guid [\n    | tstats `security_content_summariesonly`\n\
+    \      count max(_time) as lastTime\n\n    from datamodel=Endpoint.Processes where\n\
+    \n    (\n        Processes.process_integrity_level IN (\"system\")\n        NOT\
+    \ Processes.user IN (\n                \"*SYSTEM\",\n                \"*LOCAL\
+    \ SERVICE\",\n                \"*NETWORK SERVICE\",\n                \"DWM-*\"\
+    ,\n                \"*$\"\n            )\n    )\n    OR\n    (\n        Processes.process_integrity_level\
+    \ IN (\n            \"high\",\n            \"system\"\n        )\n        (\n\
+    \            Processes.parent_process_path IN (\n                \"*\\\\\\\\*\"\
+    ,\n                \"*\\\\Users\\\\*\",\n                \"*\\\\Temp\\\\*\",\n\
+    \                \"*\\\\ProgramData\\\\*\"\n            )\n            OR\n  \
+    \          Processes.process_path IN (\n                \"*\\\\\\\\*\",\n    \
+    \            \"*\\\\Users\\\\*\",\n                \"*\\\\Temp\\\\*\",\n     \
+    \           \"*\\\\ProgramData\\\\*\"\n            )\n        )\n    )\n\n   \
+    \ by Processes.dest Processes.user Processes.parent_process_guid\n       Processes.process_name\
+    \ Processes.process\n       Processes.process_path Processes.process_integrity_level\n\
+    \       Processes.process_current_directory\n\n    | `drop_dm_object_name(Processes)`\n\
+    \n    | eval elevated_integrity_level = CASE(\n                match(process_integrity_level,\"\
+    low\"),1,\n                match(process_integrity_level,\"medium\"),2,\n    \
+    \            match(process_integrity_level,\"high\"),3,\n                match(process_integrity_level,\"\
+    system\"),4,\n                true(),0\n            )\n    | rename parent_process_guid\
+    \ as join_guid\n]\n\n| where\n    elevated_integrity_level > integrity_level\n\
+    \    OR\n    user != elevated_user\n\n| fields dest user src_user parent_process_name\
+    \ parent_process\n         parent_process_path parent_process_guid\n         parent_process_integrity_level\
+    \ parent_process_current_directory\n         process_name process process_path\
+    \ process_guid\n         process_integrity_level process_current_directory\n \
+    \        orig_parent_process_name orig_parent_process\n         orig_parent_process_guid\
+    \ firstTime lastTime count\n\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_privilege_escalation_suspicious_process_elevation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6a80300a-9f8a-4f22-bd3e-09ca577cfdfc
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_privilege_escalation_suspicious_process_elevation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

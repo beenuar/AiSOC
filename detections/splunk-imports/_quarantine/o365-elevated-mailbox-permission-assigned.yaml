@@ -1,0 +1,43 @@
+id: splunk-security-content-2246c142-a678-45f8-8546-aaed7e0efd30
+name: O365 Elevated Mailbox Permission Assigned
+description: The following analytic identifies the assignment of elevated mailbox
+  permissions in an Office 365 environment via the Add-MailboxPermission operation.
+  It leverages logs from the Exchange workload in the o365_management_activity data
+  source, focusing on permissions such as FullAccess, ChangePermission, or ChangeOwner.
+  This activity is significant as it indicates potential unauthorized access or control
+  over mailboxes, which could lead to data exfiltration or privilege escalation. If
+  confirmed malicious, attackers could gain extensive access to sensitive email data
+  and potentially manipulate mailbox settings, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/002/
+- https://learn.microsoft.com/en-us/powershell/module/exchange/add-mailboxpermission
+- https://learn.microsoft.com/en-us/exchange/recipients/mailbox-permissions?view=exchserver-2019
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=Exchange Operation=Add-MailboxPermission\
+    \ (AccessRights=FullAccess OR AccessRights=ChangePermission OR AccessRights=ChangeOwner)\n\
+    \  | rename Identity AS dest_user\n  | fillnull\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime\n    BY signature dest user\n       src vendor_account\
+    \ vendor_product\n       dest_user\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_elevated_mailbox_permission_assigned_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2246c142-a678-45f8-8546-aaed7e0efd30
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_elevated_mailbox_permission_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,155 @@
+# Dependency vulnerability ignore list for AiSOC CI.
+#
+# Format: tool|ID|reason|YYYY-MM-DD
+#   tool   — pnpm, python, or go
+#   ID     — CVE-YYYY-NNNNN, GHSA-xxxx-xxxx-xxxx, GO-YYYY-NNNN, or PYSEC-YYYY-N
+#   reason — why this ignore is acceptable (required, no blanks)
+#   expiry — date this ignore expires (max 90 days from today)
+#
+# Example:
+# python|CVE-2026-12345|Upstream fix not released; tracked in issue #123|2026-07-15
+
+# ── 2026-09-23 re-triage — the list is now empty ─────────────────────────────
+# All 42 entries that stood here were re-verified against OSV and against the
+# versions the repo actually resolves, rather than against the claims in their
+# own reason strings. Every one of them was resolvable, so none was carried
+# forward. Nothing is suppressed today.
+#
+# The entries were re-checked ahead of the 2026-10-05 ecdsa expiry because
+# `load_ignores` fails closed: a lapsed entry aborts `validate-ignores` before
+# any ecosystem is scanned, which reds every open PR and leaves `main`
+# stale-green. That has happened here before (twelve expired suppressions,
+# #650), so the list is re-read on a schedule rather than on a failure.
+#
+# Recording what was measured, because most of these reason strings had
+# quietly stopped being true and re-reading them would have produced another
+# round of date bumps rather than fixes:
+#
+#   • starlette (9 entries) claimed "slack-bot and teams-bot still cap fastapi
+#     <0.137, which resolves fastapi 0.136.1 / starlette 1.0.0". Neither cap
+#     exists: both pyproject files read fastapi >=0.111,<0.142 and both locks
+#     resolve fastapi 0.141.1 with starlette 1.6.0. services/agents resolves
+#     starlette 1.3.1. The highest fix among the nine is 1.3.1, so every
+#     service was already clean.
+#
+#   • idna CVE-2026-45409 claimed "only services/slack-bot still resolves
+#     3.13". slack-bot resolves 3.20, teams-bot 3.15, agents 3.18; the fix is
+#     3.15. (The CVE id is also not a resolvable OSV record — OSV carries this
+#     as GHSA-65pc-fj4g-8rjx / PYSEC-2026-215 with the CVE as an alias.)
+#
+#   • langchain / langgraph (9 entries) claimed pins of langchain <0.4.0,
+#     langchain-openai <0.4.0 and langgraph <1.1.0 blocking a "0.3 to 1.x
+#     migration". That migration has already happened: the pins read
+#     langchain >=1.3.9, langchain-core >=1.2.22, langgraph >=1.0.10,
+#     langgraph-checkpoint >=4.1.1, langgraph-sdk >=0.3.15, and the lock
+#     resolves 1.4.2 / 1.6.4 / 1.2.12 / 4.2.0 / 0.4.5 respectively.
+#     langchain-text-splitters (PYSEC-2026-77) is not in the tree at all.
+#
+#   • langchain-core (4 entries) claimed the same blocked major bump. The lock
+#     resolves 1.6.4; the fixes are 1.2.11 and 1.2.22.
+#
+#   • weasyprint (3) and anyio (5) claimed they were "pinned by the committed
+#     services/agents lock, needs a lock refresh". That lock already carries
+#     weasyprint 70.0 and anyio 4.15.1, which are the fixed versions.
+#
+#   • pydantic-settings claimed "slack-bot/teams-bot still resolve 2.14.1".
+#     Both resolve 2.15.0; the fix is 2.14.2.
+#
+#   • cryptography (3 entries) claimed the fix was "held by the <50 and <49
+#     version caps". No such cap exists anywhere — every pin reads <51 — and
+#     services/agents resolves 50.0.1, which is the fixed line.
+#
+#   • aiohttp (3 entries) claimed 3.14.1 awaiting a lock refresh; the locks
+#     resolve 3.14.3, which is the fix. h2 claimed 4.3.0; agents resolves
+#     4.4.1, which is the fix.
+#
+#   • image-size (2 pnpm entries) claimed the advisory "reports no patched
+#     release (patched_versions "<0.0.0"), so an override has no clean
+#     target". GHSA-5p2g-fcmc-qvqq and GHSA-w3rx-r6r6-pgpr both record a
+#     vulnerable range of "<= 2.0.2", and npm has published 2.0.3 and 2.0.4;
+#     OSV reports both as unaffected. `first_patched_version` being null in
+#     the GitHub advisory is not the same claim as no fix existing, and
+#     reading it as such kept two high-severity advisories suppressed for a
+#     fix that was already on the registry. A pnpm override now pins
+#     >=2.0.4 <3, which @docusaurus/mdx-loader's ^2.0.2 range accepts.
+#
+#   • ecdsa PYSEC-2026-1325 (CVE-2024-23342, Minerva timing attack on P-256)
+#     was the one entry whose "no patched version available" was true: OSV
+#     records the affected range as introduced at 0 with no fixed event,
+#     because upstream states python-ecdsa offers no side-channel resistance
+#     and will not fix it. It was also true that ecdsa was unconditional under
+#     python-jose. So the dependency was removed instead of re-suppressed:
+#     services/api now uses PyJWT, which it already depended on for the OIDC
+#     and SAML paths, and python-jose, ecdsa and rsa all leave the tree.
+#
+# Verification for the empty list: all 20 Python targets were exported exactly
+# as `run_pip_audit` does and every resolved pin checked against OSV — zero
+# advisories, zero unscanned. `pnpm audit` reports zero advisories with the
+# image-size override (two high without it). `govulncheck` reports zero
+# findings across all six Go modules.
+#
+# Add entries back only with a justification that names the version actually
+# resolved and the fix that is genuinely out of reach. An expiry is a
+# re-review date, not a snooze.
+
+# ── 2026-11-01 — image-size: the retire condition fired, so the entries go ──
+# Two image-size entries stood here (GHSA-5p2g-fcmc-qvqq, GHSA-w3rx-r6r6-pgpr),
+# suppressed on 2026-09-24 because apps/mobile resolved 1.2.1 through metro and
+# "every metro release through the current latest (0.87.1) still declares
+# image-size ^1.0.2". That block ended with its own retire condition: "Retire
+# these when metro adopts image-size >= 2.0.3."
+#
+# It has. Measured rather than assumed, against what the lockfiles resolve:
+# apps/mobile/pnpm-lock.yaml now resolves image-size 2.0.4 and the metro entry
+# beside it declares `image-size: 2.0.4`; the root lockfile resolves 2.0.4 too.
+# Both advisories record first_patched_version 2.0.3 and a vulnerable range
+# topping out at 2.0.2, so neither tree is affected any more.
+#
+# Deleted rather than re-dated: the condition the text named has fired, and the
+# honest end state for an advisory the tree has actually moved past is no entry
+# at all. A suppression kept past its own stated condition records a false
+# reason, which is worse than no suppression.
+
+# ── 2026-11-01 — node-forge: resolved past the advisory, entries removed ──
+# GHSA-86w9-cpqp-85rv (and its alias CVE-2026-85393, suppressed separately on
+# 2026-10-06) covered node-forge RSA PKCS#1 v1.5 signature verification. Both
+# were suppressed as "no patched version exists upstream", which was true when
+# written: the advisory still records first_patched_version null.
+#
+# The tree moved anyway. apps/mobile/pnpm-lock.yaml now resolves node-forge
+# 1.4.2 and npm's latest is 1.4.2, while the advisory's vulnerable range is
+# `<= 1.4.0`. A release outside the affected range is not the same thing as a
+# "first patched version", which is why reading that null field alone would
+# have kept this suppressed indefinitely — the same misreading the image-size
+# entries were corrected for on 2026-09-23. node-forge is absent from the root
+# lockfile entirely.
+#
+# Both ids deleted. Nothing is suppressed for node-forge.
+
+# ── 2026-11-01 — http-cache-semantics: a patched release exists and ships ──
+# GHSA-ch52-4w7c-c8xp was suppressed as "No patched version exists: npm's
+# latest http-cache-semantics is 4.2.0 and the advisory affects <=4.2.0".
+# That is no longer true. npm's latest is 4.3.0, this repo's own pnpm
+# `overrides` table already forces `>=4.3.0 <5`, and the root lockfile
+# resolves 4.3.0 — outside the advisory's `<= 4.2.0` range.
+#
+# So the residual risk this entry described does not exist: the fix is not
+# merely available, it is already what installs. Deleted.
+pnpm|GHSA-vfj7-8cjw-p6xm|No patched version exists: npm's latest braces is 3.0.3 and the advisory affects <=3.0.3. Stack-exhaustion DoS (CWE-674) triggered by expanding a deeply nested glob pattern. Reached only transitively through chokidar and micromatch, which are build tooling; neither is a direct dependency of any package here, and the patterns they expand come from this repository's own build configuration rather than from user input. No runtime route accepts a glob.|2026-12-31
+
+# ── 2026-10-06 security-bump PR — unfixable-upstream carry-forward ──────────
+# Verbatim from OSV on 2026-10-06: both advisories have NO first_patched_version.
+# braces is a transitive dev/test-tree dep (jest/micromatch lineage); the repo
+# pins overrides but there is nothing to override TO yet.
+pnpm|CVE-2026-93687|braces <=3.0.3; OSV GHSA-vfj7-8cjw-p6xm shows no patched release (current is newest); transitive test-tree dep; re-check monthly|2027-01-04
+pnpm|CVE-2026-97058|sprintf-js: GHSA-hp3w-g68c-fv3c affects <=1.1.3 with first_patched_version null, and npm's latest IS 1.1.3, so no fixed release exists to move to. Both lockfiles resolve 1.0.3, transitive via js-yaml in jest/build tooling and fed only this repo's own format strings. Re-check monthly: delete when a release above 1.1.3 ships|2027-01-04
+# A node-forge entry stood here under the CVE alias (CVE-2026-85393) alongside
+# the GHSA form further up, both carried as "no patched release". Removed
+# 2026-11-01 for the reason recorded against GHSA-86w9-cpqp-85rv above:
+# apps/mobile resolves 1.4.2 and the advisory's range stops at 1.4.0.
+#
+# Worth keeping as a shape: one advisory held two entries under two ids, so a
+# sweep that fixes the GHSA form and stops leaves the CVE form suppressing the
+# same thing. braces has the same duplication (GHSA-vfj7-8cjw-p6xm and
+# CVE-2026-93687) and both are deliberately retained, because that one really
+# does still resolve inside its vulnerable range.

@@ -1,0 +1,49 @@
+id: splunk-security-content-8560de46-ea2d-4c69-8ca3-5b78b90f1338
+name: Windows AppX Deployment Full Trust Package Installation
+description: The following analytic detects the installation of MSIX/AppX packages
+  with full trust privileges. This detection leverages Windows event logs from the
+  AppXDeployment-Server, specifically focusing on EventCode 400 which indicates a
+  package deployment operation. Full trust packages are significant as they run with
+  elevated privileges outside the normal AppX container restrictions, allowing them
+  to access system resources that regular AppX packages cannot. Adversaries have been
+  observed leveraging full trust MSIX packages to deliver malware, as documented in
+  recent threat intelligence reports. If confirmed malicious, these packages could
+  allow attackers to execute arbitrary code with elevated privileges, establish persistence,
+  or deliver malware while evading traditional detection mechanisms.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.005
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/threat-intelligence/msix-installers/
+- https://redcanary.com/threat-detection-report/techniques/installer-packages/
+- https://learn.microsoft.com/en-us/windows/msix/desktop/desktop-to-uwp-behind-the-scenes
+- https://learn.microsoft.com/en-us/windows/msix/package/package-identity
+- https://attack.mitre.org/techniques/T1553/005/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_appxdeploymentserver` EventCode=400 HasFullTrust=\"true\"\
+    \n  | stats count min(_time) as firstTime max(_time) as lastTime values(PackageFullName)\
+    \ as PackageFullName values(Path) as PackagePath values(PackageSourceUri) as PackageSourceUri\
+    \ values(PackageDisplayName) as PackageDisplayName values(CallingProcess) as CallingProcess\
+    \ values(IsCentennial) as IsCentennial\n    BY dvc EventCode HasFullTrust\n  \
+    \     user_id\n  | rename dvc as dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_appx_deployment_full_trust_package_installation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8560de46-ea2d-4c69-8ca3-5b78b90f1338
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_appx_deployment_full_trust_package_installation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

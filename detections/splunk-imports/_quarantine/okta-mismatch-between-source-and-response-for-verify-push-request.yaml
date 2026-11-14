@@ -1,0 +1,61 @@
+id: splunk-security-content-8085b79b-9b85-4e67-ad63-351c9e9a5e9a
+name: Okta Mismatch Between Source and Response for Verify Push Request
+description: The following analytic identifies discrepancies between the source and
+  response events for Okta Verify Push requests, indicating potential suspicious behavior.
+  It leverages Okta System Log events, specifically `system.push.send_factor_verify_push`
+  and `user.authentication.auth_via_mfa` with the factor "OKTA_VERIFY_PUSH." The detection
+  groups events by SessionID, calculates the ratio of successful sign-ins to push
+  requests, and checks for session roaming and new device/IP usage. This activity
+  is significant as it may indicate push spam or unauthorized access attempts. If
+  confirmed malicious, attackers could bypass MFA, leading to unauthorized access
+  to sensitive systems.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1621
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1621
+- https://splunkbase.splunk.com/app/6553
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`okta` eventType IN (system.push.send_factor_verify_push) OR (eventType\
+    \ IN (user.authentication.auth_via_mfa) debugContext.debugData.factor=\"OKTA_VERIFY_PUSH\"\
+    )\n  | eval groupby=\"authenticationContext.externalSessionId\"\n  | eval group_push_time=_time\n\
+    \  | bin span=2s group_push_time\n  | fillnull value=NULL\n  | stats min(_time)\
+    \ as _time\n    BY authenticationContext.externalSessionId eventType debugContext.debugData.factor\n\
+    \       outcome.result actor.alternateId client.device\n       client.ipAddress\
+    \ client.userAgent.rawUserAgent debugContext.debugData.behaviors\n       group_push_time\n\
+    \  | iplocation client.ipAddress\n  | fields - lat, lon, group_push_time\n  |\
+    \ stats min(_time) as _time dc(client.ipAddress) as dc_ip sum(eval(if(eventType=\"\
+    system.push.send_factor_verify_push\" AND $outcome.result$=\"SUCCESS\", 1, 0)))\
+    \ as total_pushes sum(eval(if(eventType=\"user.authentication.auth_via_mfa\" AND\
+    \ $outcome.result$=\"SUCCESS\", 1, 0))) as total_successes sum(eval(if(eventType=\"\
+    user.authentication.auth_via_mfa\" AND $outcome.result$=\"FAILURE\", 1, 0))) as\
+    \ total_rejected sum(eval(if(eventType=\"system.push.send_factor_verify_push\"\
+    \ AND $debugContext.debugData.behaviors$ LIKE \"%New Device=POSITIVE%\", 1, 0)))\
+    \ as suspect_device_from_source sum(eval(if(eventType=\"system.push.send_factor_verify_push\"\
+    \ AND $debugContext.debugData.behaviors$ LIKE \"%New IP=POSITIVE%\", 1, 0))) as\
+    \ suspect_ip_from_source values(eval(if(eventType=\"system.push.send_factor_verify_push\"\
+    , $client.ipAddress$, \"\"))) as src values(eval(if(eventType=\"user.authentication.auth_via_mfa\"\
+    , $client.ipAddress$, \"\"))) as dest values(*) as *\n    BY authenticationContext.externalSessionId\n\
+    \  | eval ratio = round(total_successes / total_pushes, 2)\n  | search ((ratio\
+    \ < 0.5 AND total_pushes > 1) OR (total_rejected > 0)) AND dc_ip > 1 AND suspect_device_from_source\
+    \ > 0 AND suspect_ip_from_source > 0\n  | rename actor.alternateId as user\n \
+    \ | `okta_mismatch_between_source_and_response_for_verify_push_request_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8085b79b-9b85-4e67-ad63-351c9e9a5e9a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_mismatch_between_source_and_response_for_verify_push_request.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

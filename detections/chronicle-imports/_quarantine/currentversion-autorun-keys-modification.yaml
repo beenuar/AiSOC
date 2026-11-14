@@ -1,0 +1,181 @@
+id: chronicle-detection-rules-currentversion-autorun-keys-modification
+name: currentversion_autorun_keys_modification
+description: currentversion_autorun_keys_modification
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule currentversion_autorun_keys_modification {\n\n  meta:\n    author = \"\
+    Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community,\
+    \ Tim Shelton, frack113 (split)\"\n    description = \"Detects modification of\
+    \ autostart extensibility point (ASEP) in registry\"\n    reference = \"https://github.com/SigmaHQ/sigma/blob/master/rules/windows/registry/registry_set/registry_set_asep_reg_keys_modification_currentversion.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"CurrentVersion Autorun Keys Modification\"\n    rule_id =\
+    \ \"mr_711750f0-0bf3-4c89-b771-65a1ed6aad05\"\n    sigma_uuid = \"20f0ee37-5942-4e45-b7d5-c5b5db9df5cd\"\
+    \n    sigma_status = \"test\"\n    tactic = \"TA0003\"\n    technique = \"T1547.001\"\
+    \n    data_source = \"Sysmon Windows Registry\"\n    platform = \"Windows\"\n\
+    \    severity = \"Medium\"\n    priority = \"Medium\"\n    false_positives = \"\
+    Legitimate software automatically sets up autorun keys\"\n\n  events:\n    $reg.metadata.event_type\
+    \ = \"REGISTRY_MODIFICATION\"\n    strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\software\\\\microsoft\\\\windows\\\\currentversion\") and\n    (\n   \
+    \     strings.contains(strings.to_lower($reg.target.registry.registry_key), \"\
+    \\\\shellserviceobjectdelayload\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\run\\\\\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\runonce\\\\\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\runonceex\\\\\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\runservices\\\\\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\runservicesonce\\\\\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\policies\\\\system\\\\shell\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\policies\\\\explorer\\\\run\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\group policy\\\\scripts\\\\startup\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\group policy\\\\scripts\\\\shutdown\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\group policy\\\\scripts\\\\logon\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\group policy\\\\scripts\\\\logoff\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\explorer\\\\shellserviceobjects\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\explorer\\\\shelliconoverlayidentifiers\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\explorer\\\\shellexecutehooks\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\explorer\\\\sharedtaskscheduler\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\explorer\\\\browser helper objects\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\plap providers\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential providers\") or\n        strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential provider filters\")\n    )\n    not (\n \
+    \       $reg.target.registry.registry_value_data = \"(Empty)\" or\n        re.regex($reg.target.registry.registry_key,\
+    \ `\\\\NgcFirst\\\\ConsecutiveSwitchCount$`) nocase or\n        re.regex($reg.principal.process.file.full_path,\
+    \ `\\\\AppData\\\\Local\\\\Microsoft\\\\OneDrive\\\\Update\\\\OneDriveSetup\\\
+    .exe$`) nocase or\n        re.regex($reg.principal.process.file.full_path, `\\\
+    \\AppData\\\\Roaming\\\\Spotify\\\\Spotify\\.exe$`) nocase or\n        re.regex($reg.principal.process.file.full_path,\
+    \ `\\\\AppData\\\\Local\\\\WebEx\\\\WebexHost\\.exe$`) nocase or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\WINDOWS\\\\system32\\\\devicecensus.exe\" nocase or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\system32\\\\winsat.exe\" nocase or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Program Files\\\\Microsoft OneDrive\\\\StandaloneUpdater\\\\OneDriveSetup.exe\"\
+    \ nocase or\n        $reg.principal.process.file.full_path = \"C:\\\\Program Files\\\
+    \\Microsoft OneDrive\\\\Update\\\\OneDriveSetup.exe\" nocase or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Program Files (x86)\\\\Microsoft OneDrive\\\\Update\\\\OneDriveSetup.exe\"\
+    \ nocase or\n        $reg.principal.process.file.full_path = \"C:\\\\Program Files\\\
+    \\KeePass Password Safe 2\\\\ShInstUtil.exe\" nocase or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Program Files\\\\Everything\\\\Everything.exe\" nocase or\n      \
+    \  $reg.principal.process.file.full_path = \"C:\\\\Program Files (x86)\\\\Microsoft\
+    \ Office\\\\root\\\\integration\\\\integrator.exe\" nocase or\n        (\n   \
+    \         $reg.principal.process.file.full_path = \"C:\\\\Windows\\\\system32\\\
+    \\LogonUI.exe\" nocase and\n            (\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential providers\\\\{d6886603-9d2f-4eb2-b667-1971041fa96b}\\\
+    \\\") or\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential providers\\\\{bec09223-b018-416d-a0ac-523971b639f5}\\\
+    \\\") or\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential providers\\\\{8af662bf-65a0-4d0a-a540-a338a999d36f}\\\
+    \\\") or\n                strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\authentication\\\\credential providers\\\\{27fbdb57-b613-4af2-9d7e-4fa7a66c21ad}\\\
+    \\\")\n            )\n        ) or\n        (\n            (\n               \
+    \ strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files (x86)\\\\microsoft\\\\edgeupdate\\\\install\\\\\") or\n\
+    \                strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files (x86)\\\\microsoft\\\\edgewebview\\\\\") or\n        \
+    \        strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files (x86)\\\\microsoft\\\\edge\\\\application\\\\msedge.exe\"\
+    )\n            )\n        ) or\n        (\n            $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Windows\\\\system32\\\\regsvr32.exe\" nocase and\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"dropboxt\") and\n            re.regex($reg.target.registry.registry_value_data,\
+    \ `A251-47B7-93E1-CDD82E34AF8B}$`) nocase\n        ) or\n        (\n         \
+    \   re.regex($reg.target.registry.registry_key, `\\\\SOFTWARE\\\\Microsoft\\\\\
+    Windows\\\\CurrentVersion\\\\Run\\\\Opera Browser Assistant$`) nocase and\n  \
+    \          $reg.target.registry.registry_value_data = \"C:\\\\Program Files\\\\\
+    Opera\\\\assistant\\\\browser_assistant.exe\" nocase\n        ) or\n        (\n\
+    \            re.regex($reg.target.registry.registry_key, `\\\\SOFTWARE\\\\Microsoft\\\
+    \\Windows\\\\CurrentVersion\\\\Run\\\\iTunesHelper$`) nocase and\n           \
+    \ $reg.target.registry.registry_value_data = \"\\\"C:\\\\Program Files\\\\iTunes\\\
+    \\iTunesHelper.exe\\\"\" nocase\n        ) or\n        (\n            re.regex($reg.target.registry.registry_key,\
+    \ `\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\RunOnce\\\\zoommsirepair$`)\
+    \ nocase and\n            $reg.target.registry.registry_value_data = \"\\\"C:\\\
+    \\Program Files\\\\Zoom\\\\bin\\\\installer.exe\\\" /repair\" nocase\n       \
+    \ ) or\n        (\n            re.regex($reg.target.registry.registry_key, `\\\
+    \\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\Greenshot$`) nocase\
+    \ and\n            $reg.target.registry.registry_value_data = \"C:\\\\Program\
+    \ Files\\\\Greenshot\\\\Greenshot.exe\" nocase\n        ) or\n        (\n    \
+    \        re.regex($reg.target.registry.registry_key, `\\\\Software\\\\Microsoft\\\
+    \\Windows\\\\CurrentVersion\\\\Run\\\\GoogleDriveFS$`) nocase and\n          \
+    \  strings.starts_with(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"c:\\\\program files\\\\google\\\\drive file stream\\\\\") and\n          \
+    \  strings.contains(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"\\\\googledrivefs.exe\")\n        ) or\n        (\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"googledrive\") and\n            (\n                $reg.target.registry.registry_value_data\
+    \ = \"{CFE8B367-77A7-41D7-9C90-75D16D7DC6B6}\" or\n                $reg.target.registry.registry_value_data\
+    \ = \"{A8E52322-8734-481D-A7E2-27B309EF8D56}\" or\n                $reg.target.registry.registry_value_data\
+    \ = \"{C973DA94-CBDF-4E77-81D1-E5B794FBD146}\" or\n                $reg.target.registry.registry_value_data\
+    \ = \"{51EF1569-67EE-4AD6-9646-E726C3FFC8A2}\"\n            )\n        ) or\n\
+    \        (\n            (\n                strings.starts_with(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"c:\\\\windows\\\\system32\\\\cmd.exe /q /c rmdir /s /q \\\"c:\\\\users\\\\\
+    \") or\n                strings.starts_with(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"c:\\\\windows\\\\system32\\\\cmd.exe /q /c del /q \\\"c:\\\\users\\\\\")\n\
+    \             ) and\n            strings.contains(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"\\\\appdata\\\\local\\\\microsoft\\\\onedrive\\\\\")\n        ) or\n     \
+    \   (\n            strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"\\\\microsoft\\\\windows\\\\currentversion\\\\runonce\\\\{\") and\n      \
+    \      strings.contains(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"\\\\appdata\\\\local\\\\package cache\\\\{\") and\n            strings.contains(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"}\\\\python-\") and\n            re.regex($reg.target.registry.registry_value_data,\
+    \ `\\.exe\" /burn\\.runonce$`) nocase\n        ) or\n        (\n            (\n\
+    \                strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files\\\\common files\\\\microsoft shared\\\\clicktorun\\\\\"\
+    ) or\n                strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files\\\\common files\\\\microsoft shared\\\\clicktorun\\\\\
+    updates\\\\\")\n            ) and\n            re.regex($reg.principal.process.file.full_path,\
+    \ `\\\\OfficeClickToRun\\.exe$`) nocase\n        ) or\n        $reg.principal.process.file.full_path\
+    \ = \"C:\\\\Program Files\\\\Windows Defender\\\\MsMpEng.exe\" nocase or\n   \
+    \     (\n            re.regex($reg.principal.process.file.full_path, `\\\\Microsoft\\\
+    \\Teams\\\\current\\\\Teams\\.exe$`) nocase and\n            strings.contains(strings.to_lower($reg.target.registry.registry_value_data),\
+    \ \"\\\\microsoft\\\\teams\\\\update.exe --processstart \")\n        ) or\n  \
+    \      (\n            $reg.principal.process.file.full_path = \"C:\\\\Windows\\\
+    \\system32\\\\userinit.exe\" nocase and\n            $reg.target.registry.registry_value_data\
+    \ = \"ctfmon.exe /n\" nocase\n        ) or\n        (\n            strings.starts_with(strings.to_lower($reg.principal.process.file.full_path),\
+    \ \"c:\\\\program files\\\\avg\\\\antivirus\\\\setup\\\\\") and\n            (\n\
+    \                $reg.target.registry.registry_value_data = \"\\\"C:\\\\Program\
+    \ Files\\\\AVG\\\\Antivirus\\\\AvLaunch.exe\\\" /gui\" nocase or\n           \
+    \     $reg.target.registry.registry_value_data = \"\\\"C:\\\\Program Files (x86)\\\
+    \\AVG\\\\Antivirus\\\\AvLaunch.exe\\\" /gui\" nocase or\n                $reg.target.registry.registry_value_data\
+    \ = \"{472083B0-C522-11CF-8763-00608CC02F24}\" nocase\n            )\n       \
+    \ ) or\n        (\n            re.regex($reg.principal.process.file.full_path,\
+    \ `\\\\aurora-agent(|-64)\\.exe$`) nocase and\n            re.regex($reg.target.registry.registry_key,\
+    \ `\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\\\\aurora-dashboard$`) nocase\
+    \ and\n            $reg.target.registry.registry_value_data = \"C:\\\\Program\
+    \ Files\\\\Aurora-Agent\\\\tools\\\\aurora-dashboard.exe\" nocase\n        ) or\n\
+    \        (\n            re.regex($reg.target.registry.registry_key, `\\\\Microsoft\\\
+    \\Windows\\\\CurrentVersion\\\\Run\\\\Everything$`) nocase and\n            re.regex($reg.target.registry.registry_value_data,\
+    \ `\\\\Everything\\\\Everything\\.exe\" -startup$`) nocase\n        )\n    )\n\
+    \n    $reg.principal.hostname = $hostname\n\n  match:\n    $hostname over 5m\n\
+    \n  outcome:\n    //example usage of specifying test hostname to adjust risk score\n\
+    \    $risk_score = max(if($reg.principal.hostname = \"hostname\", 0, 15))\n  \
+    \  $principal_hostname = array_distinct($reg.principal.hostname)\n    $principal_process_pid\
+    \ = array_distinct($reg.principal.process.pid)\n    $principal_process_file_full_path\
+    \ = array_distinct($reg.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($reg.principal.process.product_specific_process_id)\n    $principal_user_userid\
+    \ = array_distinct($reg.principal.user.userid)\n    $target_registry_key = array_distinct($reg.target.registry.registry_key)\n\
+    \    $target_registry_value_data = array_distinct($reg.target.registry.registry_value_data)\n\
+    \    $log_type = array_distinct(strings.concat($reg.metadata.log_type,\"/\",$reg.metadata.product_event_type))\n\
+    \n  condition:\n    $reg\n}"
+  chronicle_rule_name: currentversion_autorun_keys_modification
+provenance:
+  source: chronicle/detection-rules
+  source_id: currentversion_autorun_keys_modification
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/currentversion_autorun_keys_modification.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

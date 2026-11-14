@@ -1,0 +1,31 @@
+title: AWS IAM AdministratorAccess Policy Attached
+id: aisoc-id-cl-0016-iam-admin-attach
+status: stable
+description: |
+  AWS managed AdministratorAccess (or equivalent wildcard policy)
+  attached to a user, role, or group — privilege escalation step
+  commonly seen in cloud account takeover.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1098.003
+  - attack.privilege_escalation
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws.cloudtrail
+    event.action:
+      - 'AttachUserPolicy'
+      - 'AttachRolePolicy'
+      - 'AttachGroupPolicy'
+      - 'PutUserPolicy'
+      - 'PutRolePolicy'
+  admin:
+    aws.policy_arn|contains:
+      - 'AdministratorAccess'
+      - 'IAMFullAccess'
+      - 'PowerUserAccess'
+  condition: selection and admin

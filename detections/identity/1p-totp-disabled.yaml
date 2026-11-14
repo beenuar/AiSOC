@@ -1,0 +1,22 @@
+id: det-identity-284
+name: 1Password Time-Based Code Factor Disabled
+description: The factor is no longer available on the account.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "totp_disabled"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

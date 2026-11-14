@@ -1,0 +1,6 @@
+{
+  "operation": "Set-SPOTenant",
+  "parameters": {
+    "SharingCapability": "ExternalUserAndGuestSharing"
+  }
+}

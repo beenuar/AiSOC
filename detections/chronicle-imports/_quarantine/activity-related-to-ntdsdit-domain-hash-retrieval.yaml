@@ -1,0 +1,43 @@
+id: chronicle-detection-rules-activity-related-to-ntdsdit-domain-hash-retrieval
+name: activity_related_to_ntdsdit_domain_hash_retrieval
+description: activity_related_to_ntdsdit_domain_hash_retrieval
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule activity_related_to_ntdsdit_domain_hash_retrieval {\n meta:\n\
+    \    author = \"Florian Roth, Michael Haag\"\n    description = \"Detects suspicious\
+    \ commands that could be related to activity that uses volume shadow copy to steal\
+    \ and retrieve hashes from the NTDS.dit file remotely  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Rp79M4izVSNy\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"credential_access, t1003\"\n\n  events:\n\
+    (($selection.target.process.command_line = \"vssadmin.exe Delete Shadows\" or\
+    \ $selection.target.process.command_line = \"vssadmin create shadow /for=C:\"\
+    \ or re.regex($selection.target.process.command_line, `copy \\\\\\\\\\?\\\\GLOBALROOT\\\
+    \\Device\\\\.*\\\\windows\\\\ntds\\\\ntds\\.dit`) or re.regex($selection.target.process.command_line,\
+    \ `copy \\\\\\\\\\?\\\\GLOBALROOT\\\\Device\\\\.*\\\\config\\\\SAM`) or $selection.target.process.command_line\
+    \ = \"vssadmin delete shadows /for=C:\" or $selection.target.process.command_line\
+    \ = \"reg SAVE HKLM\\\\SYSTEM \" or re.regex($selection.target.process.command_line,\
+    \ `esentutl\\.exe /y /vss .*\\\\ntds\\.dit.*`)) and ($selection.metadata.product_event_type\
+    \ = \"4688\" or $selection.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: activity_related_to_ntdsdit_domain_hash_retrieval
+provenance:
+  source: chronicle/detection-rules
+  source_id: activity_related_to_ntdsdit_domain_hash_retrieval
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/activity_related_to_ntds_dit_domain_hash_retrieval.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

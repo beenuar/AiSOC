@@ -1,0 +1,62 @@
+id: splunk-security-content-eb59cf01-1874-4d16-b7e4-54a6eb9b3118
+name: Windows Proxy Execution of .NET Utilities via Scripts
+description: 'The following analytic detects the launch of common .NET-related utilities—aspnet_compiler.exe,
+  msbuild.exe, regasm.exe, InstallUtil.exe, or vbc.exe when the parent appears to
+  be a script (batch, CMD, PowerShell, JScript, VBScript, or HTML) running from an
+  unusual or user-writable Windows location (for example Public, Temp, Fonts, Debug,
+  Recycle Bin, Prefetch, or similar paths), and the child process shows little or
+  no command-line variation from the image path or name.
+
+  That pattern is consistent with adversaries using trusted .NET binaries as a proxy
+  to run code while hiding execution behind script parents in low-trust folders, behavior
+  associated with techniques such as signed binary proxy execution.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://www.joesandbox.com/analysis/1817558/0/pdfexecutive
+- https://www.broadcom.com/support/security-center/protection-bulletin/vip-keylogger-spreads-via-multi-org-impersonation-campaign
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.vipkeylogger
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n\nProcesses.process_name\
+    \ IN (\n    \"aspnet_compiler.exe\",\n    \"InstallUtil.exe\",\n    \"msbuild.exe\"\
+    ,\n    \"regasm.exe\",\n    \"vbc.exe\",\n)\nProcesses.parent_process IN (\n \
+    \   \"*.bat*\",\n    \"*.cmd*\",\n    \"*.html*\",\n    \"*.js*\",\n    \"*.ps1*\"\
+    ,\n    \"*.vbe*\",\n    \"*.vbs*\"\n)\nProcesses.parent_process IN (\n    \":\\\
+    \\Windows\\\\repair\\\\*\",\n    \"*:\\\\Microsoft\\\\Windows\\\\Libraries\\\\\
+    *\",\n    \"*:\\\\Temp\\\\*\",\n    \"*:\\\\Users\\\\Administrator\\\\Music\\\\\
+    *\",\n    \"*:\\\\Users\\\\Public\\\\*\",\n    \"*:\\\\Windows\\\\Cursors\\\\\
+    *\",\n    \"*:\\\\Windows\\\\debug\\\\*\",\n    \"*:\\\\Windows\\\\Fonts\\\\*\"\
+    ,\n    \"*:\\\\Windows\\\\INF\\\\*\",\n    \"*:\\\\Windows\\\\Media\\\\*\",\n\
+    \    \"*:\\\\Windows\\\\Prefetch\\\\*\",\n    \"*:\\\\Windows\\\\Temp\\\\*\",\n\
+    \    \"*\\\\AppData\\\\Local\\\\Temp\\\\*\",\n    \"*\\\\PerfLogs\\\\*\",\n  \
+    \  \"*Recycle.bin*\"\n  )\n  by Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n  | where (isnull(Processes.process) OR Processes.process=Processes.process_path\
+    \ OR Processes.process=Processes.process_name)\n\n  | `drop_dm_object_name(Processes)`\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_proxy_execution_of__net_utilities_via_scripts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eb59cf01-1874-4d16-b7e4-54a6eb9b3118
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_proxy_execution_of__net_utilities_via_scripts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

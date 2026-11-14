@@ -1,0 +1,76 @@
+id: mitre-car-car-2021-11-001
+name: Registry Edit with Creation of SafeDllSearchMode Key Set to 0
+description: Detection of creation of registry key HKEY_LOCAL_MACHINE\System\CurrentControlSet\Control\Session
+  Manager\SafeDllSearchMode. The key SafeDllSearchMode, if set to 0, will block the
+  Windows mechanism for the search DLL order and adversaries may execute their own
+  malicious dll.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574
+  - T1112
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process,Registry
+detection:
+  implementations:
+  - name: Creation of SafeDllSearchMode
+    type: Pseudocode
+    code: 'processes = search Process:create
+
+      safe_dll_search_processes = filter processes where command_line CONTAINS("*SafeDllSearchMode*")
+      AND ((command_line CONTAINS("*reg*") AND command_line CONTAINS("*add*") AND
+      command_line CONTAINS("*/d*")) OR (command_line CONTAINS("*Set-ItemProperty*")
+      AND command_line CONTAINS(*-value*)) OR ((command_line CONTAINS("*00000000*")
+      AND command_line CONTAINS(*0*)))
+
+      reg_keys = search Registry:value_edit
+
+      safe_dll_reg_keys = filter reg_keys where value="SafeDllSearchMode" AND value_data="0"
+
+      output safe_dll_search_processes, safe_dll_reg_keys
+
+      '
+  - name: Splunk Search - Creation of SafeDllSearchMode
+    type: Splunk
+    code: '(source="WinEventLog:*" ((((EventCode="4688" OR EventCode="1") ((CommandLine="*reg*"
+      CommandLine="*add*" CommandLine="*/d*") OR (CommandLine="*Set-ItemProperty*"
+      CommandLine="*-value*")) (CommandLine="*00000000*" OR CommandLine="*0*") CommandLine="*SafeDllSearchMode*")
+      OR ((EventCode="4657") ObjectValueName="SafeDllSearchMode" value="0")) OR ((EventCode="13")
+      EventType="SetValue" TargetObject="*SafeDllSearchMode" Details="DWORD (0x00000000)")))
+
+      '
+  - name: Elastic Search - Creation of SafeDllSearchMode
+    type: Elastic
+    code: '(((EventCode:("4688" OR "1") AND ((process.command_line:*reg* AND process.command_line:*add*
+      AND process.command_line:*\/d*) OR (process.command_line:*Set\-ItemProperty*
+      AND process.command_line:*\-value*)) AND process.command_line:(*00000000* OR
+      *0*) AND process.command_line:*SafeDllSearchMode*) OR (EventCode:"4657" AND
+      winlog.event_data.ObjectValueName:"SafeDllSearchMode" AND value:"0")) OR (EventCode:"13"
+      AND winlog.event_data.EventType:"SetValue" AND winlog.event_data.TargetObject:*SafeDllSearchMode
+      AND winlog.event_data.Details:"DWORD\ \(0x00000000\)"))
+
+      '
+  - name: LogPoint Search - Creation of SafeDllSearchMode
+    type: LogPoint
+    code: '(((EventCode IN ["4688", "1"] ((CommandLine="*reg*" CommandLine="*add*"
+      CommandLine="*/d*") OR (CommandLine="*Set-ItemProperty*" CommandLine="*-value*"))
+      CommandLine IN ["*00000000*", "*0*"] CommandLine="*SafeDllSearchMode*") OR (EventCode
+      IN "4657" ObjectValueName="SafeDllSearchMode" value="0")) OR (EventCode IN "13"
+      EventType="SetValue" TargetObject="*SafeDllSearchMode" Details="DWORD (0x00000000)"))
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-11-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-11-001.yaml
+notes:
+  car_status: needs_implementation

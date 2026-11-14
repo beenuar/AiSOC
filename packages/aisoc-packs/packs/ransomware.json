@@ -1,0 +1,96 @@
+{
+  "id": "pack-ransomware",
+  "name": "Ransomware",
+  "scenario": "ransomware",
+  "version": "1.0.0",
+  "schema_version": 1,
+  "owner": "detection-engineering",
+  "description": "Mass encryption on an endpoint: what raises it, what groups it, what to establish, what to do, and how to prove the pack works here.",
+  "mitre_techniques": [
+    "T1486",
+    "T1490",
+    "T1489"
+  ],
+  "detections": [
+    "wd-ransomware-file-extension-change",
+    "det-endpoint-123",
+    "det-endpoint-182"
+  ],
+  "correlations": [
+    {
+      "name": "One incident per host per encryption burst",
+      "key": "host",
+      "window_minutes": 30,
+      "why": "Three rules fire on the same burst. Without this an operator gets three alerts for one event, which is worse than the one they had before adopting the pack."
+    },
+    {
+      "name": "Fold in the shadow-copy deletion that usually precedes it",
+      "key": "host",
+      "window_minutes": 60,
+      "techniques": [
+        "T1490"
+      ],
+      "why": "Deletion often lands minutes ahead of encryption. Grouped, the timeline reads as one attack; separate, the earlier alert looks like unrelated admin work."
+    }
+  ],
+  "investigation_plan": [
+    {
+      "question": "Which hosts are encrypting, and is the count still rising?",
+      "tools": [
+        "search_siem",
+        "query_lake"
+      ],
+      "why": "Decides containment scope. A rising count means contain now; a flat one means investigate first."
+    },
+    {
+      "question": "What account is the encrypting process running as, and is it privileged?",
+      "tools": [
+        "get_identity_context"
+      ],
+      "why": "A domain admin changes the blast radius from one host to the estate."
+    },
+    {
+      "question": "Did shadow copies or backups get deleted, and when relative to encryption?",
+      "tools": [
+        "search_siem"
+      ],
+      "why": "Determines whether recovery is possible without paying, which is the question leadership asks first."
+    },
+    {
+      "question": "How did the process arrive \u2014 email, remote service, or existing foothold?",
+      "tools": [
+        "get_process_tree",
+        "search_siem"
+      ],
+      "why": "Containing the host without closing the entry point means it happens again tonight."
+    },
+    {
+      "question": "Are the file extensions or the ransom note attributable to a known family?",
+      "tools": [
+        "lookup_threat_intel"
+      ],
+      "why": "Attribution changes the expected next step \u2014 some families exfiltrate before encrypting."
+    }
+  ],
+  "response": [
+    "ransomware-containment"
+  ],
+  "validation": [
+    {
+      "action": "Replay 200 rename events for one process within five minutes through the live windowed engine.",
+      "expect": "Exactly one alert, severity critical, technique T1486."
+    },
+    {
+      "action": "Replay 199 of the same rename events \u2014 one short of the threshold.",
+      "expect": "No alert. A pack whose detections fire on benign activity is worse than no pack."
+    },
+    {
+      "action": "Replay fixtures for all three detections within one 30-minute window on one host.",
+      "expect": "One correlated incident, not three alerts. This is the claim the correlation section makes."
+    },
+    {
+      "action": "Run the response playbook in dry-run against a documentation-range host.",
+      "expect": "Every step reports a plan and nothing reports executed, confirming the approval gate holds."
+    }
+  ]
+}

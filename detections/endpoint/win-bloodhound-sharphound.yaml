@@ -1,0 +1,24 @@
+id: det-endpoint-107
+name: SharpHound Collection Run Detected
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'SharpHound Collection
+  Run Detected'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1087.002
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_command_line CONTAINS_ANY ["sharphound", "invoke-bloodhound", "bloodhound.py"]
+false_positives:
+- Authorised red-team or penetration test
+playbook: tpl-discovery
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

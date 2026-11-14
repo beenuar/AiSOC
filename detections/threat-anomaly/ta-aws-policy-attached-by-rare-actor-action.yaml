@@ -1,0 +1,26 @@
+id: det-threat-anomaly-002
+name: AWS Policy Attached by a Principal Who Does Not Normally Attach Policies
+description: AiSOC v1 curated detection. Triggers on the threat-anomaly signal described by 'AWS Policy
+  Attached by a Principal Who Does Not Normally Attach Policies'. Watch the 2 documented false-positive
+  cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: threat-anomaly
+log_source:
+  product: aws
+  service: iam
+detection:
+  condition: |
+    eventName IN ["AttachUserPolicy", "AttachRolePolicy", "AttachGroupPolicy"]
+    AND baseline_action_rarity >= 0.95
+false_positives:
+- Account vending and IAM bootstrap runs
+- A new provisioning service account's first week
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

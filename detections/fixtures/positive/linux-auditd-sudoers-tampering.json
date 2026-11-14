@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_critical_sudoers_write",
+  "exe": "/usr/bin/vim",
+  "syscall": "openat",
+  "path": "/etc/sudoers.d/90-attacker",
+  "uid": 0,
+  "comm": "vim"
+}

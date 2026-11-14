@@ -1,0 +1,24 @@
+id: det-cloud-056
+name: AWS S3 Block Public Access Disabled
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS S3 Block Public
+  Access Disabled'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: s3
+detection:
+  condition: |
+    event_name IN ["PutBucketPublicAccessBlock", "DeletePublicAccessBlock"]
+    AND block_public_acls == false
+false_positives:
+- Static site bucket explicitly public
+playbook: tpl-data-exposure
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

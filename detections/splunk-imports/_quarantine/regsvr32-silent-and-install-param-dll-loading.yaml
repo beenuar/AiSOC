@@ -1,0 +1,46 @@
+id: splunk-security-content-f421c250-24e7-11ec-bc43-acde48001122
+name: Regsvr32 Silent and Install Param Dll Loading
+description: The following analytic detects the loading of a DLL using the regsvr32
+  application with the silent parameter and DLLInstall execution. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process command-line
+  arguments and parent process details. This activity is significant as it is commonly
+  used by RAT malware like Remcos and njRAT to load malicious DLLs on compromised
+  machines. If confirmed malicious, this technique could allow attackers to execute
+  arbitrary code, maintain persistence, and further compromise the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.010
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/dc93ee63-050c-4ff8-b07e-8277af9ab939/
+- https://attack.mitre.org/techniques/T1218/010/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_regsvr32`\n\
+    \    AND\n    Processes.process=\"*/i*\" AND NOT Processes.process=\"*Microsoft\\\
+    \\TeamsMeetingAddin*\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where match(process,\"(?i)[\\-\n| \\/][Ss]{1}\")\n| `regsvr32_silent_and_install_param_dll_loading_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f421c250-24e7-11ec-bc43-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/regsvr32_silent_and_install_param_dll_loading.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

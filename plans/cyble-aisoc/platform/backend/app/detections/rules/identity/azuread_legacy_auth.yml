@@ -1,0 +1,30 @@
+title: Azure AD Legacy Authentication Protocol Used
+id: aisoc-id-id-0014-legacy-auth
+status: stable
+description: |
+  Successful sign-in via legacy authentication (POP, IMAP, SMTP
+  AUTH, ActiveSync basic auth). These protocols bypass MFA and
+  Conditional Access — heavily abused in password spray attacks.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azuread
+  service: signinlogs
+tags:
+  - attack.t1110.003
+  - attack.credential_access
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    event.category: 'authentication'
+    event.outcome: 'success'
+  legacy:
+    azuread.client_app|contains:
+      - 'IMAP4'
+      - 'POP3'
+      - 'SMTP'
+      - 'Authenticated SMTP'
+      - 'Exchange ActiveSync'
+      - 'Other clients'
+  condition: selection and legacy

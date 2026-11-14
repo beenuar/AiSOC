@@ -1,0 +1,47 @@
+id: splunk-security-content-8d486e2e-3235-4cfe-ac35-0d042e24ecb4
+name: O365 Multiple Users Failing To Authenticate From Ip
+description: The following analytic identifies instances where more than 10 unique
+  user accounts fail to authenticate from a single IP address within a 5-minute window.
+  This detection leverages O365 audit logs, specifically Azure Active Directory login
+  failures (AzureActiveDirectoryStsLogon). Such activity is significant as it may
+  indicate brute-force attacks or password spraying attempts. If confirmed malicious,
+  this behavior suggests an external entity is attempting to breach security by targeting
+  multiple accounts, potentially leading to unauthorized access. Immediate action
+  is required to block or monitor the suspicious IP and notify affected users to enhance
+  their security measures.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  - T1110.004
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/security/compass/incident-response-playbook-password-spray
+- https://www.cisa.gov/uscert/ncas/alerts/aa21-008a
+- https://docs.microsoft.com/azure/active-directory/reports-monitoring/reference-sign-ins-error-codes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=AzureActiveDirectory Operation=UserLoginFailed\
+    \ ErrorNumber=50126\n  | bucket span=5m _time\n  | fillnull\n  | stats dc(user)\
+    \ as unique_accounts values(user) as user values(LogonError) as LogonError values(signature)\
+    \ as signature values(UserAgent) as user_agent values(dest) as dest\n    BY _time\
+    \ src vendor_account\n       vendor_product\n  | where unique_accounts > 10\n\
+    \  | `o365_multiple_users_failing_to_authenticate_from_ip_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8d486e2e-3235-4cfe-ac35-0d042e24ecb4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_users_failing_to_authenticate_from_ip.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

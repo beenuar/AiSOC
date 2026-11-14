@@ -1,0 +1,4 @@
+{
+  "event_name": "DeleteObject",
+  "objects_per_minute": 1100.0
+}

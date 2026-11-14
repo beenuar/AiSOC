@@ -1,0 +1,27 @@
+title: Connection to Known C2 IP
+id: aisoc-id-nw-0010-known-c2
+status: stable
+description: |
+  Internal host establishes connection to an IP flagged by threat
+  intelligence as active command-and-control infrastructure.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1071
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'outbound'
+  c2:
+    enrich.threatintel.dst_category|contains:
+      - 'c2'
+      - 'malware'
+      - 'ransomware'
+  high_conf:
+    enrich.threatintel.dst_confidence|gte: 80
+  condition: selection and c2 and high_conf

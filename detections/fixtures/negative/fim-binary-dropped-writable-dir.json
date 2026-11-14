@@ -1,0 +1,11 @@
+{
+  "action": "CREATED",
+  "target_path": "/home/deploy/app/server.py",
+  "hostname": "app-server-01",
+  "node_key": "xyz789uvw012",
+  "tenant_id": "acme",
+  "process_name": "rsync",
+  "pid": 5501,
+  "username": "deploy",
+  "event_time": "2026-05-10T09:10:00Z"
+}

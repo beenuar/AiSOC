@@ -1,0 +1,45 @@
+id: splunk-security-content-695aceae-21db-4e7f-93ac-a52e39d02b93
+name: Adobe ColdFusion Unauthenticated Arbitrary File Read
+description: 'The following analytic detects potential exploitation of the Adobe ColdFusion
+  vulnerability, CVE-2023-26360, which allows unauthenticated arbitrary file read.
+
+  It monitors POST requests to the "/cf_scripts/scripts/ajax/ckeditor/*" endpoint
+  using the Web datamodel.
+
+  This activity can be significant due to the vulnerability''s high CVSS score of
+  9.8, indicating severe risk.
+
+  If confirmed malicious, it could lead to unauthorized data access, further attacks,
+  or severe operational disruptions.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://www.rapid7.com/db/modules/auxiliary/gather/adobe_coldfusion_fileread_cve_2023_26360/
+- https://github.com/projectdiscovery/nuclei-templates/blob/main/http/cves/2023/CVE-2023-26360.yaml
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\nWeb.url=\"*/cf_scripts/scripts/ajax/ckeditor/*\"\
+    \nWeb.status=200\nWeb.http_method=POST\n\nBY Web.http_user_agent Web.status Web.http_method\n\
+    \   Web.url Web.url_length Web.src Web.dest\n\n| `drop_dm_object_name(\"Web\"\
+    )`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `adobe_coldfusion_unauthenticated_arbitrary_file_read_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 695aceae-21db-4e7f-93ac-a52e39d02b93
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/adobe_coldfusion_unauthenticated_arbitrary_file_read.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

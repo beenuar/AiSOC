@@ -1,0 +1,5 @@
+{
+  "command_line": "xattr -d com.apple.quarantine /tmp/payload.app",
+  "host": "mac-01",
+  "image_basename": "xattr"
+}

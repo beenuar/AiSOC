@@ -1,0 +1,56 @@
+id: splunk-security-content-a4214f0b-e01c-41bc-8cc4-d2b71e3056b4
+name: Single Letter Process On Endpoint
+description: The following analytic detects processes with names consisting of a single
+  letter, which is often indicative of malware or an attacker attempting to evade
+  detection. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on process names and command-line executions. This activity is
+  significant because attackers use such techniques to obscure their presence and
+  carry out malicious activities like data theft or ransomware attacks. If confirmed
+  malicious, this behavior could lead to unauthorized access, data exfiltration, or
+  system compromise. Immediate investigation is required to determine the legitimacy
+  of the process.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n  from datamodel=Endpoint.Processes where\n \
+    \ Processes.process_name IN (\n    \"_.exe\",\n    \"-.exe\",\n    \",.exe\",\n\
+    \    \";.exe\",\n    \"!.exe\",\n    \"'.exe\"\n    \"(.exe\",\n    \"(.exe\"\
+    ,\n    \").exe\",\n    \").exe\",\n    \"@.exe\",\n    \"&.exe\",\n    \"#.exe\"\
+    ,\n    \"%.exe\",\n    \"`.exe\",\n    \"^.exe\",\n    \"+.exe\",\n    \"=.exe\"\
+    ,\n    \"~.exe\",\n    \"$.exe\",\n    \"0.exe\",\n    \"1.exe\",\n    \"2.exe\"\
+    ,\n    \"3.exe\",\n    \"4.exe\",\n    \"5.exe\",\n    \"6.exe\",\n    \"7.exe\"\
+    ,\n    \"8.exe\",\n    \"9.exe\",\n    \"a.exe\",\n    \"b.exe\",\n    \"c.exe\"\
+    ,\n    \"d.exe\",\n    \"e.exe\",\n    \"f.exe\",\n    \"g.exe\",\n    \"h.exe\"\
+    ,\n    \"i.exe\",\n    \"j.exe\",\n    \"k.exe\",\n    \"l.exe\",\n    \"m.exe\"\
+    ,\n    \"N.exe\",\n    \"o.exe\",\n    \"p.exe\",\n    \"q.exe\",\n    \"r.exe\"\
+    ,\n    \"s.exe\",\n    \"t.exe\",\n    \"u.exe\",\n    \"v.exe\",\n    \"w.exe\"\
+    ,\n    \"x.exe\",\n    \"y.exe\",\n    \"z.exe\",\n  )\nby Processes.action Processes.dest\
+    \ Processes.original_file_name Processes.parent_process\n   Processes.parent_process_exec\
+    \ Processes.parent_process_guid Processes.parent_process_id\n   Processes.parent_process_name\
+    \ Processes.parent_process_path Processes.process\n   Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash Processes.process_id\n   Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path Processes.user\n   Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(lastTime)`\n\
+    | `security_content_ctime(firstTime)`\n| `single_letter_process_on_endpoint_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a4214f0b-e01c-41bc-8cc4-d2b71e3056b4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/single_letter_process_on_endpoint.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

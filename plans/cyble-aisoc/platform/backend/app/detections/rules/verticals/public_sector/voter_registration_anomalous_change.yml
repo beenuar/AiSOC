@@ -1,0 +1,32 @@
+title: Voter Registration Bulk Modification Outside Election-Office Hours
+id: aisoc-vt-pub-0003-voter-registration-anomaly
+status: experimental
+description: |
+  Bulk modification to voter registration records (address changes,
+  party changes, status flips) executed outside election-office
+  business hours or from an account whose role does not typically
+  perform bulk operations. Election-integrity signal — even apparent
+  ops mistakes here are notifiable events under most state
+  certification regimes.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: gov
+  service: voter_registration
+tags:
+  - attack.t1565.001
+  - attack.impact
+  - aisoc.vertical.public_sector
+  - aisoc.election_integrity
+detection:
+  selection:
+    event.module: gov.voter_registration
+    event.action|in:
+      - 'record.bulk_modified'
+      - 'record.bulk_deleted'
+  filter:
+    business_hours.active: true
+    actor.role|contains:
+      - 'registrar'
+      - 'election_admin'
+  condition: selection and not filter

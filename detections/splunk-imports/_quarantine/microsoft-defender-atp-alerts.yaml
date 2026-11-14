@@ -1,0 +1,62 @@
+id: splunk-security-content-38f034ed-1598-46c8-95e8-14edf05fdf5d
+name: Microsoft Defender ATP Alerts
+description: The following analytic is to leverage alerts from Microsoft Defender
+  ATP Alerts. This query aggregates and summarizes all alerts from Microsoft Defender
+  ATP Alerts, providing details such as the source, file name, severity, process command
+  line, ip address, registry key, signature, description, unique id, and timestamps.
+  This detection is not intended to detect new activity from raw data, but leverages
+  Microsoft provided alerts to be correlated with other data as part of risk based
+  alerting. The data contained in the alert is mapped not only to the risk object,
+  but also the threat object. This detection filters out evidence that has a verdict
+  of clean from Microsoft. It dynamically maps the MITRE technique at search time
+  to auto populate the annotation field with the value provided in the alert. It also
+  uses a dynamic mapping to set the risk score in Enterprise Security based on the
+  severity of the alert.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/defender-xdr/api-list-incidents?view=o365-worldwide
+- https://learn.microsoft.com/en-us/graph/api/resources/security-alert?view=graph-rest-1.0
+- https://splunkbase.splunk.com/app/6207
+- https://jasonconger.com/splunk-azure-gdi/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ms_defender_atp_alerts` (dest=* OR user=*)\n  | eval tmp_evidence=json_extract(_raw,\
+    \ \"evidence\"), tmp_evidencemv=json_array_to_mv(tmp_evidence), entityType = mvmap(tmp_evidencemv,\
+    \ spath(tmp_evidencemv, \"entityType\")), filePath = mvmap(tmp_evidencemv, spath(tmp_evidencemv,\
+    \ \"filePath\")), processCommandLine = mvmap(tmp_evidencemv, spath(tmp_evidencemv,\
+    \ \"processCommandLine\")), ipAddress = mvmap(tmp_evidencemv, spath(tmp_evidencemv,\
+    \ \"ipAddress\")), registryKey = mvmap(tmp_evidencemv, spath(tmp_evidencemv, \"\
+    registryKey\")), url = mvmap(tmp_evidencemv, spath(tmp_evidencemv, \"url\")),\
+    \ fileName = mvmap(tmp_evidencemv, spath(tmp_evidencemv, \"fileName\"))\n  | eval\
+    \ tmp_evidencemv=mvfilter(json_extract(tmp_evidencemv, \"entityType\") = \"File\"\
+    ), fileName = mvmap(tmp_evidencemv, spath(tmp_evidencemv, \"fileName\"))\n  |\
+    \ eval risk_score=case(severity=\"informational\", 5, severity=\"low\", 15, severity=\"\
+    medium\", 25, severity=\"high\", 50 , true(), 2)\n  | eval processCommandLine=if(processCommandLine=\"\
+    null\", \"\", processCommandLine), ipAddress=if(ipAddress=\"null\", \"\", ipAddress),\
+    \ registryKey=if(registryKey=\"null\", \"\", registryKey), url=if(url=\"null\"\
+    , \"\", url)\n  | stats count min(_time) as firstTime max(_time) as lastTime values(fileName)\
+    \ as file_name values(severity) as severity values(processCommandLine) as process\
+    \ values(ipAddress) as ip_address values(registryKey) as registry_key values(url)\
+    \ as url values(mitreTechniques{}) as annotations.mitre_attack.mitre_technique_id\
+    \ values(signature) as signature values(user) as user values(risk_score) as risk_score\n\
+    \    BY id description src\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `microsoft_defender_atp_alerts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 38f034ed-1598-46c8-95e8-14edf05fdf5d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/microsoft_defender_atp_alerts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,6 @@
+{
+  "event_name_count": 60,
+  "event_source": "iam.amazonaws.com",
+  "time_window_minutes": 3,
+  "user_arn": "arn:aws:iam::111:user/contractor"
+}

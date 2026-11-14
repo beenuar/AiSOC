@@ -1,0 +1,58 @@
+id: chronicle-detection-rules-okta-user-account-lockout
+name: okta_user_account_lockout
+description: okta_user_account_lockout
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule okta_user_account_lockout {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects when a user's account is locked out or a user account\
+    \ has reached the lockout limit.\"\n    rule_id = \"mr_b7d1d908-77db-4217-a170-44e0423c7fbe\"\
+    \n    rule_name = \"Okta User Account Lockout\"\n    reference = \"https://www.okta.com/resources/whitepaper/how-adaptive-mfa-helps-mitigate-brute-force-attacks/\"\
+    \n    mitre_attack_tactic = \"Defense Evasion, Persistence, Privilege Escalation,\
+    \ Initial Access\"\n    mitre_attack_technique = \"Valid Accounts\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1078/\"\n    mitre_attack_version =\
+    \ \"v13.1\"\n    type = \"Alert\"\n    data_source = \"Okta\"\n    severity =\
+    \ \"Medium\"\n    priority = \"Medium\"\n\n  events:\n    $login.metadata.product_name\
+    \ = \"Okta\"\n    $login.metadata.vendor_name = \"Okta\"\n    (\n        $login.metadata.product_event_type\
+    \ = \"user.account.lock.limit\" or\n        $login.metadata.product_event_type\
+    \ = \"user.account.lock\"\n    )\n    $login.security_result.action = \"BLOCK\"\
+    \n    $login.principal.user.userid = $userid\n\n  match:\n    $userid over 1h\n\
+    \n  outcome:\n    $risk_score = max(35)\n    $mitre_attack_tactic = \"Defense\
+    \ Evasion, Persistence, Privilege Escalation, Initial Access\"\n    $mitre_attack_technique\
+    \ = \"Valid Accounts\"\n    $target_user_agent = array_distinct($login.network.http.user_agent)\n\
+    \    $principal_ip = array_distinct($login.principal.ip)\n    $principal_ip_country\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($login.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_ip_city = array_distinct($login.principal.location.city)\n   \
+    \ $principal_user_email_addresses = array_distinct ($login.principal.user.email_addresses)\n\
+    \    $security_result_summary = array_distinct($login.security_result.summary)\n\
+    \    $security_result_category_details = array_distinct($login.security_result.category_details)\n\
+    \n  condition:\n    $login\n}"
+  chronicle_rule_name: okta_user_account_lockout
+provenance:
+  source: chronicle/detection-rules
+  source_id: okta_user_account_lockout
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/okta/okta_user_account_lockout.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

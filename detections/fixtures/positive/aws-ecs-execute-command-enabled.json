@@ -1,0 +1,4 @@
+{
+  "enable_execute_command": true,
+  "event_name": "CreateService"
+}

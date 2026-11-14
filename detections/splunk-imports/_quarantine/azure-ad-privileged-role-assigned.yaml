@@ -1,0 +1,48 @@
+id: splunk-security-content-a28f0bc3-3400-4a6e-a2da-89b9e95f0d2a
+name: Azure AD Privileged Role Assigned
+description: The following analytic detects the assignment of privileged Azure Active
+  Directory roles to a user. It leverages Azure AD audit logs, specifically monitoring
+  the "Add member to role" operation. This activity is significant as adversaries
+  may assign privileged roles to compromised accounts to maintain persistence within
+  the Azure AD environment. If confirmed malicious, this could allow attackers to
+  escalate privileges, access sensitive information, and maintain long-term control
+  over the Azure AD infrastructure.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.003
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/active-directory/roles/concept-understand-roles
+- https://docs.microsoft.com/en-us/azure/active-directory/roles/permissions-reference
+- https://adsecurity.org/?p=4277
+- https://www.mandiant.com/resources/detecting-microsoft-365-azure-active-directory-backdoors
+- https://docs.microsoft.com/en-us/azure/active-directory/roles/security-planning
+- https://attack.mitre.org/techniques/T1098/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` \"operationName\"=\"Add member to role\"\n  | rename\
+    \ properties.* as *\n  | rename initiatedBy.user.userPrincipalName as initiatedBy\n\
+    \  | rename targetResources{}.modifiedProperties{}.newValue as roles\n  | eval\
+    \ role=mvindex(roles,1)\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest user src\n       vendor_account vendor_product\
+    \ initiatedBy\n       result role signature\n  | lookup privileged_azure_ad_roles\
+    \ azureadrole AS role OUTPUT isprvilegedadrole description\n  | search isprvilegedadrole\
+    \ = True\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_privileged_role_assigned_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a28f0bc3-3400-4a6e-a2da-89b9e95f0d2a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_privileged_role_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

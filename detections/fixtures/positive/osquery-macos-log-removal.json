@@ -1,0 +1,4 @@
+{
+  "cmdline": "system.logrm ",
+  "event_type": "osquery_query_row"
+}

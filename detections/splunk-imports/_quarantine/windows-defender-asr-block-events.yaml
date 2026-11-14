@@ -1,0 +1,43 @@
+id: splunk-security-content-026f5f4e-e99f-4155-9e63-911ba587300b
+name: Windows Defender ASR Block Events
+description: This detection searches for Windows Defender ASR block events. ASR is
+  a feature of Windows Defender Exploit Guard that prevents actions and apps that
+  are typically used by exploit-seeking malware to infect machines. ASR rules are
+  applied to processes and applications. When a process or application attempts to
+  perform an action that is blocked by an ASR rule, an event is generated. This detection
+  searches for ASR block events that are generated when a process or application attempts
+  to perform an action that is blocked by an ASR rule. Typically, these will be enabled
+  in block most after auditing and tuning the ASR rules themselves. Set to TTP once
+  tuned.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1566.001
+  - T1566.002
+  categories:
+  - endpoint
+references:
+- https://asrgen.streamlit.app/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`ms_defender` EventCode IN (1121, 1126, 1129, 1131, 1133)\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY host, Path, Parent_Commandline,\n\
+    \       Process_Name, ID, EventCode\n  | lookup asr_rules ID OUTPUT ASR_Rule\n\
+    \  | fillnull value=NULL\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | rename host as dest\n  | `windows_defender_asr_block_events_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 026f5f4e-e99f-4155-9e63-911ba587300b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_defender_asr_block_events.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

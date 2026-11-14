@@ -1,0 +1,997 @@
+"""AiSOC Core API - FastAPI Application Entry Point."""
+
+import asyncio
+import hmac
+import time
+from collections.abc import AsyncGenerator, Awaitable, Callable
+from contextlib import asynccontextmanager
+
+import structlog
+from fastapi import FastAPI, HTTPException, Request, Response, Security, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
+
+from app._health import install_health_routes, register_dependency
+from app.api.v1.endpoints.scim import ScimAuthFailed
+from app.api.v1.endpoints.scim import router as scim_router
+from app.api.v1.router import api_router
+from app.auth.oidc import router as oidc_router
+from app.auth.saml import router as saml_router
+from app.core.airgap import airgap_status
+from app.core.config import enforce_secure_defaults, is_dev_env, settings
+from app.core.cors import build_cors_kwargs
+from app.core.logging import configure_logging
+from app.core.scheduler_lock import scheduler_lock
+from app.core.telemetry import instrument_app
+from app.db.clickhouse import close_clickhouse, init_lake_schema
+from app.db.database import engine
+from app.db.neo4j import close_neo4j, init_neo4j
+from app.graphql.schema import graphql_router
+from app.middleware.audit_middleware import AuditMiddleware
+from app.middleware.demo_mode import DemoModeMiddleware
+from app.models import Base
+from app.services.plugin_manager import get_plugin_manager
+from app.services.schema_skew import readyz_probe
+from app.services.scim.resources import SCIM_CONTENT_TYPE
+from app.services.scim.resources import error_response as scim_error_response
+from app.workers.approval_expiry import run_forever as run_approval_expiry
+from app.workers.autonomy_drift import run_forever as run_autonomy_drift
+from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
+from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
+from app.workers.phishing_report_intake import run_forever as run_phishing_report_intake
+from app.workers.report_scheduler import run_forever as run_report_scheduler
+from app.workers.retention_purge import run_forever as run_retention_purge
+from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
+from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
+from app.workers.war_room_sync import run_forever as run_war_room_sync
+from app.workers.weekly_digest_task import run_forever as run_weekly_digest
+
+_metrics_bearer = HTTPBearer(auto_error=False)
+
+logger = structlog.get_logger(__name__)
+
+_SCHEDULER_LOCK_RETRY_SECONDS = 5
+
+# 15m covers slow OAuth due-batch refreshes while each provider call is bounded
+# by OAUTH_REFRESH_HTTP_TIMEOUT_SECONDS.
+_OAUTH_REFRESH_LOCK_TTL_SECONDS = 900
+# Weekly digest can fan out across tenants + PDF generation, so use a longer
+# lease to avoid duplicate report generation during slow runs.
+_WEEKLY_DIGEST_LOCK_TTL_SECONDS = 5400
+# Hunt sweep can execute multiple saved hunts + case opens in one tick; 5m
+# covers slow sweeps while still recovering quickly after replica loss.
+_HUNT_SCHEDULER_LOCK_TTL_SECONDS = 300
+# A purge sweep scans and deletes across every tenant with a policy, and a
+# ClickHouse mutation with mutations_sync=1 blocks until it lands. 30m keeps
+# a second replica from starting a concurrent sweep mid-delete.
+_RETENTION_PURGE_LOCK_TTL_SECONDS = 1800
+# A report-mailbox poll is one vendor read plus a bounded number of
+# inserts, so a lock held long after a crashed replica would stall intake
+# for much longer than the work takes. Sized to the poll interval.
+_PHISHING_INTAKE_LOCK_TTL_SECONDS = 300
+# Shorter than the others: the sweep is a single bounded UPDATE, so a lock
+# held for half an hour after a crashed replica would leave approvals
+# un-expired for far longer than the work takes.
+_APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
+# Comfortably past one pass. The scheduler's own poll is 300s and a pass
+# is bounded by the number of templates, so a lock that outlived the
+# interval would mean a replica holding it across two ticks.
+_REPORT_SCHEDULER_LOCK_TTL_SECONDS = 600
+# A shadow-reconciliation pass makes up to SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK
+# vendor searches, each bounded at 120s. 30m covers a slow pass without letting
+# a second replica start one on top of it, which would double a customer's
+# search load for no extra evidence.
+_SHADOW_RECONCILE_LOCK_TTL_SECONDS = 1800
+
+# A drift pass runs two bounded aggregates per tenant holding a grant, against
+# this deployment's own database and nothing else. Same shape and same TTL as
+# the approval sweep: short, because a lock still held after a replica crashed
+# would leave grants un-demoted for far longer than the work takes, and a
+# capability nobody has earned staying live is the condition this closes.
+_AUTONOMY_DRIFT_LOCK_TTL_SECONDS = 300
+
+
+async def _run_guarded_scheduler_worker(
+    *,
+    job_name: str,
+    ttl_seconds: int,
+    worker: Callable[[], Awaitable[None]],
+) -> None:
+    while True:
+        async with scheduler_lock(job_name=job_name, ttl_seconds=ttl_seconds) as should_run:
+            if not should_run:
+                await asyncio.sleep(_SCHEDULER_LOCK_RETRY_SECONDS)
+                continue
+            await worker()
+            return
+
+
+# In-process status of the demo self-heal bootstrap, surfaced read-only on
+# /health so the demo DB bootstrap is diagnosable without Fly log access. Only
+# non-sensitive fields are exposed (booleans + exception *type* names — never
+# messages, which could carry internal hostnames/DSNs).
+_DEMO_BOOTSTRAP_STATUS: dict[str, object] = {
+    "enabled": False,
+    "attempts": 0,
+    "reachable": None,
+    "table_present": None,
+    "seeded": None,
+    "done": False,
+    "last_error_type": None,
+}
+
+
+async def _invalidate_stale_db_pool(reason: str) -> None:
+    """Drop every pooled connection after a mid-flight disconnect.
+
+    Fly Postgres autostop (and idle TCP teardown) closes the server side of a
+    pooled socket without the client noticing. The next checkout then raises
+    ``ConnectionDoesNotExistError``. Disposing the pool forces fresh connects
+    on the next attempt — critical for the hosted demo where this was the
+    dominant cause of out-of-the-box 500s.
+    """
+    try:
+        await engine.dispose()
+        logger.info("demo bootstrap: disposed DB pool after %s", reason)
+    except Exception as dispose_exc:  # noqa: BLE001 — best-effort; next attempt still retries
+        logger.warning(
+            "demo bootstrap: engine.dispose failed after %s: %s",
+            reason,
+            type(dispose_exc).__name__,
+        )
+
+
+async def _wake_demo_postgres(*, attempts: int = 15) -> bool:
+    """Hammer ``SELECT 1`` until Fly Postgres finishes autostart, or give up.
+
+    Autostart is triggered by the first TCP connect, but the handshake often
+    dies mid-flight (``ConnectionDoesNotExistError``) for several seconds
+    while the VM boots. A single probe + 45s sleep was too slow and left the
+    demo 500ing for minutes after every deploy. Dispose between attempts so
+    we never retry on a socket the proxy already tore down.
+    """
+    from sqlalchemy import text  # noqa: PLC0415
+
+    for wake_attempt in range(1, attempts + 1):
+        try:
+            await _invalidate_stale_db_pool(f"wake-prep:{wake_attempt}")
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+                await conn.commit()
+            _DEMO_BOOTSTRAP_STATUS["reachable"] = True
+            logger.info("demo bootstrap: Postgres awake (wake attempt %d)", wake_attempt)
+            return True
+        except Exception as exc:  # noqa: BLE001 — cold-start races are expected
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"wake:{type(exc).__name__}"
+            # Front-load: 1s, 2s, 3s… capped at 8s so we burn ~1 min max here.
+            delay = min(wake_attempt, 8)
+            logger.info(
+                "demo bootstrap: wake attempt %d/%d failed (%s); retry in %ds",
+                wake_attempt,
+                attempts,
+                type(exc).__name__,
+                delay,
+            )
+            await asyncio.sleep(delay)
+    return False
+
+
+async def _demo_self_heal_bootstrap() -> None:
+    """Best-effort schema + seed bootstrap for the hosted demo, run in the background.
+
+    The demo's Fly Postgres autostops, so the deploy-time ``release_command`` VM
+    frequently can't reach it — new tables stay uncreated and the demo goes
+    unseeded (e.g. ``/r/demo-lockbit`` 500s on a missing ``published_replays``
+    table). Critically, only the request / SQLAlchemy-**engine** path reliably
+    reaches the demo Postgres (its ingress traffic triggers Fly autostart); a
+    bare ``asyncpg`` connect (what ``run_migrations`` uses) is unreliable here,
+    which is why the release_command never applied 045. So we do everything
+    through the engine: periodically create any missing ORM tables (``checkfirst``
+    skips existing ones), apply pending SQL migrations, and, when the canonical
+    replay is absent, run the idempotent demo seed — retrying for a while so it
+    lands whenever Postgres becomes reachable. Detached from boot so it never
+    blocks readiness; every failure is logged and swallowed.
+
+    Each failed attempt disposes the SQLAlchemy pool so the next tick does not
+    reuse a socket the server already closed (``ConnectionDoesNotExistError``).
+    """
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from app.db.database import AsyncSessionLocal  # noqa: PLC0415
+    from app.models.published_replay import PublishedReplay  # noqa: PLC0415
+    from app.scripts.seed_demo import CANONICAL_REPLAY_SLUG, _run_full_seed  # noqa: PLC0415
+
+    _DEMO_BOOTSTRAP_STATUS["enabled"] = True
+
+    # Give readiness a moment to flip before we start touching the DB.
+    await asyncio.sleep(5)
+
+    # Front-load a rapid wake burst — Fly Postgres autostart often needs a
+    # dozen short-lived connects before the handshake sticks.
+    await _wake_demo_postgres(attempts=15)
+
+    # Retry until schema + seed land. Each pass is cheap once the canonical
+    # replay row is present (presence check short-circuits).
+    for attempt in range(1, 41):  # ~30 min outer budget
+        _DEMO_BOOTSTRAP_STATUS["attempts"] = attempt
+
+        if not await _wake_demo_postgres(attempts=8):
+            await asyncio.sleep(15)
+            continue
+
+        try:
+            async with AsyncSessionLocal() as session:
+                seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
+                _DEMO_BOOTSTRAP_STATUS["table_present"] = True
+            if seeded:
+                _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
+                logger.info("demo bootstrap: canonical replay present — done (attempt %d)", attempt)
+                return
+        except Exception as exc:  # noqa: BLE001 — table-missing; create below
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"probe:{type(exc).__name__}"
+            logger.info("demo bootstrap: schema not ready (attempt %d/40): %s", attempt, type(exc).__name__)
+            await _invalidate_stale_db_pool(f"probe:{type(exc).__name__}")
+
+        # ── Step A: create missing ORM tables (AUTOCOMMIT — not one giant txn).
+        # SQLAlchemy's AsyncConnection.execution_options is a coroutine; it must
+        # be awaited before calling run_sync (chaining without await raises
+        # AttributeError: 'coroutine' object has no attribute 'run_sync').
+        try:
+            async with engine.connect() as conn:
+                conn = await conn.execution_options(isolation_level="AUTOCOMMIT")
+                await conn.run_sync(Base.metadata.create_all)
+            _DEMO_BOOTSTRAP_STATUS["table_present"] = True
+        except Exception as exc:  # noqa: BLE001 — Postgres likely still waking
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"create_all:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: create_all deferred (attempt %d/40): %s (%s)",
+                attempt,
+                type(exc).__name__,
+                str(exc)[:200],
+            )
+            await _invalidate_stale_db_pool(f"create_all:{type(exc).__name__}")
+            await asyncio.sleep(15)
+            continue
+
+        # ── Step B: apply pending SQL migrations (columns create_all can't add)
+        try:
+            from app.scripts.run_migrations import main as run_sql_migrations  # noqa: PLC0415
+
+            await run_sql_migrations()
+        except Exception as exc:  # noqa: BLE001 — soft-fail; seed may still work via ORM
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"migrate:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: SQL migrations deferred (attempt %d/40): %s",
+                attempt,
+                type(exc).__name__,
+            )
+            await _invalidate_stale_db_pool(f"migrate:{type(exc).__name__}")
+
+        # ── Step C: idempotent full seed ─────────────────────────────────────
+        try:
+            await _run_full_seed()
+        except Exception as exc:  # noqa: BLE001 — Postgres likely still waking; retry next tick
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"seed:{type(exc).__name__}"
+            logger.info(
+                "demo bootstrap: seed deferred (attempt %d/40): %s",
+                attempt,
+                type(exc).__name__,
+            )
+            await _invalidate_stale_db_pool(f"seed:{type(exc).__name__}")
+            await asyncio.sleep(30)
+            continue
+
+        # Seed may short-circuit on existing cases without creating the
+        # canonical replay — only mark done when the slug is actually present.
+        try:
+            async with AsyncSessionLocal() as session:
+                seeded = await session.scalar(select(PublishedReplay.id).where(PublishedReplay.slug == CANONICAL_REPLAY_SLUG))
+            if seeded:
+                _DEMO_BOOTSTRAP_STATUS.update(seeded=True, done=True, last_error_type=None)
+                logger.info("demo bootstrap: create_all + seed pass complete (attempt %d)", attempt)
+                return
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = "seed:canonical_replay_missing"
+            logger.info(
+                "demo bootstrap: seed ran but %s still missing (attempt %d/40)",
+                CANONICAL_REPLAY_SLUG,
+                attempt,
+            )
+        except Exception as exc:  # noqa: BLE001
+            _DEMO_BOOTSTRAP_STATUS["last_error_type"] = f"seed-verify:{type(exc).__name__}"
+            await _invalidate_stale_db_pool(f"seed-verify:{type(exc).__name__}")
+
+        await asyncio.sleep(30)
+
+    logger.warning("demo bootstrap: gave up after 40 attempts (~30 min)")
+
+
+# Prometheus metrics
+REQUEST_COUNT = Counter(
+    "aisoc_http_requests_total",
+    "Total HTTP requests",
+    ["method", "endpoint", "status"],
+)
+REQUEST_LATENCY = Histogram(
+    "aisoc_http_request_duration_seconds",
+    "HTTP request latency",
+    ["method", "endpoint"],
+)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    """Application lifespan handler for startup and shutdown tasks."""
+    configure_logging()
+    logger.info("AiSOC API starting up", version=settings.VERSION, environment=settings.ENVIRONMENT)
+
+    # Surface insecure defaults (placeholder SECRET_KEY, missing METRICS_TOKEN
+    # outside dev, plugin trust mode disabled outside dev) at the top of the
+    # log stream so operators see them before anything else. In production this
+    # hard-fails the boot rather than serving with a known-bad secret (Phase 2).
+    enforce_secure_defaults(settings)
+
+    # Create all database tables (dev only; use Alembic migrations in prod).
+    # We keep this narrowly scoped to the canonical ``"development"`` label
+    # so demo / test / local don't quietly run ``create_all`` on top of a
+    # real schema. The looser dev gate is used below for SQL migrations.
+    if (settings.ENVIRONMENT or "").strip().lower() == "development":
+        try:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            logger.info("Database tables created (development mode)")
+        except Exception as exc:
+            # Tables already exist or another worker beat us to it — safe to ignore in dev.
+            logger.warning("create_all skipped (likely already applied)", error=str(exc))
+
+    # Apply raw-SQL migrations (services/api/migrations/*.sql). These cover
+    # tables that aren't part of the SQLAlchemy ORM (aisoc_cases, MSSP, EASM,
+    # connector schema-drift, etc.). The runner is idempotent (tracked in
+    # aisoc_schema_migrations). Production is excluded — it uses a managed
+    # migration pipeline.
+    #
+    # The hosted demo (AISOC_DEMO_MODE) self-heals in the BACKGROUND: its Fly
+    # Postgres autostops, so the deploy-time release_command often can't reach
+    # it. Running detached (not awaited) keeps a cold-Postgres connect-retry
+    # from blocking readiness, and it also runs the demo seed so a soft-failed
+    # release_command still yields a populated demo. Plain dev keeps the fast
+    # synchronous path (local Postgres, no seed).
+    demo_bootstrap_task: asyncio.Task | None = None
+    if settings.AISOC_DEMO_MODE:
+        demo_bootstrap_task = asyncio.create_task(_demo_self_heal_bootstrap(), name="demo_bootstrap")
+        logger.info("demo self-heal bootstrap scheduled")
+    elif settings.is_dev:
+        try:
+            from app.scripts.run_migrations import main as run_sql_migrations  # noqa: PLC0415
+
+            await run_sql_migrations()
+            logger.info("SQL migrations applied", environment=settings.ENVIRONMENT)
+        except Exception as exc:
+            logger.warning("SQL migration run failed", error=str(exc))
+
+    # Initialize Neo4j graph layer
+    try:
+        await init_neo4j()
+    except Exception as exc:
+        logger.warning("Neo4j unavailable at startup – graph features disabled", error=str(exc))
+
+    # The lake's schema converges here for the same reason the graph's
+    # does: CREATE TABLE IF NOT EXISTS is a no-op on an existing
+    # deployment, so without this a new column never lands on one.
+    try:
+        await init_lake_schema()
+    except Exception as exc:  # noqa: BLE001 - the lake is not on the critical path
+        logger.warning("lake schema migration skipped", error=str(exc))
+
+    # Auto-discover plugins from AISOC_PLUGINS_DIR
+    try:
+        plugin_mgr = get_plugin_manager()
+        loaded = await plugin_mgr.discover()
+        logger.info("plugin discovery complete", count=len(loaded), plugins=loaded)
+    except Exception as exc:
+        logger.warning("plugin discovery failed – continuing without plugins", error=str(exc))
+
+    # Workstream 5 (self-healing): kick off the OAuth refresh worker. It runs
+    # as a background asyncio task that owns its own DB session per tick. We
+    # gate on settings so tests / scheduler-replicas can opt out.
+    oauth_refresh_task: asyncio.Task | None = None
+    if settings.OAUTH_REFRESH_WORKER_ENABLED:
+        try:
+            oauth_refresh_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="oauth_refresh",
+                    ttl_seconds=_OAUTH_REFRESH_LOCK_TTL_SECONDS,
+                    worker=run_oauth_refresh,
+                ),
+                name="oauth_refresh_worker",
+            )
+            logger.info("oauth_refresh worker started")
+        except Exception as exc:
+            logger.warning("oauth_refresh worker failed to start", error=str(exc))
+
+    # WS-G2: Weekly executive digest auto-generation worker. Generates a
+    # PDF (or HTML fallback) digest for every active tenant every Monday at
+    # 00:xx UTC and persists a ReportArtefact row.
+    # Author: Beenu <beenu@cyble.com>
+    weekly_digest_task: asyncio.Task | None = None
+    if settings.WEEKLY_DIGEST_WORKER_ENABLED:
+        try:
+            weekly_digest_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="weekly_digest",
+                    ttl_seconds=_WEEKLY_DIGEST_LOCK_TTL_SECONDS,
+                    worker=run_weekly_digest,
+                ),
+                name="weekly_digest_worker",
+            )
+            logger.info("weekly_digest worker started")
+        except Exception as exc:
+            logger.warning("weekly_digest worker failed to start", error=str(exc))
+
+    # T3.4: Saved-hunt scheduler. Sweeps aisoc_saved_hunts on a tick and
+    # fires any hunt whose cron schedule says it's due. Default off until
+    # the executor is wired (see app.workers.hunt_scheduler TODO).
+    # Retention purge. Default off: retention policies were storable (and
+    # documented as enforced) long before anything deleted, so switching this
+    # on by default would turn an upgrade into unannounced data loss.
+    retention_purge_task: asyncio.Task | None = None
+    if settings.RETENTION_WORKER_ENABLED:
+        try:
+            retention_purge_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="retention_purge",
+                    ttl_seconds=_RETENTION_PURGE_LOCK_TTL_SECONDS,
+                    worker=run_retention_purge,
+                ),
+                name="retention_purge_worker",
+            )
+            logger.info(
+                "retention_purge worker started",
+                dry_run=settings.RETENTION_WORKER_DRY_RUN,
+            )
+        except Exception as exc:
+            logger.warning("retention_purge worker failed to start", error=str(exc))
+
+    # Depth 7.1. Pulls reported phish out of the tenant's nominated report
+    # mailbox. Default off: reading a mailbox on a schedule is a capability
+    # an operator opts into. Enabling it alone still polls nothing until a
+    # connector nominates a mailbox, and the sweep says which half is
+    # missing rather than going quiet.
+    phishing_intake_task: asyncio.Task | None = None
+    if settings.PHISHING_INTAKE_WORKER_ENABLED:
+        try:
+            phishing_intake_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="phishing_report_intake",
+                    ttl_seconds=_PHISHING_INTAKE_LOCK_TTL_SECONDS,
+                    worker=run_phishing_report_intake,
+                ),
+                name="phishing_report_intake_worker",
+            )
+            logger.info("phishing_report_intake worker started")
+        except Exception as exc:
+            logger.warning("phishing_report_intake worker failed to start", error=str(exc))
+
+    hunt_scheduler_task: asyncio.Task | None = None
+    if settings.HUNT_SCHEDULER_ENABLED:
+        try:
+            hunt_scheduler_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="hunt_scheduler",
+                    ttl_seconds=_HUNT_SCHEDULER_LOCK_TTL_SECONDS,
+                    worker=run_hunt_scheduler,
+                ),
+                name="hunt_scheduler_worker",
+            )
+            logger.info("hunt_scheduler worker started")
+        except Exception as exc:
+            logger.warning("hunt_scheduler worker failed to start", error=str(exc))
+
+    # Gap-closure Phase 2.1 (D15). Polls each measuring tenant's own SIEM for
+    # the closures their analysts made there. Without this the shadow-agreement
+    # scorecard only ever fills in for tenants whose analysts close alerts in
+    # this console, and a tenant working entirely in Splunk ES sees an empty
+    # page that reads as "the agent is not being evaluated".
+    #
+    # Default off: this reaches a third party's API on a timer, and the plan's
+    # standing rule is that a feature which calls out ships off by default.
+    shadow_reconcile_task: asyncio.Task | None = None
+    if settings.SHADOW_RECONCILE_ENABLED:
+        try:
+            shadow_reconcile_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="shadow_reconcile",
+                    ttl_seconds=_SHADOW_RECONCILE_LOCK_TTL_SECONDS,
+                    worker=run_shadow_reconcile,
+                ),
+                name="shadow_reconcile_worker",
+            )
+            logger.info("shadow_reconcile worker started")
+        except Exception as exc:
+            logger.warning("shadow_reconcile worker failed to start", error=str(exc))
+    else:
+        # Said out loud, because the state this closes is one where an operator
+        # reads an empty scorecard and cannot tell a sweep that is off from one
+        # that is broken.
+        logger.info(
+            "shadow_reconcile worker disabled; closures made in a tenant's own SIEM will not be "
+            "reconciled. Set SHADOW_RECONCILE_ENABLED=true to poll them"
+        )
+
+    # Approval-SLA expiry (9b). `agent_approvals` has carried an `expires_at`
+    # and an `expired` status since migration 009; nothing wrote the status
+    # and nothing swept the column, so a console-raised approval nobody
+    # answered waited forever instead of timing out to its declared safe
+    # default. Expiring dispatches nothing -- `/decide` still accepts an
+    # expired row -- so this removes the pretence that the request is live
+    # without spending the decision on the operator's behalf.
+    approval_expiry_task: asyncio.Task | None = None
+    if settings.APPROVAL_EXPIRY_ENABLED:
+        try:
+            approval_expiry_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="approval_expiry",
+                    ttl_seconds=_APPROVAL_EXPIRY_LOCK_TTL_SECONDS,
+                    worker=run_approval_expiry,
+                ),
+                name="approval_expiry_worker",
+            )
+            logger.info("approval_expiry worker started")
+        except Exception as exc:
+            logger.warning("approval_expiry worker failed to start", error=str(exc))
+    else:
+        # Said out loud: with this off, a pending approval never times out,
+        # and an operator reading the queue cannot tell an abandoned request
+        # from one still being considered.
+        logger.info(
+            "approval_expiry worker disabled; approvals with an expires_at will never move to 'expired'. "
+            "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
+        )
+
+    # Fix pass 3.7. `reconcile_grants` shipped with one caller, the handler
+    # behind `GET /autonomy-policy/grants`, so a grant whose agreement had
+    # collapsed stayed `granted` -- and kept auto-executing -- until somebody
+    # opened the autonomy page. This is the caller that needs no human.
+    autonomy_drift_task: asyncio.Task | None = None
+    if settings.AUTONOMY_DRIFT_ENABLED:
+        try:
+            autonomy_drift_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="autonomy_drift",
+                    ttl_seconds=_AUTONOMY_DRIFT_LOCK_TTL_SECONDS,
+                    worker=run_autonomy_drift,
+                ),
+                name="autonomy_drift_worker",
+            )
+            logger.info("autonomy_drift worker started")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker failed to start", error=str(exc))
+    else:
+        # Said out loud. With this off a grant is only re-checked when the
+        # autonomy page is read or when the dispatch path refreshes its
+        # policy cache, and the first of those is a human nobody scheduled.
+        logger.info(
+            "autonomy_drift worker disabled; a standing grant whose evidence has slipped will keep its "
+            "'granted' state until somebody opens the autonomy page. Set AUTONOMY_DRIFT_ENABLED=true to sweep them"
+        )
+
+    # Gap-closure Phase 8.1. The consumer for the `NEW_IOC` events
+    # `services/threatintel` has always emitted and nothing has ever read.
+    #
+    # Default off, and deliberately not guarded by the scheduler lock the
+    # three workers above use: this is a Kafka consumer group, so the broker
+    # already assigns partitions across replicas, and adding a lock on top
+    # would leave every replica but one subscribed to nothing.
+    retro_hunt_task: asyncio.Task | None = None
+    if settings.RETRO_HUNT_ENABLED:
+        try:
+            retro_hunt_task = asyncio.create_task(
+                run_retro_hunt_consumer(),
+                name="retro_hunt_consumer",
+            )
+            logger.info("retro_hunt consumer started")
+        except Exception as exc:
+            logger.warning("retro_hunt consumer failed to start", error=str(exc))
+
+    # Depth 9.4. Keeps every open war room current with its case. "Posts the
+    # timeline and verdicts as they change" is a sweep, and without one the
+    # feature is a button that posts a header once and goes quiet — worse
+    # than not opening the channel, because the people in it believe they
+    # are watching the case.
+    #
+    # Deliberately not under the scheduler lock, same reasoning as the
+    # outbound-webhook worker: every post is keyed and the posts table has a
+    # unique constraint, so two replicas racing end with one post and one
+    # `ON CONFLICT DO NOTHING`, while a single lock holder stalling every
+    # tenant's rooms would be the worse failure.
+    war_room_sync_task: asyncio.Task | None = None
+    try:
+        war_room_sync_task = asyncio.create_task(run_war_room_sync(), name="war_room_sync_worker")
+        logger.info("war_room_sync worker started")
+    except Exception as exc:
+        logger.warning("war_room_sync worker failed to start", error=str(exc))
+
+    # Phase 2.6 — flip /readyz to 200. All lifespan-managed
+    # dependencies have been touched at this point (DB, Redis,
+    # Neo4j, schedulers); the load balancer can route traffic
+    # to this pod safely now.
+    app.state.mark_ready()
+
+    # Depth 5.2. The reader `report_templates.cron_schedule` never had.
+    # Guarded by the same scheduler lock the three workers above use, so
+    # two replicas do not both generate a tenant's weekly report.
+    report_scheduler_task: asyncio.Task | None = None
+    if settings.REPORT_SCHEDULER_ENABLED:
+        try:
+            report_scheduler_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="report_scheduler",
+                    ttl_seconds=_REPORT_SCHEDULER_LOCK_TTL_SECONDS,
+                    worker=run_report_scheduler,
+                ),
+                name="report_scheduler_worker",
+            )
+            logger.info("report_scheduler worker started")
+        except Exception as exc:
+            logger.warning("report_scheduler worker failed to start", error=str(exc))
+    else:
+        logger.info("report_scheduler disabled; a tenant's stored cron_schedule will not produce a report")
+
+    # Depth 5.2. Drains the outbound-webhook retry queue. Deliberately not
+    # under the scheduler lock: each attempt is one row and one commit, so
+    # two replicas can at worst send one event twice — which the envelope's
+    # stable id lets a receiver deduplicate, and which is the right way
+    # round compared with a single lock holder stalling the whole queue.
+    outbound_webhook_task: asyncio.Task | None = None
+    if settings.OUTBOUND_WEBHOOK_WORKER_ENABLED:
+        try:
+            outbound_webhook_task = asyncio.create_task(
+                run_outbound_webhook_delivery(),
+                name="outbound_webhook_worker",
+            )
+            logger.info("outbound_webhook worker started")
+        except Exception as exc:
+            logger.warning("outbound_webhook worker failed to start", error=str(exc))
+
+    # Phase 2.6 — flip /readyz to 200. All lifespan-managed
+    # dependencies have been touched at this point (DB, Redis,
+    # Neo4j, schedulers); the load balancer can route traffic
+    # to this pod safely now.
+    app.state.mark_ready()
+
+    yield
+
+    # Phase 2.6 — flip /readyz to 503 the instant we begin
+    # shutdown, so the orchestrator drains in-flight requests
+    # without sending us new ones.
+    app.state.mark_not_ready()
+
+    logger.info("AiSOC API shutting down")
+    if oauth_refresh_task is not None and not oauth_refresh_task.done():
+        oauth_refresh_task.cancel()
+        try:
+            await oauth_refresh_task
+        except asyncio.CancelledError:
+            logger.debug("oauth_refresh worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("oauth_refresh worker shutdown error", error=type(exc).__name__)
+
+    if weekly_digest_task is not None and not weekly_digest_task.done():
+        weekly_digest_task.cancel()
+        try:
+            await weekly_digest_task
+        except asyncio.CancelledError:
+            logger.debug("weekly_digest worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("weekly_digest worker shutdown error", error=type(exc).__name__)
+
+    if hunt_scheduler_task is not None and not hunt_scheduler_task.done():
+        hunt_scheduler_task.cancel()
+        try:
+            await hunt_scheduler_task
+        except asyncio.CancelledError:
+            logger.debug("hunt_scheduler worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("hunt_scheduler worker shutdown error", error=type(exc).__name__)
+
+    if approval_expiry_task is not None and not approval_expiry_task.done():
+        approval_expiry_task.cancel()
+        try:
+            await approval_expiry_task
+        except asyncio.CancelledError:
+            logger.debug("approval_expiry worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("approval_expiry worker shutdown error", error=type(exc).__name__)
+
+    if autonomy_drift_task is not None and not autonomy_drift_task.done():
+        autonomy_drift_task.cancel()
+        try:
+            await autonomy_drift_task
+        except asyncio.CancelledError:
+            logger.debug("autonomy_drift worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker shutdown error", error=type(exc).__name__)
+
+    if retention_purge_task is not None and not retention_purge_task.done():
+        retention_purge_task.cancel()
+        try:
+            await retention_purge_task
+        except asyncio.CancelledError:
+            logger.debug("retention_purge worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("retention_purge worker shutdown error", error=type(exc).__name__)
+
+    if phishing_intake_task is not None and not phishing_intake_task.done():
+        phishing_intake_task.cancel()
+        try:
+            await phishing_intake_task
+        except asyncio.CancelledError:
+            logger.debug("phishing_report_intake worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("phishing_report_intake worker shutdown error", error=type(exc).__name__)
+
+    if shadow_reconcile_task is not None and not shadow_reconcile_task.done():
+        shadow_reconcile_task.cancel()
+        try:
+            await shadow_reconcile_task
+        except asyncio.CancelledError:
+            logger.debug("shadow_reconcile worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("shadow_reconcile worker shutdown error", error=type(exc).__name__)
+
+    for task, label in (
+        (report_scheduler_task, "report_scheduler"),
+        (outbound_webhook_task, "outbound_webhook"),
+        (war_room_sync_task, "war_room_sync"),
+    ):
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.debug(f"{label} worker cancelled during shutdown")
+            except Exception as exc:
+                logger.warning(f"{label} worker shutdown error", error=type(exc).__name__)
+
+    if retro_hunt_task is not None and not retro_hunt_task.done():
+        retro_hunt_task.cancel()
+        try:
+            await retro_hunt_task
+        except asyncio.CancelledError:
+            logger.debug("retro_hunt consumer cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("retro_hunt consumer shutdown error", error=type(exc).__name__)
+
+    if demo_bootstrap_task is not None and not demo_bootstrap_task.done():
+        demo_bootstrap_task.cancel()
+        try:
+            await demo_bootstrap_task
+        except asyncio.CancelledError:
+            logger.debug("demo bootstrap cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("demo bootstrap shutdown error", error=type(exc).__name__)
+    await engine.dispose()
+    await close_neo4j()
+    # Close the ClickHouse warm-tier client. We don't pre-init it on
+    # startup — the singleton is created lazily on the first lake query
+    # so deployments without a ClickHouse host don't pay the cost — but
+    # we do need to release the socket cleanly on shutdown.
+    await close_clickhouse()
+
+
+def create_application() -> FastAPI:
+    """Create and configure the FastAPI application."""
+    app = FastAPI(
+        title="AiSOC Platform API",
+        description=("AiSOC — open-source AI Security Operations Center. Autonomous threat detection, investigation, and response."),
+        version=settings.VERSION,
+        # Docs are exposed in every non-production environment. We use the
+        # ``is_production`` predicate (the inverse of the dev set) so any
+        # operator who names a new dev-class environment in DEV_ENVIRONMENTS
+        # automatically gets docs without touching this file.
+        docs_url="/api/docs" if not settings.is_production else None,
+        redoc_url="/api/redoc" if not settings.is_production else None,
+        openapi_url="/api/openapi.json" if not settings.is_production else None,
+        lifespan=lifespan,
+    )
+
+    # Phase 2.6 — k8s-style liveness (/livez) + readiness (/readyz).
+    # /livez always 200 once the process is up. /readyz returns 503
+    # until the lifespan startup hook calls ``_mark_ready()``.
+    # /health (the pre-existing endpoint) is kept for backwards
+    # compatibility with operators who scripted against it.
+    mark_ready, mark_not_ready = install_health_routes(app, service_name="aisoc-api")
+    app.state.mark_ready = mark_ready
+    app.state.mark_not_ready = mark_not_ready
+
+    # Is the live schema the one this build was written against? Nothing
+    # asked before: `aisoc_schema_migrations` was read only by the runner
+    # that writes it, so a deployment whose migration step failed or was
+    # skipped ran new code on an old schema while /readyz answered ready and
+    # the first symptom was an UndefinedColumnError on a random request.
+    #
+    # Registered as NOT required, deliberately. A required probe answers 503
+    # and the orchestrator stops routing — which, for a schema that is merely
+    # behind, takes an operator's console away in the middle of the incident
+    # they need it for. Non-required reports `ready_degraded` with the detail
+    # and keeps serving: loud, and not load-bearing.
+    register_dependency(app, "schema_migrations_current", readyz_probe, required=False)
+
+    # OpenTelemetry auto-instrumentation (FastAPI + SQLAlchemy + httpx)
+    instrument_app(app)
+
+    # Middleware
+    # Order matters: outermost = last added in Starlette. CORS/GZip must wrap
+    # everything else, then DemoMode (so its 403 still gets CORS headers),
+    # then Audit (so denied writes are still logged).
+    app.add_middleware(AuditMiddleware)
+    app.add_middleware(DemoModeMiddleware)
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
+    # CORS allow-list is resolved from AISOC_CORS_ORIGINS / CORS_ORIGINS via
+    # the shared helper; settings.CORS_ORIGINS is the Pydantic-parsed fallback
+    # for when neither env var is set (e.g. local pytest). The helper also
+    # enforces "no wildcard with credentials in production" so bad deploys
+    # fail loudly at startup instead of silently turning into CSRF targets.
+    app.add_middleware(
+        CORSMiddleware,
+        **build_cors_kwargs(
+            service_name="api",
+            allow_credentials=True,
+            default_origins=settings.CORS_ORIGINS,
+        ),
+    )
+
+    # Routers
+    app.include_router(api_router)
+    app.include_router(saml_router)
+    app.include_router(oidc_router)
+    # SCIM is mounted at /scim/v2 rather than under /api/v1. An identity
+    # provider is configured with a base URL and appends /Users and /Groups
+    # to it, and the discovery documents this service publishes name that
+    # same base, so the path has to be the one an administrator can paste.
+    app.include_router(scim_router)
+    app.include_router(graphql_router, prefix="/graphql", tags=["graphql"])
+
+    # A SCIM client that presents a bad credential must receive a SCIM error
+    # document, not FastAPI's default. A provider shows an administrator
+    # whatever it got back, and `{"detail": "..."}` gives them nothing to act
+    # on while looking like the service is broken rather than the secret wrong.
+    @app.exception_handler(ScimAuthFailed)
+    async def _scim_auth_failed(request: Request, exc: ScimAuthFailed) -> JSONResponse:
+        # The reason is logged, never returned: telling an unauthenticated
+        # caller whether a secret was wrong, revoked or expired tells it
+        # which secrets exist.
+        logger.warning("scim: refused a request — %s", str(exc).replace("\r", "").replace("\n", " ")[:200])
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content=scim_error_response(status.HTTP_401_UNAUTHORIZED, "Invalid SCIM credential"),
+            media_type=SCIM_CONTENT_TYPE,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return app
+
+
+app = create_application()
+
+
+@app.middleware("http")
+async def api_version_middleware(request: Request, call_next) -> Response:
+    """Add API version metadata headers to every response.
+
+    X-API-Version   – the stable version of the current route prefix
+    X-API-Stability – 'stable' for /api/v1, 'preview' for anything else
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/api/v1/"):
+        response.headers["X-API-Version"] = "v1"
+        response.headers["X-API-Stability"] = "stable"
+    elif path.startswith("/api/"):
+        response.headers["X-API-Version"] = "preview"
+        response.headers["X-API-Stability"] = "preview"
+    return response
+
+
+def _metrics_endpoint_label(request: Request) -> str:
+    """Pick a low-cardinality label for the request's route.
+
+    Using ``request.url.path`` directly is dangerous: any unmatched path
+    (think ``/api/v1/cases/<uuid>``, ``/static/<sha>``, or attacker-supplied
+    junk like ``/.git/config``) becomes its own Prometheus time series.
+    Over time this blows up the metrics backend and turns the ``/metrics``
+    endpoint into an outage vector.
+
+    FastAPI/Starlette resolves the matched route into ``request.scope["route"]``
+    once routing has run. We use ``route.path`` (the parameterized template,
+    e.g. ``/api/v1/cases/{case_id}``) when available, and fall back to a
+    single ``__unmatched__`` bucket for 404s. This caps cardinality at
+    "number of declared routes" instead of "number of distinct URLs ever
+    requested".
+    """
+    route = request.scope.get("route") if request.scope else None
+    template = getattr(route, "path", None)
+    if isinstance(template, str) and template:
+        return template
+    return "__unmatched__"
+
+
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next) -> Response:
+    """Collect Prometheus metrics for each request."""
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+
+    endpoint = _metrics_endpoint_label(request)
+    REQUEST_COUNT.labels(request.method, endpoint, response.status_code).inc()
+    REQUEST_LATENCY.labels(request.method, endpoint).observe(duration)
+
+    response.headers["X-Request-Duration"] = f"{duration:.4f}"
+    return response
+
+
+@app.get("/health", tags=["system"])
+async def health_check() -> dict:
+    """Health check endpoint.
+
+    Includes the current air-gap policy snapshot so operators can confirm
+    zero-egress mode is engaged on this pod (Tier 3.1).
+    """
+    return {
+        "status": "healthy",
+        "service": "aisoc-api",
+        "version": settings.VERSION,
+        "airgap": airgap_status(),
+        "demo_bootstrap": _DEMO_BOOTSTRAP_STATUS,
+    }
+
+
+def _metrics_environment_is_dev() -> bool:
+    # Delegate to the canonical helper so the dev allow-list stays in one
+    # place. We intentionally read ``settings.ENVIRONMENT`` (cached) rather
+    # than ``os.environ`` because boot-time CORS/docs decisions were made
+    # against the same cached value — flipping it at request time would be
+    # inconsistent.
+    return is_dev_env(settings.ENVIRONMENT)
+
+
+@app.get("/metrics", tags=["system"])
+async def metrics(
+    creds: HTTPAuthorizationCredentials | None = Security(_metrics_bearer),
+) -> Response:
+    """Prometheus metrics endpoint.
+
+    Auth gate:
+
+    * If ``settings.METRICS_TOKEN`` is set, callers MUST present
+      ``Authorization: Bearer <METRICS_TOKEN>``. Comparison uses
+      ``hmac.compare_digest`` to avoid timing leaks.
+    * If ``METRICS_TOKEN`` is empty, the endpoint is open **only** in a
+      development-class environment. In any other environment we refuse
+      the scrape with a 401 so operators don't accidentally ship an
+      unauthenticated metrics endpoint to the open internet.
+    """
+    token = (settings.METRICS_TOKEN or "").strip()
+
+    if token:
+        presented = (creds.credentials if creds else "") or ""
+        if not hmac.compare_digest(presented, token):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid metrics token",
+                headers={"WWW-Authenticate": 'Bearer realm="metrics"'},
+            )
+    elif not _metrics_environment_is_dev():
+        # Production-ish environment with no token configured: refuse rather
+        # than expose internal counters anonymously.
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="metrics endpoint requires METRICS_TOKEN outside development",
+            headers={"WWW-Authenticate": 'Bearer realm="metrics"'},
+        )
+
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

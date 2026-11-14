@@ -1,0 +1,42 @@
+id: hunt-ntds-dit-shadow-copy
+name: Volume shadow copy created then NTDS.dit read
+description: |
+  Shadow copies are ordinary backup activity almost everywhere. On a domain controller they are the standard route to an offline copy of the AD database.
+version: 1.0.0
+severity: critical
+category: endpoint
+tags:
+  - mitre.attack.t1003.003
+  - hunt.endpoint
+log_sources:
+  - windows_security
+  - sysmon
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a shadow copy created on a domain controller and NTDS.dit read from it?
+  indicators:
+    - field: "source"
+      equals: "sysmon"
+    - field: "EventID"
+      in: [1]
+    - field: "CommandLine"
+      regex: "(?i)(vssadmin|wmic).{0,60}(shadow|shadowcopy)"
+    - field: "IsDomainController"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-009
+  positive_template_id: hunt-ntds-dit-shadow-copy
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-009-NEG
+  # The negative inverts IsDomainController, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1003/003/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

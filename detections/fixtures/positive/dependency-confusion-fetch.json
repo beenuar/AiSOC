@@ -1,0 +1,5 @@
+{
+  "package_name": "@corp-internal/util",
+  "package_name_in_internal_namespace": true,
+  "package_source": "public-npm"
+}

@@ -1,0 +1,51 @@
+id: splunk-security-content-5f7d8c3e-9a2b-4d6f-8e1c-3b5a9d7f2c4e
+name: Cisco ASA - User Privilege Level Change
+description: 'This analytic detects privilege level changes for user accounts on Cisco
+  ASA devices via CLI or ASDM.
+
+  Adversaries may escalate account privileges to gain elevated access to network infrastructure,
+  enable additional command execution capabilities, or establish higher-level persistent
+  access. Privilege levels on Cisco ASA range from 0 (lowest) to 15 (full administrative
+  access), with level 15 providing complete device control.
+
+  The detection monitors for ASA message ID 502103, which is generated whenever a
+  user account''s privilege level is modified, capturing both the old and new privilege
+  levels along with the username and administrator who made the change.
+
+  Investigate unexpected privilege changes, especially escalations to level 15, substantial
+  privilege increases (e.g., from level 1 to 15), changes performed outside business
+  hours, changes by non-administrative users, or changes without corresponding change
+  management tickets.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.003
+  - T1098
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/syslog/asa-syslog/syslog-messages-500000-to-520025.html#con_4773975
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/RayInitiator-LINE-VIPER/ncsc-mar-rayinitiator-line-viper.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (502103)\n| fillnull\n| stats earliest(_time)\
+    \ as firstTime\n        latest(_time) as lastTime\n        values(action) as action\n\
+    \        values(message_id) as message_id\n        values(old_privilege_level)\
+    \ as old_privilege_level\n        values(new_privilege_level) as new_privilege_level\n\
+    \  by host user\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_asa___user_privilege_level_change_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5f7d8c3e-9a2b-4d6f-8e1c-3b5a9d7f2c4e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___user_privilege_level_change.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

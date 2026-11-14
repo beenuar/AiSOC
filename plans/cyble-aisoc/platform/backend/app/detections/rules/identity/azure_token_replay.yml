@@ -1,0 +1,22 @@
+title: Azure AD Token Replay Across Geographies
+id: aisoc-id-0004-azure-token-replay
+status: experimental
+description: |
+  Same Azure AD `correlationId` / refresh token used to authenticate
+  from two distinct ASNs inside 10 minutes. Indicates AitM / token
+  theft (e.g. EvilProxy).
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: azure
+  service: signinlogs
+tags:
+  - attack.t1539
+  - attack.credential_access
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    enrich.token_replay.distinct_asns|gte: 2
+    enrich.token_replay.window_seconds|lte: 600
+  condition: selection

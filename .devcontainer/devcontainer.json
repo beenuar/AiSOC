@@ -1,0 +1,77 @@
+{
+  "name": "AiSOC — one-click dev",
+  "//image": "Prebuilt image is published by .github/workflows/devcontainer-build.yml. It drops Codespaces cold-start from ~5 min → ~30 s by baking Node + pnpm + Python (+ uv) + Go + Docker + gh into a single layer instead of resolving them via `features:` on every boot.",
+  "image": "ghcr.io/beenuar/aisoc-devcontainer:latest",
+  "//build": "Fallback for local devcontainer-cli use and for forks that don't have GHCR pull access. The `image` directive above wins; the build block is only consulted by tooling like `devcontainer build`.",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  "//features": "We intentionally do NOT enable docker-in-docker / python / go / github-cli features here — the *binaries* are baked into the image at build time and re-enabling the features would cancel the cold-start win. But see runArgs/mounts/postStartCommand below: the docker-in-docker feature also supplies container runtime options and a dockerd entrypoint, and that half has no Dockerfile equivalent. Omitting it is what broke the Codespaces quickstart (#716).",
+  "//runArgs": "The half an image cannot provide. Capabilities are granted at container creation, so a Dockerfile cannot self-grant them: without --privileged the container ran with CapEff: 0 and CAP_SYS_ADMIN outside the bounding set, so not even sudo could start dockerd. --init reaps the zombies a background dockerd leaves behind.",
+  "runArgs": ["--privileged", "--init"],
+  "//mounts": "dockerd's overlay2 graph driver cannot run on the container's own overlay filesystem. A named volume gives it a real one, and keeps pulled images across a Codespace stop/resume so the demo does not re-pull on every boot.",
+  "mounts": [
+    {
+      "source": "aisoc-dind-var-lib-docker",
+      "target": "/var/lib/docker",
+      "type": "volume"
+    }
+  ],
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "32gb"
+  },
+  "forwardPorts": [3000, 3001, 8000, 8001, 8086],
+  "portsAttributes": {
+    "3000": {
+      "label": "AiSOC console (web)",
+      "onAutoForward": "openPreview"
+    },
+    "8000": {
+      "label": "AiSOC API (FastAPI / OpenAPI)"
+    },
+    "8001": {
+      "label": "AiSOC agents (LangGraph)"
+    },
+    "8086": {
+      "label": "AiSOC realtime (WebSocket)"
+    },
+    "3001": {
+      "label": "Docs site"
+    }
+  },
+  "//onCreateCommand": "Runs once at image-spawn time. The pnpm store is already warm in the prebuilt image, so this is fast (<= 30 s on a green Codespace). `--frozen-lockfile` matches CI and the web image: a contributor's first install must produce the dependency set CI tested, or their first green run is a different build from everyone else's. It read `--frozen-lockfile=false`, which a substring test for the flag reads as enabling the very thing it disables.",
+  "onCreateCommand": "pnpm install --frozen-lockfile",
+  "//postStartCommand": "Starts dockerd. Runs on every container start rather than only at create, so a Codespace stop/resume comes back with a working daemon — `onCreateCommand` would leave the second boot without one.",
+  "postStartCommand": "bash .devcontainer/start-docker.sh",
+  // `make up`, not `pnpm aisoc:demo`. The demo compose file has no ingest
+  // service, no fusion service and Kafka disabled — its own header says not
+  // to use it to evaluate whether AiSOC works — so pointing a fresh
+  // Codespace at it showed a populated console that had never run the
+  // pipeline. Both installers were rewritten to remove that handoff; this
+  // banner was the last place still sending people to it.
+  "postAttachCommand": "echo '\\n>>> AiSOC dev container is ready.\\n>>> To run the real stack, open a terminal and run:\\n>>>     make up      # starts it and creates your administrator\\n>>>     make smoke   # proves the pipeline end to end\\n>>> Then click the forwarded port 3000 in the Ports panel.\\n>>> Or, no-Docker:  pip install -e packages/aisoc-sandbox && aisoc-sandbox demo\\n'",
+  "remoteUser": "node",
+  "containerEnv": {
+    "AISOC_DEV_MODE": "1"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "esbenp.prettier-vscode",
+        "dbaeumer.vscode-eslint",
+        "golang.go",
+        "redhat.vscode-yaml"
+      ],
+      "settings": {
+        "editor.formatOnSave": false,
+        "files.eol": "\n"
+      }
+    }
+  }
+}

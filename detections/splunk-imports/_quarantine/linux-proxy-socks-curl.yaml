@@ -1,0 +1,53 @@
+id: splunk-security-content-bd596c22-ad1e-44fc-b242-817253ce8b08
+name: Linux Proxy Socks Curl
+description: The following analytic detects the use of the `curl` command with proxy-related
+  arguments such as `-x`, `socks`, `--preproxy`, and `--proxy`. This detection leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on command-line
+  executions and process details. This activity is significant as it may indicate
+  an adversary attempting to use a proxy to evade network monitoring and obscure their
+  actions. If confirmed malicious, this behavior could allow attackers to bypass security
+  controls, making it difficult to track their activities and potentially leading
+  to unauthorized data access or exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1090
+  - T1095
+  categories:
+  - endpoint
+references:
+- https://www.offensive-security.com/metasploit-unleashed/proxytunnels/
+- https://curl.se/docs/manpage.html
+- https://en.wikipedia.org/wiki/SOCKS
+- https://oxylabs.io/blog/curl-with-proxy
+- https://reqbin.com/req/c-ddxflki5/curl-proxy-server#:~:text=To%20use%20a%20proxy%20with,be%20URL%20decoded%20by%20Curl.
+- https://gtfobins.github.io/gtfobins/curl/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=curl\
+    \ Processes.process IN (\"*-x *\", \"*socks4a://*\", \"*socks5h://*\", \"*socks4://*\"\
+    ,\"*socks5://*\", \"*--preproxy *\", \"--proxy*\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| where match(process, \"-x\\s\") OR match(process,\
+    \ \"(?i)socks\\d\\w?:\\/\\/\n| --(pre)?proxy\")\n| `linux_proxy_socks_curl_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bd596c22-ad1e-44fc-b242-817253ce8b08
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_proxy_socks_curl.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

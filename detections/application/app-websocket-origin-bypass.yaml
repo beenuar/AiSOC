@@ -1,0 +1,24 @@
+id: det-application-041
+name: WebSocket Upgrade From Cross-Origin Header
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'WebSocket Upgrade
+  From Cross-Origin Header'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: application
+  service: ws
+detection:
+  condition: |
+    event_type == "ws_upgrade"
+    AND origin_matches_allowed_list == false
+false_positives:
+- Newly added integration partner (update allow-list)
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

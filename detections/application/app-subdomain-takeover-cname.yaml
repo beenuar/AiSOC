@@ -1,0 +1,26 @@
+id: det-application-043
+name: CNAME Pointing To Deleted SaaS Tenant
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'CNAME Pointing
+  To Deleted SaaS Tenant'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1583.001
+- tlp.white
+category: application
+log_source:
+  product: dns
+  service: resolver
+detection:
+  condition: |
+    event_type == "dns_response"
+    AND qtype == "CNAME"
+    AND target ENDSWITH_ANY [".herokudns.com", ".github.io", ".azurewebsites.net"]
+    AND target_resolves == false
+false_positives:
+- Pending tenant migration (verify ticket)
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

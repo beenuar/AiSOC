@@ -1,0 +1,42 @@
+id: splunk-security-content-09725404-a44f-4ed3-9efa-8ed5d69e4c53
+name: GetDomainGroup with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-DomainGroup`
+  cmdlet using PowerShell Script Block Logging (EventCode=4104). This cmdlet, part
+  of the PowerView tool, is used to enumerate domain groups within a Windows domain.
+  The detection leverages script block text to identify this specific command. Monitoring
+  this activity is crucial as it may indicate an adversary or Red Team performing
+  reconnaissance to gain situational awareness and map out Active Directory structures.
+  If confirmed malicious, this activity could lead to further exploitation, including
+  privilege escalation and lateral movement within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.002
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/002/
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainGroup/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-DomainGroup*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `getdomaingroup_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 09725404-a44f-4ed3-9efa-8ed5d69e4c53
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getdomaingroup_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

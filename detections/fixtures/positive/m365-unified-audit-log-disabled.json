@@ -1,0 +1,6 @@
+{
+  "operation": "Set-AdminAuditLogConfig",
+  "parameters": {
+    "UnifiedAuditLogIngestionEnabled": "False"
+  }
+}

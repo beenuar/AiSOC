@@ -1,0 +1,40 @@
+id: splunk-security-content-4669561d-3bbd-44e3-857c-0e3c6ef2120c
+name: Linux Auditd Data Transfer Size Limits Via Split
+description: The following analytic detects suspicious data transfer activities that
+  involve the use of the `split` syscall, potentially indicating an attempt to evade
+  detection by breaking large files into smaller parts. Attackers may use this technique
+  to bypass size-based security controls, facilitating the covert exfiltration of
+  sensitive data. By monitoring for unusual or unauthorized use of the `split` syscall,
+  this analytic helps identify potential data exfiltration attempts, allowing security
+  teams to intervene and prevent the unauthorized transfer of critical information
+  from the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1030
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` execve_command = \"*split*\" AND execve_command = \"\
+    *-b *\"\n  | rename host as dest\n  | rename comm as process_name\n  | rename\
+    \ exe as process\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY argc execve_command dest\n  | `security_content_ctime(firstTime)`\n  |\
+    \ `security_content_ctime(lastTime)`\n  | `linux_auditd_data_transfer_size_limits_via_split_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4669561d-3bbd-44e3-857c-0e3c6ef2120c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_data_transfer_size_limits_via_split.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

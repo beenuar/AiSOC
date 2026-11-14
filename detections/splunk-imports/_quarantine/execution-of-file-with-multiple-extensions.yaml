@@ -1,0 +1,47 @@
+id: splunk-security-content-b06a555e-dce0-417d-a2eb-28a5d8d66ef7
+name: Execution of File with Multiple Extensions
+description: The following analytic detects the execution of files with multiple extensions,
+  such as ".doc.exe" or ".pdf.exe". This behavior is identified using Endpoint Detection
+  and Response (EDR) telemetry, focusing on process creation events where the file
+  name contains double extensions. This activity is significant because attackers
+  often use double extensions to disguise malicious executables as benign documents,
+  increasing the likelihood of user execution. If confirmed malicious, this technique
+  can lead to unauthorized code execution, potentially compromising the endpoint and
+  allowing further malicious activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036.003
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.asyncrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process\
+    \ IN (\"*.doc.exe\", \"*.xls.exe\",\"*.ppt.exe\", \"*.htm.exe\", \"*.html.exe\"\
+    , \"*.txt.exe\", \"*.pdf.exe\", \"*.docx.exe\", \"*.xlsx.exe\", \"*.pptx.exe\"\
+    ,\"*.one.exe\", \"*.bat.exe\", \"*.rtf.exe\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(Processes)`\n| `execution_of_file_with_multiple_extensions_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b06a555e-dce0-417d-a2eb-28a5d8d66ef7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/execution_of_file_with_multiple_extensions.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

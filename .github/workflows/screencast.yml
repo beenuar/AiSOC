@@ -1,0 +1,151 @@
+name: 90s demo screencast (record)
+
+# Phase 4.3 / T6.4 — recording side of the public demo flow. The shot
+# list this workflow follows lives at
+# `docs/demo/SCREENCAST_SHOTLIST.md`; the Playwright runner that
+# executes the shots lives at
+# `apps/web/e2e/demo/screencast.spec.ts`.
+#
+# Manual-trigger only by design: recording a screencast on every push
+# would burn minutes for no value, and product/marketing review every
+# cut before it ships to the marketing surface anyway.
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "URL to record against. Defaults to a local demo stack (pnpm aisoc:demo)."
+        required: false
+        type: string
+        # Deliberately a local address rather than a hosted one. A default
+        # pointing at a specific deployment means a self-hoster who runs this
+        # workflow records somebody else's instance — and that hostname then
+        # travels into the README caption and the docs. Bring the stack up
+        # with `pnpm aisoc:demo --no-open` and record against it.
+        default: "http://localhost:3000"
+      release_tag:
+        description: "Optional release tag; if set, the recording is uploaded as a release asset"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: screencast-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  record:
+    name: Record 90s demo
+    runs-on: ubuntu-latest
+    # Hard 15-minute ceiling — a runaway recorder should fail fast.
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up pnpm
+        # No `version:` input — action-setup@v6 reads the root
+        # `packageManager: pnpm@8.15.1`. Pinning a different version (was
+        # `version: 9`) is a hard error under v6:
+        # "Multiple versions of pnpm specified ... ERR_PNPM_BAD_PM_VERSION".
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Set up Node 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: pnpm
+          # The root workspace lockfile. `apps/web/pnpm-lock.yaml` does not
+          # exist — this is a pnpm workspace with one lockfile at the root —
+          # and setup-node hard-fails with "Some specified paths were not
+          # resolved" when the cache path matches nothing, so this workflow
+          # could never get past step three. It is workflow_dispatch-only, so
+          # no scheduled run ever exercised it. Every other workflow in the
+          # repo already points here.
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright + ffmpeg
+        working-directory: apps/web
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+
+      - name: Run the screencast spec
+        working-directory: apps/web
+        env:
+          AISOC_SCREENCAST_URL: ${{ inputs.target_url || 'http://localhost:3000' }}
+          # Disable any analytics injection so the recorder browser
+          # doesn't render a cookie banner in the final cut.
+          AISOC_DISABLE_ANALYTICS: "1"
+        run: |
+          mkdir -p ../../tmp/screencast
+          # The spec writes the raw .webm + poster.png to tmp/screencast/.
+          # `--video=on` is set inside the spec, not via CLI, so the
+          # codec config (1080p, 30fps) stays version-controlled.
+          pnpm exec playwright test demo/screencast.spec.ts \
+            --reporter=line \
+            --output=../../tmp/screencast
+
+      - name: Transcode webm → mp4 (H.264 / AAC) + render hero.gif
+        run: |
+          set -euo pipefail
+          src=$(find tmp/screencast -name '*.webm' | head -n1)
+          if [[ -z "$src" ]]; then
+            echo "::error::No .webm produced by Playwright run"
+            exit 1
+          fi
+          # H.264 + AAC keeps the file playable in every browser that
+          # supports <video>. The poster image is whatever PNG the spec
+          # captured at the cover frame.
+          ffmpeg -y -i "$src" \
+            -c:v libx264 -preset slow -crf 22 \
+            -c:a aac -b:a 128k \
+            -movflags +faststart \
+            tmp/screencast/demo.mp4
+
+          # Phase 2 quick-win on-ramp: also render hero.gif — a 10s
+          # loop of Shot 2 (Investigation timeline) at 720p, 15 fps.
+          # palettegen / paletteuse keeps the GIF colour quantisation
+          # clean; loop=0 makes the GIF run forever in <img> tags.
+          ffmpeg -y -ss 14 -t 10 -i "$src" \
+            -vf "fps=15,scale=720:-2:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse" \
+            -loop 0 \
+            tmp/screencast/hero.gif
+
+          ls -lh tmp/screencast/
+
+      - name: Upload screencast artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: screencast-${{ github.sha }}
+          path: |
+            tmp/screencast/demo.mp4
+            tmp/screencast/hero.gif
+            tmp/screencast/*.png
+          retention-days: 30
+
+      - name: Attach to release (when release_tag set)
+        if: ${{ inputs.release_tag != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # If the tag exists, attach the mp4 + poster as release assets.
+          # We never *create* the release here; if the tag is missing
+          # we fail loudly so the operator doesn't silently lose the
+          # recording.
+          if ! gh release view "${{ inputs.release_tag }}" >/dev/null 2>&1; then
+            echo "::error::Release ${{ inputs.release_tag }} not found"
+            exit 1
+          fi
+          gh release upload "${{ inputs.release_tag }}" \
+            tmp/screencast/demo.mp4\#"AiSOC 90s demo (mp4)" \
+            tmp/screencast/hero.gif\#"AiSOC hero loop (gif)" \
+            tmp/screencast/*.png \
+            --clobber

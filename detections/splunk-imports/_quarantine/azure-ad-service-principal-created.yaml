@@ -1,0 +1,45 @@
+id: splunk-security-content-f8ba49e7-ffd3-4b53-8f61-e73974583c5d
+name: Azure AD Service Principal Created
+description: The following analytic detects the creation of a Service Principal in
+  an Azure AD environment. It leverages Azure Active Directory events ingested through
+  EventHub, specifically monitoring the "Add service principal" operation. This activity
+  is significant because Service Principals can be used by adversaries to establish
+  persistence and bypass multi-factor authentication and conditional access policies.
+  If confirmed malicious, this could allow attackers to maintain single-factor access
+  to the Azure AD environment, potentially leading to unauthorized access to resources
+  and prolonged undetected activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/active-directory/develop/app-objects-and-service-principals
+- https://docs.microsoft.com/en-us/powershell/azure/create-azure-service-principal-azureps?view=azps-8.2.0
+- https://www.truesec.com/hub/blog/using-a-legitimate-application-to-create-persistence-and-initiate-email-campaigns
+- https://www.inversecos.com/2021/10/how-to-backdoor-azure-applications-and.html
+- https://attack.mitre.org/techniques/T1136/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Add service principal\" properties.initiatedBy.user.id=*\n\
+    \  | rename properties.* as *\n  | rename targetResources{}.displayName as displayName\n\
+    \  | rename targetResources{}.type as type\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest user src\n       vendor_account\
+    \ vendor_product displayName\n       result signature\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_service_principal_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f8ba49e7-ffd3-4b53-8f61-e73974583c5d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_service_principal_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

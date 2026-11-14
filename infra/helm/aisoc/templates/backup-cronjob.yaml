@@ -1,0 +1,111 @@
+{{- if .Values.backup.enabled }}
+{{- /*
+A backup script nobody runs is documentation, not a backup. scripts/backup.sh
+has been correct and unscheduled: every deployment guide told operators to
+"run it on a cron" and none of them shipped one, so the realistic state of a
+self-hosted install was no backups at all.
+
+This runs the same script the DR gate exercises in CI, so what is scheduled
+here is what has been proven to restore.
+*/ -}}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "aisoc.fullname" . }}-backup
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backup
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  timeZone: {{ .Values.backup.timeZone | quote }}
+  concurrencyPolicy: Forbid
+  # Keep enough history that an operator can see a run start failing without
+  # having to catch it live. Failures are kept longer than successes because
+  # a failed backup is the one you need the logs for.
+  successfulJobsHistoryLimit: {{ .Values.backup.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.backup.failedJobsHistoryLimit }}
+  # Without this a cluster that was down over a scheduled window fires every
+  # missed run at once the moment it recovers.
+  startingDeadlineSeconds: {{ .Values.backup.startingDeadlineSeconds }}
+  jobTemplate:
+    spec:
+      # A backup that hangs must not silently block the next window; Forbid
+      # above means a stuck job suppresses every subsequent run.
+      activeDeadlineSeconds: {{ .Values.backup.activeDeadlineSeconds }}
+      backoffLimit: {{ .Values.backup.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            {{- include "aisoc.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: backup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ include "aisoc.serviceAccountName" . }}
+          {{- with .Values.global.imagePullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          containers:
+            - name: backup
+              image: "{{ .Values.backup.image.repository }}:{{ .Values.backup.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.backup.image.pullPolicy }}
+              command: ["/app/scripts/backup.sh"]
+              args: ["--component", {{ .Values.backup.component | quote }}]
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              env:
+                - name: BACKUP_S3_BUCKET
+                  value: {{ .Values.backup.s3.bucket | quote }}
+                - name: BACKUP_S3_PREFIX
+                  value: {{ .Values.backup.s3.prefix | quote }}
+                - name: BACKUP_RETENTION_DAYS
+                  value: {{ .Values.backup.retentionDays | quote }}
+                {{- if .Values.backup.s3.endpointUrl }}
+                - name: AWS_ENDPOINT_URL
+                  value: {{ .Values.backup.s3.endpointUrl | quote }}
+                {{- end }}
+                - name: AWS_DEFAULT_REGION
+                  value: {{ .Values.backup.s3.region | quote }}
+                # Encryption is on by default in backup.sh and the script
+                # refuses to start without a key, which is deliberate: an
+                # operator should not discover the artifacts were plaintext
+                # after the bucket is exposed.
+                - name: BACKUP_ENCRYPTION
+                  value: {{ .Values.backup.encryption.mode | quote }}
+                {{- if .Values.backup.encryption.existingSecret }}
+                - name: BACKUP_ENCRYPTION_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.backup.encryption.existingSecret }}
+                      key: {{ .Values.backup.encryption.secretKey }}
+                {{- end }}
+                {{- range $name, $ref := .Values.backup.secretEnv }}
+                - name: {{ $name }}
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ $ref.secretName }}
+                      key: {{ $ref.secretKey }}
+                {{- end }}
+                {{- range $name, $value := .Values.backup.extraEnv }}
+                - name: {{ $name }}
+                  value: {{ $value | quote }}
+                {{- end }}
+              volumeMounts:
+                # readOnlyRootFilesystem is on, and the script stages the dump
+                # under /tmp before uploading.
+                - name: scratch
+                  mountPath: /tmp
+              resources:
+                {{- toYaml .Values.backup.resources | nindent 16 }}
+          volumes:
+            - name: scratch
+              emptyDir:
+                sizeLimit: {{ .Values.backup.scratchSize }}
+{{- end }}

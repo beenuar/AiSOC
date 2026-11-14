@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "process_command_line": "iex downloadstring",
+  "process_name": "head-powershell.exe"
+}

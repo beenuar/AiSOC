@@ -1,0 +1,47 @@
+id: splunk-security-content-58eb9f80-896c-42f8-86c6-27ab59026c9c
+name: Okta Non-Standard VPN Usage
+description: Remote Employment Fraud (REF) actors will often use virtual private networks
+  (VPNs) to conceal their true physical location. Threat actors mask their originating
+  IP address and instead appear to be situated in any location where the VPN service
+  has a node.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  - T1572
+  - T1090
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`okta` debugContext.debugData.tunnels IN (*Astrill*,*Azire*,*CyberGhost*,*Express*VPN,*HideMe*,
+    *IPVanish*,*Mullvad*,*Nord*VPN*,*OVPN*,*PIA*VPN*,*Proton*VPN*,*Pure*VPN*,*Slick*VPN*,*Surf*Easy*,
+    *SurfShark*,*Star*VPN*,*TorGuard*,*TorProxy*,*Tiger*VPN*,*TunnelBear*,*Unblock*VPN*,*Warp*VPN*,*WarpSpeed*,
+    *VPNReactor*,*VPN*Shield*,*VPN*Super*VPN*,*ZenMate*) ```listing of commonly used
+    known VPN providers. Add or remove whatever is appropriate for your environment```
+    | eval user=coalesce(''actor.alternateId'',user), user=mvindex(split(user, "@"),
+    0) | rename targetUserAlternateId as user client.* as * request.* as * ipChain{}.*
+    as * geographicalContext.* as * debugContext.* as * debugData.* as * | eval status=case(match(_raw,
+    "FAILURE"), "failure", !match(_raw, "FAILURE"), "success") | stats count values(status)
+    as status max(published) as UTC min(_time) as firsttime max(_time) as lasttime
+    values(target_data) as target_data values(displayMessage) as displayMessage values(eventType)
+    as eventType values(city) as city values(country) as country values(action) as
+    action values(src_ip) as src_ip values(outcome.*) as * values(user) as user by
+    tunnels,_time,host sourcetype index | fillnull value="N/A" | convert ctime(*ttime)
+    | `okta_non_standard_vpn_usage_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 58eb9f80-896c-42f8-86c6-27ab59026c9c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/okta_non_standard_vpn_usage.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

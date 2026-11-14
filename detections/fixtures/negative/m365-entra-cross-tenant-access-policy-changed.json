@@ -1,0 +1,4 @@
+{
+  "operation_name": "Read cross-tenant access setting",
+  "actor": "user@corp.com"
+}

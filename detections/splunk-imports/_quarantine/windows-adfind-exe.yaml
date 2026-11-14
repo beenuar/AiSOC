@@ -1,0 +1,57 @@
+id: splunk-security-content-bd3b0187-189b-46c0-be45-f52da2bae67f
+name: Windows AdFind Exe
+description: The following analytic identifies the execution of `adfind.exe` standalone
+  or with specific command-line arguments related to Active Directory queries. It
+  leverages data from Endpoint Detection and Response (EDR) agents, focusing on process
+  names, command-line arguments, and parent Processes. This activity is significant
+  because `adfind.exe` is a powerful tool often used by threat actors like Wizard
+  Spider and FIN6 to gather sensitive AD information. If confirmed malicious, this
+  activity could allow attackers to map the AD environment, facilitating further attacks
+  such as privilege escalation or lateral movement.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1018
+  categories:
+  - endpoint
+references:
+- https://www.volexity.com/blog/2020/12/14/dark-halo-leverages-solarwinds-compromise-to-breach-organizations/
+- https://www.mandiant.com/resources/a-nasty-trick-from-credential-theft-malware-to-business-disruption
+- https://www.joeware.net/freetools/tools/adfind/index.htm
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n\n(\n\
+    \  Processes.process_name = \"AdFind.exe\"\n  OR\n  Processes.original_file_name\
+    \ = \"AdFind.exe\"\n)\nOR\n(\n  Processes.process IN (\"* -f *\", \"* /f*\")\n\
+    \  Processes.process = \"*objectcategory=*\"\n)\nOR\n(\n  Processes.process IN\
+    \ (\"* -sc *\", \"* /sc *\")\n  Processes.process IN (\"* -gcb *\", \"* /gcb *\"\
+    )\n)\nOR\n(\n  Processes.process IN (\"* -sc *\", \"* /sc *\")\n  Processes.process\
+    \ IN (\n        \"* trustdmp*\",\n        \"* dclist*\",\n        \"* dcdmp*\"\
+    ,\n        \"* adobjcnt*\",\n        \"* adamobjcnt*\",\n        \"* sdump*\"\
+    ,\n        \"* exchaddresses*\",\n        \"* getacl*\",\n        \"* domainlist*\"\
+    ,\n        \"* export_user*\",\n        \"* export_group*\",\n        \"* admincountdmp*\"\
+    \n  )\n)\nby Processes.action Processes.dest Processes.original_file_name Processes.parent_process\n\
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id\n\
+    Processes.parent_process_name Processes.parent_process_path Processes.process\
+    \ Processes.process_exec\nProcesses.process_guid Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\nProcesses.process_name Processes.process_path\
+    \ Processes.user Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_adfind_exe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bd3b0187-189b-46c0-be45-f52da2bae67f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_adfind_exe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

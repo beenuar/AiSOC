@@ -1,0 +1,28 @@
+id: slack-quarantine
+name: Slack Quarantine Notifier
+version: "1.0.0"
+plugin_type: responder
+description: >
+  Posts a structured quarantine notification to a Slack channel when a host
+  or user has been isolated during an incident response. Supports rich Block
+  Kit formatting, direct-message escalations to the on-call analyst, and
+  thread-based updates as the incident evolves.
+author: AiSOC Core Team
+tags: [slack, notification, quarantine, response]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/slack-quarantine
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [bot_token, channel]
+  properties:
+    bot_token:
+      type: string
+      description: "Slack Bot OAuth token (xoxb-...)"
+      secret: true
+    channel:
+      type: string
+      description: "Default Slack channel ID or name (e.g. #soc-alerts)"
+    oncall_user:
+      type: string
+      description: "Slack user ID of on-call analyst to DM for critical events"

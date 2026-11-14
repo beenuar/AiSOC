@@ -1,0 +1,39 @@
+id: splunk-security-content-31810b7a-0abe-42be-a210-0dec8106afee
+name: Linux Auditd Kernel Module Using Rmmod Utility
+description: The following analytic detects suspicious use of the `rmmod` utility
+  for kernel module removal, which may indicate an attacker attempt to unload critical
+  or security-related kernel modules. The `rmmod` command is used to remove modules
+  from the Linux kernel, and unauthorized use can be a tactic to disable security
+  features, conceal malicious activities, or disrupt system operations. By monitoring
+  for unusual or unauthorized `rmmod` activity, this analytic helps identify potential
+  tampering with kernel modules, enabling security teams to take proactive measures
+  to protect system integrity and security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.006
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=SYSCALL comm=rmmod\n  | rename host as dest\n \
+    \ | stats count min(_time) as firstTime max(_time) as lastTime\n    BY comm exe\
+    \ syscall\n       uid ppid pid\n       success dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_kernel_module_using_rmmod_utility_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 31810b7a-0abe-42be-a210-0dec8106afee
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_kernel_module_using_rmmod_utility.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,47 @@
+id: splunk-security-content-d56fe0c8-4650-11ec-a8fa-acde48001122
+name: Windows DiskCryptor Usage
+description: The following analytic detects the execution of DiskCryptor, identified
+  by the process names "dcrypt.exe" or "dcinst.exe". This detection leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process names and
+  original file names. DiskCryptor is significant because adversaries use it to manually
+  encrypt disks during an operation, potentially leading to data inaccessibility.
+  If confirmed malicious, this activity could result in complete disk encryption,
+  causing data loss and operational disruption. Immediate investigation is required
+  to mitigate potential ransomware attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/11/15/exchange-exploit-leads-to-domain-wide-ransomware/
+- https://github.com/DavidXanatos/DiskCryptor
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name=\"dcrypt.exe\"\n        OR\n        Processes.original_file_name=dcinst.exe\n\
+    \    )\n  BY Processes.action Processes.dest Processes.original_file_name\n  \
+    \   Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_diskcryptor_usage_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d56fe0c8-4650-11ec-a8fa-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_diskcryptor_usage.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

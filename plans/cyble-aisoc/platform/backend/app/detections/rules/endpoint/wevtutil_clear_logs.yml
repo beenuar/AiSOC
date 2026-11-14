@@ -1,0 +1,25 @@
+title: Windows Event Log Cleared via wevtutil
+id: aisoc-id-ep-0019-wevtutil-cl
+status: stable
+description: |
+  wevtutil.exe invoked with "cl" (clear-log) — actor clearing
+  Security, System, or PowerShell event logs to hide their tracks.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1070.001
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name: 'wevtutil.exe'
+  args:
+    process.command_line|contains:
+      - ' cl '
+      - ' clear-log '
+  condition: selection and args

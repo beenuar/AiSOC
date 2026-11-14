@@ -1,0 +1,44 @@
+id: splunk-security-content-1435475e-2128-4417-a34f-59770733b0d5
+name: O365 Mailbox Folder Read Permission Assigned
+description: The following analytic identifies instances where read permissions are
+  assigned to mailbox folders within an Office 365 environment. It leverages the `o365_management_activity`
+  data source, specifically monitoring the `ModifyFolderPermissions` and `AddFolderPermissions`
+  operations, while excluding Calendar, Contacts, and PersonMetadata objects. This
+  activity is significant as unauthorized read permissions can lead to data exposure
+  and potential information leakage. If confirmed malicious, an attacker could gain
+  unauthorized access to sensitive emails, leading to data breaches and compromising
+  the confidentiality of organizational communications.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.002
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/002/
+- https://learn.microsoft.com/en-us/openspecs/exchange_server_protocols/ms-oxodlgt/5610c6e6-3268-44e3-adff-8804f5315946
+- https://learn.microsoft.com/en-us/purview/audit-mailboxes
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=Exchange (Operation=ModifyFolderPermissions
+    OR Operation=AddFolderPermissions) Workload=Exchange object!=Calendar object!=Contacts
+    object!=PersonMetadata | eval isReadRole=if(match(''Item.ParentFolder.MemberRights'',"(ReadAny)"),
+    "true", "false") | rename UserId as user | stats count earliest(_time) as firstTime
+    latest(_time) as lastTime by signature user object dest Item.ParentFolder.MemberUpn
+    Item.ParentFolder.MemberRights src vendor_account vendor_product | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_mailbox_folder_read_permission_assigned_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 1435475e-2128-4417-a34f-59770733b0d5
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_mailbox_folder_read_permission_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

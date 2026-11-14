@@ -1,0 +1,24 @@
+id: det-endpoint-268
+name: Developer Mode Enabled On Managed Device
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Developer Mode
+  Enabled On Managed Device'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: endpoint
+log_source:
+  product: mobile
+  service: mdm
+detection:
+  condition: |
+    event_type == "compliance"
+    AND developer_mode == true
+false_positives:
+- Approved engineering device
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

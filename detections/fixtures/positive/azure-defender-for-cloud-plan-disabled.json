@@ -1,0 +1,6 @@
+{
+  "operation_name": "Microsoft.Security/pricings/write",
+  "properties": {
+    "pricingTier": "Free"
+  }
+}

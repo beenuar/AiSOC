@@ -1,0 +1,44 @@
+id: mitre-car-car-2021-01-008
+name: Disable UAC
+description: Threat actors often, after compromising a machine, try to disable User
+  Access Control (UAC) to escalate privileges. This is often done by changing the
+  registry key for system policies using “reg.exe”, a legitimate tool provided by
+  Microsoft for modifying the registry via command prompt or scripts. This action
+  interferes with UAC and may enable a threat actor to escalate privileges on the
+  compromised system, thereby allowing further exploitation of the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Detect disabling of UAC via reg.exe
+    type: Splunk
+    code: 'sourcetype = __your_sysmon_index__ ParentImage = "C:\\Windows\\System32\\cmd.exe"
+      | where like(CommandLine,"reg.exe%HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System%REG_DWORD
+      /d 0%")
+
+      '
+  - name: Detect disabling of UAC via reg.exe
+    type: pseudocode
+    code: "processes = search Process:Create\ncmd_processes = filter processes where\
+      \ (\n                (parent_image = \"C:\\\\Windows\\\\System32\\\\cmd.exe\"\
+      ) AND (command_line = \"reg.exe%HKLM\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\\
+      CurrentVersion\\\\Policies\\\\System%REG_DWORD /d 0%\")\n                )\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-01-008
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-01-008.yaml
+notes:
+  car_status: needs_implementation

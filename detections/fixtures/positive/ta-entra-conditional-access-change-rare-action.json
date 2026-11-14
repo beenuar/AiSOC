@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.997,
+  "operation": "Update conditional access policy",
+  "result": "success",
+  "user": "helpdesk-tier1@example.com"
+}

@@ -1,0 +1,5 @@
+{
+  "actor": "principal-a",
+  "event_name": "CreateAccessKey",
+  "target": "principal-a"
+}

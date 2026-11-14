@@ -1,0 +1,52 @@
+id: splunk-security-content-619eac6c-0f03-4699-ae29-5f337877bcf9
+name: Windows Chrome Auto-Update Disabled via Registry
+description: 'The following analytic detects modifications to Windows registry values
+  that disable Google Chrome auto-updates.
+
+  Changes to values such as DisableAutoUpdateChecksCheckboxValue = 1, Update{8A69D345-D564-463C-AFF1-A69D9E530F96}
+  = 0, UpdateDefault = 0, and AutoUpdateCheckPeriodMinutes = 0 can prevent Chrome
+  from receiving security updates.
+
+  This behavior may indicate attempts to bypass update policies, maintain unauthorized
+  extensions, or facilitate malware persistence.
+
+  Monitoring these registry changes helps identify potential policy violations or
+  malicious activity targeting browser security.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1185
+  categories:
+  - endpoint
+references:
+- https://www.gdatasoftware.com/blog/2025/11/38298-learning-about-browser-hijacking
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Registry\n\nwhere Registry.registry_path\
+    \ = \"*\\\\Google\\\\Update*\"\n      AND\n      (\n        Registry.registry_value_name\
+    \ = \"DisableAutoUpdateChecksCheckboxValue\"\n        Registry.registry_value_data\
+    \ = 0x00000001\n      )\n      OR\n      (\n        Registry.registry_value_name\
+    \  IN (\n          \"AutoUpdateCheckPeriodMinutes\",\n          \"Update{8A69D345-D564-463C-AFF1-A69D9E530F96}\"\
+    ,\n          \"UpdateDefault\"\n        )\n        Registry.registry_value_data\
+    \ = 0x00000000\n      )\n\nby Registry.action Registry.dest Registry.process_guid\
+    \ Registry.process_id\n   Registry.registry_hive Registry.registry_path Registry.registry_key_name\n\
+    \   Registry.registry_value_data Registry.registry_value_name\n   Registry.registry_value_type\
+    \ Registry.status Registry.user Registry.vendor_product\n\n| `drop_dm_object_name(Registry)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_chrome_auto_update_disabled_via_registry_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 619eac6c-0f03-4699-ae29-5f337877bcf9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_chrome_auto_update_disabled_via_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

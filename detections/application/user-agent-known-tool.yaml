@@ -1,0 +1,23 @@
+id: det-application-011
+name: Known-Bad Scanner User-Agent
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Known-Bad Scanner
+  User-Agent'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1595.002
+- tlp.white
+category: application
+log_source:
+  product: waf
+  service: http
+detection:
+  condition: |
+    user_agent CONTAINS_ANY ["sqlmap", "nikto", "wpscan", "fuzzfaster", "ffuf"]
+false_positives:
+- Authorized internal pen-tests (src allowlist)
+playbook: tpl-recon
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

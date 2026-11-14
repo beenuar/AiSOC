@@ -1,0 +1,42 @@
+id: splunk-security-content-4e3c26f2-4fb9-4bd7-ab46-1b76ffa2a23b
+name: AWS New MFA Method Registered For User
+description: The following analytic detects the registration of a new Multi-Factor
+  Authentication (MFA) method for an AWS account. It leverages AWS CloudTrail logs
+  to identify the `CreateVirtualMFADevice` event. This activity is significant because
+  adversaries who gain unauthorized access to an AWS account may register a new MFA
+  method to maintain persistence. If confirmed malicious, this could allow attackers
+  to secure their access, making it difficult to detect and remove their presence,
+  potentially leading to further unauthorized activities and data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  categories:
+  - cloud
+references:
+- https://aws.amazon.com/blogs/security/you-can-now-assign-multiple-mfa-devices-in-iam/
+- https://attack.mitre.org/techniques/T1556/
+- https://attack.mitre.org/techniques/T1556/006/
+- https://twitter.com/jhencinski/status/1618660062352007174
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=CreateVirtualMFADevice\n  | rename userName\
+    \ as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY signature dest user\n       user_agent src vendor_account\n       vendor_region\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_new_mfa_method_registered_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4e3c26f2-4fb9-4bd7-ab46-1b76ffa2a23b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_new_mfa_method_registered_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,25 @@
+id: det-cloud-131
+name: Azure AKS Cluster API With Public FQDN
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Azure AKS Cluster
+  API With Public FQDN'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1133
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: activity
+detection:
+  condition: |
+    operation_name ENDSWITH "managedClusters/write"
+    AND private_cluster == false
+    AND authorized_ip_ranges_empty == true
+false_positives:
+- Lab
+playbook: tpl-initial-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

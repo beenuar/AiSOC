@@ -1,0 +1,43 @@
+id: splunk-security-content-c3d22720-35d3-4da4-bd0a-740d37192bd4
+name: Okta New API Token Created
+description: The following analytic detects the creation of a new API token within
+  an Okta tenant. It uses OktaIm2 logs ingested via the Splunk Add-on for Okta Identity
+  Cloud to identify events where the `system.api_token.create` command is executed.
+  This activity is significant because creating a new API token can indicate potential
+  account takeover attempts or unauthorized access, allowing an adversary to maintain
+  persistence. If confirmed malicious, this could enable attackers to execute API
+  calls, access sensitive data, and perform administrative actions within the Okta
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.001
+  categories:
+  - application
+references:
+- https://developer.okta.com/docs/reference/api/event-types/?q=security.threat.detected
+- https://splunkbase.splunk.com/app/6553
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count max(_time) as lastTime,\
+    \ min(_time) as firstTime FROM datamodel=Change\n  WHERE All_Changes.action=created\n\
+    \    AND\n    All_Changes.command=system.api_token.create\n  BY _time span=5m\
+    \ All_Changes.user\n     All_Changes.result All_Changes.command sourcetype\n \
+    \    All_Changes.src All_Changes.action All_Changes.object_category\n     All_Changes.dest\n\
+    | `drop_dm_object_name(\"All_Changes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `okta_new_api_token_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c3d22720-35d3-4da4-bd0a-740d37192bd4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_new_api_token_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

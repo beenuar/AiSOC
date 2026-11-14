@@ -1,0 +1,27 @@
+id: gcp-scc
+name: GCP Security Command Center Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Google Cloud Security Command Center findings (misconfigurations, threats,
+  vulnerabilities) at the organization scope. Streams ACTIVE findings into
+  AiSOC for unified cloud-posture and runtime-threat triage. Requires a
+  service account with roles/securitycenter.findingsViewer on the
+  organization.
+author: AiSOC Core Team
+tags: [cloud, gcp, google, scc, posture, vuln, findings]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_scc.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [organization_id, service_account_json]
+  properties:
+    organization_id:
+      type: string
+      description: "GCP organization ID (numeric)"
+    service_account_json:
+      type: string
+      description: "Service account JSON key, encrypted at rest by the credential vault"
+      secret: true

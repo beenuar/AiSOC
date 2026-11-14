@@ -1,0 +1,5 @@
+{
+  "argv": "com.apple.icloud FindMyMacEnabled 0",
+  "event_type": "exec",
+  "process_path": "head-/defaults"
+}

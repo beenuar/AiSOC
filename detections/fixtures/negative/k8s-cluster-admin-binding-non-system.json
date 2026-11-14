@@ -1,0 +1,6 @@
+{
+  "object_resource": "clusterrolebindings",
+  "role_ref_name": "cluster-admin",
+  "subject_namespace_not": "kube-system",
+  "verb": "not-create"
+}

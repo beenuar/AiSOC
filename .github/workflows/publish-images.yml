@@ -1,0 +1,555 @@
+name: Publish Images
+
+# Build and push GHCR images for every push to main, plus on manual dispatch.
+# This keeps the `:main` and `:latest` tags fresh so `pnpm aisoc:demo` can
+# pull prebuilt images instead of building from source.
+#
+# Tagged releases are handled by release.yml.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/**'
+      - 'apps/web/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'turbo.json'
+      - '.github/workflows/publish-images.yml'
+  workflow_dispatch:
+
+# Deliberately NOT cancel-in-progress.
+#
+# Cancelling a test run discards a result nobody needs. Cancelling a run that
+# *pushes artefacts* leaves the registry holding a partial set, and that is
+# not hypothetical: on the v11.0.0 merge this job was cancelled mid-build by
+# the next push while twelve of thirteen images had already published, so the
+# console image alone stayed two commits behind `main` and the run reported
+# `cancelled` rather than `failed`. Nothing was red, and the image a
+# self-hoster pulls was not the product on `main`.
+#
+# Queuing instead costs runner minutes and can leave `:latest` a few minutes
+# behind on a busy day. GitHub runs a concurrency group in order, so the last
+# push still wins the moving tags.
+#
+# It does NOT mean every run completes its push, which this comment used to
+# claim. GitHub cancels a run that is still *pending* in a busy group when a
+# newer one queues, so `cancel-in-progress: false` only guarantees the first
+# and the last of a burst. Measured on 2026-09-28: 13 runs of this workflow on
+# `main` ended `cancelled` with zero jobs — killed before a single step
+# existed. Each of those commits therefore has no `sha-` image.
+#
+# Keeping the shared group is a deliberate trade, not an oversight. A
+# per-commit group would publish every `sha-` tag, but it would also let two
+# runs of 15 images x 2 architectures race for `:latest` and `:main`, and the
+# older run could win. A stale moving tag is what a self-hoster actually
+# pulls; a missing `sha-` tag is not. check_published_images.py — run daily by
+# image-availability.yml, and again by this workflow after its manifests are
+# pushed — is what catches a moving tag that has fallen behind.
+# scripts/check_workflow_concurrency.py records this as an exception with the
+# same reasoning, so the cost stays visible instead of being forgotten.
+concurrency:
+  group: publish-images-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+  # Keyless cosign signing + SLSA provenance attestation need an OIDC token.
+  id-token: write
+
+jobs:
+  # ── Per-architecture build, each on a runner of that architecture ────────
+  #
+  # This used to be one job per image building both architectures together,
+  # with QEMU emulating arm64 on an amd64 runner. Measured against the v11.0.0
+  # release, per BuildKit's own step timings:
+  #
+  #     pnpm install --frozen-lockfile     amd64   15.0s    arm64  114.2s
+  #     pnpm --filter … build (Next.js)    amd64   45.0s    arm64  281.6s
+  #
+  # so emulation cost roughly 7x on a good run — and on a bad one it did not
+  # finish at all. In the v11.0.0 release run the arm64 `pnpm install` ran for
+  # 6,358 seconds and was still going when the job was killed, 56x its own
+  # normal time, while the amd64 leg of the same build completed in 100s. Node
+  # under QEMU user-mode emulation does this unpredictably; the slow step is
+  # the dependency install rather than the compile, which is why no amount of
+  # Next.js tuning would have touched it.
+  #
+  # Building each architecture natively removes the emulator rather than
+  # budgeting for it, so the livelock class is gone and arm64 costs about what
+  # amd64 does. arm64 itself stays: Apple Silicon is the majority of
+  # contributor laptops and an amd64-only manifest makes `pnpm aisoc:demo`
+  # fall back to a long silent build there. The original comment argued a
+  # first run that cannot start is worse than a slower release; that is still
+  # true, and it is now also no longer the choice on offer.
+  #
+  # Each leg pushes by digest only. The tags are attached once, by the merge
+  # job below, so a half-finished multi-arch build can never claim `:latest`.
+  build:
+    name: ${{ matrix.service }} (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    # A build that stops making progress must say so rather than run until
+    # GitHub's six-hour ceiling. The slowest image on a cold cache is the
+    # console at roughly five minutes per architecture; 30 leaves room for a
+    # cache miss and still fails the same morning.
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - teams-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        # `include` entries whose `service` matches an existing combination add
+        # their remaining keys to it rather than creating new ones, so each
+        # block below applies to both platforms of that one service.
+        include:
+          # Demo-stack images (must always be fresh; pnpm aisoc:demo pulls these by tag).
+          - service: api
+            context: services/api
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            context: services/agents
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-agents
+          - service: realtime
+            context: services/realtime
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-realtime
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+
+          # The demo build of the console, published under its own `demo` tag.
+          #
+          # It used to be the *only* build: `latest` carried the demo bundle,
+          # and `latest` is what `docker-compose.yml` pulls for `make up`. Next
+          # inlines NEXT_PUBLIC_* at build time, so a self-hoster had no runtime
+          # escape — their console announced "Demo data resets daily at 00:00
+          # UTC. All write actions are disabled." over their own real alerts,
+          # disabled every write control, and offered a "Self-host AiSOC" link
+          # inside an already self-hosted install.
+          #
+          # Splitting the tag means nobody has to choose between a working demo
+          # and a usable self-host image. `latest` is the product;
+          # `infra/compose/docker-compose.demo.yml` pulls `demo`.
+          - service: web-demo
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+
+          # Full-stack backend images. Published so `docker compose up -d` can
+          # pull instead of build (with `pull_policy: missing`), shaving the
+          # cold-start time from ~15 min to ~90 s on a fresh clone.
+          - service: ingest
+            context: services/ingest
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            context: services/enrichment
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            context: services/fusion
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            context: services/actions
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            context: services/connectors
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            context: services/threatintel
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            context: services/ueba
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            context: services/slack-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-slack-bot
+          # Depth 5.2. The Teams bot held the card builder and the signed
+          # callback handler and shipped in no image and no compose file, so
+          # nothing could post a card and nothing could receive a decision.
+          - service: teams-bot
+            context: services/teams-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-teams-bot
+
+          # Named by docker-compose.yml and the Helm chart since they were
+          # written, and published by nothing until now — so `docker compose
+          # --profile extras up` silently built them from source every time,
+          # and `helm install` could only ever have produced ImagePullBackOff.
+          # scripts/check_published_images.py is what stops that recurring.
+          - service: honeytokens
+            context: services/honeytokens
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            context: services/purple-team
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            context: services/osquery-tls
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-osquery-tls
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels only. The tags are the merge job's business — a per-architecture
+      # image is half a manifest and must never be reachable by a name an
+      # operator pulls.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ matrix.image }}
+
+      # Only the `demo` tag gets the NEXT_PUBLIC_DEMO_* flags. Next inlines
+      # them at build time, so this is the whole difference between the two
+      # images — and why it has to be a separate build rather than a runtime
+      # switch. Other images (api/agents/realtime) gate demo behaviour at
+      # runtime via AISOC_DEMO_MODE and need no build args at all.
+      #
+      # The credentials are supplied here rather than defaulted in the
+      # Dockerfile so a build that does not ask for the demo cannot inline
+      # them into a bundle it ships to a customer.
+      # Every image gets the version it was built from, because a container
+      # cannot read the repo-root VERSION file: the build context is the
+      # service directory. Without this the Python services fall through to
+      # the honest-but-useless "unknown" (app/core/version.py), and before
+      # this existed at all they reported a hardcoded 0.1.0 — a number no
+      # release ever carried, on a surface operators use to confirm an
+      # upgrade landed.
+      #
+      # Read from the file rather than from the tag, so a `latest` build off
+      # main is stamped with the version main declares rather than with
+      # whatever the last tag was.
+      - id: version
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          test -n "$version"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - id: web-build-args
+        if: matrix.demo == 'true'
+        run: |
+          {
+            echo 'build_args<<EOF'
+            echo 'NEXT_PUBLIC_DEMO_MODE=true'
+            echo 'NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=ledger'
+            echo 'NEXT_PUBLIC_DEMO_BANNER=Demo data resets daily at 00:00 UTC. All write actions are disabled.'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@example.com'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=aisoc-demo'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            AISOC_VERSION=${{ steps.version.outputs.version }}
+            ${{ steps.web-build-args.outputs.build_args }}
+          # Scoped per architecture now that the two are separate jobs: one
+          # scope written by two concurrent jobs is a cache each of them can
+          # only partially trust.
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.platform }}
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          # SLSA provenance + SPDX SBOM attached to the image by BuildKit.
+          provenance: mode=max
+          sbom: true
+
+      # The digest is all the merge job needs, and an empty file named after it
+      # is the smallest thing that carries it between jobs.
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: digest.${{ matrix.service }}.${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Assemble the manifest list and attach the tags ──────────────────────
+  #
+  # Both architectures exist before any operator-visible name points at them,
+  # so `:latest` moves atomically or not at all. Signing and the SBOM
+  # attestation live here too, over the index digest, which is what
+  # `cosign verify` is given in docs/operations/verifying-releases.md.
+  merge:
+    name: manifest (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    needs: build
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - teams-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        include:
+          - service: api
+            image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            image: ghcr.io/beenuar/aisoc-agents
+          - service: realtime
+            image: ghcr.io/beenuar/aisoc-realtime
+          - service: web
+            image: ghcr.io/beenuar/aisoc-web
+          - service: web-demo
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+          - service: ingest
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            image: ghcr.io/beenuar/aisoc-slack-bot
+          - service: teams-bot
+            image: ghcr.io/beenuar/aisoc-teams-bot
+          - service: honeytokens
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            image: ghcr.io/beenuar/aisoc-osquery-tls
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          # Dot-separated, not hyphen-separated: `digest-web-*` also matches
+          # `digest-web-demo-amd64`, so the console's manifest job downloaded
+          # four digests — two of them the demo bundle — and would have pushed
+          # a mixed manifest as `:latest`. The count check below caught it; the
+          # separator is what stops it happening. `digest.web.*` cannot match
+          # `digest.web-demo.amd64`.
+          path: /tmp/digests
+          pattern: digest.${{ matrix.service }}.*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The demo build shares the repository but never the moving tags a
+      # self-hoster pulls. `latest` and `main` are the product.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' && matrix.demo != 'true' }}
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' && matrix.demo != 'true' }}
+            type=sha,prefix=sha-,format=short,enable=${{ matrix.demo != 'true' }}
+            type=raw,value=demo,enable=${{ github.ref == 'refs/heads/main' && matrix.demo == 'true' }}
+            type=sha,prefix=demo-sha-,format=short,enable=${{ matrix.demo == 'true' }}
+
+      - name: Create manifest list and push
+        id: manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          set -euo pipefail
+          # One digest file per architecture. Fewer means a leg did not run,
+          # and publishing a single-architecture manifest under `:latest` is
+          # the silent half-publish this job exists to prevent.
+          count=$(find . -type f | wc -l | tr -d ' ')
+          if [ "$count" -ne 2 ]; then
+            echo "::error::expected 2 per-architecture digests for ${IMAGE}, found ${count}" >&2
+            exit 1
+          fi
+          mapfile -t tags < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          # Every tag above is `enable=`d on a condition, and for the demo
+          # image both conditions are ref-dependent — so a dispatch from any
+          # branch but `main` produces an empty tag list. The job did fail,
+          # on `tags[0]: unbound variable` several lines further down and
+          # after `imagetools create` had already been handed no `--tag` at
+          # all. A build that produced two architectures and can name none of
+          # them has done no publishing, and should say that rather than
+          # leave an operator reading a shell diagnostic.
+          if [ "${#tags[@]}" -eq 0 ]; then
+            echo "::error::no tag is enabled for ${IMAGE} on ref ${GITHUB_REF}, so the built digests would be unreachable. Dispatch from \`main\`, or add a tag rule for this ref." >&2
+            exit 1
+          fi
+          docker buildx imagetools create \
+            "${tags[@]/#/--tag=}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+          digest=$(docker buildx imagetools inspect "${tags[0]}" --format '{{json .Manifest}}' | jq -r '.digest')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE} @ ${digest} as: ${tags[*]}"
+
+      # ── Supply-chain attestation (Phase 2 continuation) ──────────────────
+      # 1. cosign keyless (OIDC) signature over the pushed digest.
+      # 2. CycloneDX SBOM generated by syft and attached as a cosign
+      #    attestation, so users can `cosign verify-attestation --type
+      #    cyclonedx` without pulling the image.
+      # Verification commands: docs/operations/verifying-releases.md.
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      - name: Install syft
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin v1.18.1
+
+      - name: Sign image (cosign keyless)
+        env:
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+        # Hardened against the two ways one signing can observe itself and
+        # fail, the second of which reddened the 2026-10-21 main publish on
+        # `api` and `honeytokens`:
+        #
+        #  * A job rerun after a *later* step failed re-signs a digest that
+        #    already carries this repository's valid signature. Verify-first
+        #    makes that a skip instead of a second signature.
+        #  * Rekor can accept the entry while the client times out and
+        #    retries the identical payload, which answers 409
+        #    createLogEntryConflict against the step's own first POST and
+        #    aborts before the registry attachment is written — measured: the
+        #    conflicting entry's integratedTime (17:19:28Z) sat inside the
+        #    failing step's own 17:19:24–:56 window, and `cosign verify`
+        #    found no registry signature on the digest afterwards. A fresh
+        #    attempt uses a fresh ephemeral key and cannot conflict, so retry
+        #    once; the trailing verify turns "the artifact ended up signed
+        #    anyway" into a pass and anything else stays a hard failure.
+        run: |
+          set -euo pipefail
+          verify() {
+            cosign verify \
+              --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "${{ matrix.image }}@${DIGEST}" >/dev/null 2>&1
+          }
+          if verify; then
+            echo "already signed by this repository's workflows; skipping re-sign of ${DIGEST}"
+            exit 0
+          fi
+          if cosign sign --yes "${{ matrix.image }}@${DIGEST}"; then
+            exit 0
+          fi
+          echo "first sign attempt failed; retrying once with a fresh ephemeral key"
+          sleep 10
+          if cosign sign --yes "${{ matrix.image }}@${DIGEST}"; then
+            exit 0
+          fi
+          echo "second sign attempt failed; accepting only if a valid signature exists"
+          verify
+
+      - name: Attach CycloneDX SBOM attestation
+        env:
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          syft "${{ matrix.image }}@${DIGEST}" -o cyclonedx-json > /tmp/sbom.cdx.json
+          cosign attest --yes \
+            --type cyclonedx \
+            --predicate /tmp/sbom.cdx.json \
+            "${{ matrix.image }}@${DIGEST}"
+
+  # ── Prove the registry now holds what the deployment files name ─────────
+  #
+  # The loop this workflow never closed. It reported success on the v11.0.0
+  # merge while `aisoc-web:latest` stayed two commits behind `main`, because
+  # "the job ran" and "the registry holds the image" are different facts and
+  # only the first was ever checked. This asks the registry.
+  verify:
+    name: Published images match the tree
+    runs-on: ubuntu-24.04
+    needs: merge
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The gate reads VERSION as of the commit each image records in
+          # org.opencontainers.image.revision; a shallow clone cannot.
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      # --require-current closes this workflow's own loop: the moving tags it
+      # just pushed have to name the commit it just published, not merely a
+      # commit carrying the same VERSION. VERSION moves on a release commit
+      # and on no other, so without this every post-release push could leave
+      # `:latest` behind and still be told the images match the tree.
+      #
+      # It cannot red for losing a race. If a newer commit publishes while
+      # this job is asking, the tag is *ahead* of this checkout, which the
+      # gate reads as a race rather than as drift.
+      - name: Every image docker-compose.yml and the chart name resolves
+        run: python3 scripts/check_published_images.py --require-fresh --require-current --require-network --list

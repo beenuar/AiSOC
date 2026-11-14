@@ -1,0 +1,31 @@
+id: carbon-black
+name: Carbon Black Cloud Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  VMware Carbon Black Cloud (formerly Carbon Black Defense). Pulls alerts and
+  audit log entries via API key authentication. Supports host isolation and hash
+  banning via agent capabilities.
+author: AiSOC Core Team
+tags: [edr, carbon-black, vmware, endpoint]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/carbon_black.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, org_key, api_id, api_secret]
+  properties:
+    region:
+      type: string
+      description: "CBC region your tenant is hosted in. The wrong region returns 401 rather than 404, so this can't be auto-detected."
+    org_key:
+      type: string
+      description: "Found in CBC console under Settings → API Access → API Keys (the column labeled 'Org Key')."
+    api_id:
+      type: string
+      description: "The 'API ID' half of the credential pair."
+    api_secret:
+      type: string
+      description: The long secret half of the credential pair.
+      secret: true

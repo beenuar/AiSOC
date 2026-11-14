@@ -1,0 +1,41 @@
+id: hunt-lsass-process-access
+name: Non-standard process opened a handle to LSASS
+description: |
+  Credential dumping needs a handle to LSASS carrying VM_READ and QUERY_INFORMATION. The access mask is the discriminator: telemetry agents open LSASS constantly with far narrower rights.
+version: 1.0.0
+severity: critical
+category: endpoint
+tags:
+  - mitre.attack.t1003.001
+  - hunt.endpoint
+log_sources:
+  - sysmon
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any process other than the known security agents open a handle to lsass.exe?
+  indicators:
+    - field: "source"
+      equals: "sysmon"
+    - field: "EventID"
+      in: [10]
+    - field: "TargetImage"
+      iendswith: "\\lsass.exe"
+    - field: "GrantedAccess"
+      in: ["0x1010", "0x1410", "0x1438", "0x143a"]
+expected:
+  positive_incident_id: INC-HUNT-007
+  positive_template_id: hunt-lsass-process-access
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-007-NEG
+  # The negative inverts GrantedAccess, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

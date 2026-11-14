@@ -1,0 +1,42 @@
+id: hunt-archive-created-then-uploaded
+name: Archive created locally and uploaded to a personal cloud service
+description: |
+  Large uploads to corporate storage are work. The same volume to a consumer service is the last step of most data-theft cases.
+version: 1.0.0
+severity: high
+category: data-exfil
+tags:
+  - mitre.attack.t1560.001
+  - hunt.data
+log_sources:
+  - sysmon
+  - proxy
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was an archive created and then uploaded to a consumer file-sharing service?
+  indicators:
+    - field: "source"
+      equals: "proxy"
+    - field: "http_method"
+      equals: "POST"
+    - field: "destination_category"
+      equals: "personal-storage"
+    - field: "upload_bytes"
+      gte: 50000000
+expected:
+  positive_incident_id: INC-HUNT-039
+  positive_template_id: hunt-archive-created-then-uploaded
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-039-NEG
+  # The negative inverts destination_category, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1560/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

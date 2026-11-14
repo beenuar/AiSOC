@@ -1,0 +1,41 @@
+id: mitre-car-car-2021-05-011
+name: Create Remote Thread into LSASS
+description: Actors may create a remote thread into the LSASS service as part of a
+  workflow to dump credentials.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode – Remote thread creation into LSASS
+    type: Pseudocode
+    code: 'remote_threads = search Thread:remote_create
+
+      lsass_remote_create = filter remote_threads where "lsass" in raw event
+
+      output lsass_remote_create
+
+      '
+  - name: Splunk code
+    type: Splunk
+    code: '`sysmon` EventID=8 TargetImage=*lsass.exe | stats count min(_time) as firstTime
+      max(_time) as lastTime by Computer, EventCode, TargetImage, TargetProcessId
+      | rename Computer as dest'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-05-011
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-05-011.yaml
+notes:
+  car_status: needs_implementation

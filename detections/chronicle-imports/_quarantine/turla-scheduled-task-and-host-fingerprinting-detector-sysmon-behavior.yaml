@@ -1,0 +1,45 @@
+id: chronicle-detection-rules-turla-scheduled-task-and-host-fingerprinting-detector-sysmon-behavior
+name: turla_scheduled_task_and_host_fingerprinting_detector_sysmon_behavior
+description: turla_scheduled_task_and_host_fingerprinting_detector_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule turla_scheduled_task_and_host_fingerprinting_detector_sysmon_behavior\
+    \ {\n meta:\n    author = \"Lee Archinal\"\n    description = \"Detects characteristics\
+    \ of the Turla strain of malware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/r41f6zmCydPt\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/07/17\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Execution, t1059, t1065, t1129, Persistence, t1050,\
+    \ Privilege_Escalation, t1055, Defense_Evasion\"\n\n  events:\n(($selection1.metadata.product_event_type\
+    \ = \"1\" and ((re.regex($selection1.target.process.file.full_path, `.*cmd\\.exe`)\
+    \ and ($selection1.target.process.command_line = \"cmd.exe /c schtasks /creaet\
+    \ /SC MINUTE /MO 30 /TR %localappdata%\\\\\\\\VirtualStore\\\\\\\\certcheck.exe\
+    \ /TN VerifiedPublisherCertCheck /F\" or re.regex($selection1.target.process.command_line,\
+    \ `cmd\\.exe /c net use .*\\\\c$ .* /user:administrator & copy /y .*\\\\c$\\\\\
+    users\\\\public\\\\documents\\\\i\\.js $documents\\\\j\\.js & $documents\\\\j\\\
+    .js`))) or ($selection1.target.process.command_line = \"tasklist /v\" or $selection1.target.process.command_line\
+    \ = \"gpresult /z\" or $selection1.target.process.command_line = \"dir \\\\x22%programfiles%\\\
+    \\x5cKaspersky Lab\\\\x22\" or $selection1.target.process.command_line = \"tracert\
+    \ www.google.com\"))) or ($selection1.metadata.product_event_type = \"11\" and\
+    \ re.regex($selection1.target.file.full_path, `C:\\\\Users.*\\\\AppData\\\\Roaming\\\
+    \\Microsofx5ct235\\.dat`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: turla_scheduled_task_and_host_fingerprinting_detector_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: turla_scheduled_task_and_host_fingerprinting_detector_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/turla_scheduled_task_and_host_fingerprinting_detector__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

@@ -1,0 +1,25 @@
+id: det-data-exfil-012
+name: Encrypted Archive Attachment Sent Externally
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Encrypted Archive
+  Attachment Sent Externally'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1560.001
+- mitre.attack.t1567
+- tlp.white
+category: data-exfil
+log_source:
+  product: email
+  service: messages
+detection:
+  condition: |
+    attachment_encrypted == true
+    AND to_external == true
+false_positives:
+- Approved encrypted exchange with regulated counterparties (allowlist)
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

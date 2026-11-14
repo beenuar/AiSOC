@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-combination-of-wevtutil-and-fsutil-to-avoid-forensics-analysis
+name: combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis
+description: combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis\
+    \ {\n meta:\n    author = \"Ariel Millahuel\"\n    description = \"This rule detects\
+    \ the combination of wevtutil and fsutil to avoid forensics analysis  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/k1cjcKua96bW\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"test_capabilities, t1358\"\n\n  events:\n\
+    (($selection1.target.process.file.full_path = \"wevtutil.exe\" or $selection1.target.process.file.full_path\
+    \ = \"fsutil.exe\") and re.regex($selection1.target.process.command_line, `.*\
+    \ wevtutil cl Setup & wevtutil cl System & wevtutil cl Security & wevtutil cl\
+    \ Application & fsutil usn deletejournal /D %.*% .*`) and ($selection1.metadata.product_event_type\
+    \ = \"4688\" or $selection1.metadata.product_event_type = \"1\"))\n\n  condition:\n\
+    \    $selection1\n}"
+  chronicle_rule_name: combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis
+provenance:
+  source: chronicle/detection-rules
+  source_id: combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/combination_of__wevtutil_and_fsutil_to_avoid_forensics_analysis.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

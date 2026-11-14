@@ -1,0 +1,50 @@
+id: chronicle-detection-rules-sap-user-creates-and-uses-new-user
+name: sap_user_creates_and_uses_new_user
+description: sap_user_creates_and_uses_new_user
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_user_creates_and_uses_new_user {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects a user creating a new account\
+    \ (AU7) and subsequently logging into it (AU1, AU5) from the same terminal within\
+    \ a short timeframe.\"\n    severity = \"Critical\"\n    tactic = \"TA0003\"\n\
+    \    technique = \"T1136\"\n\n  events:\n    $create.metadata.log_type = \"SAP_SECURITY_AUDIT\"\
+    \n    $create.additional.fields[\"msg_1\"] = \"AU7\"\n    $creator = $create.principal.user.userid\n\
+    \n    $login.metadata.log_type = \"SAP_SECURITY_AUDIT\"\n    $login.additional.fields[\"\
+    msg_1\"] = /^AU1$|^AU5$/\n\n    //join\n    $new_user = $create.additional.fields[\"\
+    param1_1\"]\n    $new_user = $login.principal.user.userid\n    $terminal = $create.principal.ip\n\
+    \    $terminal = $login.principal.ip\n    $sid = $create.target.application\n\
+    \    $sid = $login.target.application\n\n    //sequence\n    $create.metadata.event_timestamp.seconds\
+    \ <= $login.metadata.event_timestamp.seconds\n\n    //exclusions\n    not $create.principal.user.userid\
+    \ in %sap_admin_users.user\n\n  match:\n    $terminal, $sid over 30m\n\n  outcome:\n\
+    \    $risk_score = 85\n    $creating_user = array_distinct($creator)\n    $created_user\
+    \ = array_distinct($new_user)\n    $description = array_distinct($create.metadata.description)\n\
+    \n  condition:\n    $create and $login\n}"
+  chronicle_rule_name: sap_user_creates_and_uses_new_user
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_user_creates_and_uses_new_user
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_user_creates_and_uses_new_user.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

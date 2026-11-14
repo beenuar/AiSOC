@@ -1,0 +1,25 @@
+id: gcp-pubsub
+name: GCP Pub/Sub (log sink)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Google Cloud logs streamed through a Cloud Logging sink onto a Pub/Sub
+  subscription. Carries whatever the sink's filter selects - audit, Data
+  Access, VPC flow, firewall, GKE - for a whole organisation, at the rate
+  the estate produces it rather than at the rate the Logging read API
+  allows. The subscription is the cursor: messages are acknowledged only
+  after their entries have been read.
+author: AiSOC Core Team
+tags: [cloud, gcp, pubsub, log-sink, audit, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_pubsub.py
+license: MIT
+min_aisoc_version: "17.0.0"
+config_schema:
+  type: object
+  required: [project_id, subscription_id, service_account_json]
+  properties:
+    project_id: {type: string, description: Project the Pub/Sub subscription lives in.}
+    subscription_id: {type: string, description: A pull subscription on the topic the log sink publishes to.}
+    service_account_json: {type: string, secret: true, description: Key file for a principal holding roles/pubsub.subscriber.}
+    ack_deadline_seconds: {type: number, default: 120, description: Compared against the subscription at test time.}

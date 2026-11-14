@@ -1,0 +1,24 @@
+id: det-endpoint-175
+name: rclone Binary Run On Non-Backup Host
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'rclone Binary Run
+  On Non-Backup Host'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1041
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    syscall == "execve"
+    AND exe ENDSWITH "/rclone"
+false_positives:
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

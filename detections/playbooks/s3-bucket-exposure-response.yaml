@@ -1,0 +1,132 @@
+id: s3-bucket-exposure-response-v1
+name: S3 Bucket Exposure Response
+description: >
+  Responds to S3 bucket misconfigurations including public access enablement,
+  ACL changes granting anonymous access, and unexpected data exfiltration from
+  buckets. Remediates public access, audits bucket policy, and notifies cloud security.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - s3
+  - cloud
+  - aws
+  - misconfiguration
+  - data-exposure
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - s3-exposure
+
+steps:
+  - id: enrich-bucket
+    name: Enrich S3 Bucket Configuration
+    type: enrich
+    params:
+      source: cloud_iam
+      fields:
+        - bucket_name
+        - account_id
+        - region
+        - public_access_block
+        - acl
+        - bucket_policy
+        - encryption_enabled
+        - versioning_enabled
+        - data_classification
+        - estimated_size_gb
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-access
+    name: Investigate Bucket Access Logs
+    type: investigate
+    params:
+      query: "s3_access bucket={{ alert.bucket_name }} requester=anonymous last_hours=24"
+      context_fields:
+        - alert.bucket_name
+        - alert.acl
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-public-access
+    name: Check If Bucket Is Publicly Accessible
+    type: condition
+    condition:
+      field: alert.public_access_block
+      operator: eq
+      value: false
+    next_true: block-public-access
+    next_false: audit-bucket-policy
+
+  - id: block-public-access
+    name: Enable S3 Public Access Block
+    type: http
+    params:
+      method: PUT
+      url: "{{ env.AWS_S3_API_URL }}/{{ alert.bucket_name }}/public-access-block"
+      body:
+        BlockPublicAcls: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        RestrictPublicBuckets: true
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: audit-bucket-policy
+    name: Request Bucket Policy Audit
+    type: http
+    params:
+      method: POST
+      url: "{{ env.CLOUD_SECURITY_API_URL }}/audit/s3"
+      body:
+        bucket: "{{ alert.bucket_name }}"
+        account: "{{ alert.account_id }}"
+        check_types:
+          - policy
+          - acl
+          - encryption
+          - logging
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-cloud-security
+    name: Notify Cloud Security Team
+    type: notify
+    params:
+      channel: "#cloud-security"
+      message: |
+        🪣 *S3 Bucket Exposure Detected*
+        Bucket: `{{ alert.bucket_name }}`
+        Account: `{{ alert.account_id }}`
+        Region: `{{ alert.region }}`
+        Classification: `{{ alert.data_classification }}`
+        Size: {{ alert.estimated_size_gb }}GB
+        Public access blocked: {{ steps.block-public-access.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create S3 Exposure Ticket
+    type: create_ticket
+    params:
+      title: "S3-EXPOSURE: {{ alert.bucket_name }} in {{ alert.account_id }}"
+      severity: P1
+      assignee_group: cloud-security
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close S3 Exposure Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "Public access blocked; bucket policy audited; cloud security notified."
+    timeout_seconds: 15
+    on_failure: continue

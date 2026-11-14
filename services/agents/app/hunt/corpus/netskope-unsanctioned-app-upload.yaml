@@ -1,0 +1,42 @@
+id: hunt-netskope-unsanctioned-app-upload
+name: Upload to an application the organisation has not sanctioned
+description: |
+  Cloud uploads are how work happens. The sanction state of the destination is the organisation's own statement about where its data may go.
+version: 1.0.0
+severity: medium
+category: data-exfil
+tags:
+  - mitre.attack.t1567.002
+  - hunt.data
+log_sources:
+  - netskope
+  - cloudflare_zt
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did anyone upload data to an unsanctioned cloud application?
+  indicators:
+    - field: "source"
+      equals: "netskope"
+    - field: "activity"
+      equals: "Upload"
+    - field: "appSanctionState"
+      equals: "unsanctioned"
+    - field: "upload_bytes"
+      gte: 10000000
+expected:
+  positive_incident_id: INC-HUNT-058
+  positive_template_id: hunt-netskope-unsanctioned-app-upload
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-058-NEG
+  # The negative inverts appSanctionState, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1567/002/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

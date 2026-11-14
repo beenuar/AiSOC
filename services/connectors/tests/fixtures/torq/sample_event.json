@@ -1,0 +1,53 @@
+{
+  "executions": [
+    {
+      "id": "exec-001",
+      "workflow_id": "wf-1",
+      "workflow_name": "Quarantine compromised host",
+      "status": "success",
+      "trigger_type": "webhook",
+      "started_at": "2099-01-01T12:00:00Z",
+      "duration_ms": 4321,
+      "triggered_by": {"email": "soc-bot@example.com"}
+    },
+    {
+      "id": "exec-002",
+      "workflow_id": "wf-2",
+      "workflow_name": "Slack notify suspicious login",
+      "status": "failed",
+      "trigger_type": "scheduled",
+      "started_at": "2099-01-01T12:01:00Z",
+      "duration_ms": 1234,
+      "triggered_by": {"email": "system@torq"}
+    },
+    {
+      "id": "exec-003",
+      "workflow_id": "wf-3",
+      "workflow_name": "Open Jira ticket from alert",
+      "status": "warning",
+      "trigger_type": "manual",
+      "started_at": "2099-01-01T12:02:00Z",
+      "duration_ms": 8765,
+      "triggered_by": {"email": "alice@example.com"}
+    }
+  ],
+  "events": [
+    {
+      "id": "audit-001",
+      "event_type": "workflow.deleted",
+      "timestamp": "2099-01-01T12:03:00Z",
+      "actor": {"email": "alice@example.com"},
+      "actor_email": "alice@example.com",
+      "resource_id": "wf-9",
+      "source_ip": "10.0.0.2"
+    },
+    {
+      "id": "audit-002",
+      "event_type": "workflow.updated",
+      "timestamp": "2099-01-01T12:04:00Z",
+      "actor": {"email": "bob@example.com"},
+      "resource_id": "wf-1"
+    }
+  ],
+  "next_page_token": null
+}

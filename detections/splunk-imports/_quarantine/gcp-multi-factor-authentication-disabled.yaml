@@ -1,0 +1,43 @@
+id: splunk-security-content-b9bc5513-6fc1-4821-85a3-e1d81e451c83
+name: GCP Multi-Factor Authentication Disabled
+description: The following analytic detects an attempt to disable multi-factor authentication
+  (MFA) for a Google Cloud Platform (GCP) user. It leverages Google Workspace Admin
+  log events, specifically the `UNENROLL_USER_FROM_STRONG_AUTH` command. This activity
+  is significant because disabling MFA can allow an adversary to maintain persistence
+  within the environment using a compromised account without raising suspicion. If
+  confirmed malicious, this action could enable attackers to bypass additional security
+  layers, potentially leading to unauthorized access, data exfiltration, or further
+  exploitation of the compromised account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  - T1586.003
+  categories:
+  - cloud
+references:
+- https://support.google.com/cloudidentity/answer/2537800?hl=en
+- https://attack.mitre.org/tactics/TA0005/
+- https://attack.mitre.org/techniques/T1556/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gws_reports_admin` command=UNENROLL_USER_FROM_STRONG_AUTH\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY user, command,\
+    \ actor.email,\n       status, id.applicationName, event.name,\n       vendor_account,\
+    \ action\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `gcp_multi_factor_authentication_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b9bc5513-6fc1-4821-85a3-e1d81e451c83
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gcp_multi_factor_authentication_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,397 @@
+version: 2
+
+updates:
+  # ── pnpm (web + root workspace) ──────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    # `pnpm-workspace.yaml` excludes `apps/mobile` with a `!apps/mobile`
+    # negation, and pnpm honours it: the root `pnpm-lock.yaml` has no
+    # `apps/mobile` importer. Dependabot's manifest scan does not honour it.
+    # It expands `apps/*`, finds `apps/mobile/package.json`, and proposes
+    # updates for it from *this* entry — where none of the Expo holds written
+    # into the `/apps/mobile` entry below apply, because that entry never sees
+    # the dependency.
+    #
+    # That produced `expo-constants 18.0.14 -> 57.0.19`: the Expo SDK 57
+    # release-train version of a package this repository pins to SDK 54, which
+    # `pnpm install` resolves with `expo-router 6.0.24 unmet peer
+    # expo-constants@^18.0.13`. It arrived with no lockfile change at all,
+    # because from this entry's point of view the lockfile is the root one and
+    # the root one does not contain the package.
+    #
+    # `exclude-paths` is version-updates-only, so the `/apps/mobile` entry
+    # keeps sole ownership of that directory and its security alerts are
+    # unaffected.
+    exclude-paths:
+      - "apps/mobile/**"
+    groups:
+      next-ecosystem:
+        patterns: ["next", "react", "react-dom", "@types/react*"]
+      radix-ui:
+        patterns: ["@radix-ui/*"]
+      dev-tooling:
+        # NOTE: `eslint*` and `@typescript-eslint/*` deliberately quarantined
+        # below — see the `dev-tooling-eslint` group. ESLint 10 changed the
+        # rule-context API in a way that `eslint-plugin-react@7.37.5`
+        # doesn't support (`TypeError: contextOrFilename.getFilename is not
+        # a function`), so the whole `eslint` family stays out of this group
+        # until `eslint-plugin-react` ships an ESLint-10-compatible release.
+        # Tracking issue: see the open `eslint-plugin-react / ESLint 10`
+        # issue in this repo.
+        patterns: ["typescript", "tailwindcss*", "postcss*"]
+      dev-tooling-eslint:
+        # Quarantined ESLint family. Dependabot still opens these PRs, but
+        # they land separately so a single incompatible plugin can't block
+        # the whole `dev-tooling` group from merging. Remove this group
+        # (and merge it back into `dev-tooling`) once
+        # `eslint-plugin-react` is ESLint-10-compatible.
+        patterns: ["eslint*", "@typescript-eslint/*"]
+      vitest:
+        # `@vitest/coverage-v8` peer-requires `vitest` at the *exact* same
+        # version, not a range — `@vitest/coverage-v8@4.1.10` declares
+        # `peerDependencies: { vitest: "4.1.10" }`. Ungrouped, dependabot
+        # proposes whichever one's manifest range is exceeded first and the
+        # pair drifts; `pnpm install` on this lockfile already reports
+        # `vitest 4.1.11 -> ✕ unmet peer @vitest/coverage-v8@4.1.11: found
+        # 4.1.10`. Within a major that is survivable, which is exactly why it
+        # went unnoticed. Grouping them means the next in-major bump is one
+        # pull request that moves both or neither.
+        patterns: ["vitest", "@vitest/*"]
+      storybook:
+        # Storybook requires `storybook` core and every `@storybook/*`
+        # package to share one major, so they must move as one pull
+        # request or not at all. The family was previously held on v9 by
+        # two `ignore` entries; the workspace is on 10.x now and the hold
+        # is gone, but the *reason* it was needed survives the migration —
+        # ungrouped, dependabot proposes them piecemeal (it opened a lone
+        # `@storybook/addon-themes` 9 -> 10 while core stayed on 9) and the
+        # Storybook build fails on the major mismatch.
+        #
+        # `@storybook/test-runner` is listed explicitly even though
+        # `@storybook/*` already matches it, because its version line is
+        # independent (0.x) while its *peer* tracks the Storybook major
+        # exactly: 0.23 peers `^8.2.0 || ^9.0.0`, 0.24 peers `^10.0.0`. A
+        # pattern that only looked like it covered the package is how the
+        # previous hold covered nothing on this one.
+        patterns: ["storybook", "@storybook/*", "@storybook/test-runner"]
+    ignore:
+      # Hold `eslint` on v9: ESLint 10 removed the `context.getFilename()`
+      # API that `eslint-plugin-react` (bundled via `eslint-config-next`)
+      # still calls, so `pnpm run lint` crashes with
+      # `TypeError: contextOrFilename.getFilename is not a function`.
+      # Drop this ignore once `eslint-plugin-react` ships an
+      # ESLint-10-compatible release, then bump the family in one pass.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # Hold `typescript` on v6: TypeScript 7 (the native-port compiler)
+      # fails `apps/web` type-checking (`Web — Lint & Type-check`). Moving
+      # to TS 7 needs a dedicated migration PR with the web types fixed and
+      # the whole toolchain re-verified — not a drive-by dependency bump.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # NOTE: the Storybook family is no longer held. The workspace is on
+      # 10.x (core + addon-a11y + addon-themes + react-vite at 10.6.0,
+      # test-runner at 0.24.5) and the coordination requirement is now
+      # carried by the `storybook` group above, which is the durable form
+      # of the constraint: an `ignore` only postpones the major, a group
+      # makes the family move together whenever it moves.
+      #
+      # Nothing in CI runs `test-storybook`; the only Storybook jobs are
+      # `pnpm build-storybook` and the Playwright visual diff, neither of
+      # which loads the runner. Its peer on `storybook` is satisfied by
+      # the group, not by a check.
+      # Hold `vitest` and `@vitest/*` on v4. The group above keeps the family
+      # together inside a major; the major itself needs more than a group,
+      # because two of the three things it breaks are not dependency edges
+      # dependabot can move.
+      #
+      # Measured on the 4.1.11 -> 5.0.1 proposal, which reached CI: all 59
+      # test files and all 615 tests PASSED, and then the run failed with 59
+      # unhandled rejections reading `TypeError: Expected string coverage
+      # payload, received object` out of `V8CoverageProvider.onAfterSuiteRun`,
+      # and a coverage report of `All files | 0 | 0 | 0 | 0`. vitest 5 changed
+      # the shape of the V8 coverage payload, `@vitest/coverage-v8` stayed on
+      # 4.1.10 because its own manifest range was still satisfied, and the
+      # required `Web — Vitest smoke tests + coverage gate` is what caught it.
+      # A reader skimming "615 passed" would not have.
+      #
+      # The second break is a resolution decision this file cannot express:
+      # the root `pnpm.overrides` pins `@vitest/mocker` to `>=4.1.11 <5`,
+      # while `vitest@5.0.1` depends on `@vitest/mocker@5.0.1`. The override
+      # wins silently, so the proposal's lockfile carries a vitest 5 runtime
+      # with a vitest 4 mocker.
+      #
+      # Moving to vitest 5 therefore means one commit that bumps `vitest` and
+      # `@vitest/coverage-v8` in lockstep, raises the `@vitest/mocker`
+      # override past 5, and re-verifies the two plugins that peer-depend on
+      # vitest (`vitest-axe`, `@testing-library/jest-dom`). That is a
+      # migration, not a dependency bump.
+      - dependency-name: "vitest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/*"
+        update-types: ["version-update:semver-major"]
+
+  # ── apps/mobile ──────────────────────────────────────────────
+  #
+  # Its own install root, deliberately outside the pnpm workspace: React
+  # Native needs Metro rather than Turbopack and brings an Expo dependency
+  # tree that would add several hundred megabytes to every other TypeScript
+  # CI job. That also means the `/` entry above does not cover it — and
+  # Dependabot *alerts* scan every manifest regardless of this file, so
+  # alerts appeared here that no update job could ever act on.
+  #
+  # Adding this entry made the directory visible to update jobs. It did not,
+  # and cannot, make every advisory here actionable, and the difference is
+  # worth writing down because the next person will read a red
+  # `Dependabot Updates` run and look for a mistake in this file.
+  #
+  # A security update for a *transitive* npm dependency can only propose a
+  # version the parent's own range permits. Two `image-size` advisories
+  # (GHSA-5p2g-fcmc-qvqq, GHSA-w3rx-r6r6-pgpr) are fixed in 2.0.3, and every
+  # `metro` release that depends on `image-size` declares `^1.0.2` — so the
+  # highest version Dependabot could install was 1.2.1 and it recorded
+  # `security_update_not_possible`, which surfaces as a *failed job* rather
+  # than as a pull request. Raising the parent was not a route either: the
+  # only `@expo/metro` that drops `image-size` ships with Expo SDK 55, and
+  # `expo` is pinned to 54 here.
+  #
+  # The fix for that class is a pnpm override in `apps/mobile/package.json`,
+  # which is a resolution decision this file has no way to express.
+  # `scripts/check_toolchain_pins.py` now compares the override sets and the
+  # resolved versions of every install root against each other, so an
+  # override applied in the workspace and not here fails CI instead of
+  # sitting as an open alert nobody can action.
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    # Deliberately low. The first run against this directory opened fourteen
+    # PRs at once and starved CI of runners for everything else.
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "javascript", "mobile"]
+    ignore:
+      # Expo SDK packages do not version independently — they move together
+      # with the SDK release, and their standalone version line is unrelated
+      # to it. Dependabot reads `expo-linking@8.0.12 -> 57.0.10` as a major
+      # bump; it is actually a different numbering scheme, and taking it
+      # produces a package set no Expo SDK ever shipped. These move when
+      # `expo` itself moves, via `npx expo install --fix`.
+      - dependency-name: "expo-*"
+      - dependency-name: "expo"
+      - dependency-name: "react-native"
+      - dependency-name: "react"
+      - dependency-name: "react-dom"
+      # These two are Expo-table-managed exactly like `expo-*` — they move
+      # with the SDK via `npx expo install --fix`, and `mobile.yml`'s compat
+      # gate greps `expo install --check` for precisely these two names and
+      # fails the build on any off-table version. A proposed
+      # `react-native-screens ~4.16 -> ~4.30` was folded in by hand (#1426)
+      # and reddened the iOS link and the Android gate on `main` for a day —
+      # the hold belongs here, where the proposal originates.
+      - dependency-name: "react-native-screens"
+      - dependency-name: "react-native-safe-area-context"
+      # Hold `typescript` on v6, for the same measured reason as the `/` and
+      # `/services/realtime` entries above. This directory's CI gate is
+      # `tsc --noEmit`, so a TypeScript 7 pull request reds it exactly the way
+      # it reds `apps/web` — and it was the only Node install root running
+      # `tsc` without the hold, which is the same shape as the `image-size`
+      # finding: a decision taken for the workspace that never reached the
+      # root installing separately.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # ── services/realtime ────────────────────────────────────────
+  #
+  # npm rather than pnpm, with its own package-lock.json, so the root entry
+  # does not reach it either. Three `qs` advisories sat here unactionable.
+  - package-ecosystem: npm
+    directory: /services/realtime
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    open-pull-requests-limit: 3
+    labels: ["dependencies", "javascript"]
+    groups:
+      # Four advisories here needed sdk-node, core, propagator-jaeger and
+      # exporter-prometheus to move together — and the floor for one is not
+      # the floor for the others, because sdk-node's transitive pins lag its
+      # own version. Grouping them means the next bump is one reviewable PR
+      # that either resolves all of them or none.
+      opentelemetry:
+        patterns: ["@opentelemetry/*"]
+      # The eslint family has to move as one, for the same reason the root
+      # entry quarantines it — but measured here rather than assumed.
+      # `@eslint/js@10.0.1` declares `peerDependencies: { eslint: "^10.0.0" }`,
+      # so an ungrouped bump of it alone against this service's `eslint@^9`
+      # installs a tree `npm ls` reports as `invalid` in nine places. It is
+      # not caught by anything: `npm ci`, `tsc`, `eslint src test` and the
+      # test run were all green on that tree, and the effective rule set
+      # actually *grew* by three rules, so the only signal was the peer graph.
+      #
+      # Unlike the root entry this service does not use `eslint-plugin-react`
+      # — its flat config is `@eslint/js` plus `typescript-eslint`, and
+      # `typescript-eslint@8.70.1` already accepts `eslint@^10`. So this is a
+      # group and not an `ignore`: the family can move whenever the three
+      # arrive in one reviewable pull request.
+      eslint:
+        patterns: ["eslint", "@eslint/*", "typescript-eslint", "@typescript-eslint/*"]
+    ignore:
+      # Major bumps here are breaking-change reviews, not dependency hygiene:
+      # typescript 5 -> 7 and @types/node 20 -> 26 both arrived as automatic
+      # PRs against a service whose build is `tsc` with no other guard.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+
+  # ── pip (api) ────────────────────────────────────────────────
+  #
+  # This entry had no `ignore` rules at all, which is why `ruff 0.4.10 ->
+  # 0.16.8` and `mypy 1.20.2 -> 2.3.1` arrived as ordinary weekly bumps
+  # against a service whose lint and type-check gates are both ratchets.
+  #
+  # Neither hold is about the tool being unwelcome. Both are about the fact
+  # that Dependabot can only edit `services/api/pyproject.toml` and its lock,
+  # while each of these versions is declared in several places that have to
+  # move in one commit — and in both cases the `Python — Lint & Type-check`
+  # required check is what fails, i.e. on every open pull request, not just
+  # the bump's own.
+  - package-ecosystem: pip
+    directory: /services/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    ignore:
+      # ruff is declared `>=0.4.4,<0.5` in fourteen files (seven
+      # pyproject.toml plus CI and image install lines) — a count
+      # `scripts/check_dependency_pins.py` enforces agreement across — and
+      # `.github/workflows/ci.yml` runs `ruff format --check services/` as a
+      # hard gate. Measured on 0.16.8: 90 files would be
+      # reformatted and `ruff check services/` reports 3 errors, against
+      # `All checks passed!` / `1229 files already formatted` on the pin.
+      # Moving ruff is therefore a whole-tree reformat landed together with
+      # all fourteen declarations, not a dependency bump. ruff is 0.x, so the
+      # 0.4 -> 0.16 step is a *minor* under semver; patches inside 0.4.x are
+      # deliberately still allowed through.
+      - dependency-name: "ruff"
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-major"
+      # mypy is declared `>=1.10,<2` in six pyproject.toml files and in the
+      # same CI job, which runs `scripts/check_mypy_baseline.py` — a
+      # `(tree, file, code)` ratchet. Measured on 2.3.1 under Python 3.11
+      # (the environment the baseline is recorded in): the gate exits 1 with
+      # 35 entries no longer matching. They are all *shrinkages* — mypy 2
+      # stops reporting `import-untyped` for those files — and the ratchet
+      # refuses them in that direction on purpose, so the banked headroom
+      # cannot silently absorb the next regression. Moving mypy means
+      # re-recording the baseline with `--update` under 2.x on 3.11 and
+      # moving all six declarations at once.
+      - dependency-name: "mypy"
+        update-types: ["version-update:semver-major"]
+      # Deliberately *not* held either: `fastapi` -- but note that Dependabot
+      # cannot finish the job on its own, which is why its PRs recur and sit.
+      # The range is declared in ten places: three monitored pyproject.toml
+      # files (api, actions, agents), three that no ecosystem entry watches
+      # (honeytokens, purple-team, ueba) and four `pip install` lines in
+      # .github/workflows (check-openapi, cross-tenant-rbac, integration,
+      # isolation). `scripts/check_dependency_pins.py` requires all ten to
+      # agree, Dependabot opens one PR per *directory*, and `groups` only
+      # combines updates inside a directory -- so every single-service fastapi
+      # PR fails `No two install paths disagree` by construction, and no
+      # combination of them would pass either, because nothing in any
+      # ecosystem edits a workflow file. Completing a fastapi bump is a manual
+      # cross-site change: move all ten declarations, relock the three
+      # services, then run the suites. Left unignored on purpose, for the same
+      # reason as sqlglot below -- an `ignore` rule mutes security advisories
+      # too, and this is the HTTP surface.
+
+      # Deliberately *not* held: `sqlglot`. It is the parser enforcing
+      # ClickHouse tenant isolation, an `ignore` rule suppresses security
+      # updates as well as version updates, and a single-path bump already
+      # cannot merge — `scripts/check_sqlglot_pin.py` fails closed when the
+      # seven install paths disagree. Noise that a gate catches is a better
+      # trade here than a muted advisory on the isolation boundary.
+
+  # ── pip (actions) ────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /services/actions
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── pip (agents) ────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: /services/agents
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    ignore:
+      # Hold `mcp` on 1.x. The 2.0 major is not a version bump this service
+      # can take automatically, measured by installing both and reading the
+      # signatures: `streamablehttp_client` is spelled
+      # `streamable_http_client`, and its `headers`, `timeout`,
+      # `sse_read_timeout`, `httpx_client_factory` and `auth` parameters
+      # collapsed into one caller-built `http_client`. The single call site
+      # (`app/mcp/client.py:207`) passes three of those five, and one of them
+      # is the `_CappedTransport` factory that stops a third-party MCP server
+      # over-reading into the agent. 2.x also requires `httpx2` rather than
+      # `httpx` — a different distribution, while ten services here declare
+      # `httpx >=0.26,<0.29` — so the transport cap has to be rebuilt against
+      # a new HTTP stack. That is a migration with a security surface, and it
+      # arrives as its own reviewed change; see #1033, closed for these
+      # reasons. Majors only, so 1.x security advisories still reach us,
+      # which is the trade the `sqlglot` note above declines to make for a
+      # dependency where a single-path bump is itself the signal.
+      - dependency-name: "mcp"
+        update-types: ["version-update:semver-major"]
+
+  # ── Go (enrichment) ──────────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/enrichment
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── Go (ingest) ──────────────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/ingest
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── Go (demo-producer) ───────────────────────────────────────
+  - package-ecosystem: gomod
+    directory: /services/demo-producer
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+
+  # ── GitHub Actions ───────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+    groups:
+      codeql-action:
+        # `init`, `autobuild` and `analyze` must move in one commit. CodeQL
+        # refuses to run when a single workflow mixes versions ("Not all
+        # workflow steps that use `github/codeql-action` actions use the same
+        # version") and fails the job as a configuration error, so ungrouped
+        # dependabot PRs for these are individually unmergeable.
+        patterns: ["github/codeql-action*"]

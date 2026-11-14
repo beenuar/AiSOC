@@ -1,0 +1,24 @@
+title: SSH Brute Force From Single Source
+id: aisoc-id-nw-0009-ssh-brute
+status: stable
+description: |
+  More than 50 failed SSH authentications from a single source IP
+  within five minutes — indicates credential brute force or password
+  spray targeting Linux infrastructure.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: linux
+  service: auth
+tags:
+  - attack.t1110.001
+  - attack.credential_access
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'authentication'
+    event.outcome: 'failure'
+    service.name: 'ssh'
+  brute:
+    enrich.auth.failed_per_src_5m|gte: 50
+  condition: selection and brute

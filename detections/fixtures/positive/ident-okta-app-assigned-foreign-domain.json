@@ -1,0 +1,4 @@
+{
+  "event_type": "application.federated.user.assign",
+  "external_domain": true
+}

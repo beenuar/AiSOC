@@ -1,0 +1,53 @@
+id: auditd
+name: Linux Auditd
+version: 1.0.0
+category: edr
+vendor: Linux Audit Subsystem
+publisher: AiSOC Community
+description: >
+  Linux ``auditd`` connector — file_tail mode, no host-agent dependency.
+  Tails ``/var/log/audit/audit.log`` forward from a saved byte cursor,
+  reassembles multi-record auditd events (SYSCALL + EXECVE + PATH +
+  CWD + PROCTITLE) into flat normalised documents, and feeds the
+  same ``syscall`` / ``exe`` / ``argv`` / ``path`` / ``actor_uid`` /
+  ``auditd_key`` primitives that detection content under
+  ``detections/endpoint/linux-*.yaml`` pivots on. Ship the AiSOC
+  ``audit.rules`` profile (``profiles/auditd/aisoc.rules``) for
+  full coverage; rules with ``aisoc_*`` keys auto-bucket into
+  AiSOC's four-tier severity ladder.
+homepage: https://github.com/linux-audit/audit-userspace
+docs_url: /docs/connectors/auditd
+license: MIT
+capabilities:
+  - pull_audit
+  - pull_alerts
+config_schema:
+  - name: host_label
+    label: Host label
+    type: string
+    required: true
+    help_text: >
+      Human-readable label for the host being monitored (for example
+      ``web-prod-01.eu-west-1``). Stamped on every normalised event so
+      detections and investigations can filter to a single fleet
+      member without relying on the kernel's reported hostname.
+  - name: audit_log_path
+    label: Audit log path
+    type: string
+    required: true
+    default: /var/log/audit/audit.log
+    help_text: >
+      Absolute path to ``audit.log`` inside the AiSOC connector pod.
+      Mount the host's ``/var/log/audit`` directory read-only into
+      the pod, or run the connector on the same host as the auditd
+      daemon. The connector needs read access to this path.
+  - name: cursor_path
+    label: Cursor file path
+    type: string
+    required: false
+    help_text: >
+      Optional override for where AiSOC stores its byte-position
+      cursor. Defaults to ``<audit_log_path>.aisoc-cursor``. Use a
+      writeable path — the connector pod needs to update this on
+      every successful poll. Surviving the cursor across restarts
+      is what gives the connector exactly-once-ish semantics.

@@ -1,0 +1,8 @@
+{
+  "auditd_key": "aisoc_critical_ssh_config",
+  "exe": "/usr/bin/dpkg",
+  "syscall": "openat",
+  "path": "/etc/ssh/sshd_config",
+  "uid": 0,
+  "comm": "dpkg"
+}

@@ -1,0 +1,5 @@
+{
+  "destination_cidr": "0.0.0.0/0",
+  "event_name": "AttachUserPolicy",
+  "target_type": "internet-gateway"
+}

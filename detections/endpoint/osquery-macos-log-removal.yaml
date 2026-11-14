@@ -1,0 +1,25 @@
+id: det-endpoint-291
+name: macOS System Log Removed or Manually Rotated
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS System Log
+  Removed or Manually Rotated'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1070
+- tlp.white
+category: endpoint
+log_source:
+  product: osquery
+  service: processes
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ALL ["system.log"]
+    AND cmdline CONTAINS_ANY ["rm ", "truncate", "audit -n"]
+false_positives:
+- Scheduled log rotation via cron or launchd
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,48 @@
+id: splunk-security-content-d0895c20-de71-4fd2-b56c-3fcdb888eba1
+name: Azure AD Multiple Denied MFA Requests For User
+description: The following analytic detects an unusually high number of denied Multi-Factor
+  Authentication (MFA) requests for a single user within a 10-minute window, specifically
+  when more than nine MFA prompts are declined. It leverages Azure Active Directory
+  (Azure AD) sign-in logs, focusing on "Sign-in activity" events with error code 500121
+  and additional details indicating "MFA denied; user declined the authentication."
+  This behavior is significant as it may indicate a targeted attack or account compromise
+  attempt, with the user actively declining unauthorized access. If confirmed malicious,
+  it could lead to data exfiltration, lateral movement, or further malicious activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1621
+  categories:
+  - cloud
+references:
+- https://www.mandiant.com/resources/blog/russian-targeting-gov-business
+- https://arstechnica.com/information-technology/2022/03/lapsus-and-solar-winds-hackers-both-use-the-same-old-trick-to-bypass-mfa/
+- https://therecord.media/russian-hackers-bypass-2fa-by-annoying-victims-with-repeated-push-notifications/
+- https://attack.mitre.org/techniques/T1621/
+- https://attack.mitre.org/techniques/T1078/004/
+- https://www.cisa.gov/sites/default/files/publications/fact-sheet-implement-number-matching-in-mfa-applications-508c.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs operationName=\"Sign-in activity\"\
+    \n  | rename properties.* as *\n  | search status.errorCode=500121 status.additionalDetails=\"\
+    MFA denied; user declined the authentication\"\n  | bucket span=10m _time\n  |\
+    \ rename userAgent as user_agent\n  | fillnull\n  | stats count min(_time) as\
+    \ firstTime max(_time) as lastTime values(dest) as dest values(user_agent) as\
+    \ user_agent values(src) as src\n    BY user status.additionalDetails vendor_account\n\
+    \       vendor_product signature _time\n  | where count > 9\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_multiple_denied_mfa_requests_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d0895c20-de71-4fd2-b56c-3fcdb888eba1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multiple_denied_mfa_requests_for_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

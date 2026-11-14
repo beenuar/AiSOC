@@ -1,0 +1,28 @@
+title: Okta Impossible Travel
+id: aisoc-id-0001-okta-impossible-travel
+status: stable
+description: |
+  Successful Okta authentication from two countries within a window
+  shorter than physical travel time. Normalized upstream by the
+  geo-velocity enrichment.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1078
+  - attack.initial_access
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action: 'user.session.start'
+    event.outcome: success
+    enrich.geo_velocity.kmh|gte: 800
+  filter_kiosk:
+    user.attributes.kiosk: true
+  condition: selection and not filter_kiosk
+falsepositives:
+  - VPN concentrators that move user IP egress between regions.
+  - Mobile carriers that NAT users across continents.

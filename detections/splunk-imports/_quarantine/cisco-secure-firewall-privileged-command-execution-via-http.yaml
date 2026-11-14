@@ -1,0 +1,45 @@
+id: splunk-security-content-0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
+name: Cisco Secure Firewall - Privileged Command Execution via HTTP
+description: 'This analytic detects HTTP requests to privileged execution paths on
+  Cisco routers, specifically targeting the `/level/15/exec/-/*` endpoint using Cisco
+  Secure Firewall Intrusion Events.
+
+  This detection leverages Snort signature 65370 to identify requests to these sensitive
+  endpoints, which when combined with other indicators may signal active exploitation
+  or post-compromise activity.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1505.003
+  categories:
+  - network
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa25-239a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall`\nEventType=IntrusionEvent\nsignature_id=65370\n\
+    | fillnull\n| stats dc(signature_id) as unique_signature_count\n        values(signature_id)\
+    \ as signature_id\n        values(signature) as signature\n        values(class_desc)\
+    \ as class_desc\n        values(MitreAttackGroups) as MitreAttackGroups\n    \
+    \    values(InlineResult) as InlineResult\n        values(InlineResultReason)\
+    \ as InlineResultReason\n        values(src) as src\n        values(dest_port)\
+    \ as dest_port\n        values(rule) as rule\n        values(transport) as transport\n\
+    \        values(app) as app\n        min(_time) as firstTime\n        max(_time)\
+    \ as lastTime\n        by dest\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___privileged_command_execution_via_http_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___privileged_command_execution_via_http.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

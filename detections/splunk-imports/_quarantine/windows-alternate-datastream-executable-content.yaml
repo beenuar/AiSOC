@@ -1,0 +1,43 @@
+id: splunk-security-content-a258bf2a-34fd-4986-8086-78f506e00206
+name: Windows Alternate DataStream - Executable Content
+description: The following analytic detects the writing of data with an IMPHASH value
+  to an Alternate Data Stream (ADS) in the NTFS file system. It leverages Sysmon Event
+  ID 15 and regex to identify files with a Portable Executable (PE) structure. This
+  activity is significant as it may indicate a threat actor staging malicious code
+  in hidden areas for persistence or future execution. If confirmed malicious, this
+  could allow attackers to execute hidden code, maintain persistence, or escalate
+  privileges within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://car.mitre.org/analytics/CAR-2020-08-001/
+- https://blogs.juniper.net/en-us/threat-research/bitpaymer-ransomware-hides-behind-windows-alternate-data-streams
+- https://twitter.com/0xrawsec/status/1002478725605273600?s=21
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=15 IMPHASH!=00000000000000000000000000000000 | regex
+    TargetFilename="(?<!\/)\b\w+(\.\w+)?:\w+(\.\w+)?$" | eval file_name = replace(TargetFilename,"(.*\\\)",""),
+    process = Image , file_path = TargetFilename, file_hash = coalesce(SHA256,SHA1,MD5,Hash)
+    | stats count min(_time) as firstTime max(_time) as lastTime by dest dvc file_hash
+    file_name file_path process_exec process_guid process_id process_name process_path
+    signature signature_id user_id vendor_product Contents Image | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_alternate_datastream___executable_content_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a258bf2a-34fd-4986-8086-78f506e00206
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_alternate_datastream___executable_content.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,55 @@
+id: splunk-security-content-e0422b71-2c05-4f32-8754-01fb415f49c9
+name: Executables Or Script Creation In Temp Path
+description: 'The following analytic identifies the creation of executables or scripts
+  in temporary file paths on Windows systems. It leverages the Endpoint.Filesystem
+  data set to detect files with specific extensions (e.g., .exe, .dll, .ps1) created
+  in temporary directories (e.g., \windows\Temp\, \AppData\Local\Temp\).
+
+  This activity can be significant as adversaries often use these paths to evade detection
+  and maintain persistence.
+
+  If confirmed malicious, this behavior could allow attackers to execute unauthorized
+  code, escalate privileges, or persist within the environment, posing a significant
+  security threat.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2020/04/20/sqlserver-or-the-miner-in-the-basement/
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+- https://twitter.com/pr0xylife/status/1590394227758104576
+- https://www.microsoft.com/en-us/security/blog/2023/05/24/volt-typhoon-targets-us-critical-infrastructure-with-living-off-the-land-techniques/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Endpoint.Filesystem where\n\n\
+    Filesystem.action= \"created\"\nFilesystem.file_name IN (\n    \"*.bat\",\n  \
+    \  \"*.cmd\",\n    \"*.com\",\n    \"*.dll\",\n    \"*.exe\",\n    \"*.js\",\n\
+    \    \"*.msc\",\n    \"*.pif\",\n    \"*.ps1\",\n    \"*.sys\",\n    \"*.vbe\"\
+    ,\n    \"*.vbs\"\n)\nFilesystem.file_path IN (\n    \"*:\\\\Temp\\\\*\",\n   \
+    \ \"*:\\\\Windows\\\\Temp\\\\*\",\n    \"*\\\\AppData\\\\Local\\\\Temp\\\\*\"\n\
+    )\nNOT Filesystem.file_path IN (\"*\\\\__PSScriptPolicyTest_*\")\n\nby Filesystem.action\
+    \ Filesystem.dest Filesystem.file_access_time\n   Filesystem.file_create_time\
+    \ Filesystem.file_hash\n   Filesystem.file_modify_time Filesystem.file_name\n\
+    \   Filesystem.file_path Filesystem.file_acl\n   Filesystem.file_size Filesystem.process_guid\n\
+    \   Filesystem.process_id Filesystem.user\n   Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `executables_or_script_creation_in_temp_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e0422b71-2c05-4f32-8754-01fb415f49c9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/executables_or_script_creation_in_temp_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

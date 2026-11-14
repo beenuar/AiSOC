@@ -1,0 +1,54 @@
+id: splunk-security-content-4af01f6b-d8d4-4f96-8635-758a01557130
+name: Windows AD Object Owner Updated
+description: AD Object Owner Updated. The owner provides Full control level privileges
+  over the target AD Object. This event has significant impact alone and is also a
+  precursor activity for hiding an AD object.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  - T1484
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/win32/secauthz/ace-strings
+- https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-adts/1522b774-6464-41a3-87a5-1e5633c3fbbb
+- https://trustedsec.com/blog/a-hitchhackers-guide-to-dacl-based-detections-part-1-a
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136\n  | stats min(_time) as _time\
+    \ values(eval(if(OperationType==\"%%14675\",AttributeValue,null))) as old_value\
+    \ values(eval(if(OperationType==\"%%14674\",AttributeValue,null))) as new_value\
+    \ values(OperationType) as OperationType values(dest) as dest\n    BY ObjectClass\
+    \ ObjectDN OpCorrelationID\n       src_user SubjectLogonId DSName\n  | rex field=old_value\
+    \ \"O:(?P<old_owner>.*?)G:\"\n  | rex field=new_value \"O:(?P<new_owner>.*?)G:\"\
+    \n  | where old_owner!=new_owner ``` optional SID resolution lookups\n  | lookup\
+    \ identity_lookup_expanded objectSid as new_owner OUTPUT downLevelDomainName as\
+    \ new_owner_user\n  | lookup admon_groups_def objectSid as new_owner OUTPUT cn\
+    \ as new_owner_group\n  | lookup identity_lookup_expanded objectSid as old_owner\
+    \ OUTPUT downLevelDomainName as old_owner_user\n  | lookup admon_groups_def objectSid\
+    \ as old_owner OUTPUT cn as old_owner_group ```\n  | lookup builtin_groups_lookup\
+    \ builtin_group_string  as new_owner_group OUTPUT builtin_group_name as new_owner_group_builtin_group\n\
+    \  | lookup builtin_groups_lookup builtin_group_string  as old_owner OUTPUT builtin_group_name\
+    \ as old_owner_group_builtin_group\n  | eval user=coalesce(new_owner_user, new_owner_group,\
+    \ new_owner_group_builtin_group, new_owner), previousOwner=coalesce(old_owner_user,\
+    \ old_owner_group, old_owner_group_builtin_group, old_owner)\n  | stats values(previousOwner)\
+    \ as previousOwner values(user) as user values(SubjectLogonId) as SubjectLogonId\n\
+    \    BY _time ObjectClass ObjectDN\n       src_user OpCorrelationID DSName\n \
+    \ | `windows_ad_object_owner_updated_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4af01f6b-d8d4-4f96-8635-758a01557130
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_object_owner_updated.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

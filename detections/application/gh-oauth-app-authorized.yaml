@@ -1,0 +1,23 @@
+id: det-application-137
+name: GitHub OAuth Application Authorised Against The Organisation
+description: An authorised application reaches organisation data with the authorising member's scope.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.oauth_application.create"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

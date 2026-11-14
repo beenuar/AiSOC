@@ -1,0 +1,24 @@
+id: det-endpoint-286
+name: Linux osqueryd Service Stop Detected via auditd
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'Linux osqueryd
+  Service Stop Detected via auditd'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1489
+- tlp.white
+category: endpoint
+log_source:
+  product: linux
+  service: auditd
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ANY ["service osqueryd stop", "systemctl stop osqueryd"]
+false_positives:
+- Admin stopping osqueryd for maintenance (allow-listed)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

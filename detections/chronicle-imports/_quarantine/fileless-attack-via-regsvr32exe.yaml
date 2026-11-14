@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-fileless-attack-via-regsvr32exe
+name: fileless_attack_via_regsvr32exe
+description: fileless_attack_via_regsvr32exe
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule fileless_attack_via_regsvr32exe {\n meta:\n    author = \"\
+    Ariel Millahuel\"\n    description = \"Detects suspicious behavior in the utilization\
+    \ of regsvr32.exe and also a possible fileless attack via this executable.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/KO6EuyFYoCN8\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/11/26\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"execution, defense evasion, t1218,\
+    \ t1218.010, t1059, t1059.003\"\n\n  events:\n(re.regex($selection.target.process.command_line,\
+    \ `.*regsvr32.*`) and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\") and re.regex($selection.target.process.command_line, `.*/s.*`) and\
+    \ re.regex($selection.target.process.command_line, `.*/i.*`) and (re.regex($selection.target.process.command_line,\
+    \ `.*\\.txt.*`) or re.regex($selection.target.process.command_line, `.*\\.dll.*`)))\n\
+    \n  condition:\n    $selection\n}"
+  chronicle_rule_name: fileless_attack_via_regsvr32exe
+provenance:
+  source: chronicle/detection-rules
+  source_id: fileless_attack_via_regsvr32exe
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/process_creation/fileless_attack_via_regsvr32_exe.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

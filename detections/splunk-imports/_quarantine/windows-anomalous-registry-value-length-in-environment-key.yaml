@@ -1,0 +1,51 @@
+id: splunk-security-content-f5bde743-245a-4e1f-a152-3971cec6e9ef
+name: Windows Anomalous Registry Value Length in Environment Key
+description: 'The following analytic detects creation or modification of registry
+  values under a user or system Environment key (paths matching *\Environment\*) where
+  the stored value exceeds 2,000 characters.
+
+  Legitimate environment variables are typically short strings (paths, tokens, or
+  flags); unusually long values can indicate adversaries or malware staging encoded
+  payloads, bloated malicious PATH entries, or other data in a location that is loaded
+  for every interactive session.
+
+  This behavior has been observed in contexts such as .NET infostealer activity. Analysts
+  should validate the writing process, value content, and whether the change aligns
+  with trusted software deployment or administrative tasks.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.joesandbox.com/analysis/1817558/0/pdfexecutive
+- https://www.broadcom.com/support/security-center/protection-bulletin/vip-keylogger-spreads-via-multi-org-impersonation-campaign
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.vipkeylogger
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Registry WHERE\n\n\
+    Registry.action IN (\"created\", \"modified\")\nRegistry.registry_path= \"*\\\\\
+    Environment\\\\*\"\nRegistry.registry_value_name != \"Path\"\n\nby Registry.action\
+    \ Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive\
+    \  Registry.registry_key_name  Registry.registry_value_name Registry.registry_value_type\
+    \ Registry.status Registry.user Registry.vendor_product Registry.registry_value_data\
+    \ Registry.registry_path\n| `drop_dm_object_name(Registry)`\n| eval registry_value_data_len\
+    \ = len(registry_value_data)\n| where registry_value_data_len > 2000\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_anomalous_registry_value_length_in_environment_key_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f5bde743-245a-4e1f-a152-3971cec6e9ef
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_anomalous_registry_value_length_in_environment_key.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

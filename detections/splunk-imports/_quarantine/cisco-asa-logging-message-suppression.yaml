@@ -1,0 +1,52 @@
+id: splunk-security-content-4e6c9d2a-8f3b-4c7e-9a5f-2d8b6e1c4a9f
+name: Cisco ASA - Logging Message Suppression
+description: 'This analytic detects suppression of specific logging messages on Cisco
+  ASA devices using the "no logging message" command.
+
+  Adversaries may suppress specific log message IDs to selectively disable logging
+  of security-critical events such as authentication failures, configuration changes,
+  or suspicious network activity. This targeted approach allows attackers to evade
+  detection while maintaining normal logging operations that might otherwise alert
+  administrators to complete logging disablement.
+
+  The detection monitors for command execution events (message ID 111008 or 111010)
+  containing the "no logging message" command, which is used to suppress specific
+  message IDs from being logged regardless of the configured severity level.
+
+  Investigate unauthorized message suppression, especially suppression of security-critical
+  message IDs (authentication, authorization, configuration changes), suppression
+  performed by non-administrative accounts, during unusual hours, or without documented
+  justification.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.002
+  - T1070
+  categories:
+  - application
+references:
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/RayInitiator-LINE-VIPER/ncsc-mar-rayinitiator-line-viper.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111008, 111010)\ncommand = \"no logging\
+    \ message *\"\n| fillnull\n| stats count\n        earliest(_time) as firstTime\n\
+    \        latest(_time) as lastTime\n        values(user) as user\n        values(action)\
+    \ as action\n        values(message_id) as message_id\n        values(command)\
+    \ as command\n        values(src_ip) as src_ip\n        values(process_name) as\
+    \ process_name\n  by host\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_asa___logging_message_suppression_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 4e6c9d2a-8f3b-4c7e-9a5f-2d8b6e1c4a9f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___logging_message_suppression.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

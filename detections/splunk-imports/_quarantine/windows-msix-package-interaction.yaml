@@ -1,0 +1,43 @@
+id: splunk-security-content-1a06689d-814e-4db2-b2c7-5a174f8c2d6d
+name: Windows MSIX Package Interaction
+description: This hunting query detects user interactions with MSIX packages by monitoring
+  EventCode 171 in the Microsoft-Windows-AppXPackaging/Operational logs. These events
+  are generated when a user clicks on or attempts to interact with an MSIX package,
+  even if the package is not fully installed. This information can be valuable for
+  security teams to identify what MSIX packages users are attempting to open in their
+  environment, which may help detect malicious MSIX packages before they're fully
+  installed. Monitoring these interactions can provide early warning of potential
+  MSIX package abuse, which has been leveraged by threat actors such as FIN7, Zloader
+  (Storm-0569), and FakeBat (Storm-1113).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://www.appdeploynews.com/packaging-types/msix/troubleshooting-an-msix-package/
+- https://learn.microsoft.com/en-us/windows/win32/appxpkg/troubleshooting
+- https://www.advancedinstaller.com/msix-installation-or-launching-errors-and-fixes.html
+- https://redcanary.com/blog/msix-installers/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_appxpackaging` EventCode=171\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime values(packageFullName) as packageFullName\
+    \ values(user_id) as user_id\n    BY host EventCode\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_msix_package_interaction_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1a06689d-814e-4db2-b2c7-5a174f8c2d6d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_msix_package_interaction.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

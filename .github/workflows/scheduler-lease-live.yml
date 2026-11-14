@@ -1,0 +1,155 @@
+# One connector scheduler leads, against real Postgres (depth plan 4.5).
+#
+# Without an election two replicas each add one APScheduler job per
+# connector instance, so every vendor is polled twice on every cycle. On
+# a rate-limited API that is worse than duplication: the second replica's
+# poll is what gets throttled, and a throttled connector looks identical
+# to one whose credentials expired.
+#
+# The election is one conditional UPDATE, and the only way to show it
+# works is two of them against one row. The decisive test interleaves the
+# transactions explicitly rather than racing them, because a race between
+# coroutines on one loop passes under a SELECT-then-UPDATE as well —
+# measured on this repository's own lake-job claim.
+name: Scheduler lease (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: scheduler-lease-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  scheduler-lease-live:
+    name: Two replicas cannot both poll every vendor
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS
+      # policy in the schema, and although scheduler_leases carries none
+      # by design — it is replica coordination, not tenant data — running
+      # a live suite as the superuser is how a tree acquires the habit.
+      LEASE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      LEASE_DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install connectors from its lockfile
+        working-directory: services/connectors
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          # greenlet explicitly: SQLAlchemy 2.1 moved it out of the base
+          # dependency set, and without it every async engine call raises
+          # a ValueError that reads as a test bug rather than a missing
+          # package.
+          python -m pip install --quiet pytest pytest-asyncio greenlet
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: The lease table exists
+        run: |
+          set -euo pipefail
+          found=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = 'scheduler_leases'")
+          if [ "$found" != "1" ]; then
+            echo "FAIL: migration 112 ran and created no scheduler_leases table."
+            exit 1
+          fi
+
+      - name: Acquisition, renewal, takeover and release
+        working-directory: services/connectors
+        env:
+          ISOLATION_LEASE_DSN: ${{ env.LEASE_DSN }}
+          PYTHONPATH: .
+        run: python -m pytest ../../tests/isolation/test_scheduler_lease_live.py -v --tb=short
+
+      - name: The suite actually ran
+        working-directory: services/connectors
+        env:
+          ISOLATION_LEASE_DSN: ${{ env.LEASE_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_scheduler_lease_live.py -q 2>&1 | tee /tmp/lease-run.txt
+          if grep -qE '[0-9]+ skipped' /tmp/lease-run.txt; then
+            echo "FAIL: a case skipped in the job whose whole purpose is to run it live."
+            exit 1
+          fi
+          if ! grep -qE '[0-9]+ passed' /tmp/lease-run.txt; then
+            echo "FAIL: no case reported as passed."
+            exit 1
+          fi
+
+      # The negative control.
+      #
+      # Remove the expiry predicate from the acquire. Postgres then has
+      # nothing to re-evaluate once the row lock is released, so both
+      # interleaved transactions take the lease and both replicas poll
+      # every vendor. The suite must go red.
+      - name: The gate fails when the acquire stops checking the expiry
+        working-directory: services/connectors
+        env:
+          ISOLATION_LEASE_DSN: ${{ env.LEASE_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          cp app/leader_lease.py /tmp/lease.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/leader_lease.py")
+          s = p.read_text()
+          needle = "     WHERE scheduler_leases.expires_at < now()\n"
+          if needle not in s:
+              print("negative control could not find the expiry predicate; the acquire has been "
+                    "reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "\n", 1))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_scheduler_lease_live.py::TestOnlyOneLeader" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/lease.bak app/leader_lease.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: both replicas took the lease and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: without the predicate both replicas lead and the suite goes red, as it must."

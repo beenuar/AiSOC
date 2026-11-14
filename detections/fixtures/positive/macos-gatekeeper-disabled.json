@@ -1,0 +1,5 @@
+{
+  "command_line": "spctl --master-disable",
+  "host": "mac-01",
+  "image_basename": "spctl"
+}

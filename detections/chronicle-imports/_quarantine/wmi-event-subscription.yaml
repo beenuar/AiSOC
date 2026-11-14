@@ -1,0 +1,35 @@
+id: chronicle-detection-rules-wmi-event-subscription
+name: wmi_event_subscription
+description: wmi_event_subscription
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule wmi_event_subscription {\n meta:\n    author = \"Tom Ueltschi\
+    \ (@c_APT_ure)\"\n    description = \"Detects creation of WMI event subscription\
+    \ persistence method  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/3ptoCPtD5smC\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Persistence, t1084, Execution, t1047\"\n\n  events:\n\
+    ($selector.metadata.product_event_type = \"19\" or $selector.metadata.product_event_type\
+    \ = \"20\" or $selector.metadata.product_event_type = \"21\")\n\n  condition:\n\
+    \    $selector\n}"
+  chronicle_rule_name: wmi_event_subscription
+provenance:
+  source: chronicle/detection-rules
+  source_id: wmi_event_subscription
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/wmi_event_subscription.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

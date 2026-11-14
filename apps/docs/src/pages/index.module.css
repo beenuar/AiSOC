@@ -1,0 +1,84 @@
+.heroBanner {
+  padding: 4rem 0;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+.sectionTitle {
+  text-align: center;
+  margin-bottom: 0.75rem;
+}
+
+.sectionLede {
+  text-align: center;
+  max-width: 720px;
+  margin: 0 auto 2.5rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+.compareWrap {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.compareTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.compareTable thead th {
+  background: var(--ifm-color-emphasis-100);
+  text-align: left;
+  font-weight: 600;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.compareTable th.aisocCol,
+.compareTable td.aisocCell {
+  background: rgba(53, 120, 229, 0.08);
+  font-weight: 600;
+}
+
+.compareTable td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  vertical-align: top;
+}
+
+.compareTable tr:last-child td {
+  border-bottom: 0;
+}
+
+.compareYes {
+  color: var(--ifm-color-success);
+  font-weight: 600;
+}
+
+.compareNo {
+  color: var(--ifm-color-emphasis-600);
+}
+
+.compareCaveat {
+  color: var(--ifm-color-warning-darker);
+  font-weight: 500;
+}
+
+.compareNote {
+  text-align: center;
+  margin-top: 1rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.9rem;
+}

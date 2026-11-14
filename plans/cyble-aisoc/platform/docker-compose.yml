@@ -1,0 +1,30 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: aisoc-backend
+    ports:
+      - "8478:8478"
+    environment:
+      AISOC_ENV: dev
+      AISOC_LLM_PROVIDER: ${AISOC_LLM_PROVIDER:-mock}
+      AISOC_OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      AISOC_ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AISOC_AUTONOMY_LEVEL: ${AISOC_AUTONOMY_LEVEL:-supervised}
+    volumes:
+      - ./backend/data:/app/data
+
+  frontend:
+    image: python:3.12-slim
+    container_name: aisoc-frontend
+    working_dir: /app
+    ports:
+      - "8479:8479"
+    volumes:
+      - ./frontend:/app:ro
+    command: ["python", "-m", "http.server", "8479", "--bind", "0.0.0.0"]
+    depends_on:
+      - backend

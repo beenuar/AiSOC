@@ -1,0 +1,51 @@
+id: mitre-car-car-2013-09-005
+name: Service Outlier Executables
+description: New executables that are started as a service are suspicious. This analytic
+  looks for anomalous service executables.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'processes = search Process:Create
+
+      services = filter processes where (parent_image_path == "C:\Windows\System32\services.exe")
+
+      historic_services = filter services (where timestamp < now - 1 day AND timestamp
+      > now - 1 day)
+
+      current_services = filter services (where timestamp >= now - 1 day)
+
+      new_services = historic_services - current_services
+
+      output new_services'
+  - name: Sigma (Windows Event Log)
+    type: Sigma
+    code: ''
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WinServer event_id=7045
+
+      | chart count() as cnt by file
+
+      | search cnt < 5'
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2013-09-005
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2013-09-005.yaml
+notes:
+  car_status: needs_implementation

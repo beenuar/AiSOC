@@ -1,0 +1,30 @@
+title: AWS Security Group Opened to 0.0.0.0/0
+id: aisoc-id-cl-0003-sg-open-world
+status: stable
+description: |
+  Ingress rule added permitting 0.0.0.0/0 on a sensitive port. Common
+  side-effect of credential theft or misconfigured IaC.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1190
+  - attack.persistence
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'ec2.amazonaws.com'
+    event.action: 'AuthorizeSecurityGroupIngress'
+    aws.request_parameters|contains: '0.0.0.0/0'
+  sensitive_port:
+    aws.request_parameters|contains:
+      - '"fromPort":22'
+      - '"fromPort":3389'
+      - '"fromPort":3306'
+      - '"fromPort":5432'
+      - '"fromPort":6379'
+      - '"fromPort":27017'
+  condition: selection and sensitive_port

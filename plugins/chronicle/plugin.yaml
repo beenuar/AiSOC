@@ -1,0 +1,30 @@
+id: chronicle
+name: Google Chronicle SecOps Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Google Chronicle SecOps SIEM. Pulls detections and supports UDM searches.
+  Auth is via a Google Cloud service account JSON key with chronicle.* roles.
+author: AiSOC Core Team
+tags: [siem, google, chronicle, secops]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/chronicle.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, project_id, customer_id, service_account_json]
+  properties:
+    region:
+      type: string
+      description: Region
+    project_id:
+      type: string
+      description: GCP Project ID
+    customer_id:
+      type: string
+      description: UUID of your Chronicle tenant.
+    service_account_json:
+      type: string
+      description: Paste the entire service-account JSON key.
+      secret: true

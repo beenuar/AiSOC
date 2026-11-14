@@ -1,0 +1,43 @@
+id: splunk-security-content-a1e761ac-1344-4dbd-88b2-3f34c912d359
+name: Detect hosts connecting to dynamic domain providers
+description: The following analytic identifies DNS queries from internal hosts to
+  dynamic domain providers. It leverages DNS query logs from the `Network_Resolution`
+  data model and cross-references them with a lookup file containing known dynamic
+  DNS providers. This activity is significant because attackers often use dynamic
+  DNS services to host malicious payloads or command-and-control servers, making it
+  crucial for security teams to monitor. If confirmed malicious, this activity could
+  allow attackers to bypass firewall blocks, evade detection, and maintain persistent
+  access to the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1189
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\n\
+    \  from datamodel=Network_Resolution where\n  DNS.query=*\n  NOT DNS.query IN\
+    \ (\"-\", \"unknown\")\n  by DNS.answer DNS.answer_count DNS.query DNS.query_count\n\
+    \     DNS.reply_code_id DNS.src DNS.vendor_product\n| `drop_dm_object_name(\"\
+    DNS\")`\n| `security_content_ctime(firstTime)`\n| lookup update=true dynamic_dns_providers_default\
+    \ dynamic_dns_domains as query OUTPUTNEW isDynDNS_default\n| lookup update=true\
+    \ dynamic_dns_providers_local dynamic_dns_domains as query OUTPUTNEW isDynDNS_local\n\
+    | eval isDynDNS = coalesce(isDynDNS_local,isDynDNS_default)\n|fields - isDynDNS_default,\
+    \ isDynDNS_local| search isDynDNS=True\n| `detect_hosts_connecting_to_dynamic_domain_providers_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a1e761ac-1344-4dbd-88b2-3f34c912d359
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_hosts_connecting_to_dynamic_domain_providers.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

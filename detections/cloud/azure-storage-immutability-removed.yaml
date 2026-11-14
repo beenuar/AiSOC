@@ -1,0 +1,23 @@
+id: det-cloud-124
+name: Azure Storage Immutability Policy Removed
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'Azure Storage Immutability
+  Policy Removed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: cloud
+log_source:
+  product: azure
+  service: activity
+detection:
+  condition: |
+    operation_name ENDSWITH "immutabilityPolicies/delete"
+false_positives:
+- Retention review
+playbook: tpl-impact
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

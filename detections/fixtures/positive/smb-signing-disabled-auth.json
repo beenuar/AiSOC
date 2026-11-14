@@ -1,0 +1,6 @@
+{
+  "dst_ip": "10.0.5.10",
+  "event_id": 5158,
+  "smb_signing_enabled": false,
+  "src_ip": "10.0.5.7"
+}

@@ -1,0 +1,39 @@
+id: splunk-security-content-aa19e627-d448-4a31-85cd-82068dec5691
+name: Zscaler Virus Download threat blocked
+description: The following analytic identifies attempts to download viruses that were
+  blocked by Zscaler within a network. It leverages web proxy logs to detect blocked
+  actions indicative of virus download attempts. Key data points such as device owner,
+  user, URL category, destination URL, and IP are analyzed. This activity is significant
+  as it helps in early detection and remediation of potential virus threats, enhancing
+  network security. If confirmed malicious, this activity could indicate an attempt
+  to compromise the network, potentially leading to data breaches or further malware
+  infections.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` action=blocked threatname!=\"None\" threatclass=Virus\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime\n    BY action\
+    \ deviceowner user\n       urlcategory url src\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `zscaler_virus_download_threat_blocked_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: aa19e627-d448-4a31-85cd-82068dec5691
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_virus_download_threat_blocked.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

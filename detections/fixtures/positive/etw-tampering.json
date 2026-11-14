@@ -1,0 +1,5 @@
+{
+  "command_line": "wevtutil.exe sl Microsoft-Windows-PowerShell/Operational /e:false",
+  "host": "wks-001",
+  "image_basename": "wevtutil.exe"
+}

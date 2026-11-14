@@ -1,0 +1,23 @@
+id: yara-enricher
+name: YARA File Enricher
+version: "1.0.0"
+plugin_type: enricher
+description: >
+  Scans a file (supplied as bytes or a local path) against a configurable
+  set of YARA rule files. Returns matching rule names, tags, and metadata
+  so analysts can quickly triage malware indicators.
+author: AiSOC Core Team
+tags: [malware, yara, file-analysis, enrichment]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/yara-enricher
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  properties:
+    rules_dir:
+      type: string
+      description: "Directory containing *.yar / *.yara rule files."
+      default: /opt/aisoc/yara-rules
+    max_file_size_mb:
+      type: integer
+      default: 50

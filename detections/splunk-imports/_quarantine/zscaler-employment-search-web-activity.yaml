@@ -1,0 +1,39 @@
+id: splunk-security-content-5456bdef-d765-4565-8e1f-61ca027bc50e
+name: Zscaler Employment Search Web Activity
+description: The following analytic identifies web activity related to employment
+  searches within a network. It leverages Zscaler web proxy logs, focusing on entries
+  categorized as 'Job/Employment Search'. Key data points such as device owner, user,
+  URL category, destination URL, and IP are analyzed. This detection is significant
+  for SOCs as it helps monitor potential insider threats by identifying users who
+  may be seeking new employment. If confirmed malicious, this activity could indicate
+  a risk of data exfiltration or other insider threats, potentially leading to sensitive
+  information leakage or other security breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566
+  categories:
+  - application
+references:
+- https://help.zscaler.com/zia/nss-feed-output-format-web-logs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zscaler_proxy` urlsupercategory=\"Job/Employment Search\"\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY action deviceowner\
+    \ user\n       urlcategory url src\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `zscaler_employment_search_web_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5456bdef-d765-4565-8e1f-61ca027bc50e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/zscaler_employment_search_web_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

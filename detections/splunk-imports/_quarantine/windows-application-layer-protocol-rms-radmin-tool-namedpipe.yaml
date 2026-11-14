@@ -1,0 +1,42 @@
+id: splunk-security-content-b62a6040-49f4-47c8-b3f6-fc1adb952a33
+name: Windows Application Layer Protocol RMS Radmin Tool Namedpipe
+description: The following analytic detects the use of default or publicly known named
+  pipes associated with the RMX remote admin tool. It leverages Sysmon EventCodes
+  17 and 18 to identify named pipe creation and connection events. This activity is
+  significant as the RMX tool has been abused by adversaries and malware like Azorult
+  to collect data from targeted hosts. If confirmed malicious, this could indicate
+  unauthorized remote administration capabilities, leading to data exfiltration or
+  further compromise of the affected system. Immediate investigation is required to
+  determine the legitimacy of this tool's presence.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/a6f2ffe2-e6e2-4396-ae2e-04ea0143f2d8/
+- https://attack.mitre.org/techniques/T1071/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode IN (17, 18) EventType IN ( "CreatePipe", "ConnectPipe")
+    PipeName IN ("\\RManFUSServerNotify32", "\\RManFUSCallbackNotify32", "\\RMSPrint*")
+    | stats  min(_time) as firstTime max(_time) as lastTime count by dest dvc pipe_name
+    process_exec process_guid process_id process_name process_path signature signature_id
+    user_id vendor_product Image PipeName | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `windows_application_layer_protocol_rms_radmin_tool_namedpipe_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b62a6040-49f4-47c8-b3f6-fc1adb952a33
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_application_layer_protocol_rms_radmin_tool_namedpipe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

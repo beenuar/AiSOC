@@ -1,0 +1,24 @@
+title: High Volume DNS TXT Queries to External Domain
+id: aisoc-id-nw-0013-dns-txt-exfil
+status: stable
+description: |
+  Single internal host issues a large volume of DNS TXT queries
+  to one external domain in a short window — consistent with
+  DNS-based data exfiltration or C2 channels that encode payloads
+  in TXT records.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: dns
+tags:
+  - attack.t1048.003
+  - attack.exfiltration
+  - aisoc.network
+detection:
+  selection:
+    dns.question.type: 'TXT'
+    enrich.flow.dst_external: true
+  volume:
+    enrich.dns.queries_per_domain_5m|gte: 50
+  condition: selection and volume

@@ -1,0 +1,111 @@
+{
+  "id": "user-verification-containment-v1",
+  "name": "Suspicious Sign-In: Ask the User, Then Their Manager",
+  "description": "Asks the person whose account signed in whether they recognise it, escalates to their manager from the directory when nobody answers, and branches on the signed answer. 'No, that wasn't me' and 'nobody answered' both reach containment behind an analyst approval; 'yes, that was me' closes the case. Never asked on a confirmed true positive, and auto-sent only for alert classes the tenant opted into.",
+  "version": "1.0.0",
+  "author": "AiSOC",
+  "tags": [
+    "suspicious-signin",
+    "identity",
+    "verification",
+    "mitre.t1078",
+    "mitre.t1556"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["medium", "high"],
+    "tags": ["suspicious-signin", "impossible-travel", "new-device"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-10-11T00:00:00+00:00",
+  "updated_at": "2026-10-11T00:00:00+00:00",
+  "inputs": {
+    "user": {
+      "description": "The account the suspicious sign-in was for",
+      "field": "alert.user",
+      "required": true
+    },
+    "source_ip": {
+      "description": "Where the sign-in came from, quoted back to the person being asked",
+      "field": "alert.source_ip",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "ask",
+      "name": "Ask the account holder",
+      "type": "verify_user",
+      "params": {
+        "user": "{{alert.user}}",
+        "channel": "slack",
+        "message_template": "AiSOC saw a sign-in to your account from {{alert.source_ip}}. Was this you?",
+        "expires_in_hours": 24
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "approve_contain",
+      "name": "Approve containment",
+      "type": "approval",
+      "params": {
+        "prompt": "{{alert.user}} did not confirm this sign-in. Disable the account and revoke its sessions?",
+        "expires_in_hours": 4
+      },
+      "condition": "verification_outcome != 'acknowledged'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "disable",
+      "name": "Disable the account",
+      "type": "disable_user",
+      "params": {
+        "user": "{{alert.user}}"
+      },
+      "condition": "verification_outcome != 'acknowledged'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "revoke",
+      "name": "Revoke the account's sessions",
+      "type": "revoke_session",
+      "params": {
+        "user": "{{alert.user}}"
+      },
+      "condition": "verification_outcome != 'acknowledged'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "notify_soc",
+      "name": "Tell the SOC what the answer was",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Verification for {{alert.user}} came back '{{verification_outcome}}' (asked: {{verification.stage}}). Containment {{verification_outcome}} != acknowledged.",
+        "webhook_env": "SLACK_SOC_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "close",
+      "name": "Close the case when the user confirmed it was them",
+      "type": "close_case",
+      "params": {},
+      "condition": "verification_outcome == 'acknowledged'",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

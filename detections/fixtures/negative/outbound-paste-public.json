@@ -1,0 +1,7 @@
+{
+  "bytes_out": 50000,
+  "dst_host": "company-internal.com",
+  "dst_in_paste_list": false,
+  "method": "POST",
+  "src_host": "wks-001"
+}

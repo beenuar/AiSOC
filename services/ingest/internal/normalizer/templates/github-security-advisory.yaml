@@ -1,0 +1,39 @@
+# GitHub security advisory / Dependabot alert webhook template.
+#
+# Triggered by repository_advisory and dependabot_alert events. We
+# project these onto an OCSF Vulnerability Finding (class 2002) so they
+# land in the same lake bucket as Tenable / Wiz / Qualys output.
+#
+# Reference:
+#   https://docs.github.com/en/webhooks/webhook-events-and-payloads#dependabot_alert
+#   https://docs.github.com/en/webhooks/webhook-events-and-payloads#repository_advisory
+id: github-security-advisory
+vendor_name: GitHub
+product_name: GitHub Security
+class_uid: 2002
+class_name: Vulnerability Finding
+activity_id: 1
+field_map:
+  alert.security_advisory.summary: finding.title
+  alert.security_advisory.description: finding.description
+  alert.security_advisory.cve_id: vulnerabilities.cve.uid
+  alert.security_advisory.ghsa_id: finding.uid
+  alert.html_url: url
+  alert.number: finding.related_events.id
+  alert.dependency.package.name: vulnerabilities.affected_packages.name
+  alert.dependency.package.ecosystem: vulnerabilities.affected_packages.package_manager
+  alert.security_vulnerability.vulnerable_version_range: vulnerabilities.affected_packages.version
+  repository.full_name: source
+  repository.html_url: finding.product.url_string
+  action: activity_name
+severity_field: alert.security_advisory.severity
+severity_map:
+  low: 2
+  moderate: 3
+  high: 4
+  critical: 5
+time_field: alert.created_at
+message_field: alert.security_advisory.summary
+constants:
+  source_type: github-security-advisory
+  metadata.product.vendor_name: GitHub

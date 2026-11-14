@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "process_command_line": "prefix-shell32.dll,control_rundll-suffix",
+  "process_name": "head-rundll32.exe"
+}

@@ -1,0 +1,51 @@
+id: mitre-car-car-2014-11-004
+name: Remote PowerShell Sessions
+description: 'According to [ATT&CK](https://attack.mitre.org/), [PowerShell](https://attack.mitre.org/techniques/T1059/001)
+  can be used over WinRM to remotely run commands on a host. When a remote PowerShell
+  session starts, svchost.exe executes wsmprovhost.exe
+
+
+  For this to work, certain registry keys must be set, and the WinRM service must
+  be enabled. The PowerShell command `Enter-PSSession -ComputerName \<RemoteHost\>`
+  creates a remote PowerShell session.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  - T1021
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      wsmprovhost = filter process where (exe == "wsmprovhost.exe" and parent_exe
+      == "svchost.exe")
+
+      '
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_name == \"wsmprovhost.exe\"\
+      \ and parent_process_name == \"svchost.exe\")\n"
+  - name: ''
+    type: LogPoint
+    code: 'norm_id=WindowsSysmon event_id=1 image="*\wsmprovhost.exe" parent_image="*\svchost.exe"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-11-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-11-004.yaml
+notes:
+  car_status: needs_implementation

@@ -1,0 +1,46 @@
+id: splunk-security-content-83317b08-155b-11ec-8e00-acde48001122
+name: Wmic Group Discovery
+description: The following analytic identifies the use of `wmic.exe` to enumerate
+  local groups on an endpoint. This detection leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on process execution logs, including command-line
+  details. Monitoring this activity is significant as it can indicate reconnaissance
+  efforts by an attacker to understand group memberships, which could be a precursor
+  to privilege escalation or lateral movement. If confirmed malicious, this activity
+  could allow an attacker to map out privileged groups, aiding in further exploitation
+  and persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1069.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1069/001/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1069.001/T1069.001.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=wmic.exe\
+    \ (Processes.process=\"*group get name*\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `wmic_group_discovery_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 83317b08-155b-11ec-8e00-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wmic_group_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

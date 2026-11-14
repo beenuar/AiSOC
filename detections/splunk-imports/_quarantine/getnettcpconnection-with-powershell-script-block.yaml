@@ -1,0 +1,42 @@
+id: splunk-security-content-091712ff-b02a-4d43-82ed-34765515d95d
+name: GetNetTcpconnection with PowerShell Script Block
+description: The following analytic detects the execution of the `Get-NetTcpconnection`
+  PowerShell cmdlet using PowerShell Script Block Logging (EventCode=4104). This cmdlet
+  lists network connections on a system, which adversaries may use for situational
+  awareness and Active Directory discovery. Monitoring this activity is crucial as
+  it can indicate reconnaissance efforts by an attacker. If confirmed malicious, this
+  behavior could allow an attacker to map the network, identify critical systems,
+  and plan further attacks, potentially leading to data exfiltration or lateral movement
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1049
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1049/
+- https://docs.microsoft.com/en-us/powershell/module/nettcpip/get-nettcpconnection?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText = \"*Get-NetTcpconnection*\"\
+    )\n  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `getnettcpconnection_with_powershell_script_block_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 091712ff-b02a-4d43-82ed-34765515d95d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getnettcpconnection_with_powershell_script_block.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

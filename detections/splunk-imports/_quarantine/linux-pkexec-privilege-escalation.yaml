@@ -1,0 +1,47 @@
+id: splunk-security-content-03e22c1c-8086-11ec-ac2e-acde48001122
+name: Linux pkexec Privilege Escalation
+description: The following analytic detects the execution of `pkexec` without any
+  command-line arguments. This behavior leverages data from Endpoint Detection and
+  Response (EDR) agents, focusing on process telemetry. The significance lies in the
+  fact that this pattern is associated with the exploitation of CVE-2021-4034 (PwnKit),
+  a critical vulnerability in Polkit's pkexec component. If confirmed malicious, this
+  activity could allow an attacker to gain full root privileges on the affected Linux
+  system, leading to complete system compromise and potential unauthorized access
+  to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://www.reddit.com/r/crowdstrike/comments/sdfeig/20220126_cool_query_friday_hunting_pwnkit_local/
+- https://linux.die.net/man/1/pkexec
+- https://www.bleepingcomputer.com/news/security/linux-system-service-bug-gives-root-on-all-major-distros-exploit-released/
+- https://access.redhat.com/security/security-updates/#/?q=polkit&p=1&sort=portal_publication_date%20desc&rows=10&portal_advisory_type=Security%20Advisory&documentKind=PortalProduct
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name=pkexec\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | regex process=\"(^.{1}$)\"\n| `linux_pkexec_privilege_escalation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 03e22c1c-8086-11ec-ac2e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_pkexec_privilege_escalation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

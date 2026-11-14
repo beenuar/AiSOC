@@ -1,0 +1,63 @@
+id: splunk-security-content-be19b369-fd0c-42be-ae97-c10b6c01638f
+name: Windows Potential AppDomainManager Hijack Artifacts Creation
+description: The following analytic detects the creation of an .exe file along with
+  its corresponding .exe.config and a .dll in the same directory, which is a common
+  pattern indicative of potential AppDomain hijacking or CLR code injection attempts.
+  This behavior may signal that a malicious actor is attempting to load a rogue assembly
+  into a legitimate application's AppDomain, allowing code execution under the context
+  of a trusted process.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.014
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/en-us/security/blog/2025/11/03/sesameop-novel-backdoor-uses-openai-assistants-api-for-command-and-control/
+- https://attack.mitre.org/techniques/T1574/014/
+- https://gist.github.com/djhohnstein/afb93a114b848e16facf0b98cd7cb57b
+- https://www.scworld.com/brief/appdomain-manager-injection-exploited-for-cobalt-strike-beacon-delivery
+- https://jp.security.ntt/insights_resources/tech_blog/appdomainmanager-injection-en/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) AS firstTime\
+    \ max(_time) AS lastTime from datamodel=Endpoint.Filesystem\nwhere Filesystem.file_name\
+    \ IN (\"*.exe\", \"*.exe.config\", \"*.dll\") AND Filesystem.file_path IN\n  (\"\
+    *\\\\windows\\\\fonts\\\\*\", \"*\\\\temp\\\\*\", \"*\\\\users\\\\public\\\\*\"\
+    , \"*\\\\windows\\\\debug\\\\*\",\"*\\\\Users\\\\Administrator\\\\Music\\\\*\"\
+    , \"*\\\\Windows\\\\servicing\\\\*\", \"*\\\\Users\\\\Default\\\\*\", \"*Recycle.bin*\"\
+    , \"*\\\\Windows\\\\Media\\\\*\", \"*\\\\Windows\\\\repair\\\\*\", \"*\\\\PerfLogs\\\
+    \\*\")\nAND Filesystem.action = \"created\"\nby Filesystem.action Filesystem.dest\
+    \ Filesystem.file_access_time Filesystem.file_create_time Filesystem.file_hash\
+    \ Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path Filesystem.file_acl\
+    \ Filesystem.file_size Filesystem.process_guid Filesystem.process_id Filesystem.user\
+    \ Filesystem.vendor_product\n| `drop_dm_object_name(\"Filesystem\")`\n| stats\
+    \ values(file_name) AS file_name\n        values(file_path) AS file_path\n   \
+    \     values(user) AS user\n        min(firstTime) AS firstTime max(lastTime)\
+    \ AS lastTime\n        BY dest process_guid\n| eval exe_present = if(mvcount(mvfilter(match(file_name,\
+    \ \"\\.exe$\"))) > 0, 1, 0)\n| eval config_present = if(mvcount(mvfilter(match(file_name,\
+    \ \"\\.exe\\.config$\"))) > 0, 1, 0)\n| eval dll_present = if(mvcount(mvfilter(match(file_name,\
+    \ \"\\.dll$\"))) > 0, 1, 0)\n\n| eval exe_files = mvfilter(match(file_name, \"\
+    \\.exe$\") AND NOT match(file_name, \"\\.exe\\.config$\"))\n| eval config_files\
+    \ = mvfilter(match(file_name, \"\\.exe\\.config$\"))\n| eval exe_base_names =\
+    \ mvmap(exe_files, replace(exe_files, \"\\.exe$\", \"\"))\n| eval config_base_names\
+    \ = mvmap(config_files, replace(config_files, \"\\.exe\\.config$\", \"\"))\n\n\
+    | mvexpand exe_base_names\n| mvexpand config_base_names\n\n| eval file_count =\
+    \ mvcount(file_name)\n\n| where file_count >= 3 AND exe_present = 1 AND config_present\
+    \ = 1 AND dll_present = 1 AND exe_base_names = config_base_names\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_potential_appdomainmanager_hijack_artifacts_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: be19b369-fd0c-42be-ae97-c10b6c01638f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_potential_appdomainmanager_hijack_artifacts_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

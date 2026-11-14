@@ -1,0 +1,33 @@
+id: fleetdm
+name: FleetDM Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  FleetDM — osquery fleet manager (commercial-friendly OSS). Pulls host posture
+  changes (online/offline/missing) and saved-query report rows from the Fleet
+  REST API. Severity for query rows is derived from the osquery table queried;
+  host posture transitions get their own severity ladder.
+author: AiSOC Core Team
+tags: [edr, fleetdm, osquery, endpoint, open-source]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/fleetdm.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [base_url, api_token]
+  properties:
+    base_url:
+      type: string
+      description: "Base URL of the Fleet server (no trailing slash). The /api prefix is added automatically."
+    api_token:
+      type: string
+      description: "Long-lived token issued from the Fleet UI under Settings -> Users -> [user] -> Get API token."
+      secret: true
+    team_id:
+      type: string
+      description: "Optional Fleet Team ID to scope queries to. Leave empty to span all teams."
+    verify_tls:
+      type: boolean
+      description: "Verify TLS certificate when calling the Fleet REST API."
+      default: true

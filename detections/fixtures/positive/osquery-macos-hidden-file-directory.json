@@ -1,0 +1,4 @@
+{
+  "cmdline": "prefix-chflags hidden-suffix",
+  "event_type": "osquery_query_row"
+}

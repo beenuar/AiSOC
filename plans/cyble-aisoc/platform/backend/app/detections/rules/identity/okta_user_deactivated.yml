@@ -1,0 +1,25 @@
+title: Okta User Deactivated by Admin Out-of-Process
+id: aisoc-id-id-0011-okta-user-deactivate
+status: stable
+description: |
+  Okta admin deactivates a user outside of normal HR offboarding
+  hours or without a corresponding ticket — could indicate insider
+  threat or account takeover of an Okta admin.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: okta
+  service: system
+tags:
+  - attack.t1531
+  - attack.impact
+  - aisoc.identity
+detection:
+  selection:
+    event.module: okta
+    event.action:
+      - 'user.lifecycle.deactivate'
+      - 'user.lifecycle.suspend'
+  off_hours:
+    enrich.identity.privileged: true
+  condition: selection and off_hours

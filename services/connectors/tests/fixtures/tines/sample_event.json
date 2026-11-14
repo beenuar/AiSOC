@@ -1,0 +1,54 @@
+{
+  "audit_logs": [
+    {
+      "id": 1001,
+      "operation_name": "credential.created",
+      "created_at": "2099-01-01T12:00:00Z",
+      "user_email": "alice@example.com",
+      "tenant_id": 42,
+      "team_id": 7,
+      "request_ip": "10.0.0.1",
+      "user": {"email": "alice@example.com", "id": 99}
+    },
+    {
+      "id": 1002,
+      "operation_name": "story.updated",
+      "created_at": "2099-01-01T12:01:00Z",
+      "user_email": "bob@example.com",
+      "tenant_id": 42,
+      "team_id": 7
+    },
+    {
+      "id": 1003,
+      "operation_name": "story.deleted",
+      "created_at": "2099-01-01T12:02:00Z",
+      "user_email": "alice@example.com",
+      "tenant_id": 42,
+      "team_id": 7
+    }
+  ],
+  "cases": [
+    {
+      "id": 5001,
+      "name": "Suspicious login from Tor",
+      "status": "open",
+      "record_severity": "critical",
+      "story_id": 71,
+      "assignee": {"email": "soc-on-call@example.com"},
+      "updated_at": "2099-01-01T12:03:00Z",
+      "created_at": "2099-01-01T11:55:00Z"
+    },
+    {
+      "id": 5002,
+      "name": "Threat intel hit (closed)",
+      "status": "closed",
+      "resolution": "resolved",
+      "record_severity": "high",
+      "story_id": 72,
+      "assignee": {"email": "soc-lead@example.com"},
+      "updated_at": "2099-01-01T12:04:00Z",
+      "created_at": "2099-01-01T11:50:00Z"
+    }
+  ],
+  "meta": {"current_page": 1, "next_page": null}
+}

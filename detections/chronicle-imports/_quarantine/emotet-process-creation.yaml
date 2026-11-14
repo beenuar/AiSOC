@@ -1,0 +1,43 @@
+id: chronicle-detection-rules-emotet-process-creation
+name: emotet_process_creation
+description: emotet_process_creation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule emotet_process_creation {\n meta:\n    author = \"Florian\
+    \ Roth\"\n    description = \"Detects all Emotet like process executions that\
+    \ are not covered by the more generic rules  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/9U8NXanTx6TC\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/09/30\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n\n  events:\n((re.regex($selection.target.process.command_line,\
+    \ `.* -e PAA.*`) or re.regex($selection.target.process.command_line, `.* -en PAA.*`)\
+    \ or re.regex($selection.target.process.command_line, `.* -enc PAA.*`) or re.regex($selection.target.process.command_line,\
+    \ `.* -enco PAA.*`) or re.regex($selection.target.process.command_line, `.* -encod\
+    \ PAA.*`) or re.regex($selection.target.process.command_line, `.*JABlAG4AdgA6AHUAcwBlAHIAcAByAG8AZgBpAGwAZQ.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*QAZQBuAHYAOgB1AHMAZQByAHAAcgBvAGYAaQBsAGUA.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*kAGUAbgB2ADoAdQBzAGUAcgBwAHIAbwBmAGkAbABlA.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*IgAoACcAKgAnACkAOwAkA.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*IAKAAnACoAJwApADsAJA.*`)\
+    \ or re.regex($selection.target.process.command_line, `.*iACgAJwAqACcAKQA7ACQA.*`))\
+    \ and ($selection.metadata.product_event_type = \"4688\" or $selection.metadata.product_event_type\
+    \ = \"1\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: emotet_process_creation
+provenance:
+  source: chronicle/detection-rules
+  source_id: emotet_process_creation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/emotet_process_creation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

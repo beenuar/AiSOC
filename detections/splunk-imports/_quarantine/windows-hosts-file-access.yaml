@@ -1,0 +1,46 @@
+id: splunk-security-content-b34bcf35-5380-4b00-b208-5531303fb751
+name: Windows Hosts File Access
+description: 'This Analytic detects the execution of a process attempting to access
+  the hosts file.
+
+  The hosts file is a critical file for network configuration and DNS resolution.
+
+  If an attacker gains access to it, they can redirect traffic to malicious websites,
+  serve fake content or block legitimate security websites.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1012
+  categories:
+  - endpoint
+references:
+- https://cert.gov.ua/article/6284730
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`\nEventCode=4663\nobject_file_path=\"*:\\\\Windows\\\
+    \\System32\\\\drivers\\\\etc\\\\hosts\"\nNOT process_path IN (\n    \"*:\\\\Windows\\\
+    \\explorer.exe\",\n    \"*:\\\\Windows\\\\System32\\\\lsass.exe\",\n    \"*:\\\
+    \\Windows\\\\System32\\\\SearchIndexer.exe\",\n    \"*:\\\\Windows\\\\System32\\\
+    \\services.exe\",\n    \"*:\\\\Windows\\\\System32\\\\svchost.exe\",\n    \"*:\\\
+    \\Windows\\\\SysWow64\\\\SearchIndexer.exe\",\n    \"*:\\\\Windows\\\\SysWow64\\\
+    \\svchost.exe\"\n)\n| stats count\n    by _time object_file_path object_file_name\
+    \ dest process_name\n       process_path process_id EventCode\n| eval process_path\
+    \ = lower(process_path)\n| lookup browser_process_and_path browser_process_path\
+    \ as process_path OUTPUT is_valid_browser_path\n| eval is_valid_browser_path=coalesce(is_valid_browser_path,\"\
+    false\")\n| where is_valid_browser_path = \"false\"\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_hosts_file_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b34bcf35-5380-4b00-b208-5531303fb751
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_hosts_file_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

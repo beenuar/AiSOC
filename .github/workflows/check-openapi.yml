@@ -1,0 +1,113 @@
+name: Check OpenAPI schema
+
+on:
+  pull_request:
+    paths:
+      - "services/api/**"
+      - "docs/openapi.yaml"
+      - "scripts/export_openapi.py"
+  push:
+    branches: [main]
+    paths:
+      - "services/api/**"
+
+# Shared install step extracted as a composite action would be cleaner, but for
+# simplicity we duplicate the pip install across both jobs.  The dep list mirrors
+# pyproject.toml so it stays in sync manually; a future improvement would be to
+# generate requirements.txt via `poetry export`.
+env:
+  OPENAPI_DEPS: >-
+    "fastapi>=0.117,<0.163" uvicorn pydantic "pydantic[email]" pydantic-settings
+    "sqlalchemy[asyncio]" asyncpg structlog
+    "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]"
+    tenacity pyyaml prometheus-client
+    neo4j redis celery aiofiles aiokafka
+    boto3 clickhouse-driver
+    opentelemetry-sdk opentelemetry-api
+    opentelemetry-exporter-otlp-proto-grpc
+    "opentelemetry-instrumentation-fastapi"
+    "strawberry-graphql[fastapi]" httpx email-validator "PyJWT>=2.8,<3"
+    "sqlglot>=30,<31"
+
+jobs:
+  openapi-check:
+    name: Verify docs/openapi.yaml is up to date
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.OPENAPI_DEPS }}
+
+      - name: Export and check OpenAPI schema
+        run: python scripts/export_openapi.py --check
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x
+
+  openapi-export:
+    name: Auto-export OpenAPI on merge to main
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: openapi-check
+    # The default GITHUB_TOKEN is read-only under the repo's restrictive
+    # token policy, so the commit/push step below 403s. Grant write scope so
+    # the bot can push the regenerated docs/openapi.yaml back to main.
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install API dependencies
+        run: pip install --quiet ${{ env.OPENAPI_DEPS }}
+
+      - name: Regenerate and commit openapi.yaml
+        run: |
+          python scripts/export_openapi.py
+          # Identity policy: all commits on this repo must be authored by
+          # Beenu Arora <beenu@cyble.com>, including machine-written CI
+          # commits like the auto-regenerated OpenAPI spec.
+          git config user.name  "Beenu Arora"
+          git config user.email "beenu@cyble.com"
+          git add docs/openapi.yaml
+          git diff --staged --quiet || git commit -m "chore: regenerate docs/openapi.yaml [skip ci]"
+          # Retry the push up to three times with a rebase pull
+          # between attempts. A concurrent push (e.g. another auto-
+          # commit workflow, or a maintainer landing a follow-up fix)
+          # would otherwise fail this job with
+          # `! [rejected]  main -> main (fetch first)`, even though
+          # the OpenAPI regeneration itself succeeded.
+          for attempt in 1 2 3; do
+            if git push; then
+              echo "OpenAPI sync pushed on attempt $attempt"
+              break
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::OpenAPI sync push failed after 3 attempts"
+              exit 1
+            fi
+            echo "Push rejected; pulling --rebase and retrying ($attempt/3)..."
+            git pull --rebase origin main
+            sleep $((attempt * 2))
+          done
+        env:
+          ENVIRONMENT: development
+          SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
+          DATABASE_URL: postgresql+asyncpg://x:x@localhost/x

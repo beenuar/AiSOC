@@ -1,0 +1,55 @@
+id: splunk-security-content-eb65619c-4f8d-4383-a975-d352765d344b
+name: Java Writing JSP File
+description: The following analytic detects the Java process writing a .jsp file to
+  disk, which may indicate a web shell being deployed. It leverages data from the
+  Endpoint datamodel, specifically monitoring process and filesystem activities. This
+  activity is significant because web shells can provide attackers with remote control
+  over the compromised server, leading to further exploitation. If confirmed malicious,
+  this could allow unauthorized access, data exfiltration, or further compromise of
+  the affected system, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://www.microsoft.com/security/blog/2022/04/04/springshell-rce-vulnerability-guidance-for-protecting-against-and-detecting-cve-2022-22965/
+- https://github.com/TheGejr/SpringShell
+- https://www.tenable.com/blog/spring4shell-faq-spring-framework-remote-code-execution-vulnerability
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\n\
+    \  WHERE Processes.process_name IN (\"java\",\"java.exe\", \"javaw.exe\")\n  BY\
+    \ _time Processes.action Processes.dest\n     Processes.original_file_name Processes.parent_process\
+    \ Processes.parent_process_exec\n     Processes.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_name\n     Processes.parent_process_path Processes.process\
+    \ Processes.process_exec\n     Processes.process_guid Processes.process_hash Processes.process_id\n\
+    \     Processes.process_integrity_level Processes.process_name Processes.process_path\n\
+    \     Processes.user Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | join process_guid [\n| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Filesystem\n\
+    \  WHERE Filesystem.file_name=\"*.jsp*\"\n  BY _time Filesystem.action Filesystem.dest\n\
+    \     Filesystem.file_access_time Filesystem.file_create_time Filesystem.file_hash\n\
+    \     Filesystem.file_modify_time Filesystem.file_name Filesystem.file_path\n\
+    \     Filesystem.file_acl Filesystem.file_size Filesystem.process_guid\n     Filesystem.process_id\
+    \ Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | fields _time process_guid file_path file_name file_create_time user dest process_name]\n\
+    | stats count min(_time) as firstTime max(_time) as lastTime\n  BY dest process_name\
+    \ process_guid\n     file_name file_path file_create_time\n     user\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `java_writing_jsp_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: eb65619c-4f8d-4383-a975-d352765d344b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/java_writing_jsp_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

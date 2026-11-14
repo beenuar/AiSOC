@@ -1,0 +1,6 @@
+{
+  "action": "create",
+  "baseline_principal_volume_z": 0.9,
+  "resource": "pods/exec",
+  "user": "sre-oncall@example.com"
+}

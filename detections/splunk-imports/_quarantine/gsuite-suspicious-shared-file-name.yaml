@@ -1,0 +1,48 @@
+id: splunk-security-content-07eed200-03f5-11ec-98fb-acde48001122
+name: Gsuite Suspicious Shared File Name
+description: The following analytic detects shared files in Google Drive with suspicious
+  filenames commonly used in spear phishing campaigns. It leverages GSuite Drive logs
+  to identify documents with titles that include keywords like "dhl," "ups," "invoice,"
+  and "shipment." This activity is significant because such filenames are often used
+  to lure users into opening malicious documents or clicking harmful links. If confirmed
+  malicious, this activity could lead to unauthorized access, data theft, or further
+  compromise of the user's system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  categories:
+  - cloud
+references:
+- https://www.redhat.com/en/topics/devops/what-is-devsecops
+- https://www.mandiant.com/resources/top-words-used-in-spear-phishing-attacks
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`gsuite_drive` parameters.owner_is_team_drive=false \"parameters.doc_title\"\
+    \ IN (\"*dhl*\", \"* ups *\", \"*delivery*\", \"*parcel*\", \"*label*\", \"*invoice*\"\
+    , \"*postal*\", \"*fedex*\", \"* usps *\", \"* express *\", \"*shipment*\", \"\
+    *Banking/Tax*\",\"*shipment*\", \"*new order*\") parameters.doc_type IN (\"document\"\
+    ,\"pdf\", \"msexcel\", \"msword\", \"spreadsheet\", \"presentation\")\n  | rex\
+    \ field=parameters.owner \"[^@]+@(?<source_domain>[^@]+)\"\n  | rex field=parameters.target_user\
+    \ \"[^@]+@(?<dest_domain>[^@]+)\"\n  | where not source_domain=\"internal_test_email.com\"\
+    \ and dest_domain=\"internal_test_email.com\"\n  | eval phase=\"plan\"\n  | eval\
+    \ severity=\"low\"\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY email parameters.owner parameters.target_user\n       parameters.doc_title\
+    \ parameters.doc_type phase\n       severity\n  | rename parameters.target_user\
+    \ AS user\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `gsuite_suspicious_shared_file_name_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 07eed200-03f5-11ec-98fb-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/gsuite_suspicious_shared_file_name.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

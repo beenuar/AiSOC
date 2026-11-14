@@ -1,0 +1,389 @@
+# Security scanner ceilings and suppressions.
+#
+# Read by scripts/check_scanner_ratchet.py, which runs as a blocking step in
+# each of the three observe-mode scanner jobs in .github/workflows/security.yml.
+# Until that gate was written this file had no reader at all: the workflow
+# described its scanners as "report-and-ratchet" and named this path as where
+# the triaged baseline lives, and nothing opened it. An allow-list nobody
+# reads is worse than no allow-list, because it looks like a control.
+#
+# ── ceilings ────────────────────────────────────────────────────────────────
+#
+# A scanner may report at most this many findings. The ratchet is shrink-only:
+# reporting fewer also fails, with the measured number in the message, so the
+# ceiling comes down in the same change that removes the finding rather than
+# leaving room for the count to drift back up for free. Reporting zero against
+# a non-zero ceiling fails too — a scanner that previously found dozens and
+# now finds none did not run, and "clean" must never look like "did not run".
+#
+# `measured_with` is compared against the version the report declares. Counts
+# move when rules move, so a ceiling compared against a different scanner is
+# not a comparison; the scanners are pinned exactly in the workflow for the
+# same reason, because for a ratchet the scanner version is the behaviour.
+#
+# To lower a ceiling: fix findings, read the measured count out of the gate's
+# failure message, and write it here in the same pull request.
+
+ceilings:
+  # Every number here was measured by this gate in CI, not carried over.
+  # The counts the workflow header used to publish were 92/35 for semgrep and
+  # 91 for checkov, and both were wrong the first time the ratchet compared
+  # them: semgrep came back 101/40 because the tree has grown since anyone
+  # looked, and checkov came back 219 because the 91 covered infra/terraform
+  # while the job had always scanned infra/helm as well and reported only the
+  # first number. That is the whole argument for the ratchet in one run — a
+  # count nothing compares to anything drifts, and nobody finds out.
+  semgrep:
+    # 101 -> 102 (error unchanged at 40). The added WARNING is
+    # `dynamic-urllib-use-detected` on scripts/check_main_run_cancellations.py,
+    # which asks the Actions API whether a run on `main` was cancelled. It is
+    # the same finding the identical call in check_codeql_alerts.py already
+    # contributes: both build the URL from a fixed API root and refuse
+    # anything that does not start with it, so the `file://` read the rule
+    # warns about is not reachable — but the rule fires on any non-literal
+    # argument to `urlopen`, and counting it is better than suppressing it.
+    # `entries:` below stays empty on purpose: a ceiling counts a finding, a
+    # suppression hides it.
+    #
+    # Unchanged at v12.1.0, and the reason is worth recording rather than
+    # smoothing over. Fixing GHSA-w754-prh8-m56j removed one ERROR
+    # (`use-defused-xml`, which fired on the PAN-OS client's
+    # `xml.sax.saxutils` import — string escaping with no parser and no XXE
+    # surface, which the rule cannot distinguish from parsing; replaced with
+    # `html.escape`). CI measured 39/101 at that point and asked for the
+    # ceiling to be lowered. Adding the rest of the release commit took the
+    # measurement back to 40/102, and **I could not attribute which file
+    # contributed the returning finding** — the scan covered the same 2,265
+    # files both times and `main` had not moved. Left at the measured value
+    # rather than lowered on a number that then moved under it; the honest
+    # state is that the net is unchanged and one finding is unexplained.
+    #
+    # That +/-1 was reproduced on 2026-09-29, which upgrades it from a
+    # one-off nobody could attribute to a property of the scan. Four
+    # dependency pull requests, all based on 7d3e90a7, all changing nothing
+    # but a `poetry.lock`, ran this job within thirteen minutes of each other
+    # against a ceiling of 102/40:
+    #
+    #   #1023  102 findings, error=40  -> pass
+    #   #1035  102 findings, error=40  -> pass
+    #   #1031  101 findings, error=39  -> FAIL (stale-ceiling)
+    #   #1037  101 findings, error=39  -> FAIL (stale-ceiling)
+    #
+    # Every one reported `Ran 387 rules on 2267 files`, so it is not the
+    # corpus and not the rule set. The obvious mechanism was checked and
+    # **eliminated**: all four also reported the identical `Partially
+    # scanned: 8 files` and `Scan skipped: 5 files`, so a file semgrep failed
+    # to fully parse is not where the finding goes. The count simply differs
+    # between runs of the same tree, and it moves `error` and `total`
+    # together, which is why both sub-ceilings trip at once.
+    #
+    # Two consequences worth stating rather than discovering again. First,
+    # this ratchet can fail a pull request that cannot possibly have changed
+    # a finding — a lockfile-only dependency bump is the case observed twice
+    # here, and a re-run clears it, so read a stale-ceiling failure on such a
+    # change as this rather than as a stale branch. Second, and the reason
+    # this is not merely noise: a gate that under-counts by one can just as
+    # easily under-count a *real* finding into invisibility, because the
+    # ratchet only fails on a count that disagrees with the ceiling and 39
+    # against a ceiling of 39 would be silent. The ceiling stays at the
+    # measured value; what is missing is an attribution, and the way to get
+    # one is to retain `semgrep.json` as a run artefact and diff two runs of
+    # the same tree. Nothing here does that yet.
+    #
+    # Third consequence, and the one most likely to be undone by someone
+    # tidying up: this is why `Semgrep (ratcheted)` is **not** a required
+    # check on `main` while the other ratcheted scanners are. The job used to
+    # carry a second, unrelated defect — a `continue-on-error` scan step whose
+    # outcome nothing read, so the job reported success over a scan that had
+    # died — and that one is now fixed, in the same change that promoted
+    # `IaC scan (checkov, ratcheted)` to a required check after fixing the
+    # identical hole there. Semgrep was deliberately left unrequired anyway.
+    # The split above is the reason: at one run in twenty disagreeing with
+    # itself, requiring this job would red a pull request whose author cannot
+    # have caused it and cannot do anything about it except press re-run, and
+    # a required check whose documented remedy is "run it again" teaches
+    # people to re-run until green instead of reading what it said. Fixing
+    # the absorbed failure and requiring the job are separate questions;
+    # only the first was answered yes. Requiring it becomes reasonable once
+    # the +/-1 is attributed and eliminated, not before.
+    # The same reasoning is recorded in `.github/required-checks.json`.
+    #
+    # 102 -> 103 (error unchanged at 40). The added WARNING is a third
+    # `dynamic-urllib-use-detected`, on scripts/check_required_check_substance.py,
+    # which asks the Actions API which steps each required check actually
+    # executed. It is byte-for-byte the same `_get` helper the two findings
+    # above already count: the URL is built from a fixed API root and the
+    # function refuses anything not starting with it, so the `file://` read
+    # the rule warns about is unreachable — but the rule fires on any
+    # non-literal argument to `urlopen`. Measured in isolation with
+    # semgrep 1.86.0 on the same rule set the workflow uses: 205 rules over
+    # the two new files, exactly 1 finding. Counted rather than suppressed,
+    # for the reason stated at the bottom of this file.
+    #
+    # 103 -> 104 (error unchanged at 40). A fourth
+    # `dynamic-urllib-use-detected`, on scripts/check_chart_version.py:495,
+    # which asks GHCR whether the Helm chart version about to be pushed
+    # already exists holding different content. Same shape as the three
+    # above and as check_published_images.py: every URL is an f-string whose
+    # literal prefix is `https://ghcr.io/`, with the repository a module
+    # constant and only a tag or a digest from the registry's own response
+    # interpolated, so the `file://` read the rule warns about cannot be
+    # reached — but the rule fires on any non-literal argument to `urlopen`.
+    # Measured in isolation with semgrep 1.86.0 on the same rule set and the
+    # same five configs the workflow passes: 205 rules over the one new
+    # file, exactly 1 finding. CI measured the whole tree at 104/40 against
+    # the ceiling of 103, which is the +1 and nothing else.
+    #
+    # Held at 104/40, and the reason is worth more than the number.
+    #
+    # One run measured 103/39 and the ratchet asked to lock that in. The
+    # next run on the same branch measured 104/40 again, and **no file
+    # semgrep scans had changed between them** — the two commits in
+    # between touched `.github/workflows/link-check.yml` and this file,
+    # and the job scans `services/ apps/ packages/ scripts/` only.
+    #
+    # The workflow pins the semgrep *binary* to 1.86.0 precisely so the
+    # count cannot re-baseline itself. It does not pin the **rule packs**:
+    # `p/security-audit`, `p/owasp-top-ten`, `p/python`, `p/typescript`
+    # and `p/react` are fetched from the registry at scan time, so the
+    # ratchet compares today's tree against whatever those packs contain
+    # today. A pinned binary against unpinned rules is half a pin.
+    #
+    # So a ±1 drift here is not evidence about the code, and lowering the
+    # ceiling on a low reading would red the next pull request for a rule
+    # update nobody in this repository made. Pinning the packs by digest
+    # is the real fix and is tracked in issue #1099 rather than done here,
+    # because it
+    # re-baselines every count in this file and belongs in its own change.
+    #
+    # 104 -> 103 and 40 -> 39, and this one is a real reduction rather
+    # than the ±1 the note above warns about. `main` reported exactly
+    # 40/104 on three consecutive runs while this branch reported 39/103,
+    # so the delta is the tree, not the scanner. The finding that went is
+    # an unused module-level `logger` in the new marketplace-installs
+    # service, removed because nothing logged through it.
+    #
+    # Lowering locks the improvement in, which is what a shrink-only
+    # ratchet is for. Raising one to make a scan pass is the thing that
+    # is never allowed.
+    #
+    # 103 -> 104. The added WARNING is a third
+    # `dynamic-urllib-use-detected`, in scripts/chaos/store_outage.py,
+    # which reads a readiness endpoint while a store is down. It is
+    # the same finding the two calls in check_codeql_alerts.py and
+    # check_main_run_cancellations.py already contribute, with the
+    # same mitigation: the URL is built from a fixed root and anything
+    # not starting with it is refused, so the `file://` read the rule
+    # warns about is unreachable. The rule fires on any non-literal
+    # argument to `urlopen` regardless.
+    #
+    # Counted rather than suppressed, per the note above: a ceiling
+    # counts a finding, a suppression hides it. This returns the total
+    # to where it stood before the unused-logger removal lowered it,
+    # which is a different thing from raising a ceiling to make a scan
+    # pass — the error count stays at the reduced 39.
+    #
+    # 104 -> 103 and 39 -> 38, another real reduction rather than the ±1
+    # the note above warns about. The GHSA-w4r8-969c-67p2 fix removed the
+    # `jwt.decode(token, options={"verify_signature": False})` call in
+    # services/api/app/middleware/audit_middleware.py, which the rule set
+    # flags as an `error` (a JWT decoded with signature verification
+    # disabled). That is exactly one `error` finding, and both the error
+    # and total counts dropped by exactly one on this branch, so the delta
+    # is the removed call and not the scanner. Lowering locks it in.
+    #
+    # 103/38 -> 105/40. Two `avoid-sqlalchemy-text` findings, both on
+    # `services/api/app/services/alert_bulk_close.py`, where the bulk-close
+    # snapshot interpolates a backup *table name* into `text()`.
+    #
+    # Counted rather than suppressed, per the note above: a ceiling counts a
+    # finding, a suppression hides it. And the finding is real as a pattern
+    # even though it is not exploitable here — a table name cannot be a bind
+    # parameter in SQL, so interpolation is the only way to name one. The
+    # value is generated as `uuid.uuid4().hex` and then re-checked against an
+    # anchored `_BACKUP_TABLE_RE` that admits nothing but
+    # `aisoc_bulk_close_backup.bulk_close_backup_<32 hex>`, with a raise if it
+    # does not match, so no caller-supplied string reaches the statement.
+    #
+    # If the snapshot is ever reshaped to write into one fixed table keyed by
+    # a run id, both findings go away and this ceiling should come back down.
+    #
+    # 105/40 -> 109/44. Four `avoid-sqlalchemy-text` findings, all on
+    # `services/api/app/services/posture_store.py`, where three statements
+    # interpolate `_COLUMNS` into a `RETURNING` or `SELECT` list.
+    #
+    # Counted rather than suppressed, same reasoning as the bulk-close pair
+    # above. `_COLUMNS` is a module-level string literal naming fourteen
+    # columns; nothing assigns to it and no caller reaches it, so there is no
+    # path by which request data becomes part of the statement. A column list
+    # cannot be a bind parameter in SQL, which is why interpolation is the
+    # only way to write one -- the same reason a table name is interpolated
+    # two entries up.
+    #
+    # If the store is ever rewritten against the ORM rather than `text()`,
+    # all four go away and this ceiling should come back down.
+    #
+    # 109 -> 110 (error unchanged at 44; the 2026-10-12 merge train). The
+    # added finding is `avoid-sqlalchemy-text` on the new
+    # services/api/app/services/posture_store.py (depth 2.5), attributed by
+    # scanning the train and `main` with the pinned 1.86.0 and diffing the
+    # finding sets. It is the same accepted family as the rest of this
+    # ceiling: `text()` with every value bound, which three gates hold
+    # (check_text_bind_casts, check_raw_sql_columns,
+    # check_tenant_query_predicates). Counting it beats suppressing it.
+    # 110/44 -> 111/44, and the rules are no longer a moving target
+    # (issue #1099, closed by this change). The registry packs the scan
+    # fetched at run time are vendored under .security/semgrep/ and the
+    # ceiling is now bound to their combined digest via `rules_sha256`,
+    # verified by the ratchet the same way `measured_with` is — so from here
+    # a count can only move when this tree moves, or when someone refreshes
+    # the packs with scripts/vendor_semgrep_packs.py and re-measures both
+    # numbers in the same change. The totals moving in the act of pinning is
+    # itself the closing exhibit: 110/44 was measured against the registry
+    # state of an earlier week, 111/44 against the vendored state of
+    # 2026-10-17, with no scanned file changing in between.
+    #
+    # Both numbers here were measured by this gate in CI, per the rule at the
+    # top of this section. Worth recording because it narrows the attribution
+    # hunt below: a local macOS run of the *identical* rules digest and
+    # binary read 110/43 against CI's 111/44 — one finding apart in both
+    # buckets on the same tree. Platform is a variable the count depends on,
+    # so never pin a ceiling from a laptop measurement.
+    #
+    # What this does NOT close: the scanner's own one-run-in-twenty +/-1,
+    # measured further down on identical rule sets and identical trees. That
+    # is the reason `Semgrep (ratcheted)` stays unrequired, and it is
+    # unchanged by pinning the rules; requiring the job still waits on that
+    # +/-1 being attributed and eliminated.
+    # 111 -> 112 (error unchanged at 44). A fifth and sixth
+    # `dynamic-urllib-use-detected`, both in scripts/chaos/store_outage.py
+    # (#1446), which probes the liveness/readiness routes the chaos legs
+    # grade. Net +1 against the ceiling: the rewrite replaced one flagged
+    # call and added one. Both call sites refuse any URL that does not start
+    # with the fixed localhost probe prefixes — the same shape as the four
+    # findings above — so the `file://` read the rule warns about is not
+    # reachable; the rule fires on any non-literal argument to `urlopen`.
+    # Counted rather than suppressed, per the note at the bottom of this
+    # file. Measured with semgrep 1.86.0 on the vendored packs
+    # (rules_sha256 below): 112 total / 44 error.
+    #
+    # 112 -> 113 (error unchanged at 44). The added WARNING is
+    # `dynamic-urllib-use-detected` on scripts/perf/retro_hunt_scale.py,
+    # which POSTs a measurement query to an operator-supplied ClickHouse DSN.
+    # This is the third instance of the identical finding — the same rule
+    # already contributes one for check_main_run_cancellations.py and one for
+    # check_codeql_alerts.py — and it is counted for the same reason: the
+    # rule fires on any non-literal argument to `urlopen`, which every one of
+    # these three has by construction, and counting it is better than
+    # suppressing it. That `error` did not move is the check that this is a
+    # real warning rather than the scanner's recorded +/-1, which moves both
+    # numbers; the new line was also located in the diff before the ceiling
+    # was touched, so this is the ratchet's documented path for an understood
+    # finding and not a ceiling raised to make a scan pass.
+    #
+    # 113 -> 114 (error unchanged at 44). A sixth
+    # `dynamic-urllib-use-detected`, in scripts/sync_sigma_authors.py, which
+    # fetches SigmaHQ/sigma at the commit the importer pins so every imported
+    # rule can carry the author DRL-1.1 requires (#1680). Identical shape to
+    # the five already counted: `CODELOAD_ROOT` is a module-level literal, the
+    # commit is refused unless it matches `^[0-9a-f]{40}$`, and the fetch
+    # refuses any URL not starting with that root — so the `file://` read the
+    # rule warns about is unreachable, while the rule still fires on any
+    # non-literal argument to `urlopen`.
+    #
+    # Attributed before the ceiling moved, which is the condition this file
+    # places on raising one. CI measured 114/44 against the ceiling of 113 and
+    # named the delta as 1; the branch adds exactly one `urlopen` call site,
+    # and `error` is unchanged, which is what distinguishes a new WARNING of a
+    # known shape from the +/-1 the long note above describes (that drift
+    # moves `error` and `total` together). Counted rather than suppressed: a
+    # ceiling counts a finding, a suppression hides it.
+    #
+    # 114 -> 113 (error unchanged at 44). One of those six
+    # `dynamic-urllib-use-detected` warnings is gone: the one on
+    # check_main_run_cancellations.py, named in the 112 -> 113 note above.
+    # That gate had its own single-attempt copy of the Actions API request
+    # and now delegates to the retrying reader in
+    # check_required_check_substance.py, so the `urlopen` call site the rule
+    # fired on no longer exists in that file. No suppression was added and
+    # nothing moved to a different file; there is simply one fewer call.
+    #
+    # Attributed before the ceiling moved, and measured rather than inferred,
+    # because two consecutive CI runs reading 113 against a ceiling of 114 is
+    # also what the recorded +/-1 looks like and the first reading of this
+    # was wrongly called drift. The control that settles it: the file alone,
+    # scanned at `main` and on the branch with semgrep 1.86.0 on the same
+    # vendored packs, gives
+    #
+    #   main    1 finding:  ['dynamic-urllib-use-detected']
+    #   branch  0 findings: []
+    #
+    # `error` is unchanged at 44, which is the other half of the test --
+    # the scanner's drift moves `error` and `total` together.
+    #
+    # 113 -> 112 (error unchanged at 44). GHSA-9q6p-m345-h3hj added a
+    # honeytoken delivery journal whose five log events read "honeytoken
+    # alert for trigger ..." and were all counted as
+    # `python-logger-credential-disclosure`: the heuristic keys on the
+    # substring `token`, and no secret is logged on any of those lines --
+    # they carry a trip id and an error string. The events were reworded to
+    # say "trip", which is the remedy this file already records for the two
+    # log events renamed for the same reason, rather than raising the number
+    # to accommodate a false positive.
+    #
+    # The net is one *below* the old ceiling rather than level with it,
+    # because the honeytokens service's previous alerting module was deleted
+    # in the same change (the path is deliberately not spelled out here: it
+    # no longer exists, and `check_comment_paths` rightly fails a comment
+    # naming a file that is gone). It had no callers left once delivery
+    # moved, and a dead `send_alert` returning False is the shape the
+    # advisory is about. CI measured 112/44, so the ceiling comes down with
+    # it -- a shrink that is not banked drifts back up for free.
+    total: 112
+    error: 44
+    measured_with: "1.86.0"
+    rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
+  checkov:
+    # 219 -> 272 (the 2026-10-12 merge train). The chart stopped describing
+    # seven services and started installing CORE (depth 4.5, #1326: three more
+    # services through the generic template, litellm/ollama/qdrant as their
+    # own workloads) plus the opt-in MCP server (#1304). Every added workload
+    # contributes the same per-container classes the existing 219 already
+    # accepted — image digests a version-templated chart cannot pin, secrets
+    # delivered as env from Secret refs, imagePullPolicy IfNotPresent, no
+    # read-only root for services that write temp files. What could be fixed
+    # without risking boot was fixed in the same change and is why this is
+    # 272 and not 293: the new templates gained seccompProfile RuntimeDefault,
+    # allowPrivilegeEscalation false, capabilities drop ALL and
+    # automountServiceAccountToken false (runAsNonRoot deliberately not —
+    # ollama's stock image runs as root and writes /root/.ollama, and a chart
+    # that renders cleanly and CreateContainerConfigErrors on install is the
+    # v10 lesson). The same pass found and fixed litellm's missing config
+    # volumeMount, which no static scan flags and which made the gateway
+    # unable to boot at all.
+    failed: 272
+    measured_with: "3.2.334"
+  tfsec:
+    total: 32
+    critical: 7
+    high: 5
+    measured_with: "1.28.13"
+
+# ── suppressions ────────────────────────────────────────────────────────────
+#
+# Individual findings accepted as risk. Separate from the dependency-CVE
+# ignore list at scripts/security_audit_ignores.txt.
+#
+# Schema, enforced by the gate:
+#   entries:
+#     - tool: semgrep|checkov|tfsec
+#       id: <rule/check id>
+#       path: <optional path glob>
+#       reason: <why this is acceptable>       # required, non-empty
+#       expires: YYYY-MM-DD                    # required, at most 90 days out
+#
+# An expired entry fails the build. Re-triage it or fix the finding; do not
+# extend the date. Prefer lowering a ceiling over adding an entry here —
+# a suppression hides a finding, a ceiling counts it.
+
+entries: []

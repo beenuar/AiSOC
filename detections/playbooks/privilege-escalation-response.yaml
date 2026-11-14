@@ -1,0 +1,121 @@
+id: privilege-escalation-response-v1
+name: Privilege Escalation Response
+description: >
+  Responds to detected privilege escalation attempts including sudo abuse,
+  SUID/SGID exploitation, token impersonation, or role assignment anomalies.
+  Revokes elevated privileges, isolates the session, and logs forensic evidence.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - privilege-escalation
+  - endpoint
+  - linux
+  - windows
+  - iam
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - privesc
+
+steps:
+  - id: enrich-session
+    name: Enrich Privileged Session
+    type: enrich
+    params:
+      source: endpoint
+      fields:
+        - username
+        - hostname
+        - process_name
+        - parent_process
+        - escalation_method
+        - elevated_to
+        - command_line
+        - file_path
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-user
+    name: Investigate User Privilege History
+    type: investigate
+    params:
+      query: >
+        privilege_events user={{ alert.username }}
+        host={{ alert.hostname }} last_hours=24
+      context_fields:
+        - alert.username
+        - alert.escalation_method
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-critical-host
+    name: Check If Critical Host
+    type: condition
+    condition:
+      field: alert.hostname
+      operator: contains
+      value: "-prod-"
+    next_true: isolate-host
+    next_false: revoke-privilege
+
+  - id: isolate-host
+    name: Isolate Production Host
+    type: isolate_host
+    params:
+      reason: "Privilege escalation on production host — playbook {{ id }}"
+      notify_user: false
+    timeout_seconds: 60
+    on_failure: abort
+    retry_max: 2
+
+  - id: revoke-privilege
+    name: Revoke Escalated Privileges
+    type: http
+    params:
+      method: POST
+      url: "{{ env.IAM_API_URL }}/users/{{ alert.username }}/revoke-elevated"
+      body:
+        host: "{{ alert.hostname }}"
+        reason: "Detected privilege escalation"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-security
+    name: Notify Security Operations
+    type: notify
+    params:
+      channel: "#security-alerts"
+      message: |
+        ⬆️ *Privilege Escalation Detected*
+        User: `{{ alert.username }}`
+        Host: `{{ alert.hostname }}`
+        Method: `{{ alert.escalation_method }}`
+        Escalated To: `{{ alert.elevated_to }}`
+        Process: `{{ alert.process_name }}`
+        Host isolated: {{ steps.isolate-host.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Privilege Escalation Ticket
+    type: create_ticket
+    params:
+      title: "PRIVESC: {{ alert.username }} via {{ alert.escalation_method }} on {{ alert.hostname }}"
+      severity: P1
+      assignee_group: ir-team
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Privilege Escalation Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Elevated privileges revoked; host isolated if production; IR investigating."
+    timeout_seconds: 15
+    on_failure: continue

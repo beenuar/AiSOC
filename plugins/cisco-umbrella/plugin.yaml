@@ -1,0 +1,28 @@
+id: cisco-umbrella
+name: Cisco Umbrella DNS Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Cisco Umbrella DNS + secure web gateway activity. Surfaces blocked domains,
+  malware verdicts, and proxy events.
+author: AiSOC Core Team
+tags: [network, cisco, umbrella, dns]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cisco_umbrella.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [api_key, api_secret]
+  properties:
+    api_key:
+      type: string
+      description: Umbrella Management API Key
+      secret: true
+    api_secret:
+      type: string
+      description: Umbrella Management API Secret
+      secret: true
+    org_id:
+      type: string
+      description: "Optional. If omitted, the token's default org is used."

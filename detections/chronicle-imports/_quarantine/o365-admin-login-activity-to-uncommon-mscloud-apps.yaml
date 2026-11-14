@@ -1,0 +1,62 @@
+id: chronicle-detection-rules-o365-admin-login-activity-to-uncommon-mscloud-apps
+name: o365_admin_login_activity_to_uncommon_mscloud_apps
+description: o365_admin_login_activity_to_uncommon_mscloud_apps
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_admin_login_activity_to_uncommon_mscloud_apps {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"This rule detects O365 login\
+    \ activity to apps other than a defined list of first party MS Cloud Apps. Note\
+    \ that Azure Active Directory PowerShell and custom Azure apps are not in this\
+    \ list by default\"\n    rule_id = \"mr_4fa166c8-922a-4dc1-b72d-9bcb2ec7609f\"\
+    \n    rule_name = \"O365 Admin Login Activity To Uncommon Microsoft Cloud Apps\"\
+    \n    assumption = \"The lists first_party_ms_cloud_apps and msazure_admin_watchlist\
+    \ are populated as needed\"\n    tactic = \"TA0001\"\n    technique = \"T1078.004\"\
+    \n    reference = \"https://learn.microsoft.com/en-us/troubleshoot/azure/active-directory/verify-first-party-apps-sign-in\"\
+    \n    type = \"alert\"\n    platform = \"azure\"\n    data_source = \"o365\"\n\
+    \    severity = \"High\"\n    priority = \"High\"\n\n  events:\n    $login.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $login.metadata.product_event_type = \"UserLoggedIn\"\n\
+    \    $login.metadata.product_name = \"Office 365\"\n    NOT $login.target.resource.product_object_id\
+    \ in %first_party_ms_cloud_apps\n    $login.metadata.vendor_name = \"Microsoft\"\
+    \n    $login.security_result.action = \"ALLOW\"\n    $login.target.user.userid\
+    \ = $userid\n\n    //Use the criteria below if you want to isolate activity to\
+    \ a specific watchlist of users\n    //@domain.com is stripped off to reduce the\
+    \ values in the list to just the username of the email address, can apply to userid\
+    \ or email address fields\n    re.replace($login.target.user.userid, `@.*$`, \"\
+    \")  in %msazure_admin_watchlist\n\n  match:\n    $userid over 5m\n\n  outcome:\n\
+    \    $risk_score = 65\n    $event_count = count_distinct($login.metadata.id)\n\
+    \    $target_application = array_distinct($login.target.resource.product_object_id)\n\
+    \    $security_summary = array_distinct($login.security_result.summary)\n    $user_agent\
+    \ = array_distinct($login.network.http.user_agent)\n    $country_region_login_attempt\
+    \ = array_distinct($login.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    //added to populate alert graph with additional context\n    $principal_ip\
+    \ = array_distinct($login.principal.ip)\n    $target_user_userid = array_distinct($login.target.user.userid)\n\
+    \n  condition:\n    $login\n}"
+  chronicle_rule_name: o365_admin_login_activity_to_uncommon_mscloud_apps
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_admin_login_activity_to_uncommon_mscloud_apps
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_admin_login_activity_to_uncommon_mscloud_apps.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

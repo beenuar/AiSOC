@@ -1,0 +1,53 @@
+id: chronicle-detection-rules-o365-entra-id-application-creation
+name: o365_entra_id_application_creation
+description: o365_entra_id_application_creation
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule o365_entra_id_application_creation {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Application creation is a legitimate activity\
+    \ but doesn't occur frequently. Alerts when a new application is created in Entra\
+    \ ID (formerly Azure AD).\"\n    rule_id = \"mr_c8daf9ab-2b39-46cc-bda9-7fd1ebb13a81\"\
+    \n    rule_name = \"O365 Entra ID Application Creation\"\n    type = \"alert\"\
+    \n    platform = \"azure\"\n    data_source = \"o365\"\n    severity = \"Low\"\
+    \n    priority = \"Medium\"\n\n  events:\n    $app.metadata.event_type = \"USER_RESOURCE_CREATION\"\
+    \n    $app.metadata.product_name = \"Office 365\"\n    $app.metadata.vendor_name\
+    \ = \"Microsoft\"\n    $app.metadata.product_event_type = \"Add application.\"\
+    \n    $app.security_result.action = \"ALLOW\"\n    //These events should have\
+    \ a userid associated with them but in case they don't we will match on the app\
+    \ name being created instead\n    strings.coalesce($app.principal.user.userid,\
+    \ $app.target.resource.name) = $user_or_resource\n\n  match:\n    $user_or_resource\
+    \ over 5m\n\n  outcome:\n    $risk_score = 35\n    $event_count = count_distinct($app.metadata.id)\n\
+    \    $target_application = array_distinct($app.target.application)\n    $security_summary\
+    \ = array_distinct($app.security_result.summary)\n    $user_agent = array_distinct($app.network.http.user_agent)\n\
+    \    //added to populate alert graph with additional context\n    $principal_user_userid\
+    \ = array_distinct($app.principal.user.userid)\n    $target_resource_name = array_distinct($app.target.resource.name)\n\
+    \n  condition:\n    $app\n}"
+  chronicle_rule_name: o365_entra_id_application_creation
+provenance:
+  source: chronicle/detection-rules
+  source_id: o365_entra_id_application_creation
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/o365/o365_entra_id_application_creation.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

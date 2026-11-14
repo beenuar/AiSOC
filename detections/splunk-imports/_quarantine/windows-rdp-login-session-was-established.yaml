@@ -1,0 +1,42 @@
+id: splunk-security-content-00ca7f9e-88ab-4841-a6c2-83979ab1ed29
+name: Windows RDP Login Session Was Established
+description: The following analytic detects instances where a successful Remote Desktop
+  Protocol (RDP) login session was established, as indicated by Windows Security Event
+  ID 4624 with Logon Type 10. This event confirms that a user has not only provided
+  valid credentials but has also initiated a full interactive RDP session. It is a
+  key indicator of successful remote access to a Windows system. When correlated with
+  Event ID 1149, which logs RDP authentication success, this analytic helps distinguish
+  between mere credential acceptance and actual session establishment—critical for
+  effective monitoring and threat detection.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.001
+  categories:
+  - endpoint
+references:
+- https://medium.com/@bonguides25/how-to-clear-rdp-connections-history-in-windows-cf0ffb67f344
+- https://thelocalh0st.github.io/posts/rdp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security`  EventCode=4624 Logon_Type=10\n  | stats count\
+    \ min(_time) as firstTime max(_time) as lastTime\n    BY action app authentication_method\n\
+    \       dest dvc process\n       process_id process_name process_path\n      \
+    \ signature signature_id src\n       src_port status subject\n       user user_group\
+    \ vendor_product\n       Logon_Type\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_rdp_login_session_was_established_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 00ca7f9e-88ab-4841-a6c2-83979ab1ed29
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_rdp_login_session_was_established.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

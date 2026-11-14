@@ -1,0 +1,45 @@
+id: splunk-security-content-abf39464-ed43-4d69-a56c-02750032a3fb
+name: Cisco Duo Policy Deny Access
+description: The following analytic identifies instances where a Duo administrator
+  creates or updates a policy to explicitly deny user access within the Duo environment.
+  It detects this behavior by searching Duo administrator activity logs for policy
+  creation or update actions where the authentication status is set to "Deny access."
+  By correlating these events with user and admin details, the analytic highlights
+  potential misuse or malicious changes to access policies. This behavior is critical
+  for a SOC to monitor, as unauthorized or suspicious denial of access policies can
+  indicate insider threats, account compromise, or attempts to disrupt legitimate
+  user access. The impact of such an attack may include denial of service to critical
+  accounts, disruption of business operations, or the masking of further malicious
+  activity by preventing targeted users from accessing resources. Early detection
+  enables rapid investigation and remediation to maintain organizational security
+  and availability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_administrator` action=policy_update OR action=policy_create\n\
+    \  | spath input=description\n  | search auth_status=\"Deny access\"\n  | rename\
+    \ object as user\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY action actionlabel description\n       user admin_email\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `cisco_duo_policy_deny_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: abf39464-ed43-4d69-a56c-02750032a3fb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_policy_deny_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

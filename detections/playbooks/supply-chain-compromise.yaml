@@ -1,0 +1,112 @@
+id: supply-chain-compromise-v1
+name: Supply Chain Compromise Response
+description: >
+  Responds to suspected supply chain attacks including malicious package
+  updates, compromised third-party libraries, or tampered build artifacts.
+  Quarantines affected builds, notifies DevSecOps, and triggers a software
+  inventory audit.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - supply-chain
+  - devops
+  - sca
+  - build-security
+  - oss
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - supply-chain
+
+steps:
+  - id: enrich-package
+    name: Enrich Affected Package
+    type: enrich
+    params:
+      source: sca_scanner
+      fields:
+        - package_name
+        - package_version
+        - ecosystem
+        - cve_ids
+        - affected_repos
+        - build_jobs
+        - pipeline_id
+        - checksum_mismatch
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-package
+    name: Investigate Package Provenance
+    type: investigate
+    params:
+      query: >
+        package_usage package={{ alert.package_name }}
+        version={{ alert.package_version }}
+      context_fields:
+        - alert.package_name
+        - alert.package_version
+        - alert.cve_ids
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-checksum
+    name: Check Checksum Mismatch
+    type: condition
+    condition:
+      field: alert.checksum_mismatch
+      operator: eq
+      value: true
+    next_true: halt-pipelines
+    next_false: notify-devsecops
+
+  - id: halt-pipelines
+    name: Halt Affected CI/CD Pipelines
+    type: http
+    params:
+      method: POST
+      url: "{{ env.CI_API_URL }}/pipelines/{{ alert.pipeline_id }}/cancel"
+      body:
+        reason: "Supply chain compromise — checksum mismatch — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-devsecops
+    name: Notify DevSecOps Team
+    type: notify
+    params:
+      channel: "#devsecops-alerts"
+      message: |
+        📦 *Supply Chain Compromise Detected*
+        Package: `{{ alert.package_name }}@{{ alert.package_version }}`
+        Ecosystem: `{{ alert.ecosystem }}`
+        CVEs: {{ alert.cve_ids }}
+        Affected Repos: {{ alert.affected_repos }}
+        Checksum mismatch: {{ alert.checksum_mismatch }}
+        Pipeline halted: {{ steps.halt-pipelines.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Supply Chain Incident Ticket
+    type: create_ticket
+    params:
+      title: "SUPPLY-CHAIN: {{ alert.package_name }}@{{ alert.package_version }} — {{ alert.ecosystem }}"
+      severity: P1
+      assignee_group: devsecops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Supply Chain Case
+    type: close_case
+    params:
+      status: under-investigation
+      resolution: "Pipelines halted; DevSecOps notified; package audit in progress."
+    timeout_seconds: 15
+    on_failure: continue

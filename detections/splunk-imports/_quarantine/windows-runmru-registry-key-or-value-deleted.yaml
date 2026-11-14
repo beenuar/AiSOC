@@ -1,0 +1,47 @@
+id: splunk-security-content-e651795f-b2c9-4a84-a18a-b901018a3bfa
+name: Windows RunMRU Registry Key or Value Deleted
+description: The following analytic detects the deletion or modification of Most Recently
+  Used (MRU) command entries stored within the Windows Registry. Adversaries often
+  clear these registry keys, such as HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\RunMRU,
+  to remove forensic evidence of commands executed via the Windows Run dialog or other
+  system utilities. This activity aims to obscure their actions, hinder incident response
+  efforts, and evade detection. Detection focuses on monitoring for changes (deletion
+  of values or modification of the MRUList value) to these specific registry paths,
+  particularly when performed by unusual processes or outside of typical user behavior.
+  Anomalous deletion events can indicate an attempt at defense evasion or post-exploitation
+  cleanup by a malicious actor.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.linkedin.com/posts/mauricefielenbach_cybersecurity-incidentresponse-dfir-activity-7394805779448418304-g0gZ?utm_source=share&utm_medium=member_desktop&rcm=ACoAAAuFTjIB5weY_kcyu4qp3kHbI4v49tO0zEk
+- https://thedfirreport.com/2023/10/30/netsupport-intrusion-results-in-domain-compromise/
+- https://www.esentire.com/blog/evalusion-campaign-delivers-amatera-stealer-and-netsupport-rat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path
+    = "*\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RunMRU*" Registry.action
+    = deleted by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_runmru_registry_key_or_value_deleted_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: e651795f-b2c9-4a84-a18a-b901018a3bfa
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_runmru_registry_key_or_value_deleted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

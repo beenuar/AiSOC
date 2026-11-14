@@ -1,0 +1,38 @@
+id: splunk-security-content-d61292d5-46e4-49ea-b23b-8049ea70b525
+name: MOVEit Certificate Store Access Failure
+description: This detection identifies potential exploitation attempts of the CVE-2024-5806
+  vulnerability in Progress MOVEit Transfer. It looks for log entries indicating failures
+  to access the certificate store, which can occur when an attacker attempts to exploit
+  the authentication bypass vulnerability. This behavior is a key indicator of attempts
+  to impersonate valid users without proper credentials. While certificate store access
+  failures can occur during normal operations, an unusual increase in such events,
+  especially from unexpected sources, may indicate malicious activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - endpoint
+references:
+- https://labs.watchtowr.com/auth-bypass-in-un-limited-scenarios-progress-moveit-transfer-cve-2024-5806/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`moveit_sftp_logs` \"IpWorksKeyService: Caught exception of type IPWorksSSHException:\
+    \ The certificate store could not be opened\"\n  | stats count\n    BY source\
+    \ _raw\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `moveit_certificate_store_access_failure_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d61292d5-46e4-49ea-b23b-8049ea70b525
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/moveit_certificate_store_access_failure.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

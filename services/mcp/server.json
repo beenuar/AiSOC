@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.beenuar/aisoc",
+  "title": "AiSOC",
+  "description": "Query AiSOC alerts, cases, detections and the agent decision ledger from an MCP-aware assistant.",
+  "version": "0.1.0",
+  "websiteUrl": "https://beenuar.github.io/AiSOC/docs/integrations/mcp",
+  "repository": {
+    "url": "https://github.com/beenuar/AiSOC",
+    "source": "github",
+    "id": "1226971975",
+    "subfolder": "services/mcp"
+  },
+  "icons": [
+    {
+      "src": "https://beenuar.github.io/AiSOC/img/favicon.png",
+      "mimeType": "image/png",
+      "sizes": ["256x256"]
+    }
+  ]
+}

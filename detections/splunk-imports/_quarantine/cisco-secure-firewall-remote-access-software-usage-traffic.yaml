@@ -1,0 +1,54 @@
+id: splunk-security-content-ac54d39e-a75d-4f42-971d-006db3a0423a
+name: Cisco Secure Firewall - Remote Access Software Usage Traffic
+description: 'The following analytic detects network traffic associated with known
+  remote access software applications
+
+  that are covered by Cisco Secure Firewall Application Detectors, such as AnyDesk,
+  GoToMyPC, LogMeIn, and TeamViewer.
+
+  It leverages Cisco Secure Firewall Threat Defense Connection Event.
+
+  This activity is significant because adversaries often use remote access tools to
+  maintain unauthorized access to compromised environments.
+
+  If confirmed malicious, this activity could allow attackers to control systems remotely,
+  exfiltrate
+
+  data, or deploy additional malware, posing a severe threat to the organization''s
+  security.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219
+  categories:
+  - network
+references:
+- https://attack.mitre.org/techniques/T1219/
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` EventType=ConnectionEvent\n| stats min(_time)\
+    \ as firstTime max(_time) as lastTime\n      values(dest_port) as dest_port\n\
+    \      values(dest) as dest\n      values(transport) as transport\n      values(url)\
+    \ as url\n      values(rule) as rule\n      count by src ClientApplication action\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | lookup cisco_secure_firewall_appid_remote_mgmt_and_desktop_tools appName AS\
+    \ ClientApplication OUTPUT category, appDescription as Description\n| search category\
+    \ IN (\"remote administration\", \"remote desktop control\")\n| `remote_access_software_usage_exceptions`\n\
+    | `cisco_secure_firewall___remote_access_software_usage_traffic_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ac54d39e-a75d-4f42-971d-006db3a0423a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___remote_access_software_usage_traffic.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

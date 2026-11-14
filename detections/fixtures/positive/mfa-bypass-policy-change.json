@@ -1,0 +1,5 @@
+{
+  "event_type": "policy.lifecycle.update",
+  "policy_change_field": "mfa_required:false",
+  "policy_name": "all-employees"
+}

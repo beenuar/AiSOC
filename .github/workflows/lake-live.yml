@@ -1,0 +1,235 @@
+# The event lake, against the schema the product actually ships.
+#
+# Why loading the real DDL is the point
+# ---------------------------------------
+# `test_live_stores.py` has a live ClickHouse case and it writes its own
+# `CREATE TABLE aisoc.raw_events` — a hand-maintained subset of what
+# `services/api/clickhouse/001_init.sql` creates. A test that builds its own
+# schema cannot notice the real one has drifted, which is the same shape as
+# asserting on a producer against a copy of itself.
+#
+# Writing this suite proved the point immediately: the first version
+# inserted `message` and `raw_event`, and the shipped table has neither.
+#
+# No `paths:` filter. The previous arrangement also filtered on paths that
+# omitted `lake_hunt.py`, `lake_rate_limit.py` and `endpoints/lake.py`, so
+# editing the lake's own query surface never re-graded it.
+name: Event lake (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lake-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lake-live:
+    name: The shipped DDL loads and tenant scoping holds
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # The route suite authenticates a real user against a real `users`
+    # row, because `get_current_user` resolves the token's `sub` and
+    # 401s on "User not found". A synthetic subject would be refused —
+    # which is the behaviour worth keeping, since it is what makes the
+    # tenant come from the credential rather than from an argument.
+
+    env:
+      LAKE_ROUTE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Start ClickHouse
+        run: |
+          docker run -d --name lake-clickhouse -p 9000:9000 -p 8123:8123 \
+            -e CLICKHOUSE_SKIP_USER_SETUP=1 \
+            clickhouse/clickhouse-server:24.3-alpine
+
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio clickhouse-driver
+
+      # The hunt suite below drives `app.hunt` from services/agents, a
+      # different service with a different lock.
+      # The hunt suite below drives `app.hunt` from services/agents, a
+      # different service with a different lock.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet clickhouse-driver
+
+      - name: Wait for ClickHouse
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec lake-clickhouse clickhouse-client -q "SELECT 1" >/dev/null 2>&1; then
+              echo "ClickHouse ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "ClickHouse did not become ready"; docker logs lake-clickhouse | tail -40; exit 1
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The layer `test_lake_live.py` stops short of: the caller is
+      # authenticated, their tenant comes from the token rather than an
+      # argument, and errors map onto status codes an operator reads.
+      - name: A tenant-scoped query round-trips through POST /lake/sql
+        working-directory: services/api
+        env:
+          ISOLATION_LAKE_ROUTE_DSN: ${{ env.LAKE_ROUTE_DSN }}
+          DATABASE_URL: ${{ env.LAKE_ROUTE_DSN }}
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_lake_route_live.py -v --tb=short
+
+      - name: The shipped DDL loads and tenant scoping holds
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_lake_live.py -v --tb=short
+
+      # Fix-pass 4.4: the usage meter that counts lake rows. Its offline
+      # cases drive a stand-in for `execute_lake_query`, which proves the
+      # branching and cannot prove the SQL is valid ClickHouse or that
+      # `toDate(ingest_time)` buckets the way the module assumes — the two
+      # ways a usage figure is wrong on a deployment and right in CI.
+      - name: events_ingested counts the lake, per tenant and per day
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -v --tb=short
+
+      # The negative control for the meter above.
+      #
+      # Drops the tenant predicate from its statement, which is the shape
+      # where one customer's usage export carries another's volume.
+      # Expected: the per-tenant assertions fail.
+      - name: The meter fails when it stops scoping to one tenant
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          cp app/services/usage_metering.py /tmp/usage_metering.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/usage_metering.py")
+          s = p.read_text()
+          needle = '"WHERE tenant_id = %(tenant_id)s AND ingest_time >= %(start)s AND ingest_time < %(end)s "'
+          if needle not in s:
+              print("negative control could not find the lake meter's tenant predicate; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, '"WHERE ingest_time >= %(start)s AND ingest_time < %(end)s "', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -q >/dev/null 2>&1; then
+            cp /tmp/usage_metering.bak app/services/usage_metering.py
+            echo "FAIL: the suite passed with the lake meter counting every tenant's events."
+            exit 1
+          fi
+          cp /tmp/usage_metering.bak app/services/usage_metering.py
+          echo "OK: an unscoped lake meter makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -q
+
+      # Parity 6.1: scheduled hunts read the tenant's own events rather
+      # than a fixture corpus. Run from `services/agents`, because both
+      # services call their package `app` and running this from
+      # `services/api` resolves `app.hunt` to nothing.
+      - name: Scheduled hunts read tenant data, and refuse to fabricate
+        working-directory: services/agents
+        env:
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_hunt_lake_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Makes `rewrite_for_tenant` a pass-through — the shape where an
+      # operator's SQL reaches the lake unfiltered and every tenant reads
+      # every other tenant's events. Measured: three of the six tests
+      # fail, including the fail-closed one.
+      #
+      # Worth stating why the fail-closed test is in that set. Returning
+      # the original SQL when the rewrite cannot be applied is exactly
+      # what a pass-through does, so a control that only checked the
+      # happy path would miss the more dangerous half.
+      - name: The gate fails when the tenant rewrite is a pass-through
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          cp app/services/lake_sql.py /tmp/lake_sql.bak
+          python - <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path("app/services/lake_sql.py")
+          s = p.read_text()
+          m = re.search(r"\ndef rewrite_for_tenant\(\n(.*?)\n\) -> [^\n]*:\n", s, re.S)
+          if not m:
+              print("negative control could not find rewrite_for_tenant's signature; it "
+                    "has been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s[: m.end()] + "    return sql  # injected pass-through\n" + s[m.end() :])
+          PY
+          if python -m pytest ../../tests/isolation/test_lake_live.py -q >/dev/null 2>&1; then
+            cp /tmp/lake_sql.bak app/services/lake_sql.py
+            echo "FAIL: the suite passed with the tenant rewrite doing nothing."
+            exit 1
+          fi
+          cp /tmp/lake_sql.bak app/services/lake_sql.py
+          echo "OK: a pass-through rewrite makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_lake_live.py -q
+
+      - name: ClickHouse logs on failure
+        if: failure()
+        run: docker logs lake-clickhouse | tail -60

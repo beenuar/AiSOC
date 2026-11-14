@@ -1,0 +1,28 @@
+title: Engineering Workstation Wrote Logic to PLC Outside Maintenance Window
+id: aisoc-vt-mfg-0001-eng-workstation-plc-write
+status: experimental
+description: |
+  An OT engineering workstation initiated a logic-download or
+  configuration write to a PLC (Siemens S7, Rockwell ControlLogix,
+  Schneider Modicon) outside the tenant's declared maintenance
+  window. Direct precursor to ICS sabotage; legitimate PLC writes are
+  always scheduled.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: ot
+  service: plc
+tags:
+  - attack.t0831
+  - attack.impact
+  - aisoc.vertical.manufacturing
+  - aisoc.ics
+detection:
+  selection:
+    event.module: ot.plc
+    event.action|in:
+      - 'logic.downloaded'
+      - 'config.written'
+  filter:
+    maintenance_window.active: true
+  condition: selection and not filter

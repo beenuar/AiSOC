@@ -1,0 +1,71 @@
+id: chronicle-detection-rules-aws-successful-login-after-multiple-failed-attempts
+name: aws_successful_login_after_multiple_failed_attempts
+description: aws_successful_login_after_multiple_failed_attempts
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule aws_successful_login_after_multiple_failed_attempts {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"Detects successful login after\
+    \ multiple failed attempts\"\n    rule_id = \"mr_8ba028b6-98e3-4983-92e9-c0fe50419a20\"\
+    \n    rule_name = \"AWS Successful Login After Multiple Failed Attempts\"\n  \
+    \  mitre_attack_tactic = \"Defense Evasion, Persistence, Privilege Escalation,\
+    \ Initial Access\"\n    mitre_attack_technique = \"Valid Accounts\"\n    mitre_attack_url\
+    \ = \"https://attack.mitre.org/techniques/T1078/\"\n    mitre_attack_version =\
+    \ \"v13.1\"\n    type = \"Alert\"\n    data_source = \"AWS CloudTrail\"\n    platform\
+    \ = \"AWS\"\n    severity = \"Medium\"\n    priority = \"Medium\"\n\n  events:\n\
+    \    $fail.metadata.vendor_name = \"AMAZON\"\n    $fail.metadata.product_name\
+    \ = \"AWS CloudTrail\"\n    $fail.metadata.event_type = \"USER_LOGIN\"\n    $fail.metadata.product_event_type\
+    \ = \"ConsoleLogin\"\n    $fail.security_result.action = \"BLOCK\"\n    $fail.security_result.description\
+    \ = \"Reason: Failed authentication\"\n    $fail.target.user.user_display_name\
+    \ = $user\n\n    $success.metadata.vendor_name = \"AMAZON\"\n    $success.metadata.product_name\
+    \ = \"AWS CloudTrail\"\n    $success.metadata.event_type = \"USER_LOGIN\"\n  \
+    \  $success.metadata.product_event_type = \"ConsoleLogin\"\n    $success.security_result.action\
+    \ = \"ALLOW\"\n    $success.security_result.summary = \"Login to AWS Console succeeded.\"\
+    \n    $success.target.user.user_display_name = $user\n\n    $success.metadata.event_timestamp.seconds\
+    \ > $fail.metadata.event_timestamp.seconds\n\n  match:\n    $user over 15m\n\n\
+    \  outcome:\n    $risk_score = max(\n        // Country mismatch\n        if($fail.principal.ip_geo_artifact.location.country_or_region\
+    \ = $success.principal.ip_geo_artifact.location.country_or_region, 40) +\n   \
+    \     // Unauthorized geographies\n        if($success.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Cuba\", 10) +\n        if($success.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Iran\", 10) +\n        if($success.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"North Korea\" , 10) +\n        if($success.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Russia\", 10) +\n        if($success.principal.ip_geo_artifact.location.country_or_region\
+    \ = \"Syria\", 10)\n    )\n    $mitre_attack_tactic = \"Defense Evasion, Persistence,\
+    \ Privilege Escalation, Initial Access\"\n    $mitre_attack_technique = \"Valid\
+    \ Accounts\"\n    $mitre_attack_technique_id = \"T1078\"\n    $event_count = count_distinct($success.metadata.id)\
+    \ + count_distinct($fail.metadata.id)\n    $principal_ip = array_distinct($success.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($success.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($success.principal.ip_geo_artifact.location.state)\n\
+    \    $target_user_userid = array_distinct($success.target.user.userid)\n    $is_mfa_used\
+    \ = array_distinct($success.extensions.auth.auth_details)\n    $target_resource_name\
+    \ = array_distinct($success.target.resource.name)\n    $target_resource_product_object_id\
+    \ = array_distinct($success.target.resource.product_object_id)\n\n  condition:\n\
+    \    #fail > 3 and $success\n}"
+  chronicle_rule_name: aws_successful_login_after_multiple_failed_attempts
+provenance:
+  source: chronicle/detection-rules
+  source_id: aws_successful_login_after_multiple_failed_attempts
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/aws/cloudtrail/aws_successful_login_after_multiple_failed_attempts.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

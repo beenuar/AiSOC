@@ -1,0 +1,23 @@
+id: det-application-166
+name: M365 Mail Items Accessed
+description: The record that shows which messages were actually read, which is what scopes a compromise.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1114.002
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "MailItemsAccessed"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

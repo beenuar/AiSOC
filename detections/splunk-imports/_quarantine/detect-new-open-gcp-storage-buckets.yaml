@@ -1,0 +1,43 @@
+id: splunk-security-content-f6ea3466-d6bb-11ea-87d0-0242ac130003
+name: Detect New Open GCP Storage Buckets
+description: The following analytic identifies the creation of new open/public GCP
+  Storage buckets. It leverages GCP PubSub events, specifically monitoring for the
+  `storage.setIamPermissions` method and checks if the `allUsers` member is added.
+  This activity is significant because open storage buckets can expose sensitive data
+  to the public, posing a severe security risk. If confirmed malicious, an attacker
+  could access, modify, or delete data within the bucket, leading to data breaches
+  and potential compliance violations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1530
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`google_gcp_pubsub_message` data.resource.type=gcs_bucket data.protoPayload.methodName=storage.setIamPermissions\n\
+    \  | spath output=action path=data.protoPayload.serviceData.policyDelta.bindingDeltas{}.action\n\
+    \  | spath output=user path=data.protoPayload.authenticationInfo.principalEmail\n\
+    \  | spath output=location path=data.protoPayload.resourceLocation.currentLocations{}\n\
+    \  | spath output=src path=data.protoPayload.requestMetadata.callerIp\n  | spath\
+    \ output=bucketName path=data.protoPayload.resourceName\n  | spath output=role\
+    \ path=data.protoPayload.serviceData.policyDelta.bindingDeltas{}.role\n  | spath\
+    \ output=member path=data.protoPayload.serviceData.policyDelta.bindingDeltas{}.member\n\
+    \  | search (member=allUsers AND action=ADD)\n  | table  _time, bucketName, src,\
+    \ user, location, action, role, member\n  | search `detect_new_open_gcp_storage_buckets_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f6ea3466-d6bb-11ea-87d0-0242ac130003
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_new_open_gcp_storage_buckets.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

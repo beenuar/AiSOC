@@ -1,0 +1,24 @@
+id: det-cloud-253
+name: GCP GKE Cluster Created
+description: A cluster created outside the platform pipeline is one with nobody's admission policies on
+  it.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1578
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: container
+detection:
+  condition: |
+    method_name == "google.container.v1.ClusterManager.CreateCluster"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

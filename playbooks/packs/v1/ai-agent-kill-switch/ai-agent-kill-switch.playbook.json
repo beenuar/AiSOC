@@ -1,0 +1,140 @@
+{
+  "id": "ai-agent-kill-switch-v1",
+  "name": "AI Agent Kill Switch",
+  "description": "Stop one compromised AI agent: block its gateway key, deactivate the provider key behind it, kill the agent process on the host, and ask the model one bounded question about whether the account itself needs demoting. Every containment step is behind an approval, and the approval declares what happens if nobody answers. Distinct from services/actions kill_switch.py, which is the platform-wide autonomy stop and is not an agent control.",
+  "version": "1.0.0",
+  "author": "AiSOC",
+  "tags": [
+    "ai-agent",
+    "ai-estate",
+    "kill-switch",
+    "mitre.t1552",
+    "mitre.t1078"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["ai-agent-compromise", "provider-key-exposed", "agent-anomaly"]
+  },
+  "enabled": false,
+  "dry_run_support": true,
+  "created_at": "2026-11-01T00:00:00+00:00",
+  "updated_at": "2026-11-01T00:00:00+00:00",
+  "inputs": {
+    "gateway_key": {
+      "description": "Virtual key the agent presents at the AI gateway",
+      "field": "alert.gateway_key",
+      "required": false
+    },
+    "provider_key_id": {
+      "description": "Provider API key id behind the agent",
+      "field": "alert.provider_key_id",
+      "required": false
+    },
+    "agent_host": {
+      "description": "Host running the agent process",
+      "field": "alert.host",
+      "required": false
+    },
+    "agent_process": {
+      "description": "Agent process id or name",
+      "field": "alert.process_id",
+      "required": false
+    },
+    "principal": {
+      "description": "Person or service identity the agent acts for",
+      "field": "alert.user",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "read_key_state",
+      "name": "Read the gateway key's current state",
+      "type": "search_siem",
+      "params": {
+        "query": "ai_gateway key state for {{inputs.gateway_key}}",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "scope_question",
+      "name": "Is this the agent's own scheduled work or somebody else driving it?",
+      "type": "ask_model",
+      "params": {
+        "question": "Given the evidence, does this activity look like the agent's own scheduled work, or like a third party driving the agent's credentials?",
+        "choices": ["own_scheduled_work", "third_party_driving"],
+        "context_keys": ["alert", "_step_read_key_state"],
+        "branches": {
+          "third_party_driving": "approve_containment"
+        },
+        "on_invalid": "approve_containment"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 60
+    },
+    {
+      "id": "approve_containment",
+      "name": "Approve stopping this agent",
+      "type": "approval",
+      "params": {
+        "reason": "Blocking the gateway key and deactivating the provider key stops every workload using this agent's credentials, not only the compromised one.",
+        "expires_in_hours": 2,
+        "timeout_outcome": "contain",
+        "timeout_capability": "set_spend_cap",
+        "timeout_target": "{{inputs.gateway_key}}",
+        "timeout_params": {
+          "max_budget": 0,
+          "vendor_id": "ai_gateway"
+        }
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 60
+    },
+    {
+      "id": "block_gateway_key",
+      "name": "Block the agent's gateway key",
+      "type": "block_ioc",
+      "params": {
+        "capability": "revoke_token",
+        "vendor_id": "ai_gateway",
+        "target": "{{inputs.gateway_key}}",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "kill_agent_process",
+      "name": "Kill the agent process on the host",
+      "type": "kill_process",
+      "params": {
+        "host_field": "alert.host",
+        "process_field": "alert.process_id",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "notify_owner",
+      "name": "Tell the agent's owner what was stopped and why",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "recipient": "{{inputs.principal}}",
+        "message": "An AI agent acting for you was contained: its gateway key was blocked and its process stopped. The provider key behind it needs a separate decision."
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    }
+  ]
+}

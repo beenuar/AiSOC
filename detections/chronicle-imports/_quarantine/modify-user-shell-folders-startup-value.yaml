@@ -1,0 +1,60 @@
+id: chronicle-detection-rules-modify-user-shell-folders-startup-value
+name: modify_user_shell_folders_startup_value
+description: modify_user_shell_folders_startup_value
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule modify_user_shell_folders_startup_value {\n\n  meta:\n    author = \"frack113\"\
+    \n    description = \"Detect modification of the startup key to a path where a\
+    \ payload could be stored to be launched during startup\"\n    reference = \"\
+    https://github.com/SigmaHQ/sigma/blob/master/rules/windows/registry/registry_set/registry_set_susp_user_shell_folders.yml\"\
+    \n    license = \"https://github.com/SigmaHQ/Detection-Rule-License/blob/main/LICENSE.Detection.Rules.md\"\
+    \n    rule_name = \"Modify User Shell Folders Startup Value\"\n    rule_id = \"\
+    mr_bf813e89-427f-46e4-a671-bb3eea037725\"\n    sigma_uuid = \"9c226817-8dc9-46c2-a58d-66655aafd7dc\"\
+    \n    sigma_status = \"test\"\n    tactic = \"TA0003\"\n    //tactic = \"TA0004\"\
+    \n    technique = \"T1547.001\"\n    type = \"Detection\"\n    data_source = \"\
+    Sysmon Windows Registry\"\n    platform = \"Windows\"\n    severity = \"High\"\
+    \n    priority = \"High\"\n    false_positives = \"Unknown\"\n\n  events:\n  \
+    \  $reg.metadata.event_type = \"REGISTRY_MODIFICATION\"\n    strings.contains(strings.to_lower($reg.target.registry.registry_key),\
+    \ \"software\\\\microsoft\\\\windows\\\\currentversion\\\\explorer\\\\user shell\
+    \ folders\")\n    re.regex($reg.target.registry.registry_key, `Startup$`) nocase\n\
+    \n    $reg.principal.hostname = $hostname\n\n  match:\n    $hostname over 5m\n\
+    \n  outcome:\n    //example usage of specifying test user and hostname to adjust\
+    \ risk score\n    $risk_score = max(if($reg.principal.user.userid = \"user\" and\
+    \ $reg.principal.hostname = \"hostname\", 0, 15))\n    $principal_hostname = array_distinct($reg.principal.hostname)\n\
+    \    $principal_process_pid = array_distinct($reg.principal.process.pid)\n   \
+    \ $principal_process_file_full_path = array_distinct($reg.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($reg.principal.process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($reg.principal.user.userid)\n   \
+    \ $target_registry_key = array_distinct($reg.target.registry.registry_key)\n \
+    \   $target_registry_value_data = array_distinct($reg.target.registry.registry_value_data)\n\
+    \    $log_type = array_distinct(strings.concat($reg.metadata.log_type,\"/\",$reg.metadata.product_event_type))\n\
+    \n  condition:\n    $reg\n}"
+  chronicle_rule_name: modify_user_shell_folders_startup_value
+provenance:
+  source: chronicle/detection-rules
+  source_id: modify_user_shell_folders_startup_value
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/windows/modify_user_shell_folders_startup_value.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

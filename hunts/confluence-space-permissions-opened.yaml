@@ -1,0 +1,41 @@
+id: hunt-confluence-space-permissions-opened
+name: Documentation space opened to all authenticated users
+description: |
+  Space permissions change as teams grow. Opening a restricted space to every authenticated user exposes runbooks and architecture to anyone with a login.
+version: 1.0.0
+severity: medium
+category: application
+tags:
+  - mitre.attack.t1213.001
+  - hunt.saas
+log_sources:
+  - confluence_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was a restricted documentation space opened to everyone?
+  indicators:
+    - field: "source"
+      equals: "confluence_audit"
+    - field: "action"
+      equals: "space_permissions_updated"
+    - field: "grantsAllAuthenticated"
+      equals: true
+    - field: "spaceSensitivity"
+      equals: "restricted"
+expected:
+  positive_incident_id: INC-HUNT-068
+  positive_template_id: hunt-confluence-space-permissions-opened
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-068-NEG
+  # The negative inverts grantsAllAuthenticated, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1213/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

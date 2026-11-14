@@ -1,0 +1,997 @@
+"""
+Detection Pack v1 - Part 3 / Application (40 new specs)
+=======================================================
+
+Native application-layer detection rules covering web-app attacks, SaaS
+collaboration tools, DevOps/CI pipelines and API misuse. These extend the
+application rules in ``detection_specs.APPLICATION`` (~25 stable rules).
+"""
+
+from __future__ import annotations
+
+from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
+    FP_PENTEST,
+    FP_TUNING,
+    S,
+)
+
+# ---------------------------------------------------------------------------
+# Web-app attacks (15)
+# ---------------------------------------------------------------------------
+WEB_APP_RULES: list[dict] = [
+    S(
+        slug="app-ssti-pattern",
+        name="Server-Side Template Injection Pattern In Request",
+        severity="high",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "body_contains_any": ["{{7*7}}", "${7*7}", "{%7*7%}", "<%= 7*7 %>"]},
+        fp=[FP_PENTEST],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-xxe-pattern",
+        name="XML External Entity Reference In Request Body",
+        severity="high",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "body_contains_any": ["<!ENTITY", 'SYSTEM "file://', 'SYSTEM "http://']},
+        fp=["Approved XML SOAP integration"],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-nosql-injection",
+        name="NoSQL Injection Operator In Request",
+        severity="high",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "body_contains_any": ['$ne":', '$gt":', '$where":', '$regex":']},
+        fp=[FP_PENTEST],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-graphql-introspection",
+        name="GraphQL Introspection Query Against Production",
+        severity="medium",
+        mitre=["t1213"],
+        product="api-gateway",
+        service="http",
+        when={"event_type": "http_request", "uri": "/graphql", "body_contains": "__schema", "environment": "prod"},
+        fp=["Approved schema documentation generator"],
+        playbook="tpl-discovery",
+    ),
+    S(
+        slug="app-graphql-deep-recursion",
+        name="GraphQL Query With Excessive Recursion Depth",
+        severity="medium",
+        mitre=["t1499"],
+        product="api-gateway",
+        service="http",
+        when={"event_type": "http_request", "uri": "/graphql", "query_depth_gt": 10},
+        fp=["Sanctioned bulk export"],
+        playbook="tpl-impact",
+    ),
+    S(
+        slug="app-jndi-log4shell",
+        name="JNDI LDAP Lookup Pattern (Log4Shell-Style)",
+        severity="critical",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "any_header_value_contains_any": ["${jndi:ldap://", "${jndi:rmi://", "${jndi:dns://"]},
+        fp=[FP_PENTEST],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-spring4shell-pattern",
+        name="Spring4Shell Class Loader Manipulation Pattern",
+        severity="critical",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "body_contains_any": ["class.module.classloader", "class.classLoader"]},
+        fp=[FP_PENTEST],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-deserialization-rce-marker",
+        name="Java/.NET Deserialization Marker In Body",
+        severity="critical",
+        mitre=["t1059"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "body_contains_any": ["rO0AB", "AAEAAAD/////AQAAAAAAAAAM", "TypeObject"]},
+        fp=["Inter-service signed payload (allow-listed)"],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-cookie-tampered-hmac",
+        name="Session Cookie Failed HMAC Verification",
+        severity="medium",
+        mitre=["t1185"],
+        product="application",
+        service="auth",
+        when={"event_type": "session_validate", "hmac_valid": False},
+        fp=["Stale cookie after key rotation"],
+        playbook="tpl-credential-access",
+    ),
+    S(
+        slug="app-account-enum-reset",
+        name="High Volume Of Password Reset Requests From Single IP",
+        severity="medium",
+        mitre=["t1110"],
+        product="application",
+        service="auth",
+        when={"event_type": "password_reset_request", "count_5min_per_ip_gt": 30},
+        fp=["Internal load test"],
+        playbook="tpl-credential-access",
+    ),
+    S(
+        slug="app-websocket-origin-bypass",
+        name="WebSocket Upgrade From Cross-Origin Header",
+        severity="medium",
+        mitre=["t1190"],
+        product="application",
+        service="ws",
+        when={"event_type": "ws_upgrade", "origin_matches_allowed_list": False},
+        fp=["Newly added integration partner (update allow-list)"],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-crlf-header-injection",
+        name="CRLF Sequence In HTTP Header Value",
+        severity="high",
+        mitre=["t1190"],
+        product="waf",
+        service="http",
+        when={"event_type": "http_request", "any_header_value_contains_any": ["%0d%0a", "\\r\\n"]},
+        fp=[FP_PENTEST],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="app-subdomain-takeover-cname",
+        name="CNAME Pointing To Deleted SaaS Tenant",
+        severity="high",
+        mitre=["t1583.001"],
+        product="dns",
+        service="resolver",
+        when={
+            "event_type": "dns_response",
+            "qtype": "CNAME",
+            "target_endswith_any": [".herokudns.com", ".github.io", ".azurewebsites.net"],
+            "target_resolves": False,
+        },
+        fp=["Pending tenant migration (verify ticket)"],
+        playbook="tpl-initial-access",
+    ),
+    S(
+        slug="app-cors-wildcard-with-creds",
+        name="CORS Response With Wildcard Origin And Credentials Allowed",
+        severity="medium",
+        mitre=["t1190"],
+        product="application",
+        service="http",
+        when={"event_type": "http_response", "header_access_control_allow_origin": "*", "header_access_control_allow_credentials": "true"},
+        fp=["Public unauthenticated API"],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="app-csp-disabled",
+        name="Content-Security-Policy Header Removed From Production Response",
+        severity="medium",
+        mitre=["t1190"],
+        product="application",
+        service="http",
+        when={"event_type": "http_response", "csp_header_present": False, "environment": "prod"},
+        fp=["Public marketing pages exempt from CSP"],
+        playbook="tpl-defense-evasion",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# DevOps / CI / supply-chain (12)
+# ---------------------------------------------------------------------------
+DEVOPS_RULES: list[dict] = [
+    S(
+        slug="app-ci-workflow-modified-by-non-owner",
+        name="CI Workflow Modified By Account Without CODEOWNER Approval",
+        severity="high",
+        mitre=["t1199"],
+        product="github",
+        service="repo",
+        when={"event_type": "push", "path_contains": ".github/workflows/", "approver_role_neq": "codeowner"},
+        fp=["Bootstrap of new repository"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-self-hosted-runner-external",
+        name="Self-Hosted Runner Registered From External IP",
+        severity="critical",
+        mitre=["t1199"],
+        product="github",
+        service="actions",
+        # `runner_register` is not in GitHub's vocabulary; registrations are
+        # `org.register_self_hosted_runner` / `repo.register_self_hosted_runner`.
+        # `ip_is_internal` is derived by the engine from `src_ip` (which the
+        # connector maps from the audit entry's `actor_ip`); when the org
+        # does not disclose IPs the field is absent and the rule stays
+        # silent — unknown is not external (issue #1545).
+        when={
+            "action_in": ["org.register_self_hosted_runner", "repo.register_self_hosted_runner"],
+            "ip_is_internal": False,
+        },
+        fp=["Approved partner-hosted runner"],
+        playbook="tpl-supply-chain",
+        # Explicit fixtures carry the source IP rather than the derived
+        # boolean, so fixture replay exercises the derivation itself.
+        positive={"action": "org.register_self_hosted_runner", "src_ip": "203.0.113.9", "actor": "proof-actor"},
+        negative={"action": "org.register_self_hosted_runner", "src_ip": "10.20.30.40", "actor": "proof-actor"},
+    ),
+    S(
+        slug="app-build-signing-key-rotated",
+        name="Build Artifact Signing Key Rotated Outside Maintenance Window",
+        severity="high",
+        mitre=["t1554"],
+        product="ci",
+        service="signing",
+        when={"event_type": "key_rotation", "in_change_window": False},
+        fp=["Emergency key rotation (must be ticketed)"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-helm-chart-untrusted-repo",
+        name="Helm Install From Unknown Chart Repository",
+        severity="high",
+        mitre=["t1195.002"],
+        product="kubernetes",
+        service="helm",
+        when={"event_type": "helm_install", "repo_url_endswith_in_allow_list": False},
+        fp=["Pilot of new vendor chart"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-terraform-destroy-prod",
+        name="terraform destroy Run Targeting Production Workspace",
+        severity="critical",
+        mitre=["t1485"],
+        product="terraform",
+        service="cli",
+        when={"event_type": "terraform_run", "command": "destroy", "workspace_in": ["prod", "production"]},
+        fp=["Authorised infra teardown"],
+        playbook="tpl-impact",
+    ),
+    S(
+        slug="app-secret-published-to-slack",
+        name="Newly Created Secret Has Slack Webhook Pattern",
+        severity="high",
+        mitre=["t1078"],
+        product="vault",
+        service="secrets",
+        when={"event_type": "secret_create", "value_contains": "hooks.slack.com/services/"},
+        fp=["Approved alerting webhook"],
+        playbook="tpl-credential-access",
+    ),
+    S(
+        slug="app-deploy-key-added-github",
+        name="SSH Deploy Key Added To GitHub Repository",
+        severity="medium",
+        mitre=["t1098.004"],
+        product="github",
+        service="repo",
+        # GitHub's audit log has no deploy_key.* category: a deploy-key add
+        # is logged as `public_key.create` ("An SSH key was added to a user
+        # account or a deploy key was added to a repository"). The repo slug
+        # is what marks the deploy-key case — a user SSH-key add carries no
+        # repo, and the matcher treats a missing field as no match. `action`
+        # rather than `event_type` because the connector prefixes the latter
+        # (`github.{action}`); the raw audit entry's own key is the stable
+        # one (issue #1545).
+        when={"action": "public_key.create", "repo_contains": "/"},
+        fp=["Sanctioned automation onboarding"],
+        playbook="tpl-persistence",
+        positive={"action": "public_key.create", "repo": "example-org/payments-core", "actor": "user@corp.com"},
+        # The negative is the other thing public_key.create genuinely logs:
+        # a user SSH-key add, which carries no repo at all. Explicit because
+        # the auto-negative flips the repo *value* and the vocabulary's
+        # alternatives are repo slugs, every one of which still contains "/".
+        negative={"action": "public_key.create", "actor": "user@corp.com"},
+    ),
+    S(
+        slug="app-npm-package-publish-new-account",
+        name="NPM Package Published From New Account",
+        severity="high",
+        mitre=["t1195.002"],
+        product="npm",
+        service="registry",
+        when={"event_type": "package_publish", "publisher_account_age_days_lt": 14, "package_visibility": "public"},
+        fp=["New maintainer onboarding"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-pypi-package-publish-new-ip",
+        name="PyPI Package Published From New IP",
+        severity="medium",
+        mitre=["t1195.002"],
+        product="pypi",
+        service="registry",
+        when={"event_type": "package_publish", "publisher_ip_seen_before": False},
+        fp=["New maintainer onboarding"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-docker-insecure-registry-flag",
+        name="Docker Daemon Started With --insecure-registry Flag",
+        severity="medium",
+        mitre=["t1195.002"],
+        product="docker",
+        service="dockerd",
+        when={"event_type": "daemon_config", "insecure_registries_count_gt": 0},
+        fp=["Internal mirror without TLS (deprecated, must be ticketed)"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-image-critical-cve-pushed",
+        name="Container Image With Critical CVE Pushed To Prod Registry",
+        severity="high",
+        mitre=["t1525"],
+        product="container-registry",
+        service="scan",
+        when={"event_type": "scan_result", "cvss_max_gte": 9.0, "registry_environment": "prod"},
+        fp=["Approved exception (must be ticketed)"],
+        playbook="tpl-supply-chain",
+    ),
+    S(
+        slug="app-protected-branch-disabled",
+        name="Branch Protection Disabled On Protected Branch",
+        severity="high",
+        mitre=["t1098.004"],
+        product="github",
+        service="repo",
+        # Both are documented audit actions, but the connector emits
+        # `event_type=github.{action}`, so clausing the unprefixed values on
+        # `event_type` could never match. The raw entry's `action` key is
+        # visible to the engine and carries them unprefixed (issue #1545).
+        when={"action_in": ["protected_branch.policy_override", "protected_branch.destroy"]},
+        fp=[FP_TUNING],
+        playbook="tpl-supply-chain",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# SaaS / collaboration (12)
+# ---------------------------------------------------------------------------
+SAAS_RULES: list[dict] = [
+    S(
+        slug="app-salesforce-mass-export",
+        name="Salesforce Mass Data Export Initiated",
+        severity="high",
+        mitre=["t1530"],
+        product="salesforce",
+        service="audit",
+        when={"event_type": "DataExport", "row_count_gt": 100000},
+        fp=["Approved data migration"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-salesforce-sandbox-refresh-anomaly",
+        name="Salesforce Sandbox Refreshed Outside Change Window",
+        severity="medium",
+        mitre=["t1199"],
+        product="salesforce",
+        service="audit",
+        when={"event_type": "SandboxRefresh", "in_change_window": False},
+        fp=["Emergency sandbox refresh (must be ticketed)"],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="app-workday-bank-info-changed",
+        name="Workday Banking Info Changed Without HR Ticket",
+        severity="high",
+        mitre=["t1098"],
+        product="workday",
+        service="audit",
+        when={"event_type": "BankAccountChange", "linked_ticket": False},
+        fp=["Self-service change with valid step-up auth"],
+        playbook="tpl-impact",
+    ),
+    S(
+        slug="app-zoom-recording-shared-external",
+        name="Zoom Cloud Recording Shared Externally",
+        severity="medium",
+        mitre=["t1530"],
+        product="zoom",
+        service="audit",
+        when={"event_type": "recording_share", "share_type": "external"},
+        fp=["Customer-facing webinar recording"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-box-public-link-mass-create",
+        name="Box Created Many Public Links In Short Window",
+        severity="high",
+        mitre=["t1567.002"],
+        product="box",
+        service="audit",
+        when={"event_type": "shared_link.create", "access": "open", "count_5min_per_user_gt": 20},
+        fp=["Marketing campaign content drop"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-notion-workspace-export",
+        name="Notion Workspace Exported By Non-Admin",
+        severity="high",
+        mitre=["t1530"],
+        product="notion",
+        service="audit",
+        when={"event_type": "workspace.export", "actor_is_admin": False},
+        fp=["Approved knowledge migration"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-confluence-space-export-bulk",
+        name="Confluence Bulk Space Export",
+        severity="medium",
+        mitre=["t1530"],
+        product="confluence",
+        service="audit",
+        when={"event_type": "space.export", "size_bytes_gt": 524288000},
+        fp=["Approved knowledge migration"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-servicenow-record-export-bulk",
+        name="ServiceNow Bulk Record Export",
+        severity="medium",
+        mitre=["t1530"],
+        product="servicenow",
+        service="audit",
+        when={"event_type": "record_export", "row_count_gt": 50000},
+        fp=["Approved reporting workflow"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-slack-file-shared-external",
+        name="Slack File Shared To External Channel",
+        severity="medium",
+        mitre=["t1567.002"],
+        product="slack",
+        service="audit",
+        when={"event_type": "file_shared", "channel_type": "external"},
+        fp=["Approved partner connect channel"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-slack-channel-public-conversion",
+        name="Slack Private Channel Converted To Public",
+        severity="medium",
+        mitre=["t1213"],
+        product="slack",
+        service="audit",
+        when={"event_type": "channel_convert_to_public"},
+        fp=["Approved transparency policy"],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="app-onedrive-anonymous-link-sensitive",
+        name="OneDrive Anonymous Sharing Link Created For Sensitive File",
+        severity="high",
+        mitre=["t1567.002"],
+        product="m365",
+        service="audit",
+        when={"event_type": "AnonymousLinkCreated", "sensitivity_label_in": ["Confidential", "Highly Confidential"]},
+        fp=["Approved external review"],
+        playbook="tpl-exfiltration",
+    ),
+    S(
+        slug="app-sharepoint-guest-tenantwide",
+        name="SharePoint Tenant-Wide Guest Access Enabled",
+        severity="high",
+        mitre=["t1078.004"],
+        product="m365",
+        service="audit",
+        when={"event_type": "TenantSettingChanged", "setting": "SharingCapability", "value": "ExternalUserSharingOnly"},
+        fp=["Approved tenant-level policy update"],
+        playbook="tpl-defense-evasion",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# API misuse (1)
+# ---------------------------------------------------------------------------
+API_RULES: list[dict] = [
+    S(
+        slug="app-graphql-mutation-anonymous",
+        name="GraphQL Mutation Executed By Anonymous Caller",
+        severity="high",
+        mitre=["t1190"],
+        product="api-gateway",
+        service="http",
+        when={"event_type": "graphql_op", "op_type": "mutation", "actor_authenticated": False},
+        fp=["Public mutation endpoint (allow-listed: subscribe / contact)"],
+        playbook="tpl-initial-access",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# AI / LLM-usage audit rules (Phase D2)
+#
+# The AI/LLM-usage audit connector (services/connectors/app/connectors/
+# llm_usage.py) pulls OpenAI + Anthropic org audit logs and emits events with
+# a top-level ``event_type`` like ``openai.api_key.created`` /
+# ``anthropic.member.added``. These rules turn the high-signal ones into
+# detections — the SaaS-AI governance surface the leading platforms emphasise.
+# ---------------------------------------------------------------------------
+LLM_USAGE_RULES: list[dict] = [
+    S(
+        slug="llm-api-key-created",
+        name="LLM Provider API Key Created",
+        severity="medium",
+        mitre=["t1098"],
+        product="openai",
+        service="audit",
+        when={"event_type_endswith": ".api_key.created"},
+        fp=["Planned key rotation (change ticket)", "New service onboarding"],
+        playbook="tpl-account-compromise",
+    ),
+    S(
+        slug="llm-admin-key-created",
+        name="LLM Provider Admin API Key Created",
+        severity="high",
+        mitre=["t1098"],
+        product="openai",
+        service="audit",
+        when={"event_type_endswith": ".api_key.created", "key_scope": "admin"},
+        fp=["Documented break-glass admin key issuance"],
+        playbook="tpl-privilege-escalation",
+    ),
+    S(
+        slug="llm-member-added-owner",
+        name="LLM Provider Owner Role Granted",
+        severity="high",
+        mitre=["t1098.003"],
+        product="openai",
+        service="audit",
+        when={"event_type_endswith": ".member.added", "role": "owner"},
+        fp=["Approved org owner change"],
+        playbook="tpl-privilege-escalation",
+    ),
+    S(
+        slug="llm-logging-disabled",
+        name="LLM Provider Audit Logging Disabled",
+        severity="critical",
+        mitre=["t1562.008"],
+        product="openai",
+        service="audit",
+        when={"event_type_contains": "logging", "action": "disabled"},
+        fp=["Vendor maintenance window (documented)"],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="llm-mfa-disabled",
+        name="LLM Provider MFA Requirement Disabled",
+        severity="high",
+        mitre=["t1556"],
+        product="openai",
+        service="audit",
+        when={"event_type_contains": "mfa", "action": "disabled"},
+        fp=["Approved auth-policy change"],
+        playbook="tpl-defense-evasion",
+    ),
+    S(
+        slug="llm-anthropic-workspace-created",
+        name="Anthropic Workspace Created",
+        severity="low",
+        mitre=["t1098"],
+        product="anthropic",
+        service="audit",
+        when={"event_type": "anthropic.workspace.created"},
+        fp=["Planned workspace provisioning"],
+        playbook="tpl-triage",
+    ),
+    S(
+        slug="llm-service-account-created",
+        name="LLM Provider Service Account Created",
+        severity="medium",
+        mitre=["t1136.003"],
+        product="openai",
+        service="audit",
+        when={"event_type_endswith": ".service_account.created"},
+        fp=["New automation onboarding (change ticket)"],
+        playbook="tpl-persistence",
+    ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4. Four rules on the providers wave-2 7.1 added, each
+    # clausing only on a field the connector really emits at the top
+    # level — which is the whole lesson of the GitHub pass, where 1 of 12
+    # rules fired on real connector output because the rest claused on
+    # names nothing produced. Every one of these is replayed through
+    # `LlmUsageConnector.normalize()` and the real engine in
+    # `services/fusion/tests/test_ai_rule_pack_replay.py`.
+    # ----------------------------------------------------------------
+    S(
+        slug="llm-copilot-content-exclusion-changed",
+        name="Copilot Content Exclusion Changed",
+        severity="critical",
+        mitre=["t1562.001"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.content_exclusion_changed"},
+        fp=["Exclusion list edited as part of an approved repository onboarding"],
+        playbook="tpl-defense-evasion",
+        description=(
+            "Content exclusion is the control that stops a coding assistant reading the "
+            "paths an organisation has declared off limits — key material, customer data, "
+            "anything it has decided a model must not see. A change to it is a change to "
+            "that boundary, and it is made in a settings page rather than in a pull "
+            "request, so nothing else reviews it."
+        ),
+    ),
+    S(
+        slug="llm-copilot-agent-mcp-config-changed",
+        name="Hosted Coding Agent MCP Server List Changed",
+        severity="high",
+        mitre=["t1195"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.swe_agent_mcp_config_updated"},
+        fp=["A reviewed addition of an internal MCP server"],
+        playbook="tpl-supply-chain",
+        description=(
+            "The MCP server list decides what a hosted coding agent can reach and what it "
+            "is told. Adding a server is adding a party that can instruct the agent, which "
+            "is a scope change rather than a settings change — and the agent runs on the "
+            "provider's infrastructure, so no endpoint control sees the result."
+        ),
+    ),
+    S(
+        slug="llm-ai-app-granted-write-scope",
+        name="AI Application Consented a Write Scope",
+        severity="high",
+        mitre=["t1098.001"],
+        product="entra_consent",
+        service="audit",
+        when={
+            "event_type_endswith": ".consent_to_application",
+            # `granted_scopes`, the name the connector promotes. A bare
+            # `scopes` collided with GitHub's token scopes in the
+            # detection-field gate's union-of-all-connectors namespace.
+            "granted_scopes_has_any": [
+                "Mail.ReadWrite",
+                "Mail.Send",
+                "Files.ReadWrite.All",
+                "Sites.ReadWrite.All",
+                "Directory.ReadWrite.All",
+                "User.ReadWrite.All",
+            ],
+        },
+        fp=["An AI application approved through the organisation's own review process"],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "A consent grant handing an AI application the ability to change a mailbox, a "
+            "drive, a site or the directory itself. The read equivalent is an exposure; "
+            "this one can act. The decisive field is the granted scope, which the "
+            "connector lifts out of the free-text consent property — a grant whose scopes "
+            "stay buried is indistinguishable from one that was granted nothing."
+        ),
+    ),
+    S(
+        slug="llm-copilot-bulk-resource-access",
+        name="AI Assistant Interaction Touched Many Resources at Once",
+        severity="medium",
+        mitre=["t1530"],
+        product="microsoft_copilot",
+        service="audit",
+        when={
+            "event_type_endswith": ".CopilotInteraction",
+            "accessed_resource_count_gte": 25,
+        },
+        fp=[
+            "A summarisation task over a large shared folder, run deliberately",
+            "A migration or audit the owner initiated",
+        ],
+        playbook="tpl-data-exfil",
+        description=(
+            "One assistant turn that read a large number of distinct resources. An "
+            "assistant with a user's full grant is an exfiltration path that authenticates "
+            "as that user and looks like ordinary application traffic; volume in a single "
+            "interaction is the shape that separates answering a question from sweeping a "
+            "drive."
+        ),
+    ),
+    S(
+        slug="llm-project-deleted",
+        name="LLM Provider Project Deleted",
+        severity="medium",
+        mitre=["t1485"],
+        product="openai",
+        service="audit",
+        when={"event_type_endswith": ".project.archived"},
+        fp=["Planned project decommission"],
+        playbook="tpl-triage",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Aggregate
+
+# ---------------------------------------------------------------------------
+# AI runtime detections — the customer's own agent / LLM / MCP estate.
+#
+# Distinct from LLM_USAGE_RULES above, and the distinction is the point. Those
+# fire on an AI provider's *control plane*: who minted an API key, who was made
+# an owner. Valuable, but it says nothing about what the agents did once
+# running. These fire on runtime behaviour arriving from the `aisoc-ai-sdk`
+# and the `ai-runtime` / `ai-finding` ingest templates.
+#
+# Every field below is one the SDK or a template actually emits. That is not a
+# style note: the matcher does a flat `event.get(field)`, and 663 rules in this
+# corpus were found matching on fields nothing produces — loaded by the engine,
+# passing fixture replay (fixtures are synthesized from the rule), and unable
+# to fire. `scripts/check_detection_fields.py` now gates that.
+#
+# Severity reflects what the signal means on its own, before triage. An agent
+# reading a record it was designed to read is not an alert; an agent whose
+# retrieved context tried to give it new instructions is.
+# ---------------------------------------------------------------------------
+AI_RUNTIME_RULES: list[dict] = [
+    S(
+        slug="ai-prompt-injection-detected",
+        name="Prompt Injection Detected in AI Agent Context",
+        severity="high",
+        mitre=["t1059"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "prompt_injection"},
+        fp=[
+            "Security team testing the guardrail with a known payload",
+            "A document legitimately quoting injection text, e.g. an awareness training page",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "A guardrail flagged instruction-override content reaching an agent's context. "
+            "Injection is the delivery mechanism for every other agent abuse, so this is "
+            "the earliest point at which the chain is visible."
+        ),
+    ),
+    S(
+        slug="ai-agent-excessive-agency",
+        name="AI Agent Took Action Beyond Its Granted Scope",
+        severity="high",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "excessive_agency"},
+        fp=["Agent scope widened without the policy being updated to match"],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "The agent invoked a capability outside the scope it was granted. Unlike a "
+            "compromised user, an agent has no intent to infer — a call outside its "
+            "declared tool set is either a policy gap or someone steering it."
+        ),
+    ),
+    S(
+        slug="ai-sensitive-data-egress",
+        name="Sensitive Data Left via an AI Agent",
+        severity="critical",
+        mitre=["t1567"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "sensitive_data_egress"},
+        fp=["Approved data-processing workflow not yet added to the allowlist"],
+        playbook="tpl-data-exfil",
+        description=(
+            "A guardrail matched sensitive content on its way out through an agent. An "
+            "agent with retrieval access is an exfiltration path that authenticates as "
+            "itself and looks like normal application traffic."
+        ),
+    ),
+    S(
+        slug="ai-unapproved-model",
+        name="AI Agent Used an Unapproved Model",
+        severity="medium",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "unapproved_model"},
+        fp=["Model newly approved but the inventory not yet updated"],
+        playbook="tpl-triage",
+        description=(
+            "An agent called a model outside the approved set. Often benign drift, but it "
+            "is also how data leaves a reviewed provider for an unreviewed one."
+        ),
+    ),
+    S(
+        slug="ai-tool-escalation",
+        name="AI Agent Escalated to a Higher-Privilege Tool",
+        severity="high",
+        mitre=["t1548"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "tool_escalation"},
+        fp=["Break-glass tool use during an incident, with a ticket"],
+        playbook="tpl-privilege-escalation",
+    ),
+    S(
+        slug="ai-shadow-agent-discovered",
+        name="Undeclared AI Agent Observed",
+        severity="medium",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"finding_type": "shadow_ai"},
+        fp=["A newly deployed agent that has not been registered yet"],
+        playbook="tpl-triage",
+        description=(
+            "Telemetry arrived from an agent absent from the inventory. Shadow AI is the "
+            "AI-estate equivalent of an unmanaged endpoint: it cannot be governed, and "
+            "its access is unreviewed."
+        ),
+    ),
+    S(
+        slug="ai-prompt-contained-credential",
+        name="Credential Material Present in an AI Prompt",
+        severity="high",
+        mitre=["t1552"],
+        product="ai_runtime",
+        service="runtime",
+        when={"prompt_secret_kinds_has_any": ["aws_access_key", "github_token", "openai_key", "private_key", "slack_token"]},
+        fp=["Security testing with a revoked key", "Developer pasting a sample key from documentation"],
+        playbook="tpl-account-compromise",
+        description=(
+            "A secret shape appeared in a prompt. Detected without the prompt content "
+            "ever being transmitted: the SDK reports which patterns matched while "
+            "sending only a digest, so this fires even under the default hashed "
+            "capture mode."
+        ),
+    ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4, the four targets Phase 7.3's baselines unblock.
+    #
+    # Each clauses on a `baseline_agent_*` or `baseline_gateway_key_*`
+    # derived field, which `services/fusion/app/services/baselines.py`
+    # computes per sub-principal and `scripts/check_detection_fields.py`
+    # knows about. Novelty and rate are properties of a *history*, so the
+    # stateless matcher cannot express them on its own — which is exactly
+    # why these four could not be written before 7.3 and were recorded as
+    # blocked rather than shipped clausing on fields nothing produced.
+    #
+    # Thresholds are stated as floors on an already-bounded score: rarity
+    # is in [0,1] and a z-score is in deviations, so the numbers below are
+    # readable without knowing the corpus.
+    # ----------------------------------------------------------------
+    S(
+        slug="ai-agent-new-high-risk-tool",
+        name="AI Agent Called a High-Risk Tool It Has Never Used",
+        severity="high",
+        mitre=["t1059"],
+        product="ai_runtime",
+        service="runtime",
+        when={
+            "tool_name_in": [
+                "execute_command",
+                "run_shell",
+                "write_file",
+                "delete_file",
+                "send_email",
+                "create_user",
+                "grant_permission",
+                "deploy",
+                "terraform_apply",
+                "database_write",
+            ],
+            "baseline_agent_tool_rarity_gte": 0.95,
+        },
+        fp=[
+            "An agent whose scope was widened deliberately, with the change recorded",
+            "The first run after a deployment that added the tool",
+        ],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "An agent reached for a tool that changes an estate and has essentially no "
+            "history of using it. Novelty is per agent and not global: execute_command is "
+            "routine for a deployment bot and alarming for a summariser, and a count across "
+            "the estate cannot tell them apart. The high-risk list is the same one the AI "
+            "estate's exposure score reads, so an operator sees one definition of "
+            "'changes an estate' in both places."
+        ),
+    ),
+    S(
+        slug="ai-agent-guardrail-violation-rate",
+        name="Guardrail Violations Rose Sharply for One AI Agent",
+        severity="high",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"outcome": "blocked", "baseline_agent_volume_z_gte": 3.0},
+        fp=[
+            "A newly tightened guardrail policy, where the rise is the policy and not the agent",
+            "A load test replaying blocked prompts",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "A single agent is being blocked far more often than its own history. One "
+            "guardrail violation is noise — a user phrasing something awkwardly — while a "
+            "rise against that agent's own baseline is someone probing for a phrasing that "
+            "gets through. Scored per agent rather than per tenant, because a busy estate's "
+            "total hides one agent's change completely."
+        ),
+    ),
+    S(
+        slug="ai-agent-token-spend-anomaly",
+        name="AI Agent Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_agent_token_spend_z_gte": 4.0},
+        fp=[
+            "A deliberately larger job, such as a backfill or a bulk summarisation",
+            "A model change that raised the per-request cost for every agent",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "Cost is the signal that notices an agent being used for something other than "
+            "its job — an exfiltration loop, a stolen credential driving inference, or a "
+            "prompt that has started recursing. It reads the gateway's own billed figure "
+            "rather than recomputing one from token counts, so it cannot disagree with the "
+            "invoice. An unpriced request contributes nothing instead of a zero."
+        ),
+    ),
+    S(
+        slug="ai-gateway-key-spend-anomaly",
+        name="AI Gateway Key Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_gateway_key_token_spend_z_gte": 4.0},
+        fp=["A key deliberately shared with a new workload"],
+        playbook="tpl-triage",
+        description=(
+            "The same question asked of the key rather than the agent, and the two are not "
+            "the same incident: a leaked key driving inference from outside the estate "
+            "moves the key's baseline while every agent on it looks ordinary. Both are "
+            "needed, which is why the baseline module keys on sub-principals rather than "
+            "on one chosen subject."
+        ),
+    ),
+    S(
+        slug="ai-agent-tool-call-failed-repeatedly",
+        name="AI Agent Tool Call Denied",
+        severity="low",
+        mitre=["t1078"],
+        product="ai_runtime",
+        service="runtime",
+        when={"outcome": "denied"},
+        fp=["Agent retry logic against a transiently unavailable tool"],
+        playbook="tpl-triage",
+        description=(
+            "A tool call was refused. Low on its own, and deliberately so — the value is "
+            "as a building block once the windowed engine can express 'N denials in M "
+            "minutes', which is the shape that distinguishes a probing agent from a "
+            "misconfigured one."
+        ),
+    ),
+]
+
+
+APPLICATION_EXTRA: list[dict] = WEB_APP_RULES + DEVOPS_RULES + SAAS_RULES + API_RULES + LLM_USAGE_RULES + AI_RUNTIME_RULES
+
+
+__all__ = [
+    "APPLICATION_EXTRA",
+    "WEB_APP_RULES",
+    "DEVOPS_RULES",
+    "SAAS_RULES",
+    "API_RULES",
+    "LLM_USAGE_RULES",
+    "AI_RUNTIME_RULES",
+]

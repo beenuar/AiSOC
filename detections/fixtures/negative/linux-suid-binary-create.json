@@ -1,0 +1,5 @@
+{
+  "mode_octal": "prefix-4-suffix",
+  "path": "__benign__",
+  "syscall": "openat"
+}

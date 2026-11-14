@@ -1,0 +1,24 @@
+id: det-identity-144
+name: Google Workspace Login Flagged 'Suspicious'
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Google Workspace
+  Login Flagged 'Suspicious''. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: login
+detection:
+  condition: |
+    event_name == "login_failure"
+    AND type == "suspicious_login"
+false_positives:
+- Travel
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

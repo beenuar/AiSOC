@@ -1,0 +1,24 @@
+id: det-application-113
+name: Client Walked Many Identifiers Through One API Endpoint
+description: 'One client requested 50 or more distinct identifiers through one templated path inside five
+  minutes. Templating is what makes this visible at all: without it the requests are unrelated strings.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1087
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: api-gateway
+  service: access-log
+detection:
+  condition: |
+    api_identifier_enumeration == true
+false_positives:
+- A sanctioned export job paging through records by identifier
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

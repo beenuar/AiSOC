@@ -1,0 +1,27 @@
+id: det-network-008
+name: Outbound HTTP(S) to Newly Registered Domain
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound HTTP(S)
+  to Newly Registered Domain'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1071.001
+- tlp.white
+category: network
+log_source:
+  product: proxy
+  service: http
+detection:
+  condition: |
+    domain_age_days < 7
+    AND method IN ["GET", "POST", "CONNECT"]
+false_positives:
+- Marketing campaigns and event-specific landing pages
+playbook: tpl-c2
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants a domain''s registration age, which
+  comes from RDAP or WHOIS. Nothing in this tree queries either, and answering it from when this deployment
+  first saw the domain would fire on most of the internet.'
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

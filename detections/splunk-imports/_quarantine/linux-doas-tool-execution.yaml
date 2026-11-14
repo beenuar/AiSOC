@@ -1,0 +1,45 @@
+id: splunk-security-content-d5a62490-6e09-11ec-884e-acde48001122
+name: Linux Doas Tool Execution
+description: The following analytic detects the execution of the 'doas' tool on a
+  Linux host. This tool allows standard users to perform tasks with root privileges,
+  similar to 'sudo'. The detection leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on process names and command-line executions. This activity
+  is significant as 'doas' can be exploited by adversaries to gain elevated privileges
+  on a compromised host. If confirmed malicious, this could lead to unauthorized administrative
+  access, potentially compromising the entire system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://wiki.gentoo.org/wiki/Doas
+- https://www.makeuseof.com/how-to-install-and-use-doas/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = \"doas\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `linux_doas_tool_execution_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d5a62490-6e09-11ec-884e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_doas_tool_execution.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

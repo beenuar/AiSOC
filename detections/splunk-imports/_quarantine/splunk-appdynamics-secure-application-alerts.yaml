@@ -1,0 +1,82 @@
+id: splunk-security-content-d1a45d84-8dd1-4b31-8854-62b0b1d5da0b
+name: Splunk AppDynamics Secure Application Alerts
+description: 'The following analytic is to leverage alerts from Splunk AppDynamics
+  SecureApp, which identifies and monitors exploit attempts targeting business applications.
+  The primary attack observed involves exploiting vulnerabilities in web applications,
+  including injection attacks (SQL, API abuse), deserialization vulnerabilities, remote
+  code execution attempts, LOG4J and zero day attacks. These attacks are typically
+  aimed at gaining unauthorized access, exfiltrating sensitive data, or disrupting
+  application functionality.
+
+
+  Splunk AppDynamics SecureApp provides real-time detection of these threats by analyzing
+  application-layer events and correlating attack behavior with known vulnerability
+  signatures. This detection methodology helps the Security Operations Center (SOC)
+  by:
+
+
+  * Identifying active exploitation attempts in real-time, allowing for quicker incident
+  response.
+
+  * Categorizing attack severity to prioritize remediation efforts based on risk level.
+
+  * Providing visibility into attacker tactics, including source IP, attack techniques,
+  and affected applications.
+
+  * Generating risk-based scoring and contextual alerts to enhance decision-making
+  within SOC workflows.
+
+  * Helping analysts determine whether an attack was merely an attempt or if it successfully
+  exploited a vulnerability.
+
+
+  By leveraging this information, SOC teams can proactively mitigate security threats,
+  patch vulnerable applications, and enforce security controls to prevent further
+  exploitation.'
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - application
+references:
+- https://docs.appdynamics.com/appd/24.x/latest/en/application-security-monitoring/integrate-cisco-secure-application-with-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`appdynamics_security`  blocked=false\n| rename attackEvents{}.* AS\
+    \ *, detailJson.* AS *, vulnerabilityInfo.* AS *\n| fields - tag::eventtype, eventtype,\
+    \ host, id, index, linecount, punct, source, sourcetype, splunk_server, tag, SourceType,\
+    \ app clientAddressType, application, tier, \"attackEvents{}.* status\"\n| eval\
+    \ socketOut=mvjoin(socketOut,\" AND \")\n| eval risk_score=kennaScore\n| fillnull\
+    \ risk_score value=\"0\"\n`secureapp_es_field_mappings`\n| stats values(*) as\
+    \ * by attackId\n| eval severity=case(\n    risk_score>=100 OR signature=\"LOG4J\"\
+    , \"critical\",\n    risk_score>50 AND risk_score<75, \"high\",\n    risk_score=0\
+    \ AND attackOutcome=\"EXPLOITED\", \"high\",\n    risk_score<=50 AND attackOutcome!=\"\
+    OBSERVED\", \"medium\",\n    risk_score=0 AND attackOutcome=\"ATTEMPTED\", \"\
+    medium\",\n    risk_score=0, \"low\",\n    risk_score=0 AND attackOutcome=\"OBSERVED\"\
+    , \"low\"\n    )\n| eval risk_message=case(\n  (signature=\"API\" OR signature=\"\
+    LOG4J\" OR signature=\"SSRF\"), \"An attempt to exploit a \".signature.\" vulnerability\
+    \ was made from a \".src_category.\" IP address \".src_ip.\". The server \".dest_nt_host.\"\
+    \ hosting application \".app_name.\" was accessed, and data may have been exfiltrated\
+    \ to \".socketOut.\".\",\n  (signature=\"MALIP\" OR signature=\"SQL\"), \"A vulnerability\
+    \ is being \".attackOutcome.\" from a \".src_category.\" IP address \".src_ip.\"\
+    . The server \".dest_nt_host.\" hosting application \".app_name.\" was accessed.\"\
+    ,\n  (signature=\"DESEREAL\"), \"The application \".app_name.\" deserializes untrusted\
+    \ data without sufficiently verifying that the resulting data will be valid. Data\
+    \ which is untrusted cannot be trusted to be well-formed. Malformed data or unexpected\
+    \ data could be used to abuse application logic, deny service, or execute arbitrary\
+    \ code, when deserialized.\"\n  )\n| `splunk_appdynamics_secure_application_alerts_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d1a45d84-8dd1-4b31-8854-62b0b1d5da0b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/splunk_appdynamics_secure_application_alerts.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

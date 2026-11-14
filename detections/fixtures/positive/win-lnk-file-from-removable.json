@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "parent_image": "head-explorer.exe",
+  "process_command_line": "prefix-e:\\-suffix"
+}

@@ -1,0 +1,95 @@
+name: Good first issue (proposal)
+description: Propose a small, well-scoped task suitable for first-time contributors
+title: "[Good first issue]: "
+labels: ["good first issue", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template when you want to propose a small, well-scoped task
+        that a first-time contributor could pick up in a couple of evenings.
+
+        **Looking to *take* an existing good-first-issue?** Browse the
+        [open list here](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+        instead and leave a comment saying you'd like to work on it.
+
+  - type: textarea
+    id: task
+    attributes:
+      label: What's the task?
+      description: One paragraph describing the concrete change.
+      placeholder: |
+        Example: Add a Sigma detection rule for AWS IAM `CreateUser` in a
+        prod account by a non-bot principal under `detections/cloud/`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why is this a good first issue?
+      description: |
+        Small surface, no breaking changes, doesn't require touching multiple
+        services, has clear acceptance criteria.
+      placeholder: |
+        - Single file under `detections/cloud/`
+        - Existing fixture pattern in `detections/fixtures/`
+        - No service code changes
+    validations:
+      required: true
+
+  - type: textarea
+    id: pointers
+    attributes:
+      label: Where in the codebase?
+      description: File / directory pointers so a newcomer doesn't have to spelunk.
+      placeholder: |
+        - Drop the rule in `detections/cloud/aws_iam_createuser_anomaly.yaml`
+        - Mirror the structure of `detections/cloud/aws_iam_*.yaml`
+        - Add positive and negative fixtures in `detections/fixtures/`
+        - Validate with `python3 scripts/validate_detections.py`
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: How does the contributor know they're done?
+      placeholder: |
+        - [ ] Rule passes `scripts/validate_detections.py`
+        - [ ] Fixture covers at least one positive and one negative case
+        - [ ] `pytest services/agents/tests/test_detection_fp_rate.py -k aws_iam_createuser` is green
+        - [ ] README of `detections/cloud/` mentions the new rule
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      multiple: false
+      options:
+        - Detections (Sigma / YAML rules)
+        - Connectors (new data source)
+        - Playbooks (SOAR YAML)
+        - Hunts (Hunt-as-Code YAML)
+        - Web console UI polish
+        - Docs / tutorials
+        - Tests
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: estimate
+    attributes:
+      label: Estimated effort
+      description: Rough estimate so the contributor knows what they're signing up for.
+      placeholder: e.g. 1-2 evenings, ~50 lines of YAML + 1 fixture
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Mentor / reviewer notes
+      description: Optional. Who can answer questions? What gotchas should the newcomer watch out for?

@@ -1,0 +1,538 @@
+---
+sidebar_position: 1
+---
+
+# REST API Reference
+
+AiSOC exposes a fully documented OpenAPI 3.1 REST API.
+
+## Base URL
+
+| Environment | URL |
+|-------------|-----|
+| Local dev | `http://localhost:8000/api/v1` |
+| Docker Compose | `http://api:8000/api/v1` |
+| Kubernetes | `https://your-domain.com/api/v1` |
+
+## Authentication
+
+### JWT Bearer (User)
+
+Use the administrator `make bootstrap` created. There are no default
+credentials — the password is generated per deployment and printed once.
+
+```bash
+# Obtain a token
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@aisoc.internal","password":"<the password make up printed>"}'
+
+# Use the token
+curl http://localhost:8000/api/v1/cases \
+  -H "Authorization: Bearer <token>"
+```
+
+### API Key (Service-to-Service)
+
+```bash
+curl http://localhost:8000/api/v1/alerts \
+  -H "X-API-Key: <api-key>"
+```
+
+API keys are created via `POST /api/v1/api-keys` and can be scoped to specific permissions.
+
+## Interactive Docs
+
+**`make up` does not serve them, and that is deliberate.** It starts a
+production-class stack with the interactive docs disabled, so
+`/api/docs` there answers 404 — pointing you at it would be pointing you at
+nothing. Read the committed spec instead:
+[`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml).
+
+They are served by the development overlay (`make up-dev`), which is the
+only documented local path that enables them:
+
+- **Swagger UI**: `http://localhost:8000/api/docs`
+- **ReDoc**: `http://localhost:8000/api/redoc`
+- **OpenAPI JSON**: `http://localhost:8000/api/openapi.json`
+
+## Endpoint Groups
+
+### Identity & Access
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/auth/login` | Obtain JWT |
+| `POST` | `/auth/refresh` | Refresh JWT |
+| `POST` | `/auth/logout` | Revoke token |
+| `POST` | `/auth/saml/login` | Initiate SAML SSO |
+| `GET` | `/auth/saml/callback` | SAML ACS endpoint |
+| `POST` | `/auth/oidc/login` | Initiate OIDC flow |
+| `GET` | `/auth/oidc/callback` | OIDC redirect handler |
+| `GET` | `/users/me` | Current user profile |
+| `GET/POST` | `/api-keys` | List / create API keys |
+| `DELETE` | `/api-keys/{id}` | Revoke an API key |
+| `GET/POST/PUT/DELETE` | `/rbac/roles` | Role management |
+| `GET/POST/PUT/DELETE` | `/rbac/permissions` | Permission management |
+
+### Detection & Hunting
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/alerts` | List / ingest alerts |
+| `POST` | `/alerts/submit` | **Founder-flow direct-write submit** — synthesises an `Alert` row directly from a batch of OCSF events, bypassing Kafka / `services/ingest` / `services/fusion`. Powers `aisoc submit` and the fresh-clone demo so the console at `/alerts` lights up immediately. See [`packages/aisoc-cli`](https://github.com/beenuar/AiSOC/tree/main/packages/aisoc-cli) and [`examples/alerts/lateral-movement.json`](https://github.com/beenuar/AiSOC/tree/main/examples/alerts/lateral-movement.json) for the canonical payload. |
+| `GET/PATCH/DELETE` | `/alerts/{id}` | Alert detail / update / delete |
+| `POST` | `/alerts/{id}/assign` | Assign to analyst |
+| `GET/POST` | `/rules` | Detection rule catalog |
+| `PUT/DELETE` | `/rules/{id}` | Update / delete a rule |
+| `POST` | `/rules/{id}/enable` | Enable a rule |
+| `GET/POST` | `/detections` | Detection events |
+| `GET` | `/detections/stats` | Aggregated detection metrics |
+
+### Detection Proposals (Detection-as-Code)
+
+The DAC lifecycle manages detection rule proposals from creation through
+eval-gated promotion into the live rule set.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/detection-proposals` | List proposals (filterable by `status`) |
+| `POST` | `/detection-proposals` | Create a new proposal (title, description, logic, MITRE tags) |
+| `GET` | `/detection-proposals/{id}` | Proposal detail |
+| `POST` | `/detection-proposals/{id}/comment` | Add a review comment |
+| `POST` | `/detection-proposals/{id}/eval` | Attach eval result (metric deltas from `scripts/run_evals.py`) |
+| `POST` | `/detection-proposals/{id}/decide` | Approve or reject the proposal |
+| `POST` | `/detection-proposals/{id}/promote` | Promote an approved proposal to `detection_rules` |
+| `GET` | `/detection-proposals/baseline` | Current eval baseline metrics |
+| `POST` | `/detection-proposals/baseline` | Reset eval baseline to latest harness run |
+
+### Federated Search
+
+Fan out a single query to connected SIEMs. The API translates the query
+into each target's native dialect (SPL for Splunk, KQL for Sentinel,
+ES|QL for Elastic).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/federated/query` | Submit a federated query (`query`, `targets[]`, optional `time_range`) |
+
+### Hunt-as-Code
+
+YAML hunt definitions live in `hunts/` and are loaded by the agents
+service. The API exposes read-only access for the UI.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/hunts` | List loaded hunt definitions |
+| `GET` | `/hunts/{hunt_id}` | Hunt detail (hypothesis, MITRE tags, indicators) |
+| `GET` | `/hunts/{hunt_id}/results` | Results from the latest scheduled run |
+
+### Entity Risk (Risk-Based Alerting)
+
+Time-decayed risk scores per entity, computed by the fusion service.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/entity-risk` | Top entities by risk score (descending) |
+| `GET` | `/entity-risk/{entity}` | Risk detail for a specific entity |
+
+### Entity Graph
+
+The Neo4j entity graph written at ingest time. Every read is scoped to the
+calling tenant on **every node of every traversed path**, not only on the node
+the walk starts from, and a node carrying no `tenant_id` is not readable —
+otherwise any entity two tenants happen to share would bridge between them.
+Global MITRE reference labels (`Technique`, `Tactic`, `Mitigation`) are the
+narrow exemption, because they belong to no tenant.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/graph` | Tenant-level overview: nodes, edges, `generatedAt` |
+| `GET` | `/graph/neighbors/{entity_type}/{entity_id}` | Immediate neighbours of one entity |
+| `GET` | `/graph/blast-radius/{entity_type}/{entity_id}` | Entities reachable within N hops |
+| `GET` | `/graph/attack-path/{case_id}` | Case → alerts → hosts/users → IOCs → techniques |
+| `GET` | `/graph/incident-context/{alert_id}` | Identity, asset, cloud, business and threat context |
+| `GET` | `/graph/mitre-coverage` | Technique coverage aggregated from tenant alerts |
+
+`GET /graph` backs the console's Attack Graph view. Two query parameters:
+`depth` (1–6, default 3) bounds how far the traversal walks out from the
+tenant's own nodes, and `entity` narrows the seed set to one named host, user
+or indicator.
+
+One response is bounded to at most 400 nodes and 900 edges — past that a
+force-directed canvas is unreadable — and sets `truncated: true` when the cut
+was applied, so a partial picture is never mistaken for the whole estate.
+
+Its two failure modes are deliberately distinguishable:
+
+- **`200` with an empty `nodes` array** means the tenant genuinely has no
+  graph yet.
+- **`503`** means the graph backend could not be reached. This endpoint does
+  *not* degrade to an empty graph, because "no attack relationships exist in
+  your estate" is a security claim and making it on evidence nobody retrieved
+  is worse than saying nothing. The console surfaces the status and the path.
+
+:::note Shared infrastructure fails closed
+The ingest graph writer merges nodes on `natural_key` with `tenant_id` as a
+property, so a genuinely shared entity such as a public IP is last-writer-wins.
+The strict read filter therefore drops those nodes rather than showing them
+under the wrong tenant: safe, never leaking, at some cost in completeness.
+Re-keying on `(tenant_id, natural_key)` is the proper fix and needs a migration.
+:::
+
+### Cases & Response
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/cases` | Case list / create |
+| `GET/PATCH/DELETE` | `/cases/{id}` | Case detail / update / close |
+| `POST` | `/cases/{id}/reopen` | Reopen a closed case, with a reason |
+| `POST` | `/cases/{id}/comments` | Add comment |
+| `POST` | `/cases/{id}/timeline` | Add timeline event |
+| `GET/POST` | `/playbooks` | Playbook catalog |
+| `POST` | `/playbooks/{id}/execute` | Execute a playbook |
+| `GET` | `/playbooks/{id}/runs` | Execution history |
+| `POST` | `/actions/dry-run` | Simulate an action |
+
+Every `GET` route in the cases family requires the **`cases:read`**
+permission (v20.0.0, [GHSA-wwq7-2xvh-qgq6](https://github.com/beenuar/AiSOC/security/advisories/GHSA-wwq7-2xvh-qgq6)).
+Role-based users are unaffected — every shipped role that can see the console
+case list already carries it — but an **API key** minted with only
+`alerts:read` can no longer list cases or read their comments, timeline and
+evidence chain. If a narrowly-scoped integration key breaks on a cases `GET`
+after upgrading, add `cases:read` to its scopes.
+
+**Breaking in v20.0.0:** `POST /cases/{id}/comments` no longer accepts
+`is_system` in the request body
+([GHSA-9mc5-hqgh-j6wf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-9mc5-hqgh-j6wf)).
+The field let any `cases:write` holder author a comment the console renders as
+an unattributed "System note", so it could not be preserved — system notes are
+written by the server itself. The server **ignores** the field rather than
+refusing the request, so an existing client that still sends it keeps
+succeeding; only generated SDK request types lose the property. Responses
+still carry `is_system`, now always server-assigned.
+
+`PATCH` is **forward-only**. The case state machine
+(`new → triaged → investigating → contained → resolved → closed`) has no
+backward edge, which is what makes "this case was closed" mean something —
+otherwise a title edit that happened to carry a status could walk a case
+backwards silently.
+
+Reopening is therefore its own verb. It requires `cases:write`, takes a
+`reason` of at least 8 characters, increments `reopen_count`, and clears
+`closed_at` / `resolved_at` so the case is not counted as both terminal and
+active. Only `closed` is terminal: `resolved` still has a forward edge to
+`closed`, so it is not reopenable and the route answers `409` saying so.
+
+```bash
+curl -sX POST "$AISOC_API/api/v1/cases/$CASE_ID/reopen" \
+  -H "Authorization: Bearer $AISOC_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"reason": "The indicator reappeared on two more hosts overnight.",
+       "status": "investigating"}'
+```
+
+### Investigations & Ledger
+
+Every prompt, response, evidence citation, and tool call the AI investigator
+emits is appended to the **Investigation Ledger**. See
+[Cases — Investigation Ledger](../concepts/cases#investigation-ledger) for
+the data model and rationale.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/cases/{case_id}/investigations` | List ledger entries for a case |
+| `GET` | `/investigations/{id}` | Single ledger entry with full payload |
+| `POST` | `/cases/{case_id}/investigations:replay` | Replay an investigation deterministically |
+| `POST` | `/cases/{case_id}/investigations:start` | Kick off a fresh agent investigation |
+
+### Ambient Copilot
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/copilot/context/{resource_type}/{resource_id}` | Context-aware suggestions for an alert / case / rule / playbook |
+| `POST` | `/copilot/actions/{action_id}:run` | Run a suggested action with the right agent tool |
+
+### AI model & credentials
+
+Where the model runs, and whether the credential pointed at it works.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/llm/status` | Which provider and model this pod is configured for |
+| `GET` | `/llm/runtime` | Where the local model is **actually** running |
+| `GET/PUT/DELETE` | `/llm/credentials` | The tenant's own provider credential (BYOK) |
+| `POST` | `/llm/credentials/test` | Place one real call with it and report what happened |
+| `POST` | `/llm/credentials/models` | List the chat models a `custom` endpoint serves |
+
+`/llm/status` reports *configuration*; `/llm/runtime` reports *outcome*. The
+two differ more often than you would expect: a GPU reservation is a request,
+and a model can still land on the CPU for want of VRAM or a usable driver.
+`/llm/runtime` asks Ollama rather than reading the compose file back.
+
+```json
+{
+  "placement": "gpu",
+  "detail": "llama3.2:3b-instruct-q4_K_M is running on the GPU (2.9 GB in VRAM).",
+  "base_url": "http://ollama:11434",
+  "model": "llama3.2:3b-instruct-q4_K_M",
+  "vram_bytes": 3113851904,
+  "total_bytes": 3113851904,
+  "options": ["Use a hosted provider instead: Settings -> Deployment & AI, or the setup wizard."]
+}
+```
+
+**`unknown` is one of the values**: Ollama unloads a model after a few minutes
+idle, so an empty answer means nobody has asked it anything yet — which is not
+the same as CPU, and answering CPU there would be a guess about the exact thing
+you are deciding on.
+
+`no_model` is a separate value for a reason. "Nothing is loaded" has two
+causes, and `/api/ps` reports both as an empty list: a model that is on disk
+and idle, and a model that was never downloaded because the one-time pull
+failed. The advice for the first ("run a triage and check again") is useless
+for the second. So `/llm/runtime` also reads `/api/tags`, which lists what is
+on disk, and distinguishes them.
+
+| `placement` | Means |
+|---|---|
+| `gpu` | the whole model is in VRAM |
+| `partial` | split between VRAM and CPU; `detail` says what fraction |
+| `cpu` | entirely on the CPU |
+| `no_model` | Ollama is running and holds no model at all — the download never completed |
+| `unknown` | a model exists but none is loaded right now, so it cannot say where one would run |
+| `unreachable` | nothing answered — expected on a deployment using a hosted provider |
+
+`vram_bytes` and `total_bytes` are **absent**, not zero, when nothing was
+measured.
+
+#### Testing a credential
+
+The `GET`/`PUT`/`DELETE` routes validate *shape* — that the URL parses, that
+the provider/key/base-URL combination is internally consistent. None of them
+talks to the provider, so a revoked key used to surface as triage quietly
+falling back to the deterministic path.
+
+```bash
+curl -sX POST "$AISOC_API/api/v1/llm/credentials/test" \
+  -H "Authorization: Bearer $AISOC_TOKEN"
+```
+
+```json
+{
+  "outcome": "ok",
+  "detail": "Completed a one-token request against 'gpt-4o-mini' in 412 ms.",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "latency_ms": 412
+}
+```
+
+| `outcome` | Means |
+|---|---|
+| `ok` | the provider answered. A `429` counts: being rate-limited means you reached it and were authenticated |
+| `refused` | reached it and it said no — usually the key, sometimes the model name, which `detail` distinguishes |
+| `unreachable` | nothing answered at that address |
+| `unverified` | air-gapped, so the call was **not attempted** — the policy working, not a bad key |
+
+Requires `settings:write` rather than `settings:read`: it spends the tenant's
+money and touches an external service, which is not a read. The request is one
+token against a fixed prompt.
+
+#### Listing a custom endpoint's models
+
+The `custom` provider points at any OpenAI-compatible endpoint. Rather than
+typing a model id, the console can ask the endpoint's `GET {base_url}/models`
+and offer the chat models it lists:
+
+```bash
+curl -sX POST "$AISOC_API/api/v1/llm/credentials/models" \
+  -H "Authorization: Bearer $AISOC_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"base_url": "https://llm.internal.example/v1", "api_key": "..."}'
+```
+
+```json
+{
+  "outcome": "ok",
+  "detail": "2 chat model(s) of 5 listed.",
+  "models": [
+    { "id": "vendor/model-a", "name": null },
+    { "id": "vendor/model-b", "name": null }
+  ],
+  "listed": 5,
+  "excluded": 3,
+  "truncated": false
+}
+```
+
+Both body fields are optional. `base_url` falls back to the saved `custom`
+credential's. `api_key` is used for this request only and never stored; when
+it is omitted the saved key is used, **but only if the target is the saved base
+URL** — a form that changed the base URL and left the key blank sends no key
+rather than the saved one.
+
+`/models` rows say little in the OpenAI shape, so the filter reads, strongest
+first: a declared `capabilities` flag, declared input/output modalities
+(`architecture.modality`, `input_modalities`/`output_modalities`), and a `type`
+or `mode` label (`chat`, or an image, video, audio, embedding or rerank family).
+When any row's label says chat, a row labelled otherwise is left out, because
+that endpoint names its routes in the label. A row that declares nothing is
+kept unless its id names a non-text family (`embed`, `tts`, `whisper`, `image`,
+…). It is a filter for a dropdown, not a capability guarantee: any id can still
+be typed, and `/test` is what proves it answers.
+
+Bounded on purpose: 10 s for the whole exchange, 2 MB of body, 5,000 rows
+examined and 500 models returned (`truncated` says when that cap was reached).
+Redirects are not followed. The same air-gap check and SSRF guard as `/test`
+apply, and `outcome` uses the same four values. It requires `settings:write`,
+like `/test`, because it makes the server dial an address the caller chose.
+
+See [Where the model runs](../operations/where-the-model-runs) for the four
+deployment options these routes report on.
+
+### Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/metrics/dashboard` | Alert, case and MTTR tiles |
+| `GET` | `/metrics/soc` | SOC KPIs, ATT&CK heatmap, calibration curve |
+| `GET` | `/metrics/funnel` | events → correlations → alerts, with deltas |
+| `GET` | `/metrics/alerts/trend` | Alert volume over time |
+
+All four take `period` — `1h`, `24h`, `7d` or `30d`, defaulting to `24h` —
+and it is the same window the console's global selector sets.
+
+**`alerts.total` is open work, not everything ever received.** It counts
+`new`, `triaging` and `in_progress`; the severity counts beside it are scoped
+the same way, because the console labels them *Active Alerts* and *Critical —
+Require immediate action*. Closed work is reported separately as
+`alerts.resolved`, so narrowing the active tile did not lose the number.
+
+Counts of current state are deliberately **not** windowed. "How many criticals
+are open" is a question about now, and scoping it to the last hour would hide
+the backlog rather than scope it. `period` drives the trend, the funnel and
+the closure figures.
+
+`deltas` on `/metrics/funnel` are **percentages** — `5.0` means +5%, not
++500%. A client that multiplies by 100 again renders `-93.75` as `-9375%`.
+
+### Marketplace
+
+The marketplace surface is backed by the JSON index at
+[`marketplace/index.json`](https://github.com/beenuar/AiSOC/blob/main/marketplace/index.json)
+and re-published to the web app at `/marketplace/index.json`.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/marketplace/items` | List plugins, detections, and playbooks |
+| `GET` | `/marketplace/items/{slug}` | Item detail with manifest + signature |
+| `POST` | `/marketplace/items/{slug}:install` | Install a plugin / detection / playbook into the tenant |
+
+### Responder PWA
+
+These endpoints back the mobile-first `/responder/*` route group.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/oncall/rotations` | List / create on-call rotations |
+| `GET` | `/oncall/whoison` | Currently on-call responder |
+| `GET/POST` | `/passkeys` | List / register WebAuthn credentials |
+| `DELETE` | `/passkeys/{id}` | Revoke a passkey |
+| `POST` | `/passkeys/challenge` | Begin WebAuthn ceremony |
+| `POST` | `/passkeys/verify` | Complete WebAuthn ceremony |
+| `GET/POST` | `/approvals` | List / create approval requests |
+| `POST` | `/approvals/{id}:approve` | Approve a request |
+| `POST` | `/approvals/{id}:reject` | Reject a request |
+| `GET/POST` | `/push/subscriptions` | List / register Web Push subscriptions |
+| `DELETE` | `/push/subscriptions/{id}` | Revoke a Web Push subscription |
+| `POST` | `/push/test` | Send a test push to the calling user |
+
+### Threat Intelligence
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/intel/iocs` | IOC search / ingest |
+| `POST` | `/intel/enrich` | Enrich an indicator |
+| `GET` | `/intel/feeds` | Connected feed status |
+| `POST` | `/intel/feeds/{id}/sync` | Force feed sync |
+
+### UEBA
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/ueba/anomalies` | List anomalies |
+| `GET` | `/ueba/anomalies/{id}` | Anomaly detail |
+| `GET` | `/ueba/baselines` | User baselines |
+| `GET` | `/ueba/baselines/{entity_id}` | Per-entity baseline |
+| `DELETE` | `/ueba/baselines/{entity_id}` | Reset baseline |
+| `GET` | `/ueba/stats` | Aggregate UEBA metrics |
+
+### Honeytokens
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET/POST` | `/honeytokens` | List / create tokens |
+| `GET/DELETE` | `/honeytokens/{id}` | Token detail / revoke |
+| `GET` | `/honeytokens/{id}/events` | Touch events for a token |
+| `GET` | `/honeytokens/events` | All touch events |
+| `GET` | `/honeytokens/stats` | Deployment statistics |
+| `GET` | `/honeytokens/track/{token_id}` | Public tracking endpoint (triggers alert) |
+
+### Purple Team
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/purple-team/atomic-tests` | Atomic Red Team test catalog |
+| `POST` | `/purple-team/executions` | Run an atomic test |
+| `GET/DELETE` | `/purple-team/executions/{id}` | Execution status / cancel |
+| `GET` | `/purple-team/coverage` | ATT&CK coverage heatmap |
+| `GET/POST` | `/purple-team/tabletop` | Tabletop session list / create |
+| `POST` | `/purple-team/tabletop/{id}/steps` | Add step to session |
+| `POST` | `/purple-team/drift/snapshot` | Take an ATT&CK coverage snapshot |
+| `GET` | `/purple-team/drift/snapshots` | List drift snapshots |
+| `GET` | `/purple-team/drift/diff` | Delta between two snapshots (added/dropped techniques) |
+
+### Governance
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/compliance/frameworks` | Available compliance frameworks |
+| `GET` | `/compliance/controls` | Control library |
+| `GET/POST` | `/compliance/evidence` | Evidence list / upload |
+| `GET` | `/compliance/dashboard/{framework}` | Framework dashboard data |
+| `GET` | `/audit` | Immutable audit log |
+| `GET` | `/sla/configs` | SLA configuration |
+| `PUT` | `/sla/configs/{id}` | Update SLA thresholds |
+| `GET` | `/sla/events` | SLA breach events |
+
+## Rate Limits
+
+| Caller | Limit |
+|--------|-------|
+| API key | 1000 req/min |
+| User JWT | 100 req/min |
+
+Rate-limit headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
+
+## Pagination
+
+All list endpoints support cursor-based pagination:
+
+```bash
+GET /api/v1/alerts?limit=50&cursor=<opaque-cursor>
+```
+
+Response includes `"next_cursor"` when more pages exist.
+
+## Client SDKs
+
+| Language | Package | Notes |
+|----------|---------|-------|
+| Python | [`packages/sdk-py`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-py) | Async client built on `httpx` |
+| TypeScript | [`packages/sdk-ts`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-ts) | Browser + Node, fetch-based |
+| Go | [`packages/sdk-go`](https://github.com/beenuar/AiSOC/tree/main/packages/sdk-go) | Typed models + thin client helpers |
+
+In addition, the [Model Context Protocol server](../integrations/mcp)
+(`@aisoc/mcp`) exposes 11 of these endpoints as IDE-side tools for
+Claude / Cursor / Continue / Cody.

@@ -1,0 +1,58 @@
+id: chronicle-detection-rules-ms-graph-failed-file-downloads-multiple-attempts
+name: ms_graph_failed_file_downloads_multiple_attempts
+description: ms_graph_failed_file_downloads_multiple_attempts
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ms_graph_failed_file_downloads_multiple_attempts {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"This detects when a 401 Unauthorized\
+    \ status is received on multiple attempts of the same file when attempting to\
+    \ download from OneDrive and may indicate a permissions issue for the user.\"\n\
+    \    rule_id = \"mr_1117b547-0f30-444e-b10e-c9cfdf00f1f5\"\n    rule_name = \"\
+    Multiple failed file downloads from OneDrive observed in the Microsoft Graph API\"\
+    \n    type = \"alert\"\n    data_source = \"MS Graph Activity Logs\"\n    platform\
+    \ = \"Azure\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n \
+    \   $api.metadata.event_type = \"NETWORK_HTTP\"\n    $api.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    re.regex($api.target.url, `^https://graph\\\
+    .microsoft\\.com/v1\\.0/drives/.*/content$`) nocase\n    //Can be tuned for specific\
+    \ User Agent strings being used - by default GraphRunner does not forge the UA\
+    \ for this action\n    //$api.network.http.user_agent = /PowerShell/ nocase\n\
+    \    $api.network.http.method = \"GET\"\n    $api.network.http.response_code =\
+    \ 401\n    $api.principal.ip = $ip\n    $api.network.session_id = $session\n \
+    \   $api.target.url = $url\n\n  match:\n    $ip, $session, $url over 15m\n\n \
+    \ outcome:\n    $risk_score = 35\n    $event_count = count_distinct($api.metadata.id)\n\
+    \    $doc_count = count_distinct($api.target.url)\n    $requesting_user_guid =\
+    \ array_distinct($api.principal.user.userid)\n    $requesting_ip = array_distinct($api.principal.ip)\n\
+    \    $user_agent = array_distinct($api.network.http.user_agent)\n    $location\
+    \ = array_distinct($api.principal.location.name)\n    $target_application_id_guid\
+    \ = array_distinct($api.target.resource.product_object_id)\n    $session_id =\
+    \ array_distinct($api.network.session_id)\n    $target_url = array_distinct($api.target.url)\n\
+    \n  condition:\n    //Tune to the desired threshold\n    #api > 2\n}"
+  chronicle_rule_name: ms_graph_failed_file_downloads_multiple_attempts
+provenance:
+  source: chronicle/detection-rules
+  source_id: ms_graph_failed_file_downloads_multiple_attempts
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/ms_graph_failed_file_downloads_multiple_attempts.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

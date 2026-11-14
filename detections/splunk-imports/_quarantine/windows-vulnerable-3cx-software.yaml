@@ -1,0 +1,45 @@
+id: splunk-security-content-f2cc1584-46ee-485b-b905-977c067f36de
+name: Windows Vulnerable 3CX Software
+description: The following analytic detects instances of the 3CXDesktopApp.exe with
+  a FileVersion of 18.12.x, leveraging Sysmon logs. This detection focuses on identifying
+  vulnerable versions 18.12.407 and 18.12.416 of the 3CX desktop app. Monitoring this
+  activity is crucial as these specific versions have known vulnerabilities that could
+  be exploited by attackers. If confirmed malicious, exploitation of this vulnerability
+  could lead to unauthorized access, code execution, or further compromise of the
+  affected system, posing significant security risks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1195.002
+  categories:
+  - endpoint
+references:
+- https://www.sentinelone.com/blog/smoothoperator-ongoing-campaign-trojanizes-3cx-software-in-software-supply-chain-attack/
+- https://www.cisa.gov/news-events/alerts/2023/03/30/supply-chain-attack-against-3cxdesktopapp
+- https://www.reddit.com/r/crowdstrike/comments/125r3uu/20230329_situational_awareness_crowdstrike/
+- https://www.3cx.com/community/threads/crowdstrike-endpoint-security-detection-re-3cx-desktop-app.119934/page-2#post-558898
+- https://www.3cx.com/community/threads/3cx-desktopapp-security-alert.119951/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` (process_name=3CXDesktopApp.exe OR OriginalFileName=3CXDesktopApp.exe)\
+    \  FileVersion=18.12.*\n  | stats count min(_time) as firstTime max(_time) as\
+    \ lastTime\n    BY action dest original_file_name\n       parent_process parent_process_exec\
+    \ parent_process_guid\n       parent_process_id parent_process_name parent_process_path\n\
+    \       process process_exec process_guid\n       process_hash process_id process_integrity_level\n\
+    \       process_name process_path user\n       user_id vendor_product\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_vulnerable_3cx_software_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f2cc1584-46ee-485b-b905-977c067f36de
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_vulnerable_3cx_software.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

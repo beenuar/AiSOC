@@ -1,0 +1,27 @@
+title: Bulk PAN-Pattern Egress from Cardholder Data Environment
+id: aisoc-vt-fin-0003-pci-cardholder-egress
+status: experimental
+description: |
+  Outbound transfer from a host inside the PCI CDE whose payload bytes
+  pattern-match credit-card PANs (Luhn-validated upstream by the DLP
+  hook) above the per-hour calibration baseline. Sized large enough to
+  matter under PCI-DSS 10.4 incident reporting.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: dlp
+  service: network
+tags:
+  - attack.t1041
+  - attack.exfiltration
+  - aisoc.vertical.finserv
+  - aisoc.compliance.pci
+detection:
+  selection:
+    event.module: dlp.network
+    event.action: 'egress.classified'
+    classification: 'pan'
+    host.zone: 'cde'
+  threshold:
+    bytes|gte: 50000
+  condition: selection and threshold

@@ -1,0 +1,41 @@
+id: splunk-security-content-bfc840f5-c9c6-454c-aa13-b46fd0bf1e79
+name: Okta Suspicious Activity Reported
+description: The following analytic identifies when an associate reports a login attempt
+  as suspicious via an email from Okta. It leverages Okta Identity Management logs,
+  specifically the `user.account.report_suspicious_activity_by_enduser` event type.
+  This activity is significant as it indicates potential unauthorized access attempts,
+  warranting immediate investigation to prevent possible security breaches. If confirmed
+  malicious, the attacker could gain unauthorized access to sensitive systems and
+  data, leading to data theft, privilege escalation, or further compromise of the
+  environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.001
+  categories:
+  - application
+references:
+- https://help.okta.com/en-us/Content/Topics/Security/suspicious-activity-reporting.htm
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`okta` eventType=user.account.report_suspicious_activity_by_enduser\n\
+    \  | stats count min(_time) as firstTime max(_time) as lastTime values(displayMessage)\n\
+    \    BY user dest src\n       eventType client.userAgent.rawUserAgent client.userAgent.browser\n\
+    \       client.geographicalContext.city client.geographicalContext.country\n \
+    \ | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `okta_suspicious_activity_reported_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bfc840f5-c9c6-454c-aa13-b46fd0bf1e79
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_suspicious_activity_reported.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

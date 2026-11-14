@@ -1,0 +1,107 @@
+name: aisoc-cli · build, test, demo e2e
+
+# Gates the `npx aisoc` wedge CLI (packages/aisoc-lite, published to npm as
+# `aisoc`). The demo path in the README top fold — `npx aisoc triage --demo` —
+# is run end-to-end here on a clean runner so a red badge means the wow is
+# broken.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'packages/aisoc-lite/**'
+      - '.github/workflows/aisoc-cli.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'packages/aisoc-lite/**'
+      - '.github/workflows/aisoc-cli.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: aisoc-cli-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build-test:
+    name: build · typecheck · unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # The CLI bundles @aisoc/report-card at build time and imports it in tests,
+      # so the shared package must be built first.
+      - run: pnpm --filter @aisoc/report-card build
+      - run: pnpm --filter @aisoc/report-card test
+      - name: Fixture is up to date (regenerate and diff)
+        run: |
+          node packages/aisoc-lite/scripts/gen-fixtures.mjs
+          git diff --exit-code packages/aisoc-lite/src/fixtures/demo-alerts.json \
+            || (echo "::error::demo fixture is stale — run 'pnpm --filter aisoc gen:fixtures' and commit"; exit 1)
+      - run: pnpm --filter aisoc typecheck
+      - run: pnpm --filter aisoc test
+      - run: pnpm --filter aisoc build
+
+  demo-e2e:
+    name: demo cold-run (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    needs: build-test
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @aisoc/report-card build
+      - run: pnpm --filter aisoc build
+      - name: triage --demo finishes fast with the documented headline
+        run: |
+          set -euo pipefail
+          cd packages/aisoc-lite
+          start=$(date +%s)
+          out=$(node dist/cli.js triage --demo --no-telemetry)
+          end=$(date +%s)
+          echo "$out"
+          echo "elapsed: $((end - start))s"
+          echo "$out" | grep -q "12 TP, 171 FP suppressed (85.5% noise), 17 need review" \
+            || (echo "::error::demo headline drifted"; exit 1)
+          test $((end - start)) -lt 60 || (echo "::error::demo took >= 60s"; exit 1)
+      - name: JSON output is well-formed
+        run: |
+          set -euo pipefail
+          cd packages/aisoc-lite
+          # Write to a file rather than piping: readFileSync(0) truncates a pipe
+          # at the 64KB buffer, and the 200-verdict --json payload exceeds that.
+          node dist/cli.js triage --demo --json --no-telemetry > /tmp/aisoc-demo.json
+          node -e "const d=JSON.parse(require('fs').readFileSync('/tmp/aisoc-demo.json','utf8'));if(d.summary.total!==200)process.exit(1)"
+      - name: translate produces every dialect deterministically (no LLM key)
+        run: |
+          set -euo pipefail
+          cd packages/aisoc-lite
+          echo 'CommandLine|contains: mimikatz' \
+            | node dist/cli.js translate --from sigma --to spl,kql,esql --json \
+            | node -e "const d=JSON.parse(require('fs').readFileSync(0));if(d.results.length!==3)process.exit(1)"

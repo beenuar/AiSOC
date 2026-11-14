@@ -1,0 +1,69 @@
+id: splunk-security-content-c76b796c-27e1-4520-91c4-4a58695c749e
+name: Windows Files and Dirs Access Rights Modification Via Icacls
+description: 'The following analytic identifies the modification of security permissions
+
+  on files or directories using tools like icacls.exe, cacls.exe, or xcacls.exe. It
+
+  leverages data from Endpoint Detection and Response (EDR) agents, focusing on specific
+
+  command-line executions. This activity is significant as it is commonly used by
+
+  Advanced Persistent Threats (APTs) and coinminer scripts to evade detection and
+
+  maintain control over compromised systems. If confirmed malicious, this behavior
+
+  could allow attackers to hinder investigation, impede remediation efforts, and maintain
+
+  persistent access to the compromised environment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1222.001
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.amadey
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)
+
+    as lastTime from datamodel=Endpoint.Processes where
+
+    Processes.process_name IN ("icacls.exe", "cacls.exe","xcacls.exe") AND
+
+    Processes.process IN ("*:R*", "*:W*", "*:F*", "*:C*", "*:N*", "*/P*", "*/E*")
+
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec
+
+    Processes.process_guid Processes.process_hash Processes.process_id Processes.process_integrity_level
+
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product
+
+    | `drop_dm_object_name(Processes)`
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `windows_files_and_dirs_access_rights_modification_via_icacls_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: c76b796c-27e1-4520-91c4-4a58695c749e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_files_and_dirs_access_rights_modification_via_icacls.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

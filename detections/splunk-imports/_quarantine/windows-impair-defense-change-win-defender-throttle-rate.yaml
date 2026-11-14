@@ -1,0 +1,44 @@
+id: splunk-security-content-f7da5fca-9261-43de-a4d0-130dad1e4f4d
+name: Windows Impair Defense Change Win Defender Throttle Rate
+description: The following analytic detects modifications to the ThrottleDetectionEventsRate
+  registry setting in Windows Defender. It leverages data from the Endpoint.Registry
+  datamodel to identify changes in the registry path related to Windows Defender's
+  event logging rate. This activity is significant because altering the ThrottleDetectionEventsRate
+  can reduce the frequency of logged detection events, potentially masking malicious
+  activities. If confirmed malicious, this could allow an attacker to evade detection
+  by decreasing the visibility of security events, thereby hindering incident response
+  and forensic investigations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://x.com/malmoeb/status/1742604217989415386?s=20
+- https://github.com/undergroundwires/privacy.sexy
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry where Registry.registry_path=
+    "*\\Windows Defender\\NIS\\Consumers\\IPS\\ThrottleDetectionEventsRate" by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_impair_defense_change_win_defender_throttle_rate_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: f7da5fca-9261-43de-a4d0-130dad1e4f4d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_impair_defense_change_win_defender_throttle_rate.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

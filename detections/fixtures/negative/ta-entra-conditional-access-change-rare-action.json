@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.02,
+  "operation": "Update conditional access policy",
+  "result": "success",
+  "user": "secops-ca-owner@example.com"
+}

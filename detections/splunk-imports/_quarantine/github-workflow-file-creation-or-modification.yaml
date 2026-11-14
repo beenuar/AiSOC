@@ -1,0 +1,60 @@
+id: splunk-security-content-2a9f3a2e-2c07-4c5f-9e42-8f8f0b6b6a12
+name: GitHub Workflow File Creation or Modification
+description: 'The following analytic hunts for any creations or modifications to GitHub
+  Actions workflow YAML files across the organization''s Linux or Windows endpoints.
+
+  This hunting query tracks all workflow file activity under .github/workflows directories
+  to help defenders establish baselines of legitimate CI/CD workflow creation patterns,
+  identify unusual or unauthorized changes, and detect anomalies that may indicate
+  supply chain compromise.
+
+  GitHub Actions workflows execute with privileged access to secrets and deployment
+  credentials, making them high-value targets for attackers.
+
+  By monitoring workflow file modifications over time, defenders can identify suspicious
+  patterns such as unexpected workflow creation on developer workstations, modifications
+  outside normal change windows, or activity in repositories that don''t typically
+  contain workflows.
+
+  This data is essential for detecting supply chain attacks like Shai-Hulud that inject
+  malicious workflows across multiple repositories.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.006
+  - T1554
+  - T1195
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/alerts/2025/09/23/widespread-supply-chain-compromise-impacting-npm-ecosystem
+- https://securelist.com/shai-hulud-worm-infects-500-npm-packages-in-a-supply-chain-attack/117547/
+- https://github.com/SigmaHQ/sigma/pull/5658/files
+- https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\n\nfrom datamodel=Endpoint.Filesystem where\n\nFilesystem.file_path\
+    \ IN (\n  \"*/.github/workflows/*.yaml\",\n  \"*/.github/workflows/*.yml\",\n\
+    \  \"*\\\\.github\\\\workflows\\\\*.yaml\",\n  \"*\\\\.github\\\\workflows\\\\\
+    *.yml\"\n)\n\nby Filesystem.action Filesystem.dest Filesystem.file_access_time\
+    \ Filesystem.file_create_time\n   Filesystem.file_hash Filesystem.file_modify_time\
+    \ Filesystem.file_name Filesystem.file_path Filesystem.file_acl Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id Filesystem.user\n   Filesystem.vendor_product\n\
+    \n| `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `github_workflow_file_creation_or_modification_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a9f3a2e-2c07-4c5f-9e42-8f8f0b6b6a12
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/github_workflow_file_creation_or_modification.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,41 @@
+id: splunk-security-content-6b0cb0ff-9a7e-4475-a687-43827fdb31d6
+name: Linux Auditd Auditd Daemon Start
+description: The following analytic detects the (re)initialization of the Linux audit
+  daemon (auditd) by identifying log entries of type DAEMON_START. This event indicates
+  that the audit subsystem has resumed logging after being stopped or has started
+  during system boot. While DAEMON_START may be expected during reboots or legitimate
+  configuration changes, it can also signal attempts to re-enable audit logging after
+  evasion, or restarts with modified or reduced rule sets. Monitoring this event in
+  correlation with DAEMON_END, DAEMON_ABORT, and auditctl activity provides visibility
+  into the continuity and integrity of audit logs. Frequent or unexplained DAEMON_START
+  events should be investigated, especially if they are not accompanied by valid administrative
+  or system activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.012
+  categories:
+  - endpoint
+references:
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/6/html/security_guide/sec-audit_record_types
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` type=DAEMON_START\n  | rename host as dest\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY type op res\n \
+    \      auid dest pid\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_auditd_daemon_start_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6b0cb0ff-9a7e-4475-a687-43827fdb31d6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_auditd_daemon_start.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

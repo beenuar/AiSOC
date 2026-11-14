@@ -1,0 +1,5 @@
+{
+  "argv": "prefix---setglobalstate off-suffix",
+  "event_type": "exec",
+  "process_path": "head-/socketfilterfw"
+}

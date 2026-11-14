@@ -1,0 +1,43 @@
+id: splunk-security-content-0ada2f82-b7af-40cc-b1d7-1e5985afcb4e
+name: Windows Find Domain Organizational Units with GetDomainOU
+description: The following analytic detects the execution of the `Get-DomainOU` cmdlet,
+  a part of the PowerView toolkit used for Windows domain enumeration. It leverages
+  PowerShell Script Block Logging (EventCode=4104) to identify this activity. Detecting
+  `Get-DomainOU` usage is significant as adversaries may use it to gather information
+  about organizational units within Active Directory, which can facilitate lateral
+  movement or privilege escalation. If confirmed malicious, this activity could allow
+  attackers to map the domain structure, aiding in further exploitation and persistence
+  within the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1087.002
+  categories:
+  - endpoint
+references:
+- https://powersploit.readthedocs.io/en/latest/Recon/Get-DomainOU/
+- https://attack.mitre.org/techniques/T1087/002/
+- https://book.hacktricks.xyz/windows-hardening/basic-powershell-for-pentesters/powerview
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Get-DomainOU*\"\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest signature signature_id\n       user_id vendor_product EventID\n \
+    \      Guid Opcode Name\n       Path ProcessID ScriptBlockId\n       ScriptBlockText\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_find_domain_organizational_units_with_getdomainou_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0ada2f82-b7af-40cc-b1d7-1e5985afcb4e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_find_domain_organizational_units_with_getdomainou.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

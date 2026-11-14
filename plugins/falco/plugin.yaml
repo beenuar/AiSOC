@@ -1,0 +1,40 @@
+id: falco
+name: Falco (Runtime Security)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Falco runtime security connector for Linux and Kubernetes. Receives JSON
+  rule-engine output over HTTP from falcosidekick or Falco's built-in HTTP
+  output plugin, optionally validating a shared-secret header on each
+  delivery. Push-driven — no API key required.
+author: AiSOC Core Team
+tags: [siem, runtime, kubernetes, linux, cncf, falco]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/falco.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [webhook_path]
+  properties:
+    webhook_path:
+      type: string
+      description: "Path on the AiSOC ingest service where Falco / falcosidekick POSTs events"
+      default: "/v1/webhooks/falco"
+    shared_secret:
+      type: string
+      description: "Optional shared secret validated against the X-Falco-Secret header"
+      secret: true
+    minimum_priority:
+      type: string
+      description: "Minimum Falco priority that will be accepted"
+      enum:
+        - DEBUG
+        - INFORMATIONAL
+        - NOTICE
+        - WARNING
+        - ERROR
+        - CRITICAL
+        - ALERT
+        - EMERGENCY
+      default: DEBUG

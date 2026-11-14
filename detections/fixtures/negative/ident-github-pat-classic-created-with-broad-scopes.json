@@ -1,0 +1,4 @@
+{
+  "action": "protected_branch.policy_override",
+  "scopes": "repo workflow admin:org"
+}

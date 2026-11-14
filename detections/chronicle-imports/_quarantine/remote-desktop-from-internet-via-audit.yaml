@@ -1,0 +1,46 @@
+id: chronicle-detection-rules-remote-desktop-from-internet-via-audit
+name: remote_desktop_from_internet_via_audit
+description: remote_desktop_from_internet_via_audit
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule remote_desktop_from_internet_via_audit {\n meta:\n    author\
+    \ = \"SOC Prime Team\"\n    description = \"Detects RDP logons from non-private\
+    \ ip ranges. RDP & Local Administrator accounts are often targeted for remote\
+    \ access.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/DS3MRqpI1PBa\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"security\"\n    mitre = \"initial_access, t1076, t1078\"\n\n  events:\n\
+    (($selection1.metadata.product_event_type = \"4624\" and $selection1.extensions.auth.mechanism\
+    \ = \"10\") and not ((re.regex($selection1.principal.ip, `10\\..*`) or re.regex($selection1.principal.ip,\
+    \ `192\\.168\\..*`) or re.regex($selection1.principal.ip, `172\\.31.*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.30\\..*`) or re.regex($selection1.principal.ip, `172\\.29\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.28\\..*`) or re.regex($selection1.principal.ip, `172\\.27\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.26\\..*`) or re.regex($selection1.principal.ip, `172\\.25\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.24\\..*`) or re.regex($selection1.principal.ip, `172\\.23\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.21\\..*`) or re.regex($selection1.principal.ip, `172\\.20\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.19\\..*`) or re.regex($selection1.principal.ip, `172\\.18\\..*`) or re.regex($selection1.principal.ip,\
+    \ `172\\.17\\..*`) or re.regex($selection1.principal.ip, `172\\.16\\..*`) or re.regex($selection1.principal.ip,\
+    \ `fd.*`) or re.regex($selection1.principal.ip, `fc.*`) or re.regex($selection1.principal.ip,\
+    \ `127\\.0\\.0\\.1.*`) or re.regex($selection1.principal.ip, `::1.*`))))\n\n \
+    \ condition:\n    $selection1\n}"
+  chronicle_rule_name: remote_desktop_from_internet_via_audit
+provenance:
+  source: chronicle/detection-rules
+  source_id: remote_desktop_from_internet_via_audit
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/active_directory_security/security/remote_desktop_from_internet__via_audit.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

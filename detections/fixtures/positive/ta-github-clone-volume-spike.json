@@ -1,0 +1,6 @@
+{
+  "action": "git.clone",
+  "baseline_principal_volume_z": 14.3,
+  "resource": "example-org/payments-core",
+  "user": "contractor-7"
+}

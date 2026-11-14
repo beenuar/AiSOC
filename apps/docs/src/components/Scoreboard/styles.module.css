@@ -1,0 +1,200 @@
+.scoreboard {
+  margin: 1.5rem 0 2.5rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--ifm-table-border-color, #e5e7eb);
+  border-radius: 8px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.table th,
+.table td {
+  padding: 0.55rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--ifm-table-border-color, #e5e7eb);
+  white-space: nowrap;
+}
+
+.table thead th {
+  background: var(--ifm-table-head-background, #f8fafc);
+  font-weight: 600;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.numCol {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.rowSubstrate {
+  background: rgba(245, 158, 11, 0.04);
+}
+
+.rowWet {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.badgeSubstrate,
+.badgeWet {
+  display: inline-block;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: help;
+}
+
+.badgeSubstrate {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.badgeWet {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .badgeSubstrate {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border-color: rgba(245, 158, 11, 0.4);
+}
+
+[data-theme="dark"] .badgeWet {
+  background: rgba(16, 185, 129, 0.18);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+
+[data-theme="dark"] .rowSubstrate {
+  background: rgba(245, 158, 11, 0.06);
+}
+
+[data-theme="dark"] .rowWet {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.naSubstrate {
+  color: var(--ifm-color-emphasis-500, #6b7280);
+  font-style: italic;
+  cursor: help;
+}
+
+.budgetTag {
+  font-size: 0.7rem;
+  color: var(--ifm-color-emphasis-500, #6b7280);
+  font-style: italic;
+}
+
+.empty {
+  padding: 1rem;
+  border: 1px dashed var(--ifm-color-emphasis-300, #d1d5db);
+  border-radius: 8px;
+  color: var(--ifm-color-emphasis-700, #4b5563);
+  font-size: 0.9rem;
+}
+
+.chartFigure {
+  margin: 0 0 1.5rem;
+}
+
+.chart {
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  display: block;
+}
+
+.chartBg {
+  fill: var(--ifm-background-surface-color, #ffffff);
+}
+
+[data-theme="dark"] .chartBg {
+  fill: #1b1b1d;
+}
+
+.gridLine {
+  stroke: var(--ifm-color-emphasis-200, #e5e7eb);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+[data-theme="dark"] .gridLine {
+  stroke: rgba(255, 255, 255, 0.08);
+}
+
+.line {
+  fill: none;
+  stroke: var(--ifm-color-primary, #2e8555);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.dotSubstrate {
+  fill: #f59e0b;
+  stroke: var(--ifm-background-surface-color, #ffffff);
+  stroke-width: 1.5;
+}
+
+.dotWet {
+  fill: #10b981;
+  stroke: var(--ifm-background-surface-color, #ffffff);
+  stroke-width: 1.5;
+}
+
+[data-theme="dark"] .dotSubstrate,
+[data-theme="dark"] .dotWet {
+  stroke: #1b1b1d;
+}
+
+.axisLabel {
+  font-size: 11px;
+  fill: var(--ifm-color-emphasis-700, #4b5563);
+  font-family: var(--ifm-font-family-base, sans-serif);
+}
+
+[data-theme="dark"] .axisLabel {
+  fill: #a8a8a8;
+}
+
+.swatchSubstrate {
+  color: #f59e0b;
+}
+
+.swatchWet {
+  color: #10b981;
+}
+
+.chartCaption {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700, #4b5563);
+  font-style: italic;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

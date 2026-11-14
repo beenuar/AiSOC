@@ -1,0 +1,4 @@
+{
+  "syscall": "openat",
+  "target_pid": 1
+}

@@ -1,0 +1,23 @@
+id: det-application-181
+name: Atlassian Site-Wide Deletion
+description: The broadest destructive action the product offers.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: application
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    summary_key == "site-wide_deletion"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

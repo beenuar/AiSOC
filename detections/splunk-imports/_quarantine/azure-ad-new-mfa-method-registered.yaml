@@ -1,0 +1,47 @@
+id: splunk-security-content-0488e814-eb81-42c3-9f1f-b2244973e3a3
+name: Azure AD New MFA Method Registered
+description: The following analytic detects the registration of a new Multi-Factor
+  Authentication (MFA) method for a user account in Azure Active Directory. It leverages
+  Azure AD audit logs to identify changes in MFA configurations. This activity is
+  significant because adding a new MFA method can indicate an attacker's attempt to
+  maintain persistence on a compromised account. If confirmed malicious, the attacker
+  could bypass existing security measures, solidify their access, and potentially
+  escalate privileges, access sensitive data, or make unauthorized changes. Immediate
+  verification and remediation are required to secure the affected account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098.005
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1098/005/
+- https://www.microsoft.com/en-us/security/blog/2023/06/08/detecting-and-mitigating-a-multi-stage-aitm-phishing-and-bec-campaign/
+- https://www.csoonline.com/article/573451/sophisticated-bec-scammers-bypass-microsoft-365-multi-factor-authentication.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`azure_monitor_aad` operationName="Update user" | rename properties.*
+    as * | eval propertyName = mvindex(''targetResources{}.modifiedProperties{}.displayName'',0)
+    | search propertyName = StrongAuthenticationMethod | eval oldvalue = mvindex(''targetResources{}.modifiedProperties{}.oldValue'',0)
+    | eval newvalue = mvindex(''targetResources{}.modifiedProperties{}.newValue'',0)
+    | rex field=newvalue max_match=0 "(?i)(?<new_method_type>\"MethodType\")" | rex
+    field=oldvalue max_match=0 "(?i)(?<old_method_type>\"MethodType\")" | eval count_new_method_type
+    = coalesce(mvcount(new_method_type), 0) | eval count_old_method_type = coalesce(mvcount(old_method_type),
+    0) | fillnull | stats count min(_time) as firstTime max(_time) as lastTime by
+    dest user src vendor_account vendor_product newvalue oldvalue signature | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `azure_ad_new_mfa_method_registered_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 0488e814-eb81-42c3-9f1f-b2244973e3a3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_new_mfa_method_registered.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

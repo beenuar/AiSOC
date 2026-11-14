@@ -1,0 +1,306 @@
+'use client';
+
+/**
+ * FunnelKpiBar
+ * ============
+ * Six-tile KPI strip that mirrors the reference SOC console's funnel widget.
+ *
+ * Tiles, left to right:
+ *   1. Events of Interest          (24h delta)
+ *   2. Correlation Instances       (24h delta)
+ *   3. Alerts Generated            (24h delta)
+ *   4. Signal / Noise              (24h delta — higher is better)
+ *   5. MTTD                        (24h delta — lower is better)
+ *
+ * Tiles 4 and 5 are a ratio and a mean, so each is read together with the
+ * denominator the server sends beside it. Both used to publish an undefined
+ * value as a confident zero -- "Signal / Noise 0%" and "MTTD 0s" -- on the
+ * same screen as a SOC card correctly saying "MTTD — not measured".
+ *   6. Analyst Queue Depth         (24h delta — lower is better)
+ *
+ * Data source: `GET /api/v1/metrics/funnel?period=…` ({@link metricsApi.getFunnel}).
+ * Polls every 60 s with stale-while-revalidate.
+ */
+
+import useSWR from 'swr';
+import { clsx } from 'clsx';
+import { metricsApi, type FunnelMetrics } from '@/lib/api';
+
+type Period = '1h' | '24h' | '7d' | '30d';
+
+interface FunnelKpiBarProps {
+  /** Time window for the funnel. Defaults to `24h` (matches DashboardView). */
+  period?: Period;
+  /** Override the SWR cache key — useful when multiple bars coexist. */
+  cacheKey?: string;
+}
+
+interface TileProps {
+  label: string;
+  value: string;
+  delta: number | null;
+  /**
+   * Rows behind `value`. `0` renders the tile as "not measured" instead of
+   * the figure, because a ratio over an empty denominator and a mean over
+   * no rows are both undefined, and this strip published them as 0% and 0s
+   * directly above a SOC card correctly reading "MTTD — not measured".
+   *
+   * `undefined` means the server did not send a count — an older API — and
+   * leaves the tile exactly as it was.
+   */
+  sampleCount?: number;
+  /**
+   * When `true`, a *negative* delta is rendered green (good) and positive is red
+   * (worse). When `false`, positive is green. Mirrors the reference console's
+   * coloring for MTTD / Queue (lower-is-better) vs Events / Alerts.
+   */
+  lowerIsBetter?: boolean;
+  /** Tiny note under the value (e.g. "events", "alerts/sec"). */
+  unit?: string;
+}
+
+function formatNumber(n: number): string {
+  if (!Number.isFinite(n)) return '—';
+  if (Math.abs(n) >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (Math.abs(n) >= 1_000)
+    return `${(n / 1_000).toFixed(1).replace(/\.0$/, '')}k`;
+  return String(Math.round(n));
+}
+
+function formatDurationSeconds(sec: number): string {
+  if (!Number.isFinite(sec) || sec < 0) return '—';
+  if (sec < 60) return `${Math.round(sec)}s`;
+  if (sec < 3600) return `${Math.round(sec / 60)}m`;
+  return `${(sec / 3600).toFixed(1).replace(/\.0$/, '')}h`;
+}
+
+function formatPercent(ratio: number): string {
+  if (!Number.isFinite(ratio)) return '—';
+  return `${(ratio * 100).toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+/**
+ * Render a period-over-period delta.
+ *
+ * The value arrives as a **percentage**, not a fraction: the backend's
+ * `_pct_delta` already multiplies by 100 and rounds, so a run that fell from
+ * 160 events to 10 sends `-93.75`. This used to multiply by 100 again and
+ * render `-9375%`, which is not a plausible number on a dashboard and was
+ * nevertheless shipped, because the test beside it fed `0.12`-shaped fractions
+ * the backend has never emitted and asserted `+12%`.
+ *
+ * Scale is decided by the contract, never by the magnitude. A real delta of
+ * 1% and a fraction of 1.0 are indistinguishable by value, so "it looks small,
+ * it must be a fraction" is a guess that is right until it is catastrophically
+ * not.
+ */
+function formatDelta(deltaPercent: number | null): string {
+  // null means the previous window was empty: no baseline exists, and an
+  // em-dash would read as "flat". Say it plainly.
+  if (deltaPercent === null) return 'no baseline';
+  if (!Number.isFinite(deltaPercent)) return '—';
+  const rounded =
+    Math.abs(deltaPercent) >= 10 ? Math.round(deltaPercent) : deltaPercent.toFixed(1);
+  const sign = deltaPercent > 0 ? '+' : deltaPercent < 0 ? '−' : '';
+  return `${sign}${Math.abs(Number(rounded))}%`;
+}
+
+function Tile({ label, value, delta, lowerIsBetter = false, unit, sampleCount }: TileProps) {
+  const unmeasured = sampleCount === 0;
+  const isGood =
+    delta === null || delta === 0
+      ? null
+      : lowerIsBetter
+        ? delta < 0
+        : delta > 0;
+  const deltaColor =
+    isGood === null
+      ? 'text-gray-500'
+      : isGood
+        ? 'text-green-400'
+        : 'text-red-400';
+
+  return (
+    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+      <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
+        {label}
+      </p>
+      <p
+        className={clsx(
+          'mt-1 tabular-nums truncate',
+          unmeasured
+            ? 'text-2xl font-bold text-gray-500'
+            : 'text-2xl font-bold text-gray-100',
+        )}
+      >
+        {unmeasured ? '—' : value}
+      </p>
+      <div className="flex items-baseline gap-2 mt-1">
+        {unmeasured ? (
+          <span className="text-[11px] text-gray-500 truncate">
+            not measured{unit ? ` · no ${unit}` : ''}
+          </span>
+        ) : (
+          <>
+            <span className={clsx('text-xs font-medium tabular-nums', deltaColor)}>
+              {formatDelta(delta)}
+            </span>
+            {unit && <span className="text-[11px] text-gray-600 truncate">{unit}</span>}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LoadingTile({ label }: { label: string }) {
+  return (
+    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-4 min-w-0">
+      <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
+        {label}
+      </p>
+      <div className="mt-2 h-7 w-20 rounded bg-gray-800/60 animate-pulse" />
+      <div className="mt-2 h-3 w-12 rounded bg-gray-800/40 animate-pulse" />
+    </div>
+  );
+}
+
+const TILE_LABELS = [
+  'Events of Interest',
+  'Correlation Instances',
+  'Alerts Generated',
+  'Signal / Noise',
+  'MTTD',
+  'Analyst Queue',
+] as const;
+
+export function FunnelKpiBar({
+  period = '24h',
+  cacheKey,
+}: FunnelKpiBarProps = {}) {
+  const key = cacheKey ?? `funnel-metrics:${period}`;
+  const { data, error, isLoading } = useSWR<FunnelMetrics>(
+    key,
+    () => metricsApi.getFunnel(period),
+    {
+      refreshInterval: 60_000,
+      revalidateOnFocus: false,
+      revalidateOnMount: true,
+      shouldRetryOnError: true,
+      errorRetryCount: 3,
+      errorRetryInterval: 4000,
+    },
+  );
+
+  // Error takes priority over loading and stale data. Without this ordering
+  // the loading branch wins after a failure and the user stares at skeleton
+  // tiles forever; if we let stale data through silently, the analyst sees
+  // confidently-rendered numbers that may be hours old. Bias toward making
+  // the failure visible — SWR will keep retrying every 4s underneath.
+  if (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : String(error);
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold text-gray-100">
+              Operations Funnel
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Live tenant pipeline: events → correlations → alerts
+            </p>
+          </div>
+          <span className="text-xs text-gray-500">Last {period}</span>
+        </div>
+        <div className="rounded-xl border border-red-900/60 bg-red-950/40 px-4 py-3 text-sm text-red-200">
+          <p className="font-semibold">Funnel metrics unavailable</p>
+          <p className="mt-1 text-xs text-red-300/80">{errorMessage}</p>
+          <p className="mt-1 text-xs text-red-300/60">
+            SWR will keep retrying every 4s; refresh the page if it persists.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoading || !data) {
+    return (
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-base font-semibold text-gray-100">Operations Funnel</h2>
+          <span className="text-xs text-gray-500">Last {period}</span>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          {TILE_LABELS.map((l) => (
+            <LoadingTile key={l} label={l} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  const { deltas } = data;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h2 className="text-base font-semibold text-gray-100">
+            Operations Funnel
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5">
+            Live tenant pipeline: events → correlations → alerts
+          </p>
+        </div>
+        <span className="text-xs text-gray-500">Last {period}</span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Tile
+          label="Events of Interest"
+          value={formatNumber(data.events_of_interest)}
+          delta={deltas.events_of_interest}
+          unit="events"
+        />
+        <Tile
+          label="Correlation Instances"
+          value={formatNumber(data.correlation_instances)}
+          delta={deltas.correlation_instances}
+          unit="groups"
+        />
+        <Tile
+          label="Alerts Generated"
+          value={formatNumber(data.alerts_generated)}
+          delta={deltas.alerts_generated}
+          unit="alerts"
+        />
+        <Tile
+          label="Signal / Noise"
+          value={formatPercent(data.signal_to_noise)}
+          delta={deltas.signal_to_noise}
+          sampleCount={data.signal_to_noise_sample_count}
+          unit="decided verdicts"
+        />
+        <Tile
+          label="MTTD"
+          value={formatDurationSeconds(data.mttd_seconds)}
+          delta={deltas.mttd_seconds}
+          sampleCount={data.mttd_sample_count}
+          lowerIsBetter
+          unit="acknowledged alerts"
+        />
+        <Tile
+          label="Analyst Queue"
+          value={formatNumber(data.analyst_queue_depth)}
+          delta={deltas.analyst_queue_depth}
+          lowerIsBetter
+          unit="open"
+        />
+      </div>
+    </div>
+  );
+}
+
+export default FunnelKpiBar;

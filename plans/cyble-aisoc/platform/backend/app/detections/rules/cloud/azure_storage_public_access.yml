@@ -1,0 +1,29 @@
+title: Azure Storage Account Public Access Enabled
+id: aisoc-id-cl-0018-storage-public
+status: stable
+description: |
+  Azure storage account or blob container configured with public
+  anonymous access. Common data exposure vector and a primary
+  source of cloud breaches.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azure
+  service: activitylogs
+tags:
+  - attack.t1530
+  - attack.collection
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: azure
+    event.action:
+      - 'Microsoft.Storage/storageAccounts/write'
+      - 'Microsoft.Storage/storageAccounts/blobServices/containers/write'
+  public:
+    azure.properties.allowBlobPublicAccess: true
+  public_container:
+    azure.properties.publicAccess|contains:
+      - 'Container'
+      - 'Blob'
+  condition: selection and (public or public_container)

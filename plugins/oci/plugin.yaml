@@ -1,0 +1,40 @@
+id: oci
+name: Oracle Cloud Infrastructure (OCI) Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Oracle Cloud Infrastructure audit log connector. Polls the OCI Audit
+  service for ListEvents in the configured compartment and normalises
+  them to the AiSOC alert shape with severity derived from event type
+  (IAM identity changes, network policy edits, instance state changes).
+  Auth uses an API signing key (HMAC over a canonical request, per
+  Oracle's signing v1 spec).
+author: AiSOC Core Team
+tags: [cloud, oci, oracle, audit]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/oci.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [tenancy_ocid, user_ocid, compartment_ocid, fingerprint, private_key_pem, region]
+  properties:
+    tenancy_ocid:
+      type: string
+      description: Tenancy OCID (Identity → Tenancy details).
+    user_ocid:
+      type: string
+      description: User OCID for the IAM user owning the API key.
+    compartment_ocid:
+      type: string
+      description: Root or sub-compartment OCID to scope audit ingestion to.
+    fingerprint:
+      type: string
+      description: 47-character API key fingerprint as shown in the OCI console.
+    private_key_pem:
+      type: string
+      description: PEM-encoded RSA 2048+ private key matching the fingerprint.
+      secret: true
+    region:
+      type: string
+      description: OCI region identifier (e.g. us-ashburn-1, eu-frankfurt-1).

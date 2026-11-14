@@ -1,0 +1,23 @@
+id: det-data-exfil-075
+name: Snowflake Share Created
+description: A share makes data readable from another Snowflake account entirely.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "CREATE_SHARE"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

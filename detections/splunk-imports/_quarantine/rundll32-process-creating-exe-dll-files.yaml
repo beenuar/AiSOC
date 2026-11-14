@@ -1,0 +1,39 @@
+id: splunk-security-content-6338266a-ee2a-11eb-bf68-acde48001122
+name: Rundll32 Process Creating Exe Dll Files
+description: The following analytic detects a rundll32 process creating executable
+  (.exe) or dynamic link library (.dll) files. It leverages Sysmon EventCode 11 to
+  identify instances where rundll32.exe generates these file types. This activity
+  is significant because rundll32 is often exploited by malware, such as IcedID, to
+  drop malicious payloads in directories like Temp, AppData, or ProgramData. If confirmed
+  malicious, this behavior could allow an attacker to execute arbitrary code, establish
+  persistence, or escalate privileges within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://any.run/malware-trends/icedid
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=11 Image=\"*rundll32.exe\" TargetFilename IN (\"\
+    *.exe\", \"*.dll\")\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY action dest file_name\n       file_path process_guid process_id\n    \
+    \   user_id vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `rundll32_process_creating_exe_dll_files_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6338266a-ee2a-11eb-bf68-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/rundll32_process_creating_exe_dll_files.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

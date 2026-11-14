@@ -1,0 +1,48 @@
+id: splunk-security-content-683f48de-982f-4a7e-9aac-9cec550da498
+name: Windows Alternate DataStream - Base64 Content
+description: The following analytic detects the creation of Alternate Data Streams
+  (ADS) with Base64 content on Windows systems. It leverages Sysmon EventID 15, which
+  captures file creation events, including the content of named streams. ADS can conceal
+  malicious payloads, making them significant for SOC monitoring. This detection identifies
+  hidden streams that may contain executables, scripts, or configuration data, often
+  used by malware to evade detection. If confirmed malicious, this activity could
+  allow attackers to hide and execute payloads, persist in the environment, or access
+  sensitive information without being easily detected.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1564.004
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/api0cradle/cdd2d0d0ec9abb686f0e89306e277b8f
+- https://car.mitre.org/analytics/CAR-2020-08-001/
+- https://blogs.juniper.net/en-us/threat-research/bitpaymer-ransomware-hides-behind-windows-alternate-data-streams
+- https://blog.netwrix.com/2022/12/16/alternate_data_stream/
+- https://github.com/trustedsec/SysmonCommunityGuide/blob/master/chapters/file-stream-creation-hash.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=15 NOT Contents IN ("-","[ZoneTransfer]*") | regex
+    TargetFilename="(?<!\/)\b\w+(\.\w+)?:\w+(\.\w+)?$" | regex Contents="(?:[A-Za-z0-9+/]{128,})(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+    | eval file_name = replace(TargetFilename,"(.*\\\)",""), process = Image , file_path
+    = TargetFilename , base64 = Contents, file_hash = coalesce(SHA256,SHA1,MD5,Hash)
+    | stats count min(_time) as firstTime max(_time) as lastTime by dest dvc file_hash
+    file_name file_path process process_exec process_guid process_id process_name
+    process_path signature signature_id user_id vendor_product Contents Image base64
+    | `base64decode(base64)` | fields - base64 | rename base64_decode as command |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_alternate_datastream___base64_content_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 683f48de-982f-4a7e-9aac-9cec550da498
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_alternate_datastream___base64_content.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

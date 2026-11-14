@@ -1,0 +1,33 @@
+title: curl / wget Downloads to Temp Path and Executes
+id: aisoc-id-ep-0024-curl-wget-exec
+status: stable
+description: |
+  curl.exe or wget.exe writing to %TEMP%, %APPDATA%, or %PUBLIC%
+  paths — common loader pattern used by ransomware affiliates and
+  commodity malware.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+  service: sysmon
+tags:
+  - attack.t1105
+  - attack.command_and_control
+  - aisoc.endpoint
+detection:
+  selection:
+    event.module: sysmon
+    event.action: 'process_started'
+    process.name:
+      - 'curl.exe'
+      - 'wget.exe'
+  remote:
+    process.command_line|re: '(?i)https?://'
+  temp_path:
+    process.command_line|contains:
+      - '\\AppData\\'
+      - '\\Temp\\'
+      - '\\Public\\'
+      - '\\ProgramData\\'
+      - 'C:\\Users\\Public'
+  condition: selection and remote and temp_path

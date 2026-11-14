@@ -1,0 +1,89 @@
+{
+  "id": "insider-resignation-data-access-v1",
+  "name": "Insider: Resignation + Sensitive Access",
+  "description": "Triggered when a user with a recent resignation flag accesses sensitive data. Read-only mode and HR audit.",
+  "version": "1.0.0",
+  "tags": [
+    "insider-risk",
+    "insider",
+    "hr",
+    "mitre.t1530"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "medium",
+      "high"
+    ],
+    "tags": [
+      "insider-risk"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich HR resignation status",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.user"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "readonly",
+      "name": "Force read-only on sensitive scopes",
+      "type": "http",
+      "params": {
+        "url": "${SAAS_URL}/acl/{{alert.user}}/scopes/sensitive/readonly",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate exit-risk pattern",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify HR + manager",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Resigning user {{alert.user}} accessed sensitive data. Read-only enforced.",
+        "webhook_env": "SLACK_HR_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open exit-risk ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "Exit risk: {{alert.user}}",
+        "queue": "hr"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

@@ -1,0 +1,172 @@
+{
+  "id": "container-escape-response-v1",
+  "name": "Container Escape: Runtime Breach Response",
+  "description": "Triggered by container runtime security alert (Falco, Sysdig, or similar) indicating a container escape attempt or successful breakout to the host. Kills the offending container, isolates the node, and preserves evidence.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "container-escape",
+    "container",
+    "kubernetes",
+    "mitre.t1611",
+    "mitre.t1610"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["container-escape", "container-breakout", "runtime-security"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "container_id": {
+      "description": "Container ID of the offending container",
+      "field": "alert.container_id",
+      "required": true
+    },
+    "node_host": {
+      "description": "Kubernetes node / host running the container",
+      "field": "alert.host",
+      "required": true
+    },
+    "namespace": {
+      "description": "Kubernetes namespace",
+      "field": "alert.k8s_namespace",
+      "required": false
+    },
+    "pod_name": {
+      "description": "Kubernetes pod name",
+      "field": "alert.k8s_pod",
+      "required": false
+    },
+    "process_name": {
+      "description": "Suspicious process that triggered the alert",
+      "field": "alert.process_name",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich container image and process",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.container_image",
+        "indicator_type": "container-image",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "kill_container",
+      "name": "Kill offending container",
+      "type": "kill_process",
+      "params": {
+        "host_field": "alert.host",
+        "process_field": "alert.container_id",
+        "kill_type": "container",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "cordon_node",
+      "name": "Cordon Kubernetes node (prevent new pod scheduling)",
+      "type": "http",
+      "params": {
+        "url": "${K8S_API_URL}/api/v1/nodes/{{inputs.node_host}}/cordon",
+        "method": "POST",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "approval_isolate_node",
+      "name": "Approval gate — isolate the Kubernetes node",
+      "type": "approval",
+      "params": {
+        "message": "Network-isolate node '{{inputs.node_host}}'? This will drain all pods and may impact running workloads.",
+        "approvers": ["platform-lead", "soc-lead"],
+        "timeout_seconds": 300,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 320
+    },
+    {
+      "id": "isolate_node",
+      "name": "Network-isolate compromised node (EDR)",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.host",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_isolate_node.outcome == 'approved'",
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "collect_artifacts",
+      "name": "Collect container forensic artifacts",
+      "type": "run_script",
+      "params": {
+        "host_field": "alert.host",
+        "script": "collect_container_artifacts.sh",
+        "args": ["--container-id", "{{inputs.container_id}}", "--output", "/forensics/{{alert.case_id}}/"],
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 120
+    },
+    {
+      "id": "inv",
+      "name": "Container escape investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "container-escape"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Alert platform / DevSecOps team",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Container escape on node {{inputs.node_host}} (pod: {{inputs.pod_name}}, ns: {{inputs.namespace}}). Container killed: {{context.kill_success}}. Node isolated: {{context.isolate_success}}.",
+        "service_key_env": "PD_PLATFORM_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open container escape ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Container Escape: {{inputs.pod_name}} on {{inputs.node_host}}",
+        "queue": "platform-security",
+        "labels": ["container-escape", "kubernetes", "runtime"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

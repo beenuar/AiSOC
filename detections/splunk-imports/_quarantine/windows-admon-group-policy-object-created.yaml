@@ -1,0 +1,43 @@
+id: splunk-security-content-69201633-30d9-48ef-b1b6-e680805f0582
+name: Windows Admon Group Policy Object Created
+description: The following analytic detects the creation of a new Group Policy Object
+  (GPO) using Splunk's Admon data. It identifies events where a new GPO is created,
+  excluding default "New Group Policy Object" entries. Monitoring GPO creation is
+  crucial as adversaries can exploit GPOs to escalate privileges or deploy malware
+  across an Active Directory network. If confirmed malicious, this activity could
+  allow attackers to control system configurations, deploy ransomware, or propagate
+  malware, significantly compromising the network's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1484/
+- https://attack.mitre.org/techniques/T1484/001
+- https://www.trustedsec.com/blog/weaponizing-group-policy-objects-access/
+- https://adsecurity.org/?p=2716
+- https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/9.3.2411/get-windows-data/monitor-active-directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`admon` admonEventType=Update objectCategory=\"CN=Group-Policy-Container,CN=Schema,CN=Configuration,DC=*\"\
+    \ versionNumber=0 displayName!=\"New Group Policy Object\"\n  | stats min(_time)\
+    \ as firstTime max(_time) as lastTime values(gPCFileSysPath)\n    BY dcName, displayName\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_admon_group_policy_object_created_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69201633-30d9-48ef-b1b6-e680805f0582
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_admon_group_policy_object_created.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,86 @@
+id: splunk-security-content-6e9d4f7a-3c8b-4a9e-8d2f-7b5c9e1a6f3d
+name: Cisco ASA - Reconnaissance Command Activity
+description: 'This analytic detects potential reconnaissance activities on Cisco ASA
+  devices by identifying execution of multiple information-gathering "show" commands
+  within a short timeframe.
+
+  Adversaries who gain initial access to network infrastructure devices typically
+  perform systematic reconnaissance to understand the device configuration, network
+  topology, security policies, connected systems, and potential attack paths. This
+  reconnaissance phase involves executing multiple "show" commands to enumerate device
+  details, running configurations, active connections, routing information, and VPN
+  sessions.
+
+  The detection monitors for command execution events (message ID 111009) containing
+  reconnaissance-oriented "show" commands (such as show running-config, show version,
+  show interface, show crypto, show conn, etc.) and triggers when 7 or more distinct
+  reconnaissance commands are executed within a 5-minute window by the same user.
+
+  Investigate reconnaissance bursts from non-administrative accounts, unusual source
+  IP addresses, activity during off-hours, methodical command sequences suggesting
+  automated enumeration, or reconnaissance activity correlated with other suspicious
+  behaviors.
+
+  We recommend adapting the detection filters to exclude known legitimate administrative
+  activities.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  - T1590.001
+  - T1590.005
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/asa-cli-reference/S/asa-command-ref-S/sa-shov-commands.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111009)\ncommand IN (\n    \"show access-list*\"\
+    ,\n    \"show capture*\",\n    \"show conn*\",\n    \"show cpu*\",\n    \"show\
+    \ crypto*\",\n    \"show eigrp*\",\n    \"show failover*\",\n    \"show flow*\"\
+    ,\n    \"show interface*\",\n    \"show inventory*\",\n    \"show ip*\",\n   \
+    \ \"show license*\",\n    \"show memory*\",\n    \"show nat*\",\n    \"show ospf*\"\
+    ,\n    \"show process*\",\n    \"show running-config*\",\n    \"show startup-config*\"\
+    ,\n    \"show version*\",\n    \"show vpn-sessiondb*\",\n    \"show xlate*\"\n\
+    )\n| fillnull\n\n```\nNormalize command variations to base command types to count\
+    \ distinct reconnaissance categories.\nFor example, \"show running-config\", \"\
+    show running-config | include username\", and \"show running-config interface\"\
+    \ all count as one command type.\nThis prevents adversaries from evading detection\
+    \ by adding arguments or using multiple variations of the same command.\n```\n\
+    \n| eval command_type=case(\n    match(command, \"^show access-list\"), \"show\
+    \ access-list\",\n    match(command, \"^show conn\"), \"show conn\",\n    match(command,\
+    \ \"^show cpu\"), \"show cpu\",\n    match(command, \"^show crypto\"), \"show\
+    \ crypto\",\n    match(command, \"^show eigrp\"), \"show eigrp\",\n    match(command,\
+    \ \"^show failover\"), \"show failover\",\n    match(command, \"^show flow\"),\
+    \ \"show flow\",\n    match(command, \"^show interface\"), \"show interface\"\
+    ,\n    match(command, \"^show inventory\"), \"show inventory\",\n    match(command,\
+    \ \"^show ip\"), \"show ip\",\n    match(command, \"^show license\"), \"show license\"\
+    ,\n    match(command, \"^show memory\"), \"show memory\",\n    match(command,\
+    \ \"^show nat\"), \"show nat\",\n    match(command, \"^show ospf\"), \"show ospf\"\
+    ,\n    match(command, \"^show process\"), \"show process\",\n    match(command,\
+    \ \"^show running-config\"), \"show running-config\",\n    match(command, \"^show\
+    \ startup-config\"), \"show startup-config\",\n    match(command, \"^show version\"\
+    ), \"show version\",\n    match(command, \"^show vpn-sessiondb\"), \"show vpn-sessiondb\"\
+    ,\n    match(command, \"^show xlate\"), \"show xlate\",\n    true(), command)\n\
+    \n| bin _time span=5m\n\n| stats count\n        earliest(_time) as firstTime\n\
+    \        latest(_time) as lastTime\n        dc(command_type) as unique_recon_commands\n\
+    \        values(command_type) as command_types\n        values(command) as commands\n\
+    \        values(src_ip) as src_ip\n        values(message_id) as message_id\n\
+    \        values(action) as action\n  by _time host user\n\n| where unique_recon_commands\
+    \ >= 7\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_asa___reconnaissance_command_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6e9d4f7a-3c8b-4a9e-8d2f-7b5c9e1a6f3d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___reconnaissance_command_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

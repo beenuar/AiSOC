@@ -1,0 +1,24 @@
+title: Microsoft Defender Real-time Protection Disabled
+id: aisoc-id-ep-0011-defender-disable
+status: stable
+description: |
+  Defender real-time monitoring disabled via PowerShell or registry
+  tampering.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: windows
+tags:
+  - attack.t1562.001
+  - attack.defense_evasion
+  - aisoc.endpoint
+detection:
+  pwsh:
+    process.command_line|contains:
+      - 'Set-MpPreference -DisableRealtimeMonitoring $true'
+      - 'Add-MpPreference -ExclusionPath'
+      - 'Set-MpPreference -DisableBehaviorMonitoring $true'
+  registry:
+    registry.path|contains: '\Software\Policies\Microsoft\Windows Defender\'
+    registry.value: 'DisableAntiSpyware'
+  condition: pwsh or registry

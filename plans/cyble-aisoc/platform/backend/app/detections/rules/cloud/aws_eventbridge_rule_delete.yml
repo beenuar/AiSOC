@@ -1,0 +1,25 @@
+title: AWS EventBridge Detection Rule Disabled or Deleted
+id: aisoc-id-cl-0022-eventbridge-rule-disable
+status: stable
+description: |
+  EventBridge / CloudWatch Events rule that drives security
+  monitoring (e.g. GuardDuty findings, Config compliance) is
+  disabled or deleted — defense evasion intended to blind
+  downstream SIEM pipelines.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1562.001
+  - attack.defense_evasion
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws.cloudtrail
+    event.action:
+      - 'DeleteRule'
+      - 'DisableRule'
+      - 'RemoveTargets'
+  condition: selection

@@ -1,0 +1,5 @@
+{
+  "event_type": "user.lifecycle.activate",
+  "previous_state": "DISABLED",
+  "user": "former-employee@corp.com"
+}

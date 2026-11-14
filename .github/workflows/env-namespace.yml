@@ -1,0 +1,100 @@
+name: Env namespace
+
+# Nothing in the `.env` namespace belongs in the index except the published
+# template. GHSA-57rw-w33m-cp5v: two backups of a working `.env` were
+# committed and removed a few commits later, and a deletion is not a
+# redaction — every clone and fork still carries the blobs, which between them
+# hold a generated SECRET_KEY, the Fernet key that unlocks the connector vault
+# and the datastore passwords.
+#
+# `.gitignore` named three spellings and the backups were not among them. That
+# is now a namespace deny with one exception, but an ignore rule has no effect
+# on a file that is already tracked and `git add -f` overrides it — so the
+# gate asks whether one is tracked *now*, and asks the ignore rule's own
+# question back at it, in both directions.
+#
+# Runs on BOTH pull_request and push-to-main. A PR-only gate checks what
+# contributors propose and never what lands, and the file that caused this
+# arrived in an ordinary feature commit.
+#
+# No paths filter. A `.env` backup can appear in any directory, and the whole
+# point is that nobody meant to add it — so a filtered gate that skips is
+# indistinguishable from one that passes.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: env-namespace-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  env-namespace:
+    name: No .env backup is tracked, and the next one cannot be added
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # Full history is not needed — the gate reads the index, not the log.
+      # It deliberately does not scan history: the two blobs are reachable
+      # from `main` and no gate can un-publish them. Rotation is the remedy
+      # for what is already out, and it is recorded in the advisory.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      # Runs first and on every invocation. If the detector stops working,
+      # this fails here rather than letting the scan below report a clean
+      # index it never inspected properly.
+      - name: Self-test (gate is not vacuous)
+        run: python3 scripts/check_env_backup_files.py --self-test
+
+      # Deliberately run from the repository root via the default working
+      # directory: the gate resolves its root from git, not from its own file
+      # location, so it fails loudly if pointed anywhere else.
+      - name: Scan the index
+        run: python3 scripts/check_env_backup_files.py --print
+
+      # Negative control. The ignore rule is half the fix, and the half a
+      # later edit is most likely to undo while the index stays clean — at
+      # which point the gate would go on reporting OK for the other half.
+      # Restoring the pre-fix rules must make it fail.
+      - name: The gate fails when the namespace deny is narrowed back
+        run: |
+          set -euo pipefail
+          cp .gitignore /tmp/gitignore.bak
+          restore() { cp /tmp/gitignore.bak .gitignore; }
+          trap restore EXIT
+          python3 - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path(".gitignore")
+          s = p.read_text()
+          needle = ".env\n.env.*\n!.env.example\n"
+          if needle not in s:
+              print("FAIL: the namespace deny this control narrows is not there to narrow.")
+              print("      .gitignore has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, ".env\n.env.local\n.env.*.local\n"))
+          PY
+          if python3 scripts/check_env_backup_files.py >/dev/null 2>&1; then
+            echo "FAIL: the gate passed with the pre-GHSA-57rw ignore rules restored."
+            echo "      It is not grading .gitignore, only the index."
+            exit 1
+          fi
+          echo "OK: narrowing the ignore rules makes the gate fail, as it must."
+          restore
+          trap - EXIT
+          python3 scripts/check_env_backup_files.py

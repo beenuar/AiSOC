@@ -1,0 +1,43 @@
+id: splunk-security-content-7698b945-238e-4bb9-b172-81f5ca1685a1
+name: O365 Email Reported By User Found Malicious
+description: The following analytic detects when an email submitted to Microsoft using
+  the built-in report button in Outlook is found to be malicious. This capability
+  is an enhanced protection feature that can be used within o365 tenants by users
+  to report potentially malicious emails. This correlation looks for any submission
+  that returns a Phish or Malware verdict upon submission.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1566.001
+  - T1566.002
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/microsoft-365/security/office-365-security/submissions-outlook-report-messages?view=o365-worldwide
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`o365_management_activity` Workload=SecurityComplianceCenter Operation=AlertEntityGenerated\
+    \ Name=\"Email reported by user as*\"\n  | fromjson Data\n  | rename _raw AS temp\
+    \ etps AS _raw\n  | extract pairdelim=\";\" kvdelim=\":\"\n  | rename _raw AS\
+    \ etps temp AS _raw\n  | search RescanVerdict IN (Phish,Malware)\n  | rex field=tsd\
+    \ \"\\<(?<src_user>.+)\\>\"\n  | eval src_user = case(isnull(src_user),tsd,true(),src_user)\n\
+    \  | rename Name as signature, AlertId as signature_id, AlertEntityId as user,\
+    \ tsd as sender, ms as subject\n  | fillnull\n  | stats count min(_time) as firstTime\
+    \ max(_time) as lastTime\n    BY dest user src\n       vendor_account vendor_product\
+    \ signature\n       signature_id src_user sender\n       subject\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `o365_email_reported_by_user_found_malicious_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7698b945-238e-4bb9-b172-81f5ca1685a1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_email_reported_by_user_found_malicious.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

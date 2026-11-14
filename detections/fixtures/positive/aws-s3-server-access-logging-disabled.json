@@ -1,0 +1,4 @@
+{
+  "event_name": "PutBucketLogging",
+  "logging_enabled": false
+}

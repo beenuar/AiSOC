@@ -1,0 +1,24 @@
+id: det-network-026
+name: Outbound Clear-Text Protocol Carrying Credentials
+description: AiSOC v1 curated detection. Triggers on the network signal described by 'Outbound Clear-Text
+  Protocol Carrying Credentials'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1040
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    protocol == "TCP"
+    AND dst_port IN [23, 21, 110, 143]
+false_positives:
+- Legacy systems pending decommission (host_role=legacy tag)
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

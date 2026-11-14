@@ -1,0 +1,8 @@
+{
+  "baseline_client_family_rarity": 0.04,
+  "eventName": "CreateAccessKey",
+  "eventSource": "iam.amazonaws.com",
+  "src_ip": "198.51.100.17",
+  "user": "dana.k@example.com",
+  "user_agent": "aws-cli/2.15.17 Python/3.11.6 Darwin/23.4.0"
+}

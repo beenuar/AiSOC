@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "scope_priv": true,
+  "session_timeout_minutes_increased": true
+}

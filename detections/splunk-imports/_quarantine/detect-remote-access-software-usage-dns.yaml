@@ -1,0 +1,44 @@
+id: splunk-security-content-a16b797d-e309-41bd-8ba0-5067dae2e4be
+name: Detect Remote Access Software Usage DNS
+description: The following analytic detects DNS queries to domains associated with
+  known remote access software such as AnyDesk, GoToMyPC, LogMeIn, and TeamViewer.
+  This detection is crucial as adversaries often use these tools to maintain access
+  and control over compromised environments. Identifying such behavior is vital for
+  a Security Operations Center (SOC) because unauthorized remote access can lead to
+  data breaches, ransomware attacks, and other severe impacts if these threats are
+  not mitigated promptly.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1219
+  categories:
+  - network
+references:
+- https://attack.mitre.org/techniques/T1219/
+- https://thedfirreport.com/2022/08/08/bumblebee-roasts-its-way-to-domain-admin/
+- https://thedfirreport.com/2022/11/28/emotet-strikes-again-lnk-file-leads-to-domain-wide-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Network_Resolution where\nDNS.query=*\n\
+    NOT DNS.query IN (\"-\", \"unknown\")\nby DNS.answer DNS.answer_count DNS.query\n\
+    \   DNS.query_count DNS.reply_code_id DNS.src\n   DNS.vendor_product\n| `drop_dm_object_name(\"\
+    DNS\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | lookup remote_access_software remote_domain AS query OUTPUT isutility, description\
+    \ as signature,\ncomment_reference as desc, category\n| eval dest = query\n| search\
+    \ isutility = True\n| `remote_access_software_usage_exceptions`\n| `detect_remote_access_software_usage_dns_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a16b797d-e309-41bd-8ba0-5067dae2e4be
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/detect_remote_access_software_usage_dns.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

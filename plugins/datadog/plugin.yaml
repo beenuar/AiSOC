@@ -1,0 +1,47 @@
+id: datadog
+name: Datadog Connector (Logs + APM)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Datadog observability connector. Streams from the Logs Search v2 API
+  (/api/v2/logs/events/search) or the Events v1 API (/api/v1/events,
+  APM monitor alerts + custom events) depending on the selected stream.
+  Normalises results to the AiSOC alert shape with severity derived
+  from log status or monitor alert_type. For Cloud SIEM Security
+  Signals use the separate datadog_cloud_siem connector.
+author: AiSOC Core Team
+tags: [siem, logs, datadog, apm, observability]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/datadog.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [site, api_key, application_key]
+  properties:
+    site:
+      type: string
+      description: >
+        Datadog regional site code. One of us1 (datadoghq.com),
+        us3 (us3.datadoghq.com), us5 (us5.datadoghq.com),
+        eu1 (datadoghq.eu), ap1 (ap1.datadoghq.com),
+        us1-fed (ddog-gov.com).
+    mode:
+      type: string
+      description: >
+        Stream selector. One of "logs" (Logs Search v2) or "events"
+        (Events v1 — APM monitor alerts + custom events). Defaults
+        to "logs".
+    query:
+      type: string
+      description: >
+        Datadog query string applied to the search. Defaults to "*".
+        Use this to filter to a service / env / status (e.g. "service:nginx status:error").
+    api_key:
+      type: string
+      description: Datadog API key (Org Settings → API Keys).
+      secret: true
+    application_key:
+      type: string
+      description: Datadog Application key (Personal Settings → Application Keys).
+      secret: true

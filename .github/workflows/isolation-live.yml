@@ -1,0 +1,232 @@
+name: Tenant Isolation (live containers)
+
+# Phase 3.4 (world-class program) — the live-container half of the cross-store
+# tenant-isolation gate. The offline half (isolation.yml) proves each read path
+# *constructs* a tenant scope; this job proves the scope actually isolates
+# against real datastores by seeding tenant A + B and asserting a read as A
+# returns zero B data. ClickHouse runs the production lake_sql rewriter against
+# a live warehouse. A leak fails the build.
+
+# Deliberately NOT path-filtered, on either trigger.
+#
+# It was, twice over, and each shape failed in its own direction.
+#
+# The first named three API files — `backtest.py`, `lake_sql.py`,
+# `db/clickhouse.py` — against a suite that loads far more. `app/core/config.py`
+# was not among them, so the commit that added `from app.core.version import …`
+# to it never triggered this job, merged ungraded, and left twelve
+# tenant-scoping assertions erroring at setup on `main`.
+#
+# The second widened the filter to directories covering the measured closure.
+# That was a real correction and it would have caught that regression. It is
+# still the wrong mechanism *for a required check*, which is what this job is
+# now, and the reason is categorical rather than a matter of getting the list
+# right: a workflow filtered by `paths:` creates no check run at all on a
+# pull request that misses the filter, and a required context that never
+# reports blocks the pull request forever. That is why `integration.yml`
+# dropped its workflow-level filter, and the same reasoning applies here.
+#
+# The remaining question was whether to keep the condition and push it into
+# the job. No — for the reason recorded against `Previous minor to this tree,
+# with data present` in `.github/required-checks.json`: a job-level `if:`
+# yields a check run whose conclusion is `skipped`, and GitHub counts a
+# skipped check as passing. The pull request would merge having never run the
+# assertion, which is the same ungraded merge as before wearing a different
+# costume. A job-level condition is worth that cost only when the job is
+# expensive; `integration.yml` carries one because a disaster-recovery
+# rehearsal costs 15 minutes.
+#
+# This job is not expensive. Measured over its 40 most recent successful job
+# executions: min 46s, median 52s, p90 70s, max 137s, none within an order of
+# magnitude of the 20-minute budget below. (Run wall-clock has a median of
+# 758s, but that is the shared runner pool's queue, which no filter here can
+# change and which a skipped job pays too.) So it carries no filter anywhere
+# and no job-level or step-level `if:` on any assertive step — a property a
+# reader can check by looking, rather than a behaviour someone has to go and
+# measure. `scripts/check_required_check_substance.py` checks it both ways.
+#
+# The closure that the directory filter was sized against is still worth
+# recording, because it is what made the enumeration untenable: measured by
+# recording every module the import system resolves across all three steps
+# against live stores, the suites load 13 files under `services/api/app` plus
+# `services/fusion/app/services/lake_writer.py`, and six of those arrive
+# through lazy call-time imports inside `fetch_lake_events` that no static
+# reading of the test files reveals. An import closure is free to grow; an
+# enumeration of one goes stale silently and the only symptom is a job that
+# stops grading.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: isolation-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  live-isolation:
+    name: Cross-store isolation (Neo4j + Redis + ClickHouse + Kafka)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Install clients + test deps
+        # sqlglot MUST be pinned to the same range the API service ships
+        # (`>=30,<31`): the ClickHouse test runs the production
+        # lake_sql.rewrite_for_tenant, so a version this job resolves and the
+        # image does not is a different isolation guarantee than the one under
+        # test. `scripts/check_sqlglot_pin.py` is what keeps the two equal.
+        #
+        # The historical break is why the pin is enforced rather than
+        # suggested: sqlglot 27 renamed the SELECT's FROM argument key, the
+        # table walk found nothing, and every single-table query came back
+        # with no tenant predicate, no allowlist check and no table-function
+        # ban — reported as success. `lake_sql._from_clause` now resolves the
+        # clause by node type rather than by key name, so that specific
+        # rename cannot recur; the agreement requirement stands because the
+        # next AST change will not announce itself either.
+        #
+        # pydantic + pydantic-settings are here for the backtest step below.
+        # It calls the production `fetch_lake_events`, which reaches the real
+        # `app.db.clickhouse.execute_lake_query`, and that module reads the
+        # host off the `app.core.config` settings singleton. Stubbing the
+        # settings would mean the step no longer exercises the client the
+        # service actually dials. Ranges copied from `services/api`'s manifest
+        # so this job resolves what the image ships.
+        run: >-
+          pip install --quiet
+          pytest pytest-asyncio structlog "sqlglot>=30,<31"
+          neo4j "redis>=5,<6" clickhouse-driver "kafka-python>=2,<3"
+          "pydantic>=2.7,<2.14" "pydantic-settings>=2.2.1,<3"
+
+      # Single-container stores run as `services:`-style `docker run` so we can
+      # pass the commands the images need (Redpanda especially). Same pattern as
+      # integration.yml's MinIO step.
+      - name: Start Redis
+        run: docker run -d --name iso-redis -p 6379:6379 redis:7-alpine
+
+      - name: Start Neo4j
+        run: |
+          docker run -d --name iso-neo4j -p 7687:7687 \
+            -e NEO4J_AUTH=neo4j/testpassword123 \
+            -e NEO4J_dbms_security_auth__minimum__password__length=8 \
+            neo4j:5.15-community
+
+      - name: Start ClickHouse
+        run: |
+          docker run -d --name iso-clickhouse -p 9000:9000 \
+            --ulimit nofile=262144:262144 \
+            clickhouse/clickhouse-server:23.8
+
+      - name: Start Redpanda (Kafka API)
+        run: |
+          docker run -d --name iso-redpanda -p 9092:9092 \
+            redpandadata/redpanda:v24.2.7 \
+            redpanda start --mode dev-container --smp 1 \
+            --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+            --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092
+
+      - name: Wait for stores to accept connections
+        run: |
+          set -euo pipefail
+          echo "── redis ──"
+          for i in $(seq 1 30); do
+            docker exec iso-redis redis-cli ping 2>/dev/null | grep -q PONG && { echo "redis ready (${i}s)"; break; }
+            sleep 1
+          done
+          echo "── clickhouse ──"
+          for i in $(seq 1 60); do
+            docker exec iso-clickhouse clickhouse-client --query "SELECT 1" 2>/dev/null | grep -q 1 && { echo "clickhouse ready (${i}s)"; break; }
+            sleep 1
+          done
+          echo "── neo4j ──"
+          for i in $(seq 1 60); do
+            docker exec iso-neo4j cypher-shell -u neo4j -p testpassword123 "RETURN 1" >/dev/null 2>&1 && { echo "neo4j ready (${i}s)"; break; }
+            sleep 1
+          done
+          echo "── redpanda ──"
+          for i in $(seq 1 45); do
+            docker exec iso-redpanda rpk cluster health 2>/dev/null | grep -q "Healthy:.*true" && { echo "redpanda ready (${i}s)"; break; }
+            sleep 1
+          done
+
+      # The four assertions this check is named after. `LIVE_STORES_REQUIRED`
+      # turns an unset address or an uninstalled client into a failure, for
+      # the same reason the backtest step below carries its own flag: measured
+      # with this job's exact dependency set and no containers running, this
+      # file reported **4 skipped, exit 0** — every one of the four stores in
+      # the check's own title, green having connected to nothing. The stores
+      # themselves were already covered, because an unreachable one raises
+      # here rather than being caught; the env var and the client import were
+      # the two ways left to pass vacuously.
+      - name: Run live isolation replay
+        env:
+          ISOLATION_REDIS_URL: redis://localhost:6379/0
+          ISOLATION_NEO4J_URI: bolt://localhost:7687
+          ISOLATION_NEO4J_USER: neo4j
+          ISOLATION_NEO4J_PASSWORD: testpassword123
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_KAFKA_BROKERS: localhost:9092
+          LIVE_STORES_REQUIRED: "1"
+        run: python -m pytest tests/isolation/test_live_stores.py -v --tb=short
+
+      # Gap-closure Phase 8.1's done-when clause, which is a statement about a
+      # pair of tenants and so cannot be proven offline: an indicator is found
+      # for the tenant whose recorded lake rows hold it and not for the one
+      # whose do not. The rows come from the production lake writer and the
+      # query from the production generator, so a wrong column fails here.
+      #
+      # `RETRO_HUNT_LAKE_LIVE_REQUIRED` for the same reason as the other two
+      # steps: with the dependency set installed and no warehouse, this file
+      # reported **2 passed, 17 skipped, exit 0** — the two that passed are
+      # pure-function checks on the writer's column mapping, so every
+      # assertion that needs a pair of tenants in a real warehouse was among
+      # the seventeen.
+      - name: Retro-hunt sweep matches recorded lake data
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          RETRO_HUNT_LAKE_LIVE_REQUIRED: "1"
+        run: python -m pytest tests/isolation/test_retro_hunt_live.py -v --tb=short
+
+      # The backtest's lake fetch, which had no coverage at all: its unit suite
+      # says in its own docstring that this path needs a live ClickHouse, and
+      # the claim-to-gate row said the integration gate ran it when nothing
+      # did. A backtest reads historical events for one tenant out of a
+      # warehouse holding every tenant's, so the assertion is a statement
+      # about a pair and cannot be made offline. `BACKTEST_LAKE_LIVE_REQUIRED`
+      # turns an unreachable warehouse into a failure here, because a step
+      # that can skip is a step that can report success having proven nothing.
+      - name: Backtest lake fetch is tenant-scoped against a real warehouse
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          BACKTEST_LAKE_LIVE_REQUIRED: "1"
+        run: python -m pytest tests/isolation/test_backtest_lake_live.py -v --tb=short
+
+      - name: Capture forensics on failure
+        if: failure()
+        run: |
+          docker logs --tail=60 iso-clickhouse || true
+          docker logs --tail=60 iso-neo4j || true
+          docker logs --tail=40 iso-redpanda || true
+
+      - name: Teardown
+        if: always()
+        run: docker rm -f iso-redis iso-neo4j iso-clickhouse iso-redpanda || true

@@ -1,0 +1,58 @@
+id: chronicle-detection-rules-ms-graph-user-endpoint-requests
+name: ms_graph_user_endpoint_requests
+description: ms_graph_user_endpoint_requests
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule ms_graph_user_endpoint_requests {\n\n  meta:\n    author = \"Google Cloud\
+    \ Security\"\n    description = \"Identify the use of the user API call to collect\
+    \ a listing of users. This can be chatty due to other commands calling this single\
+    \ API.\"\n    rule_id = \"mr_e67d0d46-76ad-4718-95df-5536a154fc24\"\n    rule_name\
+    \ = \"Hunt for user API endpoint requests in the Microsoft Graph\"\n    assumption\
+    \ = \"Focus on PowerShell as part of the User agent or adding IP addresses or\
+    \ applications who call this endpoint should be added to focus this detection.\"\
+    \n    type = \"Hunt\"\n    data_source = \"MS Graph Activity Logs\"\n    platform\
+    \ = \"Azure\"\n    severity = \"Info\"\n    priority = \"Info\"\n\n  events:\n\
+    \    $api.metadata.event_type = \"NETWORK_HTTP\"\n    $api.metadata.product_event_type\
+    \ = \"Microsoft Graph Activity\"\n    $api.target.url = \"https://graph.microsoft.com/v1.0/users\"\
+    \ nocase\n    //UA String could be adjusted to focus more broadly on calls to\
+    \ this API or focus on calls from PowerShell\n    //$api.network.http.user_agent\
+    \ = /PowerShell/ nocase\n    //May want to filter out IP addresses of admin consoles\n\
+    \    //$api.principal.ip != \"10.10.10.10\"\n    $api.network.http.method = \"\
+    GET\"\n    $api.network.http.response_code = 200\n    $api.principal.ip = $ip\n\
+    \    $api.network.session_id = $session\n\n  match:\n    $ip, $session over 5m\n\
+    \n  outcome:\n    $risk_score = 15\n    $event_count = count_distinct($api.metadata.id)\n\
+    \    $requesting_user_guid = array_distinct($api.principal.user.userid)\n    $requesting_ip\
+    \ = array_distinct($api.principal.ip)\n    $user_agent = array_distinct($api.network.http.user_agent)\n\
+    \    $location = array_distinct($api.principal.location.name)\n    $target_application_id_guid\
+    \ = array_distinct($api.target.resource.product_object_id)\n    $session_id =\
+    \ array_distinct($api.network.session_id)\n    $target_url = array_distinct($api.target.url)\n\
+    \n  condition:\n    $api\n}"
+  chronicle_rule_name: ms_graph_user_endpoint_requests
+provenance:
+  source: chronicle/detection-rules
+  source_id: ms_graph_user_endpoint_requests
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/microsoft/graph_activity/ms_graph_user_endpoint_requests.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

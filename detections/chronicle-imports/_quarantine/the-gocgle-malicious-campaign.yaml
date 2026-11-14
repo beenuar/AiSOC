@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-the-gocgle-malicious-campaign
+name: the_gocgle_malicious_campaign
+description: the_gocgle_malicious_campaign
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule the_gocgle_malicious_campaign {\n meta:\n    author = \"\
+    Osman Demir\"\n    description = \"Detects Web Skimming Attacks  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/LI0qbtGS0Jtv\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"proxy\"\n    mitre\
+    \ = \"T1056, Collection\"\n\n  events:\n(($selection.principal.hostname = \"gocgle-analytics.net\"\
+    \ or $selection.principal.hostname = \"googlo-analytics.com\" or $selection.principal.hostname\
+    \ = \"gocgletagmanager.com\" or $selection.principal.hostname = \"googlc-analytics.com\"\
+    \ or $selection.principal.hostname = \"gocgle-analytics.cm\" or $selection.principal.hostname\
+    \ = \"gocgletagmanager.cm\" or $selection.principal.hostname = \"gocgle-analytics.com\"\
+    \ or $selection.principal.hostname = \"analytic.is\" or $selection.principal.hostname\
+    \ = \"qdtf54y6eu7i87t.ga\") or ($selection.target.ip = \"5.188.9.61\" or $selection.target.ip\
+    \ = \"5.188.9.33\" or $selection.target.ip = \"5.188.9.40\" or $selection.target.ip\
+    \ = \"194.180.224.112\"))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: the_gocgle_malicious_campaign
+provenance:
+  source: chronicle/detection-rules
+  source_id: the_gocgle_malicious_campaign
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/cloud_security/proxy/the_gocgle_malicious_campaign.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

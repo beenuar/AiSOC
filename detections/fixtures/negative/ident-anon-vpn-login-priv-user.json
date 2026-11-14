@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "src_ip_anonymous_vpn": true,
+  "user_priv": true
+}

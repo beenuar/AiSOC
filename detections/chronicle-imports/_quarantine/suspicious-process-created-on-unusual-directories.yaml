@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-suspicious-process-created-on-unusual-directories
+name: suspicious_process_created_on_unusual_directories
+description: suspicious_process_created_on_unusual_directories
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule suspicious_process_created_on_unusual_directories {\n meta:\n\
+    \    author = \"Erdem Kucukmustafa\"\n    description = \"Detect Suspicious Process\
+    \ on Unusual Directories  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/lVgFe7QyLrys\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"Defense_Evasion, T1036\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"1\" and (re.regex($selection.target.process.file.full_path, `C:\\\\Windows\\\
+    \\Fonts.*`) or re.regex($selection.target.process.file.full_path, `.*\\\\htdocs.*`)\
+    \ or re.regex($selection.target.process.file.full_path, `C:\\\\Windows\\\\Media.*`)\
+    \ or re.regex($selection.target.process.file.full_path, `C:\\\\Users\\\\Public.*`)\
+    \ or re.regex($selection.target.process.file.full_path, `C:\\\\Windows\\\\system32\\\
+    \\config\\\\systemprofile.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\addins.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Debug.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Users\\\\NetworkService.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Users\\\\Default.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\Help.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Intel\\\\Logs.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Windows\\\\repair.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\PerfLogs.*`) or re.regex($selection.target.process.file.full_path, `C:\\\
+    \\$Recycle\\.bin.*`) or re.regex($selection.target.process.file.full_path, `C:\\\
+    \\Windows\\\\security.*`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\wwwroot.*`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: suspicious_process_created_on_unusual_directories
+provenance:
+  source: chronicle/detection-rules
+  source_id: suspicious_process_created_on_unusual_directories
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/suspicious_process_created_on_unusual_directories.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

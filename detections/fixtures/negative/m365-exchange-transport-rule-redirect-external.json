@@ -1,0 +1,6 @@
+{
+  "operation": "Set-TransportRule",
+  "parameters": {
+    "RedirectMessageTo": "internal@corp.com"
+  }
+}

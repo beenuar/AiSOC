@@ -1,0 +1,36 @@
+id: splunk-security-content-f87aa96b-369b-4a3e-9021-1bbacbfcb8fb
+name: Windows Driver Inventory
+description: The following analytic identifies drivers being loaded across the fleet.
+  It leverages a PowerShell script input deployed to critical systems to capture driver
+  data. This detection is significant as it helps monitor for unauthorized or malicious
+  drivers that could compromise system integrity. If confirmed malicious, such drivers
+  could allow attackers to execute arbitrary code, escalate privileges, or maintain
+  persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - endpoint
+references:
+- https://gist.github.com/MHaggis/3e4dc85c69b3f7a4595a06c8a692f244
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`driverinventory`\n  | stats values(Path) min(_time) as firstTime max(_time)\
+    \ as lastTime count\n    BY host DriverType\n  | rename host as dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `windows_driver_inventory_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f87aa96b-369b-4a3e-9021-1bbacbfcb8fb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_driver_inventory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

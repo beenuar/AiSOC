@@ -1,0 +1,44 @@
+id: splunk-security-content-c1eea697-99ed-44c2-9b70-d8935464c499
+name: Linux Hardware Addition SwapOff
+description: The following analytic detects the execution of the "swapoff" command,
+  which disables the swapping of paging devices on a Linux system. It leverages data
+  from Endpoint Detection and Response (EDR) agents, focusing on process execution
+  logs. This activity is significant because disabling swap can be a tactic used by
+  malware, such as Awfulshred, to evade detection and hinder forensic analysis. If
+  confirmed malicious, this action could allow an attacker to manipulate system memory
+  management, potentially leading to data corruption, system instability, or evasion
+  of memory-based detection mechanisms.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1200
+  categories:
+  - endpoint
+references:
+- https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/overview-of-the-cyber-weapons-used-in-the-ukraine-russia-war/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name\
+    \ = \"swapoff\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `linux_hardware_addition_swapoff_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c1eea697-99ed-44c2-9b70-d8935464c499
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_hardware_addition_swapoff.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

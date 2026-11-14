@@ -1,0 +1,23 @@
+id: det-data-exfil-080
+name: Snowflake Copy Into A Location
+description: COPY INTO a stage writes query results outside the warehouse.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "COPY"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "authorized_ip_ranges_empty": true,
+  "operation_name": "head-managedClusters/write",
+  "private_cluster": false
+}

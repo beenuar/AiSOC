@@ -1,0 +1,78 @@
+id: splunk-security-content-baa80bc8-7c9c-4395-b458-b69feb92830a
+name: Windows Suspicious React or Next.js Child Process
+description: 'This analytic detects Windows processes such as cmd.exe, PowerShell,
+  and common Windows LOLBINs being spawned by React or Next.js application servers.
+
+  In the context of CVE-2025-55182 / React2Shell / CVE-2025-66478 for Next.js, successful
+  exploitation can lead to arbitrary JavaScript execution on the server, which in
+  turn is used to invoke Node''s child_process APIs (for example child_process.execSync)
+  to run OS-level commands.
+
+  This detection focuses on suspicious child processes where a Next/React server process
+  spawns an uncommon process.
+
+  Such activity might be a strong indicator of exploitation of the aforementioned
+  vulnerability.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1059.003
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://react.dev/blog/2025/12/03/critical-security-vulnerability-in-react-server-components
+- https://nextjs.org/blog/CVE-2025-66478
+- https://nvd.nist.gov/vuln/detail/CVE-2025-55182
+- https://gist.github.com/maple3142/48bc9393f45e068cf8c90ab865c0f5f3
+- https://www.wiz.io/blog/critical-vulnerability-in-react-cve-2025-55182
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime\n  from datamodel=Endpoint.Processes\n  where\n    Processes.parent_process_name\
+    \ = \"node.exe\"\n    Processes.parent_process IN (\n      \"*--experimental-https*\"\
+    ,\n      \"*--experimental-next-config-strip-types*\",\n      \"*\\\\node_modules\\\
+    \\next*\",\n      \"*next dev*\",\n      \"*next start*\",\n      \"*next\\\"\
+    \ start*\",\n      \"*node_modules\\\\.bin\\\\\\\\..\\\\next*\",\n      \"*react-scripts\
+    \ start*\",\n      \"*start-server.js*\",\n    )\n    AND\n    (\n      Processes.process_name\
+    \ IN (\n        \"bash.exe\",\n        \"bitsadmin.exe\",\n        \"calc.exe\"\
+    ,\n        \"CalculatorApp.exe\",\n        \"certutil.exe\",\n        \"cscript.exe\"\
+    ,\n        \"curl.exe\",\n        \"ftp.exe\",\n        \"ipconfig.exe\",\n  \
+    \      \"mshta.exe\",\n        \"netstat.exe\",\n        \"OpenConsole.exe\",\n\
+    \        \"powershell.exe\",\n        \"pwsh.exe\",\n        \"regsvr32.exe\"\
+    ,\n        \"rundll32.exe\",\n        \"sh.exe\",\n        \"tftp.exe\",\n   \
+    \     \"wget.exe\",\n        \"win32calc.exe\",\n        \"wmic.exe\",\n     \
+    \   \"wscript.exe\",\n        \"wsl.exe\",\n        \"wt.exe\"\n      )\n    \
+    \  OR\n      (\n        Processes.process_name = \"cmd.exe\"\n        AND NOT\
+    \ Processes.process = \"*/d /s /c *\"\n      )\n      OR\n      (\n        Processes.process_name\
+    \ = \"cmd.exe\"\n        Processes.process = \"*/d /s /c *\"\n        AND NOT\
+    \ (\n          Processes.process = \"*git config --local --get remote.origin.url*\"\
+    \n          OR\n          (\n            Processes.process = \"*netstat -ano |\
+    \ findstr /C:*\"\n            Processes.process = \"* | findstr LISTENING*\"\n\
+    \          )\n          OR\n          (\n            Processes.parent_process\
+    \ = \"*--experimental-https*\"\n            Processes.process = \"*\\\\mkcert\\\
+    \\*\"\n            Processes.process IN (\"* -CAROOT*\", \"* -install *\")\n \
+    \         )\n        )\n      )\n    )\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process\n   Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process\n   Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path\n   Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_suspicious_react_or_next_js_child_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: baa80bc8-7c9c-4395-b458-b69feb92830a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_suspicious_react_or_next_js_child_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

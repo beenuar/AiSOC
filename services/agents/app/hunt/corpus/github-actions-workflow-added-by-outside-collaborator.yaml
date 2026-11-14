@@ -1,0 +1,39 @@
+id: hunt-github-actions-workflow-added-by-outside-collaborator
+name: CI workflow file added or changed by an account outside the organisation
+description: |
+  A workflow file is code that runs with repository credentials. Members change them all the time; an outside account changing one is a supply-chain question.
+version: 1.0.0
+severity: high
+category: application
+tags:
+  - mitre.attack.t1195.001
+  - hunt.supplychain
+log_sources:
+  - github_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did an account outside the organisation modify a CI workflow?
+  indicators:
+    - field: "source"
+      equals: "github_audit"
+    - field: "action"
+      in: ["workflows.created", "workflows.updated"]
+    - field: "actorIsOrgMember"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-017
+  positive_template_id: hunt-github-actions-workflow-added-by-outside-collaborator
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-017-NEG
+  # The negative inverts actorIsOrgMember, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1195/001/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

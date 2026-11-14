@@ -1,0 +1,41 @@
+id: splunk-security-content-3a1d8f62-5b9c-4e7d-b8f3-9d6a8e2f5e1f
+name: Detect Web Access to Decommissioned S3 Bucket
+description: This detection identifies web requests to domains that match previously
+  decommissioned S3 buckets through web proxy logs. This activity is significant because
+  attackers may attempt to access or recreate deleted S3 buckets that were previously
+  public to hijack them for malicious purposes. If successful, this could allow attackers
+  to host malicious content or exfiltrate data through compromised bucket names that
+  may still be referenced by legitimate applications.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - application
+references:
+- https://docs.aws.amazon.com/AmazonS3/latest/userguide/access-control-block-public-access.html
+- https://labs.watchtowr.com/8-million-requests-later-we-made-the-solarwinds-supply-chain-attack-look-amateur/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime values(Web.http_method) as http_method values(Web.http_user_agent)\
+    \ as http_user_agent values(Web.url) as url values(Web.user) as user FROM datamodel=Web\n\
+    \  WHERE Web.url_domain!=\"\"\n  BY Web.src Web.url_domain\n| `drop_dm_object_name(\"\
+    Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | eval bucket_domain = lower(url_domain)\n| lookup decommissioned_buckets bucketName\
+    \ as bucket_domain OUTPUT bucketName as match\n| where isnotnull(match)\n| `detect_web_access_to_decommissioned_s3_bucket_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 3a1d8f62-5b9c-4e7d-b8f3-9d6a8e2f5e1f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/detect_web_access_to_decommissioned_s3_bucket.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,25 @@
+id: det-endpoint-130
+name: LNK File Executed From Removable Media
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'LNK File Executed
+  From Removable Media'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1204.002
+- tlp.white
+category: endpoint
+log_source:
+  product: windows
+  service: sysmon
+detection:
+  condition: |
+    event_id == 1
+    AND process_command_line CONTAINS_ANY ["e:\", "f:\"]
+    AND parent_image ENDSWITH "explorer.exe"
+false_positives:
+- Approved kiosk workflow
+playbook: tpl-execution
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

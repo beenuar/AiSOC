@@ -1,0 +1,43 @@
+id: splunk-security-content-0d41772b-35ab-4e1c-a2ba-d0b455481aee
+name: Windows AD GPO Deleted
+description: This detection identifies when an Active Directory Group Policy is deleted
+  using the Group Policy Management Console.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 AttributeLDAPDisplayName=gpLink\n\
+    \  | eval  ObjectDN=upper(ObjectDN)\n  | stats min(_time) as eventTime values(eval(if(OperationType==\"\
+    %%14675\",AttributeValue,null))) as old_value values(eval(if(OperationType==\"\
+    %%14674\",AttributeValue,null))) as new_value values(OperationType) as OperationType\
+    \ values(src_user) as src_user values(dest) as dest\n    BY OpCorrelationID ObjectDN\
+    \ SubjectLogonId\n  | rex field=old_value max_match=10000 \"(?i)LDAP://(?P<old_dn>cn.*?);(?P<old_flag>\\\
+    d)\\]\"\n  | rex field=new_value max_match=10000 \"(?i)LDAP://(?P<new_dn>cn.*?);(?P<new_flag>\\\
+    d)\\]\"\n  | mvexpand old_dn\n  | where NOT old_dn IN (new_dn)\n  | eval ObjectDN=upper(old_dn)\n\
+    \  | join ObjectDN type=outer [\n  | search `admon` objectCategory=\"CN=Group-Policy-Container*\"\
+    \ admonEventType=Update\n  | eval ObjectDN=upper(distinguishedName)\n  | stats\
+    \ latest(displayName) as displayName\n    BY ObjectDN ]\n  | stats min(eventTime)\
+    \ as _time values(OpCorrelationID) as OpCorrelationID values(displayName) as policyName\
+    \ values(src_user) as src_user\n    BY ObjectDN SubjectLogonId\n  | `windows_ad_gpo_deleted_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0d41772b-35ab-4e1c-a2ba-d0b455481aee
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_gpo_deleted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

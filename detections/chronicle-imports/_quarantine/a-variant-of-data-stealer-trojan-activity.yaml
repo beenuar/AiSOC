@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-a-variant-of-data-stealer-trojan-activity
+name: a_variant_of_data_stealer_trojan_activity
+description: a_variant_of_data_stealer_trojan_activity
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule a_variant_of_data_stealer_trojan_activity {\n meta:\n   \
+    \ author = \"Emir Erdogan\"\n    description = \"This rule detects a stealer behaviour.\
+    \ Malware deletes itself  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/f9ZYj4C5CNBg\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1129, T1003, T1114, T1012, T1107\"\n\n  events:\n\
+    ((re.regex($selection.target.process.file.full_path, `.*/ralord\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*/lodron\\.exe`) or re.regex($selection.target.process.file.full_path, `.*/019\\\
+    .exe`) or re.regex($selection.target.process.file.full_path, `.*/016\\.exe`))\
+    \ and (re.regex($selection.principal.process.file.full_path, `.*/setup_file\\\
+    .exe`) or re.regex($selection.principal.process.file.full_path, `.*/setup_installer\\\
+    .exe`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: a_variant_of_data_stealer_trojan_activity
+provenance:
+  source: chronicle/detection-rules
+  source_id: a_variant_of_data_stealer_trojan_activity
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/a_variant_of_data_stealer__trojan_activity.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

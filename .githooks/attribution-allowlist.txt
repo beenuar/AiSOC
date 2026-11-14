@@ -1,0 +1,24 @@
+# Lines that LOOK like tool attribution but are not, and must never be stripped
+# or flagged.
+#
+# Same syntax as attribution-patterns.txt: one POSIX-ERE pattern per line,
+# matched case-insensitively against a single line. An allowlist match wins over
+# a pattern match.
+#
+# Keep this file short and justify every entry. It is the escape hatch for two
+# real cases:
+#
+#   1. A human contributor whose name or employer collides with a vendor string.
+#      A real person's trailer is legitimate no matter what they are called.
+#   2. Prose that names a vendor neutrally rather than as an attribution — for
+#      example a model identifier appearing in test data, a provider column in a
+#      cost table, or a changelog line describing a gateway alias.
+#
+# Adding an entry here is a deliberate, reviewable act: it widens what the gate
+# permits, so it belongs in the diff where a reviewer can see it.
+
+# Project automation that commits on the repository's own behalf. These are the
+# project's bots, not a third-party development tool claiming authorship.
+^[ \t]*co-authored-by:[ \t]*dependabot\[bot\]
+^[ \t]*co-authored-by:[ \t]*aisoc-[a-z-]*bot
+^[ \t]*co-authored-by:[ \t]*github-actions\[bot\]

@@ -1,0 +1,6 @@
+{
+  "driver_basename": "rentdrv2.sys",
+  "driver_hash_in_byovd_list": true,
+  "event_type": "DriverLoad",
+  "host": "wks-001"
+}

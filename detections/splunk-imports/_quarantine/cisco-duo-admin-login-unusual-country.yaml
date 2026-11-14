@@ -1,0 +1,48 @@
+id: splunk-security-content-1bf631d1-44a0-472b-98c4-2975b8b281df
+name: Cisco Duo Admin Login Unusual Country
+description: The following analytic detects instances where a Duo admin login originates
+  from a country outside of the United States, which may indicate suspicious or unauthorized
+  access attempts. Please adjust as needed to your environment. It works by analyzing
+  Duo activity logs for admin login actions and filtering out events where the access
+  device's country is not within the expected region. By correlating user, device,
+  browser, and location details, the analytic highlights anomalies in geographic login
+  patterns. This behavior is critical for a SOC to identify because admin accounts
+  have elevated privileges, and access from unusual countries can be a strong indicator
+  of credential compromise, account takeover, or targeted attacks. Early detection
+  of such activity enables rapid investigation and response, reducing the risk of
+  unauthorized changes, data breaches, or further lateral movement within the environment.
+  The impact of this attack can be severe, potentially allowing attackers to bypass
+  security controls, alter configurations, or exfiltrate sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556
+  categories:
+  - application
+references:
+- https://splunkbase.splunk.com/app/7404
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_duo_activity` \"action.name\"=admin_login NOT access_device.location.country\
+    \ IN (\"United States\")\n  | rename actor.name as user access_device.ip.address\
+    \ as src_ip\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY access_device.browser access_device.browser_version src_ip\n       access_device.location.city\
+    \ access_device.location.country access_device.location.state\n       access_device.os\
+    \ access_device.os_version actor.details\n       actor.type outcome.result user\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `cisco_duo_admin_login_unusual_country_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 1bf631d1-44a0-472b-98c4-2975b8b281df
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_duo_admin_login_unusual_country.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

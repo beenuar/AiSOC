@@ -1,0 +1,18 @@
+/**
+ * AiSOC Shared Types - Main Entry Point
+ *
+ * AiSOC — open-source AI Security Operations Center platform
+ * MIT License
+ */
+
+// OCSF (Open Cybersecurity Schema Framework) types
+export * from "./ocsf";
+
+// Core domain types
+export * from "./alert";
+export * from "./tenant";
+export * from "./connector";
+export * from "./playbook";
+export * from "./threat_intel";
+export * from "./detection_rule";
+export * from "./hunt";

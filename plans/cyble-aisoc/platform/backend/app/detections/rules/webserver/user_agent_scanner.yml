@@ -1,0 +1,22 @@
+title: Vulnerability Scanner User-Agent
+id: aisoc-id-ws-0009-scanner-ua
+status: stable
+description: |
+  HTTP request advertises a known vulnerability scanner / offensive
+  tool in the User-Agent header (sqlmap, nuclei, nikto, acunetix,
+  wpscan, masscan, zgrab).
+author: Cyble AiSOC
+level: low
+logsource:
+  product: webserver
+  service: access
+tags:
+  - attack.t1595
+  - attack.reconnaissance
+  - aisoc.web
+detection:
+  selection:
+    event.category: 'web'
+  scanner:
+    http.request.headers.user_agent|re: '(?i)(sqlmap|nuclei|nikto|acunetix|wpscan|masscan|zgrab|nmap|burpcollaborator|dirbuster|gobuster|feroxbuster|qualys|nessus)'
+  condition: selection and scanner

@@ -1,0 +1,82 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.hypothesis/
+
+# --- Virtualenvs ---
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# --- Node / frontend ---
+node_modules/
+.npm
+.yarn/
+.pnp.*
+dist/
+build/
+.next/
+.nuxt/
+.cache/
+
+# --- Local data + secrets (NEVER commit) ---
+platform/backend/data/*.db
+platform/backend/data/*.sqlite
+platform/backend/data/*.sqlite-*
+platform/backend/data/*.key
+platform/backend/data/*.pem
+**/*.sqlite
+**/*.sqlite-journal
+**/*.sqlite-shm
+**/*.sqlite-wal
+
+# Test-side throwaway DBs
+platform/backend/tests/_smoke_*.sqlite
+platform/backend/tests/_smoke_*.db
+platform/backend/tests/.tmp/
+
+# Env files — never commit credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+
+# --- Editor / OS noise ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Cursor agent local state ---
+.cursor/hooks/state/
+
+# --- Logs / runtime ---
+*.log
+logs/
+pids/
+*.pid
+
+# --- Docker volumes (if mapped locally) ---
+.docker/
+docker-volumes/

@@ -1,0 +1,7 @@
+{
+  "baseline_principal_volume_z": 8.9,
+  "event_name": "download",
+  "event_type": "drive",
+  "resource": "Q4-Pipeline-Export.xlsx",
+  "user": "mara.l@example.com"
+}

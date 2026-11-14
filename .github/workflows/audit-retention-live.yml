@@ -1,0 +1,180 @@
+# An enforced audit retention window — against real Postgres.
+#
+# Why live and not offline
+# ------------------------
+# Every control this proves is enforced by Postgres and by nothing in
+# Python: a `SECURITY DEFINER` function, `REVOKE DELETE ON audit_log FROM
+# aisoc_app`, a `BEFORE DELETE` trigger reading a transaction-local
+# setting, and two RLS policies. An offline test of that is a test of the
+# double.
+#
+# The connection is the **DML-only `aisoc_app` role**, never the owner. A
+# superuser holds DELETE on everything and ignores every RLS policy even
+# under FORCE ROW LEVEL SECURITY, so this suite would pass as the owner
+# with the privilege half of the design deleted.
+#
+# `ENVIRONMENT=test`, never `development`: `development` is in
+# `AUTH_BYPASS_ENVIRONMENTS`.
+#
+# A skip is a failure here. The suite gates on `ISOLATION_AUDIT_RETENTION_DSN`,
+# which this workflow sets, so a skip means the environment stopped being
+# what this job claims it is — and a live job that quietly ran nothing is
+# the exact shape the programme exists to catch. The junit report is read
+# for that rather than trusting the exit status, which is 0 for a run that
+# skipped everything.
+#
+# No `paths:` filter. The surface is a tamper-evident log and the
+# privileges around it; a change anywhere in `services/api` or in the
+# migrations can reach it, and a filtered gate is absent exactly when
+# something unexpected moved.
+name: Audit retention (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: audit-retention-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  audit-retention-live:
+    name: A retention window removes audit rows and the chain still verifies
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      AUDIT_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The privilege the whole design rests on, asserted here as well as in
+      # the suite. If a later migration re-granted DELETE the suite would
+      # still be reading it from one direction; this reads it from the
+      # catalogue, which cannot be satisfied by a handler.
+      - name: The runtime role holds no DELETE on audit_log
+        run: |
+          set -euo pipefail
+          granted=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT has_table_privilege('aisoc_app', 'audit_log', 'DELETE');")
+          if [ "$granted" != "f" ]; then
+            echo "::error::aisoc_app holds DELETE on audit_log; audit_retention_truncate is no longer the only path"
+            exit 1
+          fi
+          echo "OK: aisoc_app cannot delete an audit row except through the function."
+
+      - name: The window is enforced and the remainder still verifies
+        working-directory: services/api
+        env:
+          ISOLATION_AUDIT_RETENTION_DSN: ${{ env.AUDIT_DSN }}
+          DATABASE_URL: ${{ env.AUDIT_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_audit_retention_live.py \
+            -v --tb=short --junitxml=/tmp/audit-retention.xml
+
+      # A live job that skipped every case exits 0 and reports success, so
+      # the counts are read rather than the exit status.
+      - name: Nothing skipped, and something ran
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+
+          root = ET.parse("/tmp/audit-retention.xml").getroot()
+          suites = root.iter("testsuite")
+          tests = skipped = errors = 0
+          for s in suites:
+              tests += int(s.get("tests", 0))
+              skipped += int(s.get("skipped", 0))
+              errors += int(s.get("errors", 0))
+          print(f"tests={tests} skipped={skipped} errors={errors}")
+          if tests == 0:
+              print("::error::the live suite collected nothing; a job that ran no case is not evidence")
+              sys.exit(1)
+          if skipped:
+              print("::error::the live suite skipped a case; in a job that provides the DSN a skip "
+                    "means the environment is not what this workflow claims it is")
+              sys.exit(1)
+          if errors:
+              print("::error::the live suite errored outside an assertion")
+              sys.exit(1)
+          PY
+
+      # The negative control.
+      #
+      # `anchor_prev_hash` is the whole mechanism: it re-anchors the replay
+      # on the checkpoint so a lawfully truncated chain does not read as
+      # tampered with. Ignore it and the suite must go red — otherwise
+      # "the truncated chain verifies" would pass equally well against a
+      # verifier that had stopped checking `prev_hash` at all.
+      - name: The suite fails when the replay ignores the checkpoint anchor
+        working-directory: services/api
+        env:
+          ISOLATION_AUDIT_RETENTION_DSN: ${{ env.AUDIT_DSN }}
+          DATABASE_URL: ${{ env.AUDIT_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/services/audit_hash.py /tmp/audit_hash.bak
+          python - <<'PY'
+          import pathlib, sys
+
+          p = pathlib.Path("app/services/audit_hash.py")
+          s = p.read_text()
+          needle = "    prev_hash: str | None = anchor_prev_hash\n"
+          if needle not in s:
+              print("negative control could not find the anchor to subvert; the verifier has been "
+                    "reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    prev_hash: str | None = None\n", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_audit_retention_live.py -q >/dev/null 2>&1; then
+            cp /tmp/audit_hash.bak app/services/audit_hash.py
+            echo "::error::the suite passed with the checkpoint anchor ignored"
+            exit 1
+          fi
+          cp /tmp/audit_hash.bak app/services/audit_hash.py
+          echo "OK: ignoring the anchor makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_audit_retention_live.py -q

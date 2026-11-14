@@ -1,0 +1,6 @@
+{
+  "event_type": "http_request",
+  "interface": "winreg",
+  "operation": "BaseRegSetValue",
+  "src_role": "workstation"
+}

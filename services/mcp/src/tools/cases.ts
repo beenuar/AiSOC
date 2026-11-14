@@ -1,0 +1,196 @@
+/**
+ * Case-facing tools.
+ *
+ * `aisoc_list_cases` and `aisoc_get_case` mirror the alerts tools.
+ * `aisoc_run_investigation` is the marquee tool — it kicks off the AiSOC
+ * investigator agent on a case and returns the run_id that the agent can
+ * subsequently poll via `aisoc_replay_decision`.
+ *
+ * Note on streaming: the FastAPI `/cases/{id}/investigate` endpoint
+ * returns immediately with a run_id and status `started`. We do *not*
+ * stream the live agent events back through MCP because the spec's
+ * single-shot tool-call shape doesn't fit a long-running stream cleanly,
+ * and MCP hosts vary in how they handle pending tool results. Instead we
+ * return the run_id and let the agent poll with the dedicated investigation
+ * tools — that pattern composes well in chat ("kick it off, and check on
+ * it in 30 seconds").
+ */
+import { z } from "zod";
+
+import { zodToJsonSchema } from "./alerts.js";
+import type { ToolDefinition } from "./types.js";
+import { json } from "./types.js";
+
+/** One row of GET /api/v1/cases, which returns a bare array of these. */
+interface CaseResponse {
+  id: string;
+  case_number: string | null;
+  title: string;
+  description: string | null;
+  status: string;
+  severity: string;
+  alert_ids: string[];
+  tags: string[];
+  assignee: string | null;
+  created_at: string;
+  closed_at: string | null;
+  [key: string]: unknown;
+}
+
+interface InvestigateResponse {
+  run_id: string;
+  case_id: string;
+  status: string;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// aisoc_list_cases
+// ---------------------------------------------------------------------------
+
+// Values from the `aisoc_cases` CHECK constraints. The API does not validate
+// the filter, so a status outside this set silently returned no cases.
+const CASE_STATUSES = ["new", "triaged", "investigating", "contained", "resolved", "closed"] as const;
+const CASE_SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
+
+const ListCasesSchema = z
+  .object({
+    status: z.enum(CASE_STATUSES).optional(),
+    severity: z.enum(CASE_SEVERITIES).optional(),
+    assignee: z.string().min(1).optional().describe("User id the case is assigned to."),
+    page: z.number().int().min(1).max(1000).default(1),
+    page_size: z.number().int().min(1).max(50).default(25),
+  })
+  .strict();
+
+export const listCasesTool: ToolDefinition<typeof ListCasesSchema> = {
+  metadata: {
+    name: "aisoc_list_cases",
+    description:
+      "List security cases (incidents). Filter by status, severity, or assignee. Cases are higher-level groupings of related alerts.",
+    inputSchema: zodToJsonSchema(ListCasesSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  schema: ListCasesSchema,
+  async handle(ctx, args) {
+    // The endpoint pages by limit/offset and returns a bare array, with no
+    // total. A full page is the only signal that another one may exist.
+    const rows = await ctx.client.get<CaseResponse[]>("/api/v1/cases", {
+      query: {
+        status: args.status,
+        severity: args.severity,
+        assignee: args.assignee,
+        limit: args.page_size,
+        offset: (args.page - 1) * args.page_size,
+      },
+    });
+    const items = Array.isArray(rows) ? rows : [];
+    return json({
+      page: args.page,
+      page_size: args.page_size,
+      count: items.length,
+      has_more: items.length === args.page_size,
+      items: items.map(summariseCase),
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// aisoc_get_case
+// ---------------------------------------------------------------------------
+
+const GetCaseSchema = z
+  .object({
+    case_id: z.string().uuid().describe("UUID of the case (from `aisoc_list_cases`)."),
+    include_timeline: z
+      .boolean()
+      .default(false)
+      .describe("If true, also include the case timeline (comments + events)."),
+  })
+  .strict();
+
+export const getCaseTool: ToolDefinition<typeof GetCaseSchema> = {
+  metadata: {
+    name: "aisoc_get_case",
+    description:
+      "Fetch a case by id. Optionally include the timeline of comments, status changes, and analyst actions.",
+    inputSchema: zodToJsonSchema(GetCaseSchema),
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  schema: GetCaseSchema,
+  async handle(ctx, args) {
+    const caseRecord = await ctx.client.get<CaseResponse>(`/api/v1/cases/${args.case_id}`);
+    let timeline: unknown = undefined;
+    if (args.include_timeline) {
+      timeline = await ctx.client.get<unknown[]>(`/api/v1/cases/${args.case_id}/timeline`);
+    }
+    return json({ case: caseRecord, timeline });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// aisoc_run_investigation
+// ---------------------------------------------------------------------------
+
+const RunInvestigationSchema = z
+  .object({
+    case_id: z.string().uuid().describe("UUID of the case to investigate."),
+    alert_summary: z
+      .string()
+      .optional()
+      .describe(
+        "Optional human-readable summary used to seed the recon agent. If omitted, AiSOC builds one from linked alerts.",
+      ),
+  })
+  .strict();
+
+export const runInvestigationTool: ToolDefinition<typeof RunInvestigationSchema> = {
+  metadata: {
+    name: "aisoc_run_investigation",
+    description:
+      "Kick off the AiSOC multi-agent investigator on a case. Returns a run_id immediately; use `aisoc_replay_decision` to fetch the resulting decision ledger.",
+    inputSchema: zodToJsonSchema(RunInvestigationSchema),
+    // Starts a multi-agent run: it writes ledger rows, spends model
+    // budget and can reach whatever the tenant has configured. Not
+    // read-only, and not destructive either: it creates a record of an
+    // investigation rather than changing anything about the estate.
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+  },
+  schema: RunInvestigationSchema,
+  async handle(ctx, args) {
+    const data = await ctx.client.post<InvestigateResponse>(
+      `/api/v1/cases/${args.case_id}/investigate`,
+      {
+        alert_summary: args.alert_summary ?? "",
+        raw_alert: {},
+      },
+    );
+    return json({
+      run_id: data.run_id,
+      case_id: data.case_id,
+      status: data.status,
+      message: data.message,
+      next_step:
+        "Wait 5–30 seconds, then call `aisoc_replay_decision` with this run_id to inspect the agent's decisions.",
+    });
+  },
+};
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
+
+function summariseCase(c: CaseResponse): Record<string, unknown> {
+  return {
+    id: c.id,
+    case_number: c.case_number,
+    title: c.title,
+    status: c.status,
+    severity: c.severity,
+    assignee: c.assignee,
+    alert_count: (c.alert_ids ?? []).length,
+    tags: c.tags,
+    created_at: c.created_at,
+    closed_at: c.closed_at,
+  };
+}

@@ -1,0 +1,4 @@
+{
+  "event_type": "client.update",
+  "redirect_uri": "prefix-*-suffix"
+}

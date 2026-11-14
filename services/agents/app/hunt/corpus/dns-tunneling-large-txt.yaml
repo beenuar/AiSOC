@@ -1,0 +1,47 @@
+id: hunt-dns-tunneling-large-txt
+name: DNS tunneling via oversized TXT queries
+description: |
+  Adversaries exfiltrate data and run C2 over DNS by abusing oversized TXT or
+  NULL records. This hunt looks for DNS query/response pairs where the
+  query name is unusually long (>= 100 chars) or the answer payload contains
+  hex/base64-encoded chunks. Triggers when a single host emits more than 50
+  such queries in an hour.
+version: 1.0.0
+severity: high
+category: network
+tags:
+  - mitre.attack.t1071.004
+  - mitre.attack.t1572
+  - hunt.network
+  - threat.c2
+log_sources:
+  - dns
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 90
+hypothesis:
+  question: |
+    Did a single source host send more than 50 DNS queries in an hour where
+    the query name length exceeds 100 characters or the response is a TXT
+    record carrying base64/hex-encoded payload?
+  indicators:
+    - field: source
+      equals: dns
+    - field: query_type
+      in: [TXT, NULL]
+    - field: query_length
+      gte: 100
+    - field: queries_per_hour
+      gte: 50
+expected:
+  positive_incident_id: INC-HUNT-002
+  positive_template_id: hunt-dns-tunneling-large-txt
+  min_match_score: 0.75
+  negative_incident_id: INC-HUNT-002-NEG
+references:
+  - https://attack.mitre.org/techniques/T1071/004/
+  - https://attack.mitre.org/techniques/T1572/
+author: AiSOC
+created: '2026-05-05'
+modified: '2026-05-05'

@@ -1,0 +1,59 @@
+id: splunk-security-content-ac30858b-7c25-4f0a-a7fa-bef036e49dc3
+name: Windows Execution of Microsoft MSC File In Suspicious Path
+description: The following analytic detects when a Microsoft Management Console (MMC)
+  process executes an .msc file in a suspicious path on a Windows system. While .msc
+  files are legitimate components used for system administration, unexpected execution
+  of these files by non-administrative processes or in unusual contexts can indicate
+  malicious activity, such as living-off-the-land attacks, persistence mechanisms,
+  or automated administrative abuse. This detection monitors process creation events,
+  command-line arguments, and parent process relationships to help distinguish normal
+  administrative usage from potential threats. Alerts should be investigated in the
+  context of the process initiating the .msc file, the target system, and any subsequent
+  network or system activity, as routine administrative tasks may also trigger this
+  behavior.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.014
+  categories:
+  - endpoint
+references:
+- https://www.securonix.com/blog/analyzing-fluxconsole-using-tax-themed-lures-threat-actors-exploit-windows-management-console-to-deliver-backdoor-payloads/
+- https://research.checkpoint.com/2019/microsoft-management-console-mmc-vulnerabilities/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time)\nas lastTime from datamodel=Endpoint.Processes\nwhere (Processes.process_name=mmc.exe)\n\
+    AND Processes.process = \"*.msc*\"\nAND Processes.process IN (\n  \"*\\\\PerfLogs\\\
+    \\*\",\n  \"*\\\\programdata\\\\*\"\n  \"*Recycle.bin*\",\n  \"*\\\\Download*\"\
+    ,\n  \"*\\\\temp\\\\*\",\n  \"*\\\\Users\\\\Administrator\\\\Music\\\\*\",\n \
+    \ \"*\\\\Users\\\\Default\\\\*\",\n  \"*\\\\Users\\\\Public\\\\*\",\n  \"*\\\\\
+    Users\\\\Administrator\\\\Music\\\\*\",\n  \"*:\\\\Windows\\\\Prefetch\\\\*\"\
+    ,\n  \"*:\\\\Windows\\\\Cursors\\\\*\",\n  \"*:\\\\Windows\\\\INF\\\\*\"\n  \"\
+    *:\\\\Windows\\\\debug\\\\*\",\n  \"*:\\\\Windows\\\\fonts\\\\*\",\n  \"*:\\\\\
+    Windows\\\\Media\\\\*\",\n  \"*:\\\\Windows\\\\repair\\\\*\",\n  \"*:\\\\Windows\\\
+    \\servicing\\\\*\",\n  )\nAND NOT (Processes.process IN (\"*C:\\\\Windows\\\\\
+    System32\\\\eventvwr.msc*\", \"*C:\\\\Windows\\\\System32\\\\certmgr.msc*\"))\n\
+    \nby Processes.action\nProcesses.dest Processes.original_file_name Processes.parent_process\
+    \ Processes.parent_process_exec\nProcesses.parent_process_guid Processes.parent_process_id\
+    \ Processes.parent_process_name\nProcesses.parent_process_path Processes.process\
+    \ Processes.process_exec Processes.process_guid\nProcesses.process_hash Processes.process_id\
+    \ Processes.process_integrity_level Processes.process_name\nProcesses.process_path\
+    \ Processes.user Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_execution_of_microsoft_msc_file_in_suspicious_path_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ac30858b-7c25-4f0a-a7fa-bef036e49dc3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_execution_of_microsoft_msc_file_in_suspicious_path.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

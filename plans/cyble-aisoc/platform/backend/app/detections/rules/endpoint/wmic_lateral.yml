@@ -1,0 +1,23 @@
+title: WMIC Remote Process Creation
+id: aisoc-id-ep-0007-wmic-lateral
+status: stable
+description: |
+  wmic.exe used to spawn a process on a remote host. Common lateral
+  movement technique.
+author: Cyble AiSOC
+level: high
+logsource:
+  category: process_creation
+  product: windows
+tags:
+  - attack.t1047
+  - attack.lateral_movement
+  - aisoc.endpoint
+detection:
+  selection_img:
+    process.executable|endswith: '\wmic.exe'
+  selection_args:
+    process.command_line|contains:
+      - '/node:'
+      - 'process call create'
+  condition: selection_img and selection_args

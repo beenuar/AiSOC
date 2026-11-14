@@ -1,0 +1,5 @@
+{
+  "risk_event_type": "anonymizedIPAddress",
+  "src_ip": "198.51.100.5",
+  "user": "ceo@corp.com"
+}

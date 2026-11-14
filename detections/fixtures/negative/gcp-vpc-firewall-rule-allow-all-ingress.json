@@ -1,0 +1,15 @@
+{
+  "method_name": "v1.compute.firewalls.insert",
+  "request": {
+    "sourceRanges": [
+      "10.0.0.0/8"
+    ],
+    "allowed": [
+      {
+        "ports": [
+          "443"
+        ]
+      }
+    ]
+  }
+}

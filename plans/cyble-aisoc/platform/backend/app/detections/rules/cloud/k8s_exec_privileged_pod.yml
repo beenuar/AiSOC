@@ -1,0 +1,24 @@
+title: Kubernetes Exec Into Privileged Pod
+id: aisoc-id-cl-0014-k8s-exec-priv
+status: stable
+description: |
+  `kubectl exec` (pods/exec subresource) into a pod running with
+  privileged: true or hostNetwork: true. Allows container-escape style
+  lateral movement to the node.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: kubernetes
+  service: audit
+tags:
+  - attack.t1611
+  - attack.privilege_escalation
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: kubernetes
+    kubernetes.audit.verb: 'create'
+    kubernetes.audit.object_ref.subresource: 'exec'
+  privileged:
+    enrich.k8s.pod.privileged: true
+  condition: selection and privileged

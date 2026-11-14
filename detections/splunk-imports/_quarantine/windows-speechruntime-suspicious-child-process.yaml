@@ -1,0 +1,47 @@
+id: splunk-security-content-f7bb956f-b956-42a5-8c2c-ff9cdbbf7526
+name: Windows SpeechRuntime Suspicious Child Process
+description: SpeechRuntime is vulnerable to an attack that allows a user to run code
+  on another user's session remotely and stealthily by exploiting a Windows COM class.
+  When this class is invoked, it launches SpeechRuntime.exe in the context of the
+  currently logged-on user. Because this COM class is susceptible to COM Hijacking,
+  the attacker can alter the registry remotely to point to a malicious DLL. By dropping
+  that DLL on the target system (e.g., via SMB) and triggering the COM object, the
+  attacker causes the malicious DLL to load into SpeechRuntime.exe and executing under
+  the user's context. This detection identifies suspicious child processes of SpeechRuntime.exe
+  that could indicate abuse of this vulnerability.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://github.com/rtecCyberSec/SpeechRuntimeMove
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.parent_process_name=\"*SpeechRuntime.exe*\"\n    )\n    Processes.process\
+    \ IN (\"*cmd.exe*\",\"*powershell.exe*\",\"*rundll32.exe*\",\"*bitsadmin.exe*\"\
+    ,\"*wmic.exe*\",\"*cscript.exe*\")\n  BY Processes.dest Processes.user Processes.original_file_name\n\
+    \     Processes.parent_process Processes.process_name Processes.process\n    \
+    \ Processes.process_id Processes.parent_process_id Processes.parent_process_name\n\
+    \     action parent_process_exec parent_process_guid\n     parent_process_path\
+    \ process_exec process_guid\n     process_hash process_integrity_level process_path\n\
+    \     user_id vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_speechruntime_suspicious_child_process_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f7bb956f-b956-42a5-8c2c-ff9cdbbf7526
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_speechruntime_suspicious_child_process.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

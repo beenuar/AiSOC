@@ -1,0 +1,6 @@
+{
+  "operation": "Set-AntiPhishPolicy",
+  "parameters": {
+    "EnableSpoofIntelligence": "True"
+  }
+}

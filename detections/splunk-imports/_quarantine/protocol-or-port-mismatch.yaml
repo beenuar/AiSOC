@@ -1,0 +1,44 @@
+id: splunk-security-content-54dc1265-2f74-4b6d-b30d-49eb506a31b3
+name: Protocol or Port Mismatch
+description: The following analytic identifies network traffic where the higher layer
+  protocol does not match the expected port, such as non-HTTP traffic on TCP port
+  80. It leverages data from network traffic inspection technologies like Bro or Palo
+  Alto Networks firewalls. This activity is significant because it may indicate attempts
+  to bypass firewall restrictions or conceal malicious communications. If confirmed
+  malicious, this behavior could allow attackers to evade detection, maintain persistence,
+  or exfiltrate data through commonly allowed ports, posing a significant threat to
+  network security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1048.003
+  categories:
+  - network
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Network_Traffic where\n\n(\n\
+    \  All_Traffic.app=dns\n  NOT All_Traffic.dest_port IN (53)\n)\nOR\n(\n  All_Traffic.app\
+    \ IN (web-browsing, http)\n  NOT All_Traffic.dest_port IN (80, 8000, 8080)\n)\n\
+    OR\n(\n  All_Traffic.app=ssl\n  NOT All_Traffic.dest_port IN (443, 465, 993, 8443)\n\
+    )\nOR\n(\n  All_Traffic.app=smtp\n  NOT All_Traffic.dest_port IN (25, 587, 2525)\n\
+    )\n\nby All_Traffic.src_ip All_Traffic.dest_ip All_Traffic.app,\n   All_Traffic.dest_port\
+    \ All_Traffic.transport\n   All_Traffic.action All_Traffic.rule\n\n|`security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `drop_dm_object_name(\"All_Traffic\")`\n\
+    | `protocol_or_port_mismatch_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 54dc1265-2f74-4b6d-b30d-49eb506a31b3
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/protocol_or_port_mismatch.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

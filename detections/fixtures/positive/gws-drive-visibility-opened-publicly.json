@@ -1,0 +1,4 @@
+{
+  "event_type": "workspace.drive.change_document_visibility",
+  "param_visibility": "people_with_link"
+}

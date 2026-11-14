@@ -1,0 +1,4 @@
+{
+  "argv": "prefix-base64 -d | bash-suffix",
+  "syscall": "execve"
+}

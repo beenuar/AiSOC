@@ -1,0 +1,43 @@
+id: splunk-security-content-a5fffbbd-271f-4980-94ed-4fbf17f0af1c
+name: Windows Njrat Fileless Storage via Registry
+description: The following analytic detects suspicious registry modifications indicative
+  of NjRat's fileless storage technique. It leverages the Endpoint.Registry data model
+  to identify specific registry paths and values commonly used by NjRat for keylogging
+  and executing DLL plugins. This activity is significant as it helps evade traditional
+  file-based detection systems, making it crucial for SOC analysts to monitor. If
+  confirmed malicious, this behavior could allow attackers to persist on the host,
+  execute arbitrary code, and capture sensitive keystrokes, leading to potential data
+  breaches and further system compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027.011
+  categories:
+  - endpoint
+references:
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.njrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_path="*\\[kl]"
+    OR  Registry.registry_value_data IN ("*[ENTER]*", "*[TAP]*", "*[Back]*") by Registry.action
+    Registry.dest Registry.process_guid Registry.process_id Registry.registry_hive
+    Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | `security_content_ctime(lastTime)`
+    | `security_content_ctime(firstTime)` | `windows_njrat_fileless_storage_via_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a5fffbbd-271f-4980-94ed-4fbf17f0af1c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_njrat_fileless_storage_via_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

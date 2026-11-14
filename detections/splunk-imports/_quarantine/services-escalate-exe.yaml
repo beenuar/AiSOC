@@ -1,0 +1,47 @@
+id: splunk-security-content-c448488c-b7ec-11eb-8253-acde48001122
+name: Services Escalate Exe
+description: The following analytic identifies the execution of a randomly named binary
+  via `services.exe`, indicative of privilege escalation using Cobalt Strike's `svc-exe`.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process lineage and command-line executions. This activity is significant
+  as it often follows initial access, allowing adversaries to escalate privileges
+  and establish persistence. If confirmed malicious, this behavior could enable attackers
+  to execute arbitrary code, maintain long-term access, and potentially move laterally
+  within the network, posing a severe threat to the organization's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/03/29/sodinokibi-aka-revil-ransomware/
+- https://attack.mitre.org/techniques/T1548/
+- https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/index.htm#cshid=1085
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.parent_process_name=services.exe\
+    \ Processes.process_path=*admin$*\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `services_escalate_exe_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c448488c-b7ec-11eb-8253-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/services_escalate_exe.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

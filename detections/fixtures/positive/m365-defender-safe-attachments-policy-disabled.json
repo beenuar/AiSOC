@@ -1,0 +1,6 @@
+{
+  "operation": "Set-SafeAttachmentPolicy",
+  "parameters": {
+    "Enable": "False"
+  }
+}

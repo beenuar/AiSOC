@@ -1,0 +1,5 @@
+{
+  "creator_signing_id": "__benign__",
+  "event_type": "ES_EVENT_TYPE_NOTIFY_WRITE",
+  "path": "prefix-/Library/LaunchDaemons/-suffix"
+}

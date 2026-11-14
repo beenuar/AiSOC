@@ -1,0 +1,34 @@
+id: pagerduty-paging
+name: PagerDuty Paging
+version: "1.0.0"
+plugin_type: action
+description: >
+  Pages on-call responders via PagerDuty. Supports trigger / acknowledge /
+  resolve incidents through the Events API v2 and direct API calls for
+  service/escalation lookups.
+author: AiSOC Core Team
+tags: [paging, pagerduty, oncall, incidents, action]
+homepage: https://github.com/beenuar/AiSOC/tree/main/plugins/pagerduty-paging
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [routing_key]
+  properties:
+    routing_key:
+      type: string
+      description: "Events API v2 integration key for the target service"
+      secret: true
+    api_token:
+      type: string
+      description: "REST API token for service/escalation lookups (optional)"
+      secret: true
+    default_severity:
+      type: string
+      enum: [critical, error, warning, info]
+      default: error
+supported_actions:
+  - trigger_incident
+  - acknowledge_incident
+  - resolve_incident
+  - list_incidents

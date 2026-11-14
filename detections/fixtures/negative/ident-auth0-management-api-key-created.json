@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "operation": "client_grants.create",
+  "scope": "prefix-manage-suffix"
+}

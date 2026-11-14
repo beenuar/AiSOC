@@ -1,0 +1,40 @@
+id: splunk-security-content-914ab191-fa8a-48cb-83a6-0565e061f934
+name: Windows IIS Server PSWA Console Access
+description: This analytic detects access attempts to the PowerShell Web Access (PSWA)
+  console on Windows IIS servers. It monitors web traffic for requests to PSWA-related
+  URIs, which could indicate legitimate administrative activity or potential unauthorized
+  access attempts. By tracking source IP, HTTP status, URI path, and HTTP method,
+  it helps identify suspicious patterns or brute-force attacks targeting PSWA. This
+  detection is crucial for maintaining the security of remote PowerShell management
+  interfaces and preventing potential exploitation of this powerful administrative
+  tool.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa24-241a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Web\n  WHERE Web.dest IN (\"/pswa/*\"\
+    )\n  BY Web.src Web.status Web.uri_path\n     Web.dest Web.http_method Web.uri_query\n\
+    | `drop_dm_object_name(\"Web\")`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_iis_server_pswa_console_access_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 914ab191-fa8a-48cb-83a6-0565e061f934
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/windows_iis_server_pswa_console_access.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,56 @@
+id: splunk-security-content-8c3d1f2e-7b4a-45e3-9d8f-6a2e4c9b1234
+name: Windows PowerShell Script From WindowsApps Directory
+description: 'The following analytic identifies the execution of PowerShell scripts
+  from the WindowsApps directory, which is a common technique used in malicious MSIX
+  package execution.
+
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process command lines and parent process paths.
+
+  This activity is significant as adversaries have been observed using MSIX packages
+  with embedded PowerShell scripts (particularly StartingScriptWrapper.ps1) to execute
+  malicious code.
+
+  If confirmed malicious, this could allow attackers to execute arbitrary code, establish
+  persistence, or deliver malware while evading traditional detection mechanisms.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://redcanary.com/blog/threat-intelligence/msix-installers/
+- https://redcanary.com/threat-detection-report/techniques/installer-packages/
+- https://learn.microsoft.com/en-us/windows/msix/package/package-support-framework
+- https://attack.mitre.org/techniques/T1059/001/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Processes where\n\n\
+    (\n    `process_powershell`\n    OR\n    `process_cmd`\n)\nAND\n(\n    Processes.parent_process_path=\"\
+    *\\\\WindowsApps\\\\*\"\n    OR\n    Processes.process IN (\"*WindowsApps*-file\
+    \ *\", \"*WindowsApps*.ps1*\")\n)\n\nby Processes.action Processes.dest Processes.original_file_name\
+    \ Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\
+    \ Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\
+    \ Processes.process Processes.process_exec Processes.process_guid Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level Processes.process_name\
+    \ Processes.process_path Processes.user Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(\"Processes\")`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_powershell_script_from_windowsapps_directory_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8c3d1f2e-7b4a-45e3-9d8f-6a2e4c9b1234
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_powershell_script_from_windowsapps_directory.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

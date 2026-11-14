@@ -1,0 +1,41 @@
+id: splunk-security-content-a85aa37e-9647-11ec-90c5-acde48001122
+name: Windows Raw Access To Disk Volume Partition
+description: The following analytic detects suspicious raw access reads to the device
+  disk partition of a host machine. It leverages Sysmon EventCode 9 logs to identify
+  processes attempting to read or write to the boot sector, excluding legitimate system
+  processes. This activity is significant as it is commonly associated with destructive
+  actions by adversaries, such as wiping, encrypting, or overwriting the boot sector,
+  as seen in attacks involving malware like HermeticWiper. If confirmed malicious,
+  this behavior could lead to severe impacts, including system inoperability, data
+  loss, or compromised boot integrity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1561.002
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2022/02/threat-advisory-hermeticwiper.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=9 Device = \\Device\\HarddiskVolume* NOT (Image
+    IN("*\\Windows\\System32\\*", "*\\Windows\\SysWOW64\\*")) | stats count min(_time)
+    as firstTime max(_time) as lastTime by dest dvc process_exec process_guid process_id
+    process_name process_path signature signature_id user_id vendor_product Device
+    Image | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_raw_access_to_disk_volume_partition_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a85aa37e-9647-11ec-90c5-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_raw_access_to_disk_volume_partition.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

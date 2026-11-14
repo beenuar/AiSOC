@@ -1,0 +1,40 @@
+id: splunk-security-content-7f2e1a9a-1e8e-4d2e-8b7c-5f2c3d6a9b21
+name: Cisco Isovalent - Access To Cloud Metadata Service
+description: The following analytic detects workloads accessing the cloud instance
+  metadata service at 169.254.169.254. This IP is used by AWS, GCP and Azure metadata
+  endpoints and is frequently abused in SSRF or lateral movement scenarios to obtain
+  credentials and sensitive environment details. Monitor unexpected access to this
+  service from application pods or namespaces where such behavior is atypical.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1552.005
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1552/005/
+- https://hackerone.com/reports/341876
+- https://docs.isovalent.com/user-guide/sec-ops-visibility/lateral-movement/index.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_isovalent_process_connect` | rename process_connect.parent.binary\
+    \ as binary | `excluded_cloud_binaries`\n| stats count\n        min(_time) as\
+    \ firstTime\n        max(_time) as lastTime\n        values(dest_port) as dest_port\n\
+    \        values(src_ip) as src_ip\n    by cluster_name pod_name pod_image_name\
+    \ pod_namespace node_name dest_ip\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_isovalent___access_to_cloud_metadata_service_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7f2e1a9a-1e8e-4d2e-8b7c-5f2c3d6a9b21
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cisco_isovalent___access_to_cloud_metadata_service.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

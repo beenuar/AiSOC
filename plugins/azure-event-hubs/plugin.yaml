@@ -1,0 +1,27 @@
+id: azure-event-hubs
+name: Azure Event Hubs (Capture)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Entra sign-in logs, Entra audit logs and the Azure Activity log streamed to
+  an Event Hub by a diagnostic setting and captured to a storage account. One
+  configuration covers a whole tenant at the rate it actually produces
+  events, with no Graph throttle. Latency is the Capture window the operator
+  chooses (one to fifteen minutes), so keep the Entra connector alongside it
+  if a high-signal subset needs to be faster.
+author: AiSOC Core Team
+tags: [cloud, azure, entra, event-hubs, activity-log, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_event_hubs.py
+license: MIT
+min_aisoc_version: "17.0.0"
+config_schema:
+  type: object
+  required: [tenant_id, client_id, client_secret, storage_account, container]
+  properties:
+    tenant_id: {type: string, description: Entra tenant ID.}
+    client_id: {type: string, description: Application (client) ID of the app registration.}
+    client_secret: {type: string, secret: true, description: Client secret for that registration.}
+    storage_account: {type: string, description: Storage account the Event Hub's Capture writes to.}
+    container: {type: string, description: Blob container Capture writes into.}
+    prefix: {type: string, description: Optional path prefix to narrow to one namespace or hub.}

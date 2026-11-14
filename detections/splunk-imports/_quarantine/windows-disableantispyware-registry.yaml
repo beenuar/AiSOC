@@ -1,0 +1,44 @@
+id: splunk-security-content-23150a40-9301-4195-b802-5bb4f43067fb
+name: Windows DisableAntiSpyware Registry
+description: The following analytic detects the modification of the Windows Registry
+  key "DisableAntiSpyware" being set to disable. This detection leverages data from
+  the Endpoint.Registry datamodel, specifically looking for the registry value name
+  "DisableAntiSpyware" with a value of "0x00000001". This activity is significant
+  as it is commonly associated with Ryuk ransomware infections, indicating potential
+  malicious intent to disable Windows Defender. If confirmed malicious, this action
+  could allow attackers to disable critical security defenses, facilitating further
+  malicious activities such as data encryption, exfiltration, or additional system
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  categories:
+  - endpoint
+references:
+- https://blog.malwarebytes.com/malwarebytes-news/2021/02/lazyscripter-from-empire-to-double-rat/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Registry where Registry.registry_value_name="DisableAntiSpyware"
+    AND Registry.registry_value_data="0x00000001" by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | `security_content_ctime(lastTime)` | `security_content_ctime(firstTime)`
+    | `windows_disableantispyware_registry_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 23150a40-9301-4195-b802-5bb4f43067fb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disableantispyware_registry.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

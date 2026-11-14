@@ -1,0 +1,5 @@
+{
+  "actor": "principal-a",
+  "event_name": "UpdateAccountEmail",
+  "target": "principal-a"
+}

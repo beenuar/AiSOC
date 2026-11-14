@@ -1,0 +1,23 @@
+title: Inbound Email From Lookalike Sender Domain
+id: aisoc-id-em-0006-lookalike-sender
+status: stable
+description: |
+  Sender domain is a high-similarity lookalike of an internal or
+  trusted partner domain (homoglyph / typosquat). Common BEC and
+  vendor-impersonation initial vector.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: email_gateway
+  service: messagetrace
+tags:
+  - attack.t1566.002
+  - attack.initial_access
+  - aisoc.email
+detection:
+  selection:
+    event.category: 'email'
+    email.direction: 'inbound'
+  lookalike:
+    enrich.email.sender_lookalike_score|gte: 85
+  condition: selection and lookalike

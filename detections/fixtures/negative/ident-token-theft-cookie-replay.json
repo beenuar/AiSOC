@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "geo_changed": true,
+  "minutes_between": -40.0
+}

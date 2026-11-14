@@ -1,0 +1,55 @@
+id: splunk-security-content-f7e5e792-d907-46c1-a58e-4ff974dc462a
+name: Cisco Secure Firewall - Connection to File Sharing Domain
+description: The following analytic detects outbound connections to commonly abused
+  file sharing and pastebin-style hosting domains. It leverages Cisco Secure Firewall
+  Threat Defense logs and focuses on allowed connections (action=Allow) where the
+  url field matches a list of known data hosting or temporary storage services. While
+  many of these platforms serve legitimate purposes, they are frequently leveraged
+  by adversaries for malware delivery, data exfiltration, command and control (C2)
+  beacons, or staging of encoded payloads. This analytic is valuable for identifying
+  potential abuse of legitimate infrastructure as part of an attacker's kill chain.
+  If confirmed malicious, this activity may indicate tool staging, credential dumping,
+  or outbound data leaks over HTTP(S).
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1071.001
+  - T1090.002
+  - T1105
+  - T1567.002
+  - T1588.002
+  categories:
+  - network
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/firepower/741/api/FQE/secure_firewall_estreamer_fqe_guide_740.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_secure_firewall` action IN (\"Trust\", \"Allow\", \"allowed\"\
+    ) EventType=ConnectionEvent url IN (\"*//objects.githubusercontent.com*\", \"\
+    *anonfiles.com*\", \"*cdn.discordapp.com*\", \"*ddns.net*\", \"*dl.dropboxusercontent.com*\"\
+    , \"*ghostbin.co*\", \"*glitch.me*\", \"*gofile.io*\", \"*hastebin.com*\", \"\
+    *mediafire.com*\", \"*mega.nz*\", \"*onrender.com*\", \"*pages.dev*\", \"*paste.ee*\"\
+    , \"*pastebin.com*\", \"*pastebin.pl*\", \"*pastetext.net*\", \"*privatlab.com*\"\
+    , \"*privatlab.net*\", \"*send.exploit.in*\", \"*sendspace.com*\", \"*storage.googleapis.com*\"\
+    , \"*storjshare.io*\", \"*supabase.co*\", \"*temp.sh*\", \"*transfer.sh*\", \"\
+    *trycloudflare.com*\", \"*ufile.io*\", \"*w3spaces.com*\", \"*workers.dev*\")\n\
+    | stats count min(_time) as firstTime max(_time) as lastTime\n  Values(src_port)\
+    \ as src_port\n  Values(dest) as dest\n  Values(dest_port) as dest_port\n  Values(rule)\
+    \ as rule\n  Values(url) as url\n  Values(EVE_Process) as EVE_Process\n  by src,\
+    \ transport, action\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_secure_firewall___connection_to_file_sharing_domain_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f7e5e792-d907-46c1-a58e-4ff974dc462a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/cisco_secure_firewall___connection_to_file_sharing_domain.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

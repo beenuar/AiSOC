@@ -1,0 +1,46 @@
+{
+  "id": "phishing-payload",
+  "title": "Phishing — click-through to credential-harvest page",
+  "narrative": "An email passed perimeter filters because the sender domain was less than 14 days old and had a valid DMARC alignment for a typosquatted root. A user clicked the link 6 minutes after delivery and arrived at a domain that imitates the corporate SSO. The credential POST was captured at the proxy.",
+  "severity": "high",
+  "mitre_techniques": ["T1566", "T1566.002"],
+  "entities": {
+    "user": "bob@example.com",
+    "sender": "no-reply@acme-paychecks.com",
+    "url": "https://acme-paychecks.com/login",
+    "asset": "host-engineering-72"
+  },
+  "events": [
+    {
+      "uuid": "phish-0001",
+      "published": "2026-06-15T11:14:00Z",
+      "eventType": "email.delivered",
+      "actor": "no-reply@acme-paychecks.com",
+      "recipient": "bob@example.com",
+      "subject": "Action required: payslip access expires today"
+    },
+    {
+      "uuid": "phish-0002",
+      "published": "2026-06-15T11:20:32Z",
+      "eventType": "proxy.url_click",
+      "actor": "bob@example.com",
+      "url": "https://acme-paychecks.com/login",
+      "domain_age_days": 9
+    },
+    {
+      "uuid": "phish-0003",
+      "published": "2026-06-15T11:20:54Z",
+      "eventType": "proxy.form_post",
+      "actor": "bob@example.com",
+      "url": "https://acme-paychecks.com/login",
+      "form_fields": ["username", "password"]
+    }
+  ],
+  "recommended_actions": [
+    {"name": "proxy.block_domain", "args": {"domain": "acme-paychecks.com"}},
+    {"name": "user.session.revoke_all", "args": {"user": "bob@example.com"}},
+    {"name": "user.require_password_reset", "args": {"user": "bob@example.com"}},
+    {"name": "email.search_and_purge", "args": {"sender": "no-reply@acme-paychecks.com"}},
+    {"name": "case.create", "args": {"title": "Phishing — click-through to credential-harvest page", "severity": "high"}}
+  ]
+}

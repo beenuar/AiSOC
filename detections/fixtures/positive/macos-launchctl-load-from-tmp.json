@@ -1,0 +1,5 @@
+{
+  "argv": "prefix-/tmp/-suffix",
+  "event_type": "exec",
+  "process_path": "head-/launchctl"
+}

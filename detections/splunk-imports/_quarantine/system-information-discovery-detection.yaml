@@ -1,0 +1,55 @@
+id: splunk-security-content-8e99f89e-ae58-4ebc-bf52-ae0b1a277e72
+name: System Information Discovery Detection
+description: The following analytic identifies system information discovery techniques,
+  such as the execution of commands like `wmic qfe`, `systeminfo`, and `hostname`.
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  process execution logs. This activity is significant because attackers often use
+  these commands to gather system configuration details, which can aid in further
+  exploitation. If confirmed malicious, this behavior could allow attackers to tailor
+  their attacks based on the discovered system information, potentially leading to
+  privilege escalation, persistence, or data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - endpoint
+references:
+- https://web.archive.org/web/20210119205146/https://oscp.infosecsanyam.in/priv-escalation/windows-priv-escalation
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where (Processes.process="*wmic*
+    qfe*" OR Processes.process=*systeminfo* OR Processes.process=*hostname*) by Processes.action
+    Processes.dest Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | eventstats dc(process)
+    as dc_processes_by_dest by dest | where dc_processes_by_dest > 2 | stats values(process)
+    as process values(action) as action values(original_file_name) as original_file_name
+    values(parent_process) as parent_process values(parent_process_exec) as parent_process_exec
+    values(parent_process_guid) as parent_process_guid values(parent_process_id) as
+    parent_process_id values(parent_process_path) as parent_process_path values(process_exec)
+    as process_exec values(process_guid) as process_guid values(.process_hash) as
+    process_hash values(process_id) as process_id values(process_integrity_level)
+    as process_integrity_level values(process_path) as process_path values(user_id)
+    as user_id values(vendor_product) as vendor_product  min(firstTime) as firstTime
+    max(lastTime) as lastTime by user, dest parent_process_name | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `system_information_discovery_detection_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 8e99f89e-ae58-4ebc-bf52-ae0b1a277e72
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/system_information_discovery_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

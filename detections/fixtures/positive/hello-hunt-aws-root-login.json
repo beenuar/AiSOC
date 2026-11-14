@@ -1,0 +1,14 @@
+{
+  "eventName": "ConsoleLogin",
+  "eventSource": "signin.amazonaws.com",
+  "userIdentity": {
+    "type": "Root",
+    "accountId": "123456789012",
+    "arn": "arn:aws:iam::123456789012:root"
+  },
+  "sourceIPAddress": "203.0.113.42",
+  "responseElements": {
+    "ConsoleLogin": "Success"
+  },
+  "eventTime": "2026-05-12T18:00:00Z"
+}

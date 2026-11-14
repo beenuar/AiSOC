@@ -1,0 +1,24 @@
+id: trend-vision-one
+name: Trend Vision One Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Trend Micro Vision One XDR. Pulls Workbench alerts and OAT (Observed Attack
+  Technique) detections. Supports endpoint isolation as an agent capability.
+author: AiSOC Core Team
+tags: [edr, xdr, trend-micro, endpoint]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/trend_vision_one.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, api_token]
+  properties:
+    region:
+      type: string
+      description: Vision One has region-specific hostnames; using the wrong one returns 401.
+    api_token:
+      type: string
+      description: "Bearer token issued from Vision One console: Administration → API Keys."
+      secret: true

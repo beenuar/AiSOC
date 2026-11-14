@@ -1,0 +1,10 @@
+{
+  "method_name": "SetOrgPolicy",
+  "request": {
+    "policy": {
+      "booleanPolicy": {
+        "enforced": true
+      }
+    }
+  }
+}

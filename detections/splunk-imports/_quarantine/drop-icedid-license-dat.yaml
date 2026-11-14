@@ -1,0 +1,39 @@
+id: splunk-security-content-b7a045fc-f14a-11eb-8e79-acde48001122
+name: Drop IcedID License dat
+description: The following analytic detects the dropping of a suspicious file named
+  "license.dat" in %appdata% or %programdata%. This behavior is associated with the
+  IcedID malware, which uses this file to inject its core bot into other processes
+  for banking credential theft. The detection leverages Sysmon EventCode 11 to monitor
+  file creation events in these directories. This activity is significant as it indicates
+  a potential malware infection aiming to steal sensitive banking information. If
+  confirmed malicious, the attacker could gain unauthorized access to financial data,
+  leading to significant financial loss and data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.002
+  categories:
+  - endpoint
+references:
+- https://www.cisecurity.org/insights/white-papers/security-primer-icedid
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode= 11  TargetFilename = "*\\license.dat" AND (TargetFilename="*\\appdata\\*"
+    OR TargetFilename="*\\programdata\\*") |stats count min(_time) as firstTime max(_time)
+    as lastTime by TargetFilename EventCode process_id  process_name dest | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `drop_icedid_license_dat_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b7a045fc-f14a-11eb-8e79-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/drop_icedid_license_dat.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,49 @@
+id: splunk-security-content-31302468-93c9-4eca-9ae3-2d41f53a4e2b
+name: Windows Security Support Provider Reg Query
+description: The following analytic identifies command-line activity querying the
+  registry for Security Support Providers (SSPs) related to Local Security Authority
+  (LSA) protection and configuration. This detection leverages Endpoint Detection
+  and Response (EDR) telemetry, focusing on processes accessing specific LSA registry
+  paths. Monitoring this activity is crucial as adversaries and post-exploitation
+  tools like winpeas may use it to gather information on LSA protections, potentially
+  leading to credential theft. If confirmed malicious, attackers could exploit this
+  to scrape password hashes or plaintext passwords from memory, significantly compromising
+  system security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1547.005
+  categories:
+  - endpoint
+references:
+- https://blog.netwrix.com/2022/01/11/understanding-lsa-protection/
+- https://github.com/carlospolop/PEASS-ng/tree/master/winPEAS
+- https://www.microsoft.com/en-us/security/blog/2022/10/14/new-prestige-ransomware-impacts-organizations-in-ukraine-and-poland/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where `process_reg` AND
+    Processes.process = "* query *" AND Processes.process = "*\\SYSTEM\\CurrentControlSet\\Control\\LSA*"
+    Processes.process IN ("*RunAsPPL*" , "*LsaCfgFlags*") by Processes.action Processes.dest
+    Processes.original_file_name Processes.parent_process Processes.parent_process_exec
+    Processes.parent_process_guid Processes.parent_process_id Processes.parent_process_name
+    Processes.parent_process_path Processes.process Processes.process_exec Processes.process_guid
+    Processes.process_hash Processes.process_id Processes.process_integrity_level
+    Processes.process_name Processes.process_path Processes.user Processes.user_id
+    Processes.vendor_product | `drop_dm_object_name(Processes)` | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `windows_security_support_provider_reg_query_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 31302468-93c9-4eca-9ae3-2d41f53a4e2b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_security_support_provider_reg_query.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,73 @@
+{
+  "$comment": [
+    "What the AiSOC SDKs promise, per language, and every place one of them does not deliver it.",
+    "Enforced by scripts/check_sdk_surface.py, which reads this in both directions: a language with",
+    "no recorded gap must actually reach the namespace, and a recorded gap must still be a gap. So",
+    "this list only shrinks -- filling a gap without deleting its entry here fails the build.",
+    "The three sdk-* CI jobs cannot see any of this. They compile and run each package in isolation,",
+    "which is how packages/sdk-go came to hold three green ticks over a file of type declarations."
+  ],
+  "spec": "docs/openapi.yaml",
+  "clients": {
+    "python": {
+      "package": "packages/sdk-py",
+      "path": "packages/sdk-py/src/aisoc_sdk/client.py"
+    },
+    "typescript": {
+      "package": "packages/sdk-ts",
+      "path": "packages/sdk-ts/src/client.ts"
+    },
+    "go": {
+      "package": "packages/sdk-go",
+      "path": null,
+      "gap": "packages/sdk-go ships go.mod and aisoc/models.go, and that file is type and const declarations only -- no functions, no net/http. There is no Go client to check against the spec, so every namespace below is a gap in Go rather than an implementation. Recorded here rather than exempted quietly, because sdk-go-test builds, vets and tests it green and a reader takes that tick for parity. The gate re-derives this: the day a file in the package imports net/http, this entry is stale and the build fails until it is replaced by the namespaces the client reaches."
+    }
+  },
+  "namespaces": {
+    "alerts": {
+      "prefixes": ["/api/v1/alerts"]
+    },
+    "cases": {
+      "prefixes": ["/api/v1/cases"]
+    },
+    "detections": {
+      "prefixes": ["/api/v1/detection/rules"]
+    },
+    "connectors": {
+      "prefixes": ["/api/v1/connectors"]
+    },
+    "playbooks": {
+      "prefixes": ["/api/v1/playbooks"]
+    },
+    "api-keys": {
+      "prefixes": ["/api/v1/api-keys"]
+    },
+    "graphql": {
+      "prefixes": ["/graphql"]
+    },
+    "approvals": {
+      "prefixes": ["/api/v1/approvals"],
+      "gaps": {
+        "python": "The responder namespaces (approvals, push, oncall, live-actions) were added to the TypeScript client for the PWA and the native app and have no Python equivalent yet. The routes are in docs/openapi.yaml already, which is why nobody noticed: the spec is complete and the ergonomic surface is not."
+      }
+    },
+    "push": {
+      "prefixes": ["/api/v1/push"],
+      "gaps": {
+        "python": "Web Push subscription management is browser-shaped -- a Python caller has no service worker to register -- so the asymmetry is deliberate rather than an oversight."
+      }
+    },
+    "oncall": {
+      "prefixes": ["/api/v1/oncall"],
+      "gaps": {
+        "python": "Reachable from the TypeScript responder client only; no Python caller has asked for the rota yet."
+      }
+    },
+    "live-actions": {
+      "prefixes": ["/api/v1/live-actions"],
+      "gaps": {
+        "python": "Discovery and dry-run are exposed in TypeScript for the responder surfaces. Dispatch is deliberately absent from both clients: a live containment goes through the approval path so an approver is bound to it, and the API exposes no un-approved dispatch route to proxy."
+      }
+    }
+  }
+}

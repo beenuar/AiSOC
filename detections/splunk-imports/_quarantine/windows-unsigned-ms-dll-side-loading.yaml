@@ -1,0 +1,52 @@
+id: splunk-security-content-8d9e0e06-ba71-4dc5-be16-c1a46d58728c
+name: Windows Unsigned MS DLL Side-Loading
+description: The following analytic identifies potential DLL side-loading instances
+  involving unsigned DLLs mimicking Microsoft signatures. It detects this activity
+  by analyzing Sysmon logs for Event Code 7, where both the `Image` and `ImageLoaded`
+  paths do not match system directories like `system32`, `syswow64`, and `programfiles`.
+  This behavior is significant as adversaries often exploit DLL side-loading to execute
+  malicious code via legitimate processes. If confirmed malicious, this activity could
+  allow attackers to execute arbitrary code, potentially leading to privilege escalation,
+  persistence, and unauthorized access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  - T1547
+  categories:
+  - endpoint
+references:
+- https://www.mandiant.com/resources/blog/apt29-wineloader-german-political-parties
+- https://www.zscaler.com/blogs/security-research/european-diplomats-targeted-spikedwine-wineloader
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon`\nEventCode=7\nCompany=\"Microsoft Corporation\"\nSigned=false\n\
+    SignatureStatus!= Valid\nNOT (Image IN (\n              \"C:\\\\Program Files\
+    \ \\(x86\\)\\\\*\",\n              \"C:\\\\Program Files\\\\*\",\n           \
+    \   \"C:\\\\Windows\\\\System32\\\\*\",\n              \"C:\\\\Windows\\\\SysWow64\\\
+    \\*\"\n              )\n    )\nNOT (ImageLoaded IN (\n                    \"C:\\\
+    \\Program Files \\(x86\\)\\\\*\",\n                    \"C:\\\\Program Files\\\
+    \\*\",\n                    \"C:\\\\Windows\\\\System32\\\\*\",\n            \
+    \        \"C:\\\\Windows\\\\SysWow64\\\\*\"\n                    )\n    )\n| rex\
+    \ field=Image \"(?<ImageFolderPath>.+\\\\\\)\"\n| rex field=ImageLoaded \"(?<ImageLoadedFolderPath>.+\\\
+    \\\\)\"\n| where ImageFolderPath = ImageLoadedFolderPath\n| stats count min(_time)\
+    \ as firstTime max(_time) as lastTime by Image ImageLoaded\ndest loaded_file loaded_file_path\
+    \ original_file_name process_exec process_guid process_hash\nprocess_id process_name\
+    \ process_path service_dll_signature_exists service_dll_signature_verified\nsignature\
+    \ signature_id user_id vendor_product\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `windows_unsigned_ms_dll_side_loading_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8d9e0e06-ba71-4dc5-be16-c1a46d58728c
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unsigned_ms_dll_side_loading.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

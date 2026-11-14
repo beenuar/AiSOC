@@ -1,0 +1,42 @@
+id: splunk-security-content-69e2860c-0e4b-40ae-9dc4-bf9e3bf2a548
+name: Crowdstrike Privilege Escalation For Non-Admin User
+description: The following analytic detects CrowdStrike alerts for privilege escalation
+  attempts by non-admin users. These alerts indicate unauthorized efforts by regular
+  users to gain elevated permissions, posing a significant security risk. Detecting
+  and addressing these attempts promptly helps prevent potential breaches and ensures
+  that user privileges remain properly managed, maintaining the integrity of the organization's
+  security protocols.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/wp-content/uploads/2022/12/CrowdStrike-Falcon-Event-Streams-Add-on-Guide-v3.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`crowdstrike_stream` tag=alert\n  | rename event.EndpointIp as src_ip,\
+    \ event.EndpointName as src_host, event.UserName as user, event.IncidentDescription\
+    \ as description, event.IncidentType as type, event.NumbersOfAlerts as count_alerts,\
+    \ event.SeverityName as severity\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY src_ip, src_host, user,\n       description, type, count_alerts,\n\
+    \       severity\n  | where LIKE(type,\"%Privilege escalation%\") AND NOT LIKE(user,\
+    \ \"%adm%\") AND NOT LIKE(user, \"%svc%\") AND NOT LIKE(user, \"%admin%\")\n \
+    \ | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `crowdstrike_privilege_escalation_for_non_admin_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69e2860c-0e4b-40ae-9dc4-bf9e3bf2a548
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/crowdstrike_privilege_escalation_for_non_admin_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

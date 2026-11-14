@@ -1,0 +1,23 @@
+title: DNS Query to Likely DGA Domain
+id: aisoc-id-nw-0002-dga
+status: stable
+description: |
+  DNS query whose label has high entropy and no vowels — typical of
+  domain generation algorithms used by malware families like Conficker,
+  Necurs, Mirai variants.
+author: Cyble AiSOC
+level: medium
+logsource:
+  product: network
+  service: dns
+tags:
+  - attack.t1568.002
+  - attack.command_and_control
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.protocol: 'dns'
+  dga:
+    enrich.dns.dga_score|gte: 80
+  condition: selection and dga

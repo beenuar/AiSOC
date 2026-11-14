@@ -1,0 +1,1160 @@
+"""Persist fused alerts into the Postgres ``alerts`` table.
+
+Phase 3.1 (world-class program) closed the second spine gap the reality audit
+exposed: fusion published fused alerts to ``aisoc.alerts.fused`` and — before
+this module — **nothing wrote them to the alert store**. The only writers were
+the API's manual ``POST /alerts/submit`` endpoint and the demo seeder, so a
+raw event could never become an alert row without a human in the loop.
+
+Design constraints:
+
+* **Fail-soft.** Fusion ran for months without a database; a Postgres outage
+  must degrade to "fused alerts still stream over Kafka/WS, persistence
+  resumes when the DB returns" — never crash the consumer.
+* **Idempotent.** The insert is guarded by the alert's dedup fingerprint per
+  tenant, so replaying a Kafka batch (consumer-group rebalance, restart
+  mid-batch) cannot produce duplicate rows.
+* **Duplicates are not persisted.** Fusion publishes DUPLICATE decisions
+  downstream for observability, but they must not become new alert rows.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+import asyncpg
+import structlog
+
+from app.core.config import settings
+from app.models.alert import FusedAlert, FusionDecision
+from app.services.alert_status import RESOLVED_STATUSES
+
+logger = structlog.get_logger()
+
+
+class PersistOutcome(str, Enum):
+    """Distinguishable outcomes of a persist attempt (issue #568).
+
+    The old sink collapsed "inserted", "already-existed", "DB down", and
+    "insert errored" all into ``None``, so the caller could not tell a real
+    duplicate from an outage it should retry. Each state is now explicit.
+    """
+
+    INSERTED = "inserted"  # a new row was written; alert_id is the row id
+    DUPLICATE = "duplicate"  # already existed (dedup hit or id conflict)
+    UNAVAILABLE = "unavailable"  # DB unreachable — retryable, NOT a duplicate
+    FAILED = "failed"  # insert errored (bad tenant, SQL error) — observable
+
+
+@dataclass(frozen=True)
+class PersistResult:
+    """Outcome of :meth:`AlertSink.persist` plus the canonical alert id.
+
+    ``retryable`` distinguishes an outage from a bad row. The outcome alone
+    cannot: a connection reset and a foreign-key violation both used to be
+    ``FAILED``, and the consumer treated both the same way — either committing
+    the offset (loss) or retrying a permanently bad alert forever.
+
+    ``verified`` says the caller may trust the outcome as durable evidence.
+    A ``DUPLICATE`` verdict with an unreachable database is a correct *fusion*
+    verdict but not a verified store state: the surviving row might itself
+    never have been written. The consumer must not commit until it is verified
+    or repaired.
+    """
+
+    outcome: PersistOutcome
+    alert_id: str | None = None
+    retryable: bool = False
+    verified: bool = True
+
+    #: True when this repeat returned a closed alert to the queue
+    #: (GHSA-qp9f-459j-w89c). Distinct from the outcome, which stays
+    #: ``DUPLICATE``: no row was inserted, and a caller counting inserts must
+    #: not start counting these. It is surfaced rather than left to the log
+    #: because "a closed alert came back" is the event an operator wants a
+    #: number for, and a reopen that only exists in a log line is one nobody
+    #: can alert on.
+    reopened: bool = False
+
+    @property
+    def persisted(self) -> bool:
+        return self.outcome is PersistOutcome.INSERTED
+
+    @property
+    def durable(self) -> bool:
+        """True when the alert is known to exist in the store (new or dup).
+
+        Unverified duplicates are deliberately *not* durable. That distinction
+        is the difference between "fusion remembers seeing this" (a Redis hint
+        that may predate a crash) and "the row is in Postgres".
+        """
+        return self.verified and self.outcome in (PersistOutcome.INSERTED, PersistOutcome.DUPLICATE)
+
+
+def root_cause_key(alert: Any) -> tuple[str, str, str] | None:
+    """The `(resource, technique, principal)` this alert is about, or None.
+
+    Pure and module-level so the reduction suite drives the **real**
+    derivation. A measurement that re-implemented this would be a producer
+    compared against a copy of itself, which this repository has shipped
+    before and now gates against.
+
+    All three must be present. A NULL does not match another NULL: "we do
+    not know the principal" is not evidence that two findings share one, and
+    treating absence as agreement is exactly how a conservative key becomes
+    a wide one — the `correlation_key()` narrowing ladder is the same
+    argument.
+    """
+    resource = str(getattr(alert, "hostname", "") or "").strip().lower()
+    if not resource:
+        # A cloud finding names a resource rather than a host. `external_id`
+        # is the vendor's own finding id and is deliberately NOT used: it is
+        # unique per vendor, so it could never join two of them.
+        resource = str(getattr(alert, "domain", "") or "").strip().lower()
+    techniques = list(getattr(alert, "mitre_techniques", []) or [])
+    technique = str(techniques[0]).strip().upper() if techniques else ""
+    principal = str(getattr(alert, "originating_human", None) or getattr(alert, "username", "") or "").strip().lower()
+    if not resource or not technique or not principal:
+        return None
+    return resource, technique, principal
+
+
+_INSERT_SQL = """
+INSERT INTO alerts (
+    id, tenant_id, title, description, severity, status,
+    mitre_tactics, mitre_techniques, iocs, entities, raw_event,
+    dedup_hash, confidence, confidence_label, confidence_rationale,
+    narrative, anomaly_score, event_time,
+    connector_id, connector_type, source_event_ids, ocsf_class_uid,
+    rule_id, rule_name, external_id,
+    affected_hosts, affected_users, affected_ips,
+    session_id, session_key_kind, originating_human,
+    src_ip_class, src_ip_class_dataset_version
+)
+SELECT
+    $1, $2, $3, $4, $5, 'new',
+    $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb,
+    $11::text, $12, $13, $14::jsonb,
+    $15, $16, COALESCE($17, NOW()),
+    $18, $19, $20::jsonb, $21,
+    $22, $23, $24,
+    $25::jsonb, $26::jsonb, $27::jsonb,
+    $28, $29, $30,
+    $31, $32
+WHERE NOT EXISTS (
+    SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
+)
+ON CONFLICT (id) DO NOTHING
+RETURNING id
+"""
+# The three entity columns are appended rather than inserted beside
+# `entities`, where they belong semantically, so that every existing
+# positional index into `_insert_args` keeps its meaning. Renumbering 24
+# placeholders to make a list read nicely is how a confidence score ends up
+# in a narrative column.
+
+#: The reconciliation read for a fusion ``DUPLICATE`` verdict.
+#:
+#: Fusion registers a dedup fingerprint in Redis *before* the row is durable.
+#: If the process dies (or Postgres rejects the insert) in that window, the
+#: re-delivered message is still classified ``DUPLICATE`` and the old sink
+#: returned without writing anything: the event was permanently lost while the
+#: consumer committed its offset. The dedup hint is therefore treated as a
+#: claim to verify, not a fact. If no row carries this ``(tenant, dedup_hash)``
+#: pair, the redelivered alert is inserted under its deterministic id.
+_SURVIVING_ALERT_SQL = """
+SELECT id
+  FROM alerts
+ WHERE tenant_id = $1
+   AND dedup_hash = $2::text
+ LIMIT 1
+"""
+
+#: Record a raw event that deduplicated onto an alert that already exists.
+#:
+#: Issue #1244. `source_event_ids` is "the raw events that produced this
+#: alert" and the funnel's Correlation Instances tile counts the alerts where
+#: it holds two or more. The only writer appended exactly one id *before* the
+#: insert, and a deduplicated event's insert is filtered out by the
+#: `WHERE NOT EXISTS` above — so the second, third and five-hundredth event to
+#: fold onto an alert left no trace, the predicate could never be satisfied,
+#: and the tile read zero on a pipeline that was deduplicating the whole time.
+#:
+#: One id per statement, with the `@>` guard making a replay a no-op rather
+#: than a second entry — a consumer-group rebalance re-delivers the same event
+#: and the provenance list must not grow on it. `$4` caps the array because a
+#: hot dedup key would otherwise grow one row without bound; past the cap the
+#: alert still exists and still deduplicates, only the list stops growing.
+#: jsonb containment accepts a scalar against an array element, so
+#: ``'["evt-1"]'::jsonb @> '"evt-1"'::jsonb`` is the membership test.
+_DEDUP_SOURCE_EVENT_SQL = """
+UPDATE alerts
+   SET source_event_ids = source_event_ids || to_jsonb($3::text)
+ WHERE tenant_id = $1
+   AND dedup_hash = $2::text
+   AND NOT (source_event_ids @> to_jsonb($3::text))
+   AND jsonb_array_length(source_event_ids) < $4
+"""
+
+#: Ceiling on `source_event_ids` per alert. 200 ids is ~8 KB of JSONB, and the
+#: question the column answers ("did more than one event produce this?") is
+#: settled by the second entry.
+_MAX_SOURCE_EVENT_IDS = 200
+
+#: Keep a repeat as a linked occurrence instead of discarding it (Phase 3.3).
+#:
+#: `source_event_ids` above answers "did more than one event produce this?".
+#: It cannot answer "how many times, between when and when", because it also
+#: grows on multi-event correlation and it stops at 200. This statement does,
+#: as a rollup keyed `(tenant_id, alert_id)`: migration 151.
+#:
+#: Three properties the SQL holds so that no caller has to remember them:
+#:
+#: * **The count includes the surviving alert.** The INSERT arm starts at 2
+#:   (the original plus this repeat), so an alert with no row here has been
+#:   seen exactly once and a reader joins with `COALESCE(count, 1)`.
+#: * **A redelivery cannot inflate it.** The `WHERE NOT (payload_ids @> …)`
+#:   on the DO UPDATE is the same containment guard `_DEDUP_SOURCE_EVENT_SQL`
+#:   uses, for the same reason: a consumer-group rebalance re-delivers the
+#:   same message, and a count that grew on that would be measuring Kafka
+#:   rather than the vendor. Removing it takes five redeliveries of one
+#:   message from a count of 2 to a count of 7, which the live suite pins.
+#: * **The window keeps the newest ids.** `payload_ids - 0` drops the oldest
+#:   element once the window is full, so the containment guard's coverage
+#:   sits where redelivery actually happens. `payload_ids_complete` goes
+#:   false the moment anything is evicted, so a partial list is never
+#:   presented as the whole set.
+#:
+#: Looked up by `dedup_hash` rather than by an alert id because fusion holds
+#: the fingerprint at this point and the surviving row's id only after a
+#: second read.
+_OCCURRENCE_SQL = """
+INSERT INTO alert_occurrences AS ao (
+    tenant_id, alert_id, occurrence_count, first_seen, last_seen,
+    payload_ids, payload_ids_complete
+)
+SELECT
+    $1,
+    a.id,
+    2,
+    LEAST(COALESCE(a.event_time, NOW()), COALESCE($4::timestamptz, NOW())),
+    GREATEST(COALESCE(a.event_time, NOW()), COALESCE($4::timestamptz, NOW())),
+    CASE WHEN $3::text IS NULL THEN '[]'::jsonb ELSE jsonb_build_array($3::text) END,
+    TRUE
+  FROM alerts a
+ WHERE a.tenant_id = $1
+   AND a.dedup_hash = $2::text
+ON CONFLICT (tenant_id, alert_id) DO UPDATE
+   SET occurrence_count = ao.occurrence_count + 1,
+       first_seen = LEAST(ao.first_seen, EXCLUDED.first_seen),
+       last_seen = GREATEST(ao.last_seen, EXCLUDED.last_seen),
+       payload_ids = CASE
+           WHEN $3::text IS NULL THEN ao.payload_ids
+           WHEN jsonb_array_length(ao.payload_ids) >= $5
+               THEN (ao.payload_ids - 0) || jsonb_build_array($3::text)
+           ELSE ao.payload_ids || jsonb_build_array($3::text)
+       END,
+       payload_ids_complete = ao.payload_ids_complete
+           AND NOT ($3::text IS NOT NULL AND jsonb_array_length(ao.payload_ids) >= $5),
+       updated_at = NOW()
+ WHERE $3::text IS NULL OR NOT (ao.payload_ids @> jsonb_build_array($3::text))
+"""
+
+#: Collapse findings from different vendors that share a root cause (3.3).
+#:
+#: Migration 151 keeps same-fingerprint repeats. It cannot reach this half:
+#: Security Hub, Defender for Cloud, a CNAPP connector and GuardDuty each
+#: raising their own finding about one public bucket produce four different
+#: fingerprints, so every dedup layer correctly leaves all four standing.
+#: They are four reports of one root cause, and the analyst closes the same
+#: misconfiguration four times.
+#:
+#: The key is the triple `(resource, technique, principal)`, and the
+#: conjunction is the control: resource alone over-collapses (two unrelated
+#: findings on one busy host are two findings — the lesson v21 paid for),
+#: technique alone is a category, principal alone is an account's whole day.
+#:
+#: `vendor_count` is recomputed from the membership rather than incremented,
+#: for the reason the phishing fan-out already records: an increment counts
+#: deliveries, and a redelivered message would make two vendors look like
+#: three. The membership insert is `ON CONFLICT DO NOTHING`, so the count is
+#: a property of the set and a replay changes nothing.
+_ROOT_CAUSE_FINDING_SQL = """
+INSERT INTO root_cause_findings AS f
+    (tenant_id, resource, technique, principal, vendor_count, member_count,
+     severity, first_seen, last_seen)
+VALUES ($1, $2, $3, $4, 1, 1, $5, COALESCE($6::timestamptz, NOW()), COALESCE($6::timestamptz, NOW()))
+ON CONFLICT (tenant_id, resource, technique, principal) DO UPDATE
+   SET first_seen = LEAST(f.first_seen, EXCLUDED.first_seen),
+       last_seen = GREATEST(f.last_seen, EXCLUDED.last_seen),
+       updated_at = NOW()
+RETURNING id
+"""
+
+#: Link the original. Nothing is deleted and nothing is rewritten: the
+#: eval-honesty rule is that deduplicated evidence must still resolve to its
+#: retained record, and a finding that replaced its members would make the
+#: survivor's vendor and severity an accident of arrival order.
+_ROOT_CAUSE_MEMBER_SQL = """
+INSERT INTO alert_root_cause_members (tenant_id, finding_id, alert_id, connector_type)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (tenant_id, finding_id, alert_id) DO NOTHING
+"""
+
+#: Recompute the counts and the severity from the membership.
+#:
+#: Severity is the **highest** any member carried, not an average: a finding
+#: containing one critical report is a critical finding, and averaging would
+#: let three low reports bury it. Ordered by the five-tier ladder explicitly,
+#: because alphabetical order puts `critical` below `low`.
+_ROOT_CAUSE_RECOUNT_SQL = """
+UPDATE root_cause_findings f
+   SET member_count = m.members,
+       vendor_count = m.vendors,
+       severity = COALESCE(m.worst, f.severity),
+       updated_at = NOW()
+  FROM (
+    SELECT COUNT(*) AS members,
+           COUNT(DISTINCT rcm.connector_type) AS vendors,
+           (SELECT a.severity
+              FROM alert_root_cause_members i
+              JOIN alerts a ON a.id = i.alert_id AND a.tenant_id = i.tenant_id
+             WHERE i.tenant_id = $1 AND i.finding_id = $2
+             ORDER BY CASE lower(a.severity)
+                        WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                        WHEN 'medium' THEN 3 WHEN 'low' THEN 2
+                        WHEN 'info' THEN 1 ELSE 0 END DESC
+             LIMIT 1) AS worst
+      FROM alert_root_cause_members rcm
+     WHERE rcm.tenant_id = $1 AND rcm.finding_id = $2
+  ) m
+ WHERE f.tenant_id = $1 AND f.id = $2
+"""
+
+#: Ceiling on the retained payload-id window. Deliberately the same number as
+#: `_MAX_SOURCE_EVENT_IDS`: two bounded lists of ids on one alert that
+#: disagreed about their length would be a question nobody can answer.
+_MAX_OCCURRENCE_PAYLOAD_IDS = 200
+
+#: Return a closed alert to the queue when its detection fires again.
+#:
+#: GHSA-qp9f-459j-w89c. The `WHERE NOT EXISTS` in `_INSERT_SQL` carries no
+#: status, so a closed row absorbed every later firing of the same detection
+#: and no open alert was ever created: an attacker who tripped a detection,
+#: waited for the alert to be closed and repeated the activity was invisible
+#: to the queue. Reopening is the only remedy the schema permits — migration
+#: 120's `uq_alerts_tenant_dedup` is UNIQUE per `(tenant_id, dedup_hash)`, so
+#: there is no second row to insert — and migration 160 explains why that is
+#: also the remedy worth having.
+#:
+#: Three properties the statement holds, so no caller has to remember them:
+#:
+#: * **`status = ANY($3)` is the open-alert control, not an optimisation.**
+#:   An alert that is already open matches nothing, so the row is untouched:
+#:   no status churn, no reopen counted, and firing twice while open still
+#:   produces exactly one row. Widening this predicate would fix recurrence
+#:   by breaking dedup, which is the trade the reporter explicitly ruled out.
+#:   It also protects work in flight — an alert an analyst has moved to
+#:   `triaging` is not dragged back to `new` by a repeat.
+#: * **`resolved_at` goes back to NULL.** It is a claim of fact rather than a
+#:   judgement, and the MTTR average subtracts it from `created_at` without
+#:   consulting `status`; leaving it set would count an open alert as
+#:   resolved. `disposition` is deliberately left alone — see migration 160.
+#: * **The reason names the status being overturned.** In an UPDATE, the
+#:   right-hand side sees the pre-update row, so `|| status` captures what
+#:   the alert had been closed as before this statement changes it.
+#:
+#: `RETURNING` carries the new count so the reopen can be logged as the
+#: analyst-visible state change it is, rather than happening silently.
+_REOPEN_CLOSED_ALERT_SQL = """
+UPDATE alerts
+   SET status = 'new',
+       resolved_at = NULL,
+       reopened_at = NOW(),
+       reopen_count = reopen_count + 1,
+       reopen_reason = 'recurrence: the detection fired again after this alert was closed as ' || status,
+       updated_at = NOW()
+ WHERE tenant_id = $1
+   AND dedup_hash = $2::text
+   AND status = ANY($3::text[])
+   -- A HUMAN analyst's false-positive verdict is durable suppression; an
+   -- AI-authored or unknown-provenance one is not. disposition_source names
+   -- the author (migration 161); without it, one uncorroborated AI FP
+   -- verdict would permanently suppress a fingerprint — the ungoverned
+   -- silence GHSA-qp9f-459j-w89c was published against.
+   AND NOT (disposition = 'false_positive' AND disposition_source = 'analyst')
+RETURNING id, reopen_count
+"""
+
+# The reconciliation row the two-way SIEM loop reads. Written here rather than
+# from the API because fusion is the only place that holds the alert id, the
+# connector instance and the vendor finding id at the same moment — asking the
+# API to rediscover the link later would mean re-deriving the vendor from a
+# string the promoter already parsed.
+#
+# `executed` is FALSE on insert and has no default in the schema: a link that
+# has never been written back must not read as one that has.
+_LINK_SQL = """
+INSERT INTO alert_source_links (
+    tenant_id, alert_id, vendor, external_id, connector_instance_id, executed
+) VALUES ($1, $2, $3, $4, $5, FALSE)
+ON CONFLICT (alert_id, vendor, external_id) DO NOTHING
+"""
+
+#: connector_type -> live-actions vendor id, for the SIEMs a disposition can
+#: be written back to. A connector absent from this map still produces alerts;
+#: it just has no return leg, which is the honest state for most sources.
+_WRITEBACK_VENDOR_BY_CONNECTOR: dict[str, str] = {
+    "splunk": "splunk",
+    "splunk_enterprise": "splunk",
+    "elastic": "elastic",
+    "elasticsearch": "elastic",
+    "elastic_security": "elastic",
+    "microsoft_sentinel": "sentinel",
+    "azure_sentinel": "sentinel",
+    "sentinel": "sentinel",
+    "qradar": "qradar",
+    "ibm_qradar": "qradar",
+    "defender": "defender",
+    "microsoft_defender": "defender",
+    "azure_defender": "defender",
+}
+
+
+def writeback_vendor(connector_type: str | None) -> str | None:
+    """The vendor id a disposition would be written back to, if any."""
+    if not connector_type:
+        return None
+    return _WRITEBACK_VENDOR_BY_CONNECTOR.get(connector_type.strip().lower())
+
+
+# Three layers of idempotency, complementary (issue #568):
+#   * WHERE NOT EXISTS (tenant_id, dedup_hash) — content dedup; also protects
+#     legacy rows written before ids were deterministic (random id, same hash).
+#   * ON CONFLICT (id) DO NOTHING — exact-replay idempotency on the canonical
+#     deterministic UUID (RawAlert.deterministic_id()).
+#   * uq_alerts_tenant_dedup (migration 120) — the database-level guarantee for
+#     two concurrent writers that supply different ids but the same fingerprint.
+#     Under READ COMMITTED both can pass WHERE NOT EXISTS; the partial unique
+#     index makes the second INSERT raise UniqueViolationError instead of
+#     writing a second visible alert. `_persist_on_conn` resolves that
+#     violation to the winner's row (see `_DEDUP_UNIQUE_INDEX`).
+# NB: $11 (dedup_hash) is cast ::text in BOTH the INSERT target and the WHERE.
+# `dedup_hash` is VARCHAR(64); a varchar/text mismatch makes asyncpg's prepare
+# fail to unify parameter $11 ("inconsistent types deduced"), silently dropping
+# every write. Pinning both uses to ::text makes the deduction unambiguous.
+
+#: The partial unique index created by
+#: ``services/api/migrations/120_alerts_tenant_dedup_unique.sql``. A unique
+#: violation carrying this constraint name is the concurrent-dedup race, not a
+#: malformed row: the loser must resolve the winner's row rather than fail (or
+#: insert a second alert).
+_DEDUP_UNIQUE_INDEX = "uq_alerts_tenant_dedup"
+
+
+def _asyncpg_dsn(url: str) -> str:
+    """Strip the SQLAlchemy driver suffix — asyncpg wants plain postgresql://."""
+    return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
+def _is_retryable_db_error(exc: BaseException) -> bool:
+    """Whether re-running the statement could plausibly succeed.
+
+    Transient: the connection was lost, the server was shutting down, a
+    statement was cancelled by a timeout, or the pool was exhausted. Permanent:
+    a constraint violation, an unknown tenant, invalid SQL. The two classes
+    need different handling at the consumer: retry (and do not commit) versus
+    dead-letter and move on.
+    """
+    if isinstance(
+        exc,
+        (
+            asyncpg.PostgresConnectionError,
+            asyncpg.InterfaceError,
+            asyncpg.QueryCanceledError,
+            asyncpg.DeadlockDetectedError,
+            asyncpg.TooManyConnectionsError,
+            TimeoutError,
+            OSError,
+        ),
+    ):
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "connection",
+            "connect",
+            "server closed",
+            "connection reset",
+            "connection refused",
+            "timed out",
+            "timeout",
+            "pool",
+            "too many clients",
+            "starting up",
+            "shutting down",
+            "not yet accepting",
+        )
+    )
+
+
+def _iocs(fused: FusedAlert) -> list[dict[str, str]]:
+    alert = fused.alert
+    out: list[dict[str, str]] = []
+    for ioc_type, value in (
+        ("ip", alert.src_ip),
+        ("ip", alert.dst_ip),
+        ("hash", alert.file_hash),
+        ("domain", alert.domain),
+        ("url", alert.url),
+    ):
+        if value:
+            out.append({"type": ioc_type, "value": value})
+    return out
+
+
+def _usernames(fused: FusedAlert) -> list[str]:
+    """Every user this alert is about: the one who acted and the one acted on.
+
+    Issue #1718. `alert.username` is OCSF `actor.user.name` — the principal
+    that performed the change — and for a directory audit that is routinely a
+    Microsoft service rather than a person. Ten alerts measured from one
+    Entra tenant listed "Microsoft Teams Services" and named neither the
+    member added nor the group. The account that *changed* arrives beside it
+    in OCSF `target_user`, which nothing here read.
+
+    The target is read from the OCSF event rather than from a vendor-specific
+    field, so this stays a statement about what an alert affects rather than a
+    statement about Entra: `target_user` is the slot the CEF `duser` and the
+    email-recipient templates already fill, and a user an event was performed
+    on is an affected user whichever source said so.
+
+    Order is actor first, then target, and a target equal to the actor is
+    listed once — a self-service action affects one person, not two.
+    """
+    alert = fused.alert
+    raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    target = raw.get("target_user")
+    if not isinstance(target, dict):
+        target = {}
+    out: list[str] = []
+    for name in (alert.username, target.get("name"), target.get("email_addr")):
+        if isinstance(name, str) and name and name not in out:
+            out.append(name)
+    return out
+
+
+def _entities(fused: FusedAlert) -> list[dict[str, str]]:
+    alert = fused.alert
+    out: list[dict[str, str]] = []
+    if alert.hostname:
+        out.append({"type": "host", "value": alert.hostname})
+    out.extend({"type": "user", "value": name} for name in _usernames(fused))
+    return out
+
+
+def _affected(fused: FusedAlert) -> tuple[list[str], list[str], list[str]]:
+    """The denormalized `affected_hosts` / `affected_users` / `affected_ips`.
+
+    Issue #1244. These three columns have existed since migration 042, the
+    ORM maps them, `GET /alerts/{id}` serialises them, and `feedback.py`,
+    `rule_tuning.py`, `business_context.py`, `cases.py` and the GraphQL
+    resolver all read them — but the production INSERT never named them, so
+    the only rows that ever had a value were the ones `seed_demo.py` wrote.
+    Every reader saw `[]` on a real alert and a populated list on a seeded
+    one.
+
+    Derived from the same fields `_entities` and `_iocs` already use rather
+    than from a second source, so the row cannot disagree with itself — the
+    users come from `_usernames`, which `_entities` also calls, so the blob
+    the Investigation Rail reads and the column the filters read can never
+    name a different set of people.
+
+    `hosts` needs no equivalent: OCSF `device.name` is already the device an
+    event is *about*, and issue #1718's missing device was missing one layer
+    earlier, in the connector that never said its target was a host.
+    """
+    alert = fused.alert
+    hosts = [alert.hostname] if alert.hostname else []
+    ips = [ip for ip in (alert.src_ip, alert.dst_ip) if ip]
+    return hosts, _usernames(fused), ips
+
+
+def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
+    """The positional arguments `_INSERT_SQL` takes, in order.
+
+    One definition, used by both the single and the batch path. They
+    were two copies of a 25-element tuple, which is the kind of pair
+    that drifts by one column and inserts a confidence score into a
+    narrative without anything failing.
+    """
+    alert = fused.alert
+    hosts, users, ips = _affected(fused)
+    return (
+        fused.id,
+        alert.tenant_id,
+        alert.title[:500],
+        alert.description or None,
+        alert.severity.value,
+        json.dumps(alert.mitre_tactics),
+        json.dumps(alert.mitre_techniques),
+        json.dumps(_iocs(fused)),
+        json.dumps(_entities(fused)),
+        json.dumps(alert.raw_event, default=str),
+        alert.fingerprint(),
+        int(round(fused.confidence_score * 100)),
+        fused.confidence_label.value,
+        json.dumps([f.model_dump() for f in fused.confidence_rationale]),
+        fused.narrative,
+        fused.anomaly_score,
+        alert.event_time,
+        alert.connector_id,
+        alert.connector_type,
+        json.dumps(alert.source_event_ids),
+        alert.ocsf_class_uid,
+        alert.rule_id,
+        alert.rule_name,
+        alert.external_id,
+        json.dumps(hosts),
+        json.dumps(users),
+        json.dumps(ips),
+        fused.session_id,
+        fused.session_key_kind,
+        fused.originating_human,
+        alert.src_ip_class,
+        alert.src_ip_class_dataset_version,
+    )
+
+
+class AlertSink:
+    """asyncpg-backed writer from the fusion pipeline into the alert store."""
+
+    def __init__(self, database_url: str, pool_size: int = 2) -> None:
+        self._dsn = _asyncpg_dsn(database_url)
+        self._pool_size = pool_size
+        self._pool: asyncpg.Pool | None = None
+        self._connect_failed_logged = False
+        self._operation_timeout = float(getattr(settings, "alert_sink_operation_timeout_seconds", 10.0))
+        self._start_lock = asyncio.Lock()
+
+    async def start(self) -> None:
+        """Open the pool. Failure is logged, not raised (fail-soft)."""
+        async with self._start_lock:
+            if self._pool is not None:
+                return
+            try:
+                self._pool = await asyncpg.create_pool(
+                    self._dsn,
+                    min_size=1,
+                    max_size=self._pool_size,
+                    timeout=10,
+                    command_timeout=self._operation_timeout,
+                )
+                logger.info("alert_sink.started")
+            except Exception as exc:  # noqa: BLE001 — degrade, never crash the worker
+                self._pool = None
+                logger.error("alert_sink.connect_failed", error=str(exc))
+
+    async def stop(self) -> None:
+        await self._invalidate_pool()
+
+    async def _invalidate_pool(self) -> None:
+        """Forget a pool that just proved unusable.
+
+        ``_ensure_pool`` used to reconnect only when ``_pool is None``. A pool
+        whose server went away stayed non-None, so every later persist raised
+        from ``acquire()`` and returned ``FAILED`` forever even after Postgres
+        came back: recovery required a fusion restart. Dropping the handle on a
+        connection-level failure lets the next attempt rebuild it.
+        """
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception as exc:  # noqa: BLE001 — the pool is already broken
+                logger.debug("alert_sink.pool_close_failed", error=str(exc))
+
+    async def _ensure_pool(self) -> asyncpg.Pool | None:
+        if self._pool is None:
+            # One reconnect attempt per persist call — cheap when the DB is
+            # down (fast connect error) and self-healing when it returns.
+            await self.start()
+        return self._pool
+
+    async def ensure_pool(self) -> asyncpg.Pool | None:
+        """Rebuild the pool if it was invalidated.
+
+        Public because the dead-letter queue shares this pool: during a
+        recovery hold no alert is being persisted, so nothing else would
+        reconnect and the hold would never end after Postgres returns.
+        """
+        return await self._ensure_pool()
+
+    async def invalidate_pool(self) -> None:
+        """Drop a pool that just proved unusable, so the next call reconnects."""
+        await self._invalidate_pool()
+
+    async def persist(self, fused: FusedAlert) -> PersistResult:
+        """Insert one fused alert, returning a structured :class:`PersistResult`.
+
+        The canonical alert id is ``fused.id`` (deterministic — issue #568), so
+        even a duplicate / outage carries the id the row resolves to once the
+        DB is reachable.
+
+        A fusion ``DUPLICATE`` is *reconciled* rather than trusted: the dedup
+        fingerprint lives in Redis and is written before the row, so it can
+        outlive a crash that prevented the insert. When no row carries the
+        fingerprint, the redelivered alert is persisted, repairing the loss
+        instead of confirming it.
+        """
+        canonical_id = str(fused.id)
+        is_duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+        try:
+            result = await asyncio.wait_for(self._persist_once(fused), timeout=self._operation_timeout)
+        except TimeoutError as exc:
+            await self._invalidate_pool()
+            logger.error("alert_sink.persist_timeout", error=str(exc), duplicate=is_duplicate)
+            return PersistResult(
+                PersistOutcome.DUPLICATE if is_duplicate else PersistOutcome.UNAVAILABLE,
+                canonical_id,
+                retryable=True,
+                verified=False,
+            )
+        except asyncpg.ForeignKeyViolationError:
+            # Unknown tenant — a mis-provisioned connector, not a pipeline bug.
+            # Distinct from a duplicate so it is observable, not silently masked.
+            logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
+            return PersistResult(PersistOutcome.FAILED, None)
+        except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
+            retryable = _is_retryable_db_error(exc)
+            if retryable:
+                await self._invalidate_pool()
+            logger.error("alert_sink.persist_failed", error=str(exc), retryable=retryable, duplicate=is_duplicate)
+            if retryable and is_duplicate:
+                # Fusion's verdict stands, but the surviving row is unverified.
+                return PersistResult(PersistOutcome.DUPLICATE, canonical_id, retryable=True, verified=False)
+            return PersistResult(PersistOutcome.FAILED, None, retryable=retryable)
+
+        if result.outcome is PersistOutcome.INSERTED and result.alert_id:
+            await self._link_source_finding_safely(fused, alert_id=result.alert_id)
+        return result
+
+    async def _persist_once(self, fused: FusedAlert) -> PersistResult:
+        pool = await self._ensure_pool()
+        if pool is None:
+            if not self._connect_failed_logged:
+                logger.error("alert_sink.unavailable_dropping_persistence")
+                self._connect_failed_logged = True
+            if fused.fusion_decision == FusionDecision.DUPLICATE:
+                # Cannot verify; the consumer must retry rather than commit a
+                # duplicate whose surviving row may never have been written.
+                return PersistResult(PersistOutcome.DUPLICATE, str(fused.id), retryable=True, verified=False)
+            return PersistResult(PersistOutcome.UNAVAILABLE, str(fused.id), retryable=True)
+        self._connect_failed_logged = False
+        async with pool.acquire() as conn:
+            return await self._persist_on_conn(conn, fused)
+
+    async def _persist_on_conn(self, conn: Any, fused: FusedAlert) -> PersistResult:
+        """Persist one alert over an already-acquired connection.
+
+        Shared by the single and batch paths so the duplicate-reconciliation
+        rule cannot drift between them.
+        """
+        canonical_id = str(fused.id)
+        alert = fused.alert
+        is_duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+
+        if is_duplicate:
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
+
+        try:
+            row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
+        except asyncpg.UniqueViolationError as exc:
+            # Two writers with different ids can both pass the WHERE NOT EXISTS
+            # guard under READ COMMITTED. The partial unique index from
+            # migration 120 is the authority that stops the second row; this
+            # writer lost the race and must resolve the winner's row rather
+            # than report a failure (which would dead-letter an alert that is
+            # already durable) or retry blindly (which would do the same).
+            #
+            # Both call sites (``persist`` and ``persist_many``) run each
+            # statement in autocommit, so the failed INSERT does not leave a
+            # transaction aborted and the reconciliation read below is valid.
+            # Nothing in services/fusion opens a transaction around persist;
+            # asyncpg's pool release also resets (ROLLBACKs) a leaked one. If a
+            # caller ever wraps this in a transaction, run the INSERT inside a
+            # nested ``conn.transaction()`` (a savepoint) so the error is
+            # rolled back before this read, or it will fail with "current
+            # transaction is aborted".
+            #
+            # Only this index is handled here. Any other *named* unique
+            # violation is a schema/code disagreement and falls through to the
+            # caller's existing failure path, so a database error is never
+            # converted into a duplicate verdict. A driver that does not name
+            # the index (constraint_name is None) still falls through to the
+            # surviving-row read: if a row with this tenant and hash exists,
+            # the alert is durable regardless of which constraint reported it.
+            constraint = getattr(exc, "constraint_name", None)
+            if constraint is not None and constraint != _DEDUP_UNIQUE_INDEX:
+                raise
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                logger.info(
+                    "alert_sink.concurrent_dedup_resolved",
+                    tenant_id=str(alert.tenant_id),
+                    fingerprint=alert.fingerprint(),
+                )
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
+            # The winner's row is not visible: it was rolled back, deleted, or
+            # the read is looking at a different snapshot. Do not claim
+            # durability; the consumer retries.
+            logger.error(
+                "alert_sink.dedup_conflict_unverified",
+                tenant_id=str(alert.tenant_id),
+                fingerprint=alert.fingerprint(),
+            )
+            return PersistResult(PersistOutcome.FAILED, canonical_id, retryable=True, verified=False)
+
+        if row is None:
+            # The `WHERE NOT EXISTS` guard filtered the insert. Resolve the row
+            # that filtered it, so the returned id is the durable one (which
+            # may predate deterministic ids).
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
+            if is_duplicate:
+                # The hint said duplicate, but neither row nor insert exists.
+                # Do not report durability: a retry can settle the race.
+                logger.error(
+                    "alert_sink.duplicate_unverified",
+                    tenant_id=str(alert.tenant_id),
+                    fingerprint=alert.fingerprint(),
+                )
+                return PersistResult(PersistOutcome.FAILED, canonical_id, retryable=True, verified=False)
+            # A concurrent writer may have inserted the same id between the
+            # two statements; retrying the message will re-read it.
+            logger.warning("alert_sink.insert_filtered", alert_id=canonical_id)
+            return PersistResult(PersistOutcome.FAILED, None, retryable=True)
+
+        # Phase 3.3, second half. On the insert path only: a duplicate has
+        # already been folded by migration 151's occurrence rollup, and
+        # linking it again would count one vendor twice.
+        await self._link_root_cause(conn, alert, alert_id=row["id"])
+
+        return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
+
+    async def _surviving_alert_id(self, conn: Any, alert: Any) -> Any | None:
+        row = await conn.fetchrow(_SURVIVING_ALERT_SQL, alert.tenant_id, alert.fingerprint())
+        return row["id"] if row is not None else None
+
+    async def _link_source_finding_safely(self, fused: FusedAlert, *, alert_id: Any) -> None:
+        # getattr rather than direct access: the batch-path tests construct the
+        # sink with __new__ and replace this method, so there is no pool yet.
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            await self._link_source_finding(pool, fused.alert, alert_id=alert_id)
+
+    @staticmethod
+    def _unavailable_result(fused: FusedAlert) -> PersistResult:
+        """A non-durable result that preserves the fusion verdict.
+
+        A duplicate stays a duplicate (observable), but ``verified=False``
+        tells the consumer it cannot commit yet.
+        """
+        duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+        return PersistResult(
+            PersistOutcome.DUPLICATE if duplicate else PersistOutcome.UNAVAILABLE,
+            str(fused.id),
+            retryable=True,
+            verified=False,
+        )
+
+    async def persist_many(self, fused_batch: Sequence[FusedAlert]) -> list[PersistResult]:
+        """Insert a batch of fused alerts over one connection.
+
+        Gap-closure wave 7. `persist` acquires a pooled connection and
+        makes a round trip **per alert**, so a deployment taking 200
+        alerts/s makes 200 acquisitions and 200 round trips a second,
+        and the alert path spends most of its time waiting rather than
+        working.
+
+        Three things are deliberately preserved, because a faster path
+        that changes semantics is a different feature:
+
+        * **One result per input, in order.** Callers already branch on
+          `PersistOutcome`, and a batch that returned a summary would
+          make a duplicate indistinguishable from an insert.
+        * **One bad row does not take the batch.** Each insert is
+          attempted inside the shared connection and a failure is
+          recorded against that row alone — the same contract as the
+          single path, where a malformed alert must not wedge the
+          consumer.
+        * **The dedup behaviour is the database's, not ours.** The
+          `SELECT ... WHERE NOT EXISTS` in `_INSERT_SQL` still decides,
+          so batching cannot introduce a duplicate the single path
+          would have caught.
+
+        Not a transaction spanning the batch: one rollback would then
+        discard every alert in the window because of one bad row, which
+        trades a per-row failure for a whole-window one.
+        """
+        if not fused_batch:
+            return []
+
+        results: list[PersistResult] = []
+        pool = await self._ensure_pool()
+        if pool is None:
+            if not self._connect_failed_logged:
+                logger.error("alert_sink.unavailable_dropping_persistence")
+                self._connect_failed_logged = True
+            return [self._unavailable_result(f) for f in fused_batch]
+        self._connect_failed_logged = False
+
+        connection_lost = False
+        try:
+            async with pool.acquire() as conn:
+                for fused in fused_batch:
+                    if connection_lost:
+                        results.append(self._unavailable_result(fused))
+                        continue
+                    try:
+                        results.append(await self._persist_on_conn(conn, fused))
+                    except asyncpg.ForeignKeyViolationError:
+                        logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
+                        results.append(PersistResult(PersistOutcome.FAILED, None))
+                    except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the batch
+                        retryable = _is_retryable_db_error(exc)
+                        logger.error("alert_sink.persist_failed", error=str(exc), retryable=retryable)
+                        if retryable:
+                            # The connection is no longer trustworthy. Stop
+                            # using it for the rest of the batch, but keep the
+                            # results already obtained: those rows are durable.
+                            connection_lost = True
+                        duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+                        results.append(
+                            PersistResult(
+                                PersistOutcome.DUPLICATE if duplicate else PersistOutcome.FAILED,
+                                str(fused.id) if duplicate else None,
+                                retryable=retryable,
+                                verified=False,
+                            )
+                        )
+        except Exception as exc:  # noqa: BLE001 — acquire/context failure is not a row failure
+            retryable = _is_retryable_db_error(exc)
+            if retryable:
+                await self._invalidate_pool()
+            logger.error("alert_sink.batch_failed", error=str(exc), retryable=retryable)
+            done = len(results)
+            results.extend(self._unavailable_result(f) for f in fused_batch[done:])
+        else:
+            if connection_lost:
+                await self._invalidate_pool()
+
+        # Source links after the inserts, on their own connections. They
+        # are best-effort and a slow vendor lookup must not hold the
+        # batch's connection open.
+        for fused, result in zip(fused_batch, results, strict=True):
+            if result.outcome is PersistOutcome.INSERTED and result.alert_id:
+                await self._link_source_finding_safely(fused, alert_id=result.alert_id)
+
+        return results
+
+    async def _link_root_cause(self, conn: Any, alert: Any, *, alert_id: Any) -> None:
+        """Collapse this alert into a root-cause finding, if it has one (3.3).
+
+        Best-effort, like every other provenance write here: the finding is
+        worth three statements, never the alert the caller has just made
+        durable.
+
+        Only runs for a genuinely inserted alert. A duplicate has already
+        been folded by 151 and linking it again would count one vendor twice.
+        """
+        key = root_cause_key(alert)
+        if key is None:
+            return
+        resource, technique, principal = key
+        try:
+            row = await conn.fetchrow(
+                _ROOT_CAUSE_FINDING_SQL,
+                alert.tenant_id,
+                resource,
+                technique,
+                principal,
+                str(getattr(getattr(alert, "severity", None), "value", getattr(alert, "severity", "")) or "medium"),
+                getattr(alert, "event_time", None),
+            )
+            finding_id = row["id"] if row else None
+            if finding_id is None:
+                return
+            await conn.execute(
+                _ROOT_CAUSE_MEMBER_SQL,
+                alert.tenant_id,
+                finding_id,
+                alert_id,
+                str(getattr(alert, "connector_type", "") or ""),
+            )
+            await conn.execute(_ROOT_CAUSE_RECOUNT_SQL, alert.tenant_id, finding_id)
+        except Exception as exc:  # noqa: BLE001 — the finding is not worth the alert
+            logger.warning("alert_sink.root_cause_link_failed", error=str(exc))
+
+    async def _reopen_if_closed(self, conn: Any, alert: Any) -> bool:
+        """Return a closed alert to the queue when its detection fires again.
+
+        GHSA-qp9f-459j-w89c. Called from `_record_deduplicated_event`, which
+        is the one point all three dedup paths converge on (the fusion
+        DUPLICATE verdict, the unique-index race, and the `WHERE NOT EXISTS`
+        filter), so a future fourth path is governed by default rather than
+        by remembering to add a call.
+
+        Not best-effort, unlike the provenance writes beside it, and the
+        difference is deliberate: a dropped occurrence count costs a number
+        on a dashboard, whereas a dropped reopen leaves the recurrence
+        invisible, which is the vulnerability itself. So the two failure
+        classes are separated rather than both swallowed:
+
+        * **transient** (connection lost, timeout, deadlock) re-raises, so
+          the caller returns a retryable result and the consumer redelivers.
+          The reopen is idempotent in the sense that matters — a second
+          attempt against an alert that is open again matches nothing — and
+          the count is guarded by that same predicate, so a redelivery
+          cannot inflate it;
+        * **permanent** (migration 160 not applied, so the columns do not
+          exist) is logged at error naming the operator action and does not
+          re-raise. Wedging the entire alert pipeline behind a missing
+          migration would turn a missing-reopen defect into a total outage,
+          and a loop that retries a fault no retry can clear is the failure
+          mode this repository keeps paying for.
+        """
+        try:
+            row = await conn.fetchrow(
+                _REOPEN_CLOSED_ALERT_SQL,
+                alert.tenant_id,
+                alert.fingerprint(),
+                list(RESOLVED_STATUSES),
+            )
+        except Exception as exc:  # noqa: BLE001 — classified below, never silently dropped
+            if _is_retryable_db_error(exc):
+                raise
+            logger.error(
+                "alert_sink.reopen_failed",
+                error=str(exc),
+                tenant_id=str(alert.tenant_id),
+                fingerprint=alert.fingerprint(),
+                action="apply migration 160_alert_reopen_on_recurrence.sql; until then a detection that "
+                "fires again after its alert was closed will not return to the queue",
+            )
+            return False
+
+        if row is None:
+            # The alert is open, so there is nothing to reopen. The ordinary
+            # case, and the control: a repeat against an open alert must
+            # change nothing at all.
+            return False
+
+        logger.info(
+            "alert_sink.alert_reopened_on_recurrence",
+            alert_id=str(row["id"]),
+            tenant_id=str(alert.tenant_id),
+            reopen_count=row["reopen_count"],
+            fingerprint=alert.fingerprint(),
+        )
+        return True
+
+    async def _record_deduplicated_event(self, conn: Any, alert: Any) -> bool:
+        """Keep a folded-away repeat, as provenance and as a counted occurrence.
+
+        Two writes with different scopes, and the difference is the Phase 3.3
+        change. The `source_event_ids` append answers "did more than one event
+        produce this?" and needs an id to append, so it is skipped when there
+        is none. The occurrence rollup answers "how many times, between when
+        and when" and **is not skipped**: most connectors' normalisers leave
+        `source_event_ids` empty, so gating the count on an id would
+        under-report exactly those vendors and the published number would
+        quietly mean "repeats from connectors that happen to set an id".
+
+        Best-effort, for the same reason `_link_source_finding` is: the
+        provenance entry is worth one statement, never the verdict the caller
+        is about to return. A failure here must not turn a correct DUPLICATE
+        into a FAILED.
+
+        The reopen is the exception and runs first — it is a security control
+        rather than provenance, and it is the reason this method returns a
+        value. See `_reopen_if_closed`.
+        """
+        reopened = await self._reopen_if_closed(conn, alert)
+        ids = [i for i in (alert.source_event_ids or []) if i]
+        fingerprint = alert.fingerprint()
+        if ids:
+            try:
+                for source_event_id in ids:
+                    await conn.execute(
+                        _DEDUP_SOURCE_EVENT_SQL,
+                        alert.tenant_id,
+                        fingerprint,
+                        str(source_event_id),
+                        _MAX_SOURCE_EVENT_IDS,
+                    )
+            except Exception as exc:  # noqa: BLE001 — provenance is not worth the alert
+                logger.warning("alert_sink.dedup_provenance_failed", error=str(exc))
+
+        # The representative id for this folded *event*, not one per raw event
+        # behind it: one delivery is one occurrence however many source ids it
+        # carries. Keying the redelivery guard on the first id is enough
+        # because a redelivery carries the same list.
+        payload_id = str(ids[0]) if ids else None
+        try:
+            await conn.execute(
+                _OCCURRENCE_SQL,
+                alert.tenant_id,
+                fingerprint,
+                payload_id,
+                getattr(alert, "event_time", None),
+                _MAX_OCCURRENCE_PAYLOAD_IDS,
+            )
+        except Exception as exc:  # noqa: BLE001 — the count is not worth the alert
+            logger.warning("alert_sink.occurrence_record_failed", error=str(exc))
+
+        return reopened
+
+    async def _link_source_finding(self, pool: asyncpg.Pool, alert: Any, *, alert_id: Any) -> None:
+        """Record which vendor finding produced this alert, when there is one.
+
+        Best-effort by design. A missing link costs a writeback; raising here
+        would cost the alert, and the alert is the thing that matters. Silent
+        skips are the common case (most sources are not a SIEM whose findings
+        AiSOC can write to), so they log at debug and a genuine failure at
+        warning.
+        """
+        vendor = writeback_vendor(alert.connector_type)
+        if not vendor or not alert.external_id:
+            logger.debug(
+                "alert_sink.no_source_link",
+                connector_type=alert.connector_type,
+                has_external_id=bool(alert.external_id),
+            )
+            return
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    _LINK_SQL,
+                    alert.tenant_id,
+                    alert_id,
+                    vendor,
+                    alert.external_id,
+                    alert.connector_id,
+                )
+            logger.info("alert_sink.source_linked", vendor=vendor, alert_id=str(alert_id))
+        except Exception as exc:  # noqa: BLE001 — never fail an alert over its link row
+            logger.warning("alert_sink.source_link_failed", vendor=vendor, error=str(exc))

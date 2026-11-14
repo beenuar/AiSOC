@@ -1,0 +1,61 @@
+# Log Event Extended Format (LEEF) over syslog.
+#
+# QRadar's answer to the same problem CEF solves, and different from it in
+# the one way that matters to a parser: LEEF 2.0 lets the header redefine
+# the attribute delimiter, so a caret-delimited line read with the default
+# tab lands every pair in a single key. The listener's parser reads that
+# field; this template only sees the result.
+#
+# LEEF:Version|Vendor|Product|Version|EventID|key=value<TAB>key=value
+# LEEF:2.0|Vendor|Product|Version|EventID|<delimiter>|key=value...
+#
+# Reference:
+#   https://www.ibm.com/docs/en/dsm?topic=overview-leef-event-components
+id: leef-syslog
+vendor_name: LEEF
+product_name: LEEF Syslog
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  DeviceVendor: metadata.product.vendor_name
+  DeviceProduct: metadata.product.name
+  DeviceVersion: metadata.product.version
+  EventID: finding.uid
+  cat: finding.types
+  src: src_endpoint.ip
+  dst: dst_endpoint.ip
+  srcPort: src_endpoint.port
+  dstPort: dst_endpoint.port
+  srcPostNATPort: src_endpoint.svc_name
+  usrName: actor.user.name
+  identSrc: src_endpoint.hostname
+  identHostName: device.hostname
+  proto: connection_info.protocol_name
+  action: activity_name
+  msg: message
+  policy: finding.title
+  raw: raw_data
+severity_field: sev
+# LEEF's `sev` is 1-10, where 1 is least severe — the same scale CEF uses
+# and the opposite of syslog's. Mapped to the five OCSF tiers the rest of
+# the platform speaks.
+severity_map:
+  "1": 1
+  "2": 1
+  "3": 2
+  "4": 2
+  "5": 3
+  "6": 3
+  "7": 4
+  "8": 4
+  "9": 5
+  "10": 6
+  Low: 2
+  Medium: 3
+  High: 4
+  Critical: 6
+time_field: devTime
+message_field: msg
+constants:
+  source_type: leef-syslog

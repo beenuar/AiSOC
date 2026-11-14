@@ -1,0 +1,4 @@
+{
+  "method_name": "tableservice.delete",
+  "table_age_minutes": -40.0
+}

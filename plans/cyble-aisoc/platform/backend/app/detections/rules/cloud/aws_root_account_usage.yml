@@ -1,0 +1,25 @@
+title: AWS Root Account Activity
+id: aisoc-id-cl-0008-root-usage
+status: stable
+description: |
+  Any activity by the root account is a critical anti-pattern. Root
+  should only be used for break-glass — every event is investigated.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1078.004
+  - attack.persistence
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.user_identity.type: 'Root'
+  filter_ignore_readonly:
+    event.action|startswith:
+      - 'Get'
+      - 'List'
+      - 'Describe'
+  condition: selection and not filter_ignore_readonly

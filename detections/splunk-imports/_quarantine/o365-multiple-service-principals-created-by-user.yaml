@@ -1,0 +1,44 @@
+id: splunk-security-content-a34e65d0-54de-4b02-9db8-5a04522067f6
+name: O365 Multiple Service Principals Created by User
+description: The following analytic identifies instances where a single user creates
+  more than three unique OAuth applications within a 10-minute window in the Office
+  365 environment. It leverages O365 logs from the Unified Audit Log, focusing on
+  the 'Add service principal' operation in Azure Active Directory. This activity is
+  significant as it may indicate a compromised user account or unauthorized actions,
+  potentially leading to broader network infiltration or privilege escalation. If
+  confirmed malicious, this behavior could allow attackers to gain persistent access,
+  escalate privileges, or exfiltrate sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1136.003
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1136/003/
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation="Add
+    service principal." | bucket span=10m _time | eval len=mvcount(''Actor{}.ID'')
+    | eval userType = mvindex(''Actor{}.ID'',len-1) | search userType = "User" | eval
+    displayName = object | stats count earliest(_time) as firstTime latest(_time)
+    as lastTime values(displayName) as displayName dc(displayName) as unique_apps
+    values(user) as user values(src) as src by src_user vendor_account vendor_product
+    dest signature | where unique_apps > 3 | `security_content_ctime(firstTime)` |
+    `security_content_ctime(lastTime)` | `o365_multiple_service_principals_created_by_user_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a34e65d0-54de-4b02-9db8-5a04522067f6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_multiple_service_principals_created_by_user.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

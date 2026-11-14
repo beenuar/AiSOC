@@ -1,0 +1,5 @@
+{
+  "dst_ip": "198.51.100.5",
+  "dst_ip_in_tor_list": true,
+  "src_host": "wks-001"
+}

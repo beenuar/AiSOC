@@ -1,0 +1,109 @@
+id: mitre-car-car-2021-04-001
+name: Common Windows Process Masquerading
+description: '[Masquerading (T1036)](https://attack.mitre.org/techniques/T1036/) is
+  defined by ATT&CK as follows:
+
+
+  "Masquerading occurs when the name or location of an object, legitimate or malicious,
+  is manipulated or abused for the sake of evading defenses and observation. This
+  may include manipulating file metadata, tricking users into misidentifying the file
+  type, and giving legitimate task or service names."
+
+
+  Malware authors often use this technique to hide malicious executables behind legitimate
+  Windows executable names (e.g. `lsass.exe`, `svchost.exe`, etc).
+
+
+  There are several sub-techniques, but this analytic focuses on [Match Legitimate
+  Name or Location](https://attack.mitre.org/techniques/T1036/005/) only.
+
+
+  **Analytic Methodology**
+
+
+  With process monitoring, hunt for processes matching these criteria:
+
+
+  * process name is `svchost.exe`, `smss.exe`, `wininit.exe`, `taskhost.exe`, etc.
+
+  * process path is not `C:\Windows\System32\` or `C:\Windows\SysWow64\`
+
+
+  Examples (true positive):
+
+
+  `C:\Users\administrator\svchost.exe`
+
+
+  To make sure the rule doesn''t miss cases where the executable would be started
+  from a sub-folder of these locations, the entire path is checked for the process
+  path. The below example should be considered as suspicious:
+
+
+  `C:\Windows\System32\srv\svchost.exe`'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1036
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: Pseudocode - Common Windows Process Masquerading
+    type: Pseudocode
+    code: "processes = search Process:*\nsuspicious_processes = filter processes where\
+      \ (\n  (exe=svchost.exe AND (image_path!=\"C:\\\\Windows\\\\System32\\\\svchost.exe\"\
+      \ OR process_path!=\"C:\\\\Windows\\\\SysWow64\\\\svchost.exe\"))\n  OR (exe=smss.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\smss.exe\")\n  OR (exe=wininit.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\wininit.exe\")\n  OR (exe=taskhost.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\taskhost.exe\")\n  OR (exe=lasass.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\lsass.exe\")\n  OR (exe=winlogon.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\winlogon.exe\")\n  OR (exe=csrss.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\csrss.exe\")\n  OR (exe=services.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\services.exe\")\n  OR (exe=lsm.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\System32\\\\lsm.exe\")\n  OR (exe=explorer.exe\
+      \ AND image_path!=\"C:\\\\Windows\\\\explorer.exe\")\n  )\noutput suspicious_processes\n"
+  - name: Splunk Search - Common Windows Process Masquerading
+    type: Splunk
+    code: 'index=__your_sysmon_index__ source="XmlWinEventLog:Microsoft-Windows-Sysmon/Operational"
+      AND (
+
+      (process_name=svchost.exe AND NOT (process_path="C:\\Windows\\System32\\svchost.exe"
+      OR process_path="C:\\Windows\\SysWow64\\svchost.exe"))
+
+      OR (process_name=smss.exe AND NOT process_path="C:\\Windows\\System32\\smss.exe")
+
+      OR (process_name=wininit.exe AND NOT process_path="C:\\Windows\\System32\\wininit.exe")
+
+      OR (process_name=taskhost.exe AND NOT process_path="C:\\Windows\\System32\\taskhost.exe")
+
+      OR (process_name=lasass.exe AND NOT process_path="C:\\Windows\\System32\\lsass.exe")
+
+      OR (process_name=winlogon.exe AND NOT process_path="C:\\Windows\\System32\\winlogon.exe")
+
+      OR (process_name=csrss.exe AND NOT process_path="C:\\Windows\\System32\\csrss.exe")
+
+      OR (process_name=services.exe AND NOT process_path="C:\\Windows\\System32\\services.exe")
+
+      OR (process_name=lsm.exe AND NOT process_path="C:\\Windows\\System32\\lsm.exe")
+
+      OR (process_name=explorer.exe AND NOT process_path="C:\\Windows\\explorer.exe")
+
+      )
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2021-04-001
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2021-04-001.yaml
+notes:
+  car_status: needs_implementation

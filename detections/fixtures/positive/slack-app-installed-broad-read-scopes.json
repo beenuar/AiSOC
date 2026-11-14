@@ -1,0 +1,6 @@
+{
+  "app_scopes": [
+    "files:read"
+  ],
+  "event_type": "slack.app_installed"
+}

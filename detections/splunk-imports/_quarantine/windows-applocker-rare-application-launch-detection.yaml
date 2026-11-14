@@ -1,0 +1,41 @@
+id: splunk-security-content-9556f7b7-285f-4f18-8eeb-963d989f9d27
+name: Windows AppLocker Rare Application Launch Detection
+description: The following analytic detects the launch of rarely used applications
+  within the environment, which may indicate the use of potentially malicious software
+  or tools by attackers. It leverages Windows AppLocker event logs, aggregating application
+  launch counts over time and flagging those that significantly deviate from the norm.
+  This behavior is significant as it helps identify unusual application activity that
+  could signal a security threat. If confirmed malicious, this activity could allow
+  attackers to execute unauthorized code, potentially leading to further compromise
+  of the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/applocker/using-event-viewer-with-applocker
+- https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/operations/querying-application-control-events-centrally-using-advanced-hunting
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`applocker`\n  | spath input=UserData_Xml\n  | rename RuleAndFileData.*\
+    \ as *, Computer as dest, TargetUser AS user\n  | stats dc(_time) as days, count\n\
+    \    BY FullFilePath dest user\n  | eventstats avg(count) as avg, stdev(count)\
+    \ as stdev\n  | eval upperBound=(avg+stdev*3), lowerBound=(avg-stdev*3)\n  | where\
+    \ count > upperBound OR count < lowerBound\n  | `windows_applocker_rare_application_launch_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9556f7b7-285f-4f18-8eeb-963d989f9d27
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_applocker_rare_application_launch_detection.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

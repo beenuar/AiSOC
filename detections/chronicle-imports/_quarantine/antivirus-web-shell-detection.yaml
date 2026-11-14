@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-antivirus-web-shell-detection
+name: antivirus_web_shell_detection
+description: antivirus_web_shell_detection
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule antivirus_web_shell_detection {\n meta:\n    author = \"\
+    Florian Roth\"\n    description = \"Detects a highly relevant Antivirus alert\
+    \ that reports a web shell  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/NFNBlkuPv7R5\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/09/09\"\n    product = \"antivirus\"\n    mitre\
+    \ = \"persistence, t1100\"\n\n  events:\n(re.regex($selection.target.registry.registry_value_data,\
+    \ `PHP/Backdoor.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `JSP/Backdoor.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `ASP/Backdoor.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `Backdoor\\.PHP.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `Backdoor\\.JSP.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `Backdoor\\.ASP.*`) or re.regex($selection.target.registry.registry_value_data,\
+    \ `.*Webshell.*`))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: antivirus_web_shell_detection
+provenance:
+  source: chronicle/detection-rules
+  source_id: antivirus_web_shell_detection
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/antivirus/antivirus_web_shell_detection.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

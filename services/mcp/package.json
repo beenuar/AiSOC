@@ -1,0 +1,71 @@
+{
+  "name": "@aisoc/mcp",
+  "version": "0.1.0",
+  "description": "MCP server that exposes AiSOC (alerts, cases, agent investigations, the decision ledger) to Claude Desktop, Cursor, Cody, Continue, and any MCP-aware agent.",
+  "mcpName": "io.github.beenuar/aisoc",
+  "keywords": [
+    "aisoc",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "cursor",
+    "cody",
+    "soc",
+    "security",
+    "siem"
+  ],
+  "license": "MIT",
+  "author": "AiSOC contributors",
+  "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/beenuar/AiSOC.git",
+    "directory": "services/mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/beenuar/AiSOC/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "aisoc-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "src",
+    "server.json",
+    "README.md"
+  ],
+  "scripts": {
+    "dev": "tsx watch src/index.ts serve",
+    "build": "tsc -p tsconfig.json && node -e \"import('node:fs').then(fs=>fs.chmodSync('dist/index.js', 0o755))\"",
+    "start": "node dist/index.js serve",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.12"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,42 @@
+id: splunk-security-content-a4e8f3a4-48b2-11ec-bcfc-3e22fbd008af
+name: Interactive Session on Remote Endpoint with PowerShell
+description: The following analytic detects the use of the `Enter-PSSession` cmdlet
+  to establish an interactive session on a remote endpoint via the WinRM protocol.
+  It leverages PowerShell Script Block Logging (EventCode=4104) to identify this activity
+  by searching for specific script block text patterns. This behavior is significant
+  as it may indicate lateral movement or remote code execution attempts by adversaries.
+  If confirmed malicious, this activity could allow attackers to execute commands
+  remotely, potentially leading to further compromise of the network and unauthorized
+  access to sensitive information.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.006
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/006/
+- https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/enter-pssession?view=powershell-7.2
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 (ScriptBlockText=\"*Enter-PSSession*\"\
+    \ AND ScriptBlockText=\"*-ComputerName*\")\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `interactive_session_on_remote_endpoint_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: a4e8f3a4-48b2-11ec-bcfc-3e22fbd008af
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/interactive_session_on_remote_endpoint_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

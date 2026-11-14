@@ -1,0 +1,50 @@
+id: splunk-security-content-ad5ac21b-3b1e-492c-8e19-ea5d5e8e5cf1
+name: Linux Persistence and Privilege Escalation Risk Behavior
+description: The following analytic identifies potential Linux persistence and privilege
+  escalation activities. It leverages risk scores and event counts from various Linux-related
+  data sources, focusing on tactics associated with persistence and privilege escalation.
+  This activity is significant for a SOC because it highlights behaviors that could
+  allow an attacker to maintain access or gain elevated privileges on a Linux system.
+  If confirmed malicious, this activity could enable an attacker to execute code with
+  higher privileges, persist in the environment, and potentially access sensitive
+  information, posing a severe security risk.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/tactics/TA0004/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE (\n\
+    \        All_Risk.analyticstories IN (\"Linux Privilege Escalation\", \"Linux\
+    \ Persistence Techniques\")\n        OR\n        source = \"*Linux*\"\n    )\n\
+    \    All_Risk.annotations.mitre_attack.mitre_tactic IN (\"persistence\", \"privilege-escalation\"\
+    ) All_Risk.risk_object_type=\"system\"\n  BY All_Risk.risk_object All_Risk.risk_object_type\
+    \ All_Risk.annotations.mitre_attack.mitre_tactic\n| `drop_dm_object_name(All_Risk)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 4\n| `linux_persistence_and_privilege_escalation_risk_behavior_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: ad5ac21b-3b1e-492c-8e19-ea5d5e8e5cf1
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_persistence_and_privilege_escalation_risk_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

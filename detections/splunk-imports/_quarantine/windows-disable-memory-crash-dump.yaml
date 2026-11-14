@@ -1,0 +1,44 @@
+id: splunk-security-content-59e54602-9680-11ec-a8a6-acde48001122
+name: Windows Disable Memory Crash Dump
+description: The following analytic detects attempts to disable the memory crash dump
+  feature on Windows systems by setting the registry value to 0. It leverages data
+  from the Endpoint.Registry datamodel, specifically monitoring changes to the CrashDumpEnabled
+  registry key. This activity is significant because disabling crash dumps can hinder
+  forensic analysis and incident response efforts. If confirmed malicious, this action
+  could be part of a broader attack strategy, such as data destruction or system destabilization,
+  as seen with HermeticWiper, potentially leading to significant operational disruptions
+  and data loss.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://blog.talosintelligence.com/2022/02/threat-advisory-hermeticwiper.html
+- https://docs.microsoft.com/en-us/troubleshoot/windows-server/performance/memory-dump-file-options
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Registry
+    where (Registry.registry_path="*\\CurrentControlSet\\Control\\CrashControl\\CrashDumpEnabled")
+    AND Registry.registry_value_data="0x00000000" by Registry.action Registry.dest
+    Registry.process_guid Registry.process_id Registry.registry_hive Registry.registry_path
+    Registry.registry_key_name Registry.registry_value_data Registry.registry_value_name
+    Registry.registry_value_type Registry.status Registry.user Registry.vendor_product
+    | `drop_dm_object_name(Registry)` | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `windows_disable_memory_crash_dump_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 59e54602-9680-11ec-a8a6-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_disable_memory_crash_dump.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

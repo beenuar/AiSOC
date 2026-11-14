@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.998,
+  "event_name": "CREATE_DATA_TRANSFER_REQUEST",
+  "event_type": "admin",
+  "user": "ken.o@example.com"
+}

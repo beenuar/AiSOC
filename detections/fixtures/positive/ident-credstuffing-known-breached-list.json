@@ -1,0 +1,5 @@
+{
+  "event_type": "auth_failure",
+  "tries_per_minute": 150.0,
+  "user_agent_in_known_botnet_list": true
+}

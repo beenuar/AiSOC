@@ -1,0 +1,54 @@
+# Cloudflare Tunnel ingress for AiSOC's public demo.
+#
+# `infra/cloudflare/tunnel.sh` renders this template into
+# ~/.cloudflared/aisoc-tryaisoc.yml, substituting placeholders for the
+# tunnel UUID, the credentials path, and the apex domain. See tunnel.sh
+# for the exact substitution markers.
+#
+# Edit the routes here, not the rendered file — the rendered file is
+# regenerated on every run of tunnel.sh.
+
+tunnel: __TUNNEL_ID__
+credentials-file: __CREDENTIALS__
+
+# Healthcheck/metrics for cloudflared itself, on localhost only.
+metrics: 127.0.0.1:20241
+
+ingress:
+  # Web app (Next.js, port 3000 in compose).
+  - hostname: __DOMAIN__
+    service: http://localhost:3000
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      httpHostHeader: __DOMAIN__
+
+  # Core API (FastAPI, port 8000 in compose).
+  - hostname: api.__DOMAIN__
+    service: http://localhost:8000
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      httpHostHeader: api.__DOMAIN__
+
+  # Realtime WebSocket gateway (Go, port 8086 → 4000 internal in compose).
+  - hostname: ws.__DOMAIN__
+    service: http://localhost:8086
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      # WS upgrade requires the original Host header.
+      httpHostHeader: ws.__DOMAIN__
+
+  # Docusaurus docs (optional — only routed if you run `pnpm --filter @aisoc/docs dev`
+  # or build + serve the static site on port 3001).
+  - hostname: docs.__DOMAIN__
+    service: http://localhost:3001
+    originRequest:
+      connectTimeout: 30s
+      noTLSVerify: false
+      httpHostHeader: docs.__DOMAIN__
+
+  # Catch-all — every other request returns 404 from cloudflared itself,
+  # never reaching the local stack.
+  - service: http_status:404

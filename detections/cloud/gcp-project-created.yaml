@@ -1,0 +1,23 @@
+id: det-cloud-207
+name: GCP Project Created
+description: A new project is a new perimeter, often outside whatever guardrails the existing ones carry.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1578
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: cloudresourcemanager
+detection:
+  condition: |
+    method_name == "CreateProject"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

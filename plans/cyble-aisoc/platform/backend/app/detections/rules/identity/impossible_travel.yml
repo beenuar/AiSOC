@@ -1,0 +1,26 @@
+title: Impossible Travel Between Successful Logins
+id: aisoc-id-id-0021-impossible-travel
+status: stable
+description: |
+  Two successful interactive logins for the same user from
+  geographically distant locations within a window that requires
+  movement faster than commercial air travel — strong indicator
+  of stolen credentials or active session theft.
+author: Cyble AiSOC
+level: high
+logsource:
+  category: authentication
+tags:
+  - attack.t1078
+  - attack.initial_access
+  - aisoc.identity
+detection:
+  selection:
+    event.outcome: 'success'
+    event.action:
+      - 'login'
+      - 'signin'
+      - 'UserLoggedIn'
+  velocity:
+    enrich.geo_velocity.kmh|gte: 900
+  condition: selection and velocity

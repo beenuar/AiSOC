@@ -1,0 +1,5 @@
+{
+  "allow_privilege_escalation": true,
+  "environment": "prod",
+  "event_type": "create_pod"
+}

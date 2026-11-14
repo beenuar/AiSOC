@@ -1,0 +1,26 @@
+title: Azure AD New Device Joined by Privileged User
+id: aisoc-id-id-0015-device-join
+status: experimental
+description: |
+  Privileged Azure AD user registers or joins a new device — common
+  attacker step after token theft (e.g., AiTM) to establish persistence
+  and bypass device-based Conditional Access.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: azuread
+  service: auditlogs
+tags:
+  - attack.t1098.005
+  - attack.persistence
+  - aisoc.identity
+detection:
+  selection:
+    event.module: azuread
+    event.action:
+      - 'Add registered owner to device'
+      - 'Add device'
+      - 'Register device'
+  privileged:
+    enrich.identity.privileged: true
+  condition: selection and privileged

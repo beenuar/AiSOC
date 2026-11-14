@@ -1,0 +1,44 @@
+name: "AiSOC — triage your security signals"
+description: "Triage this repo's Dependabot, CodeQL, and secret-scanning alerts with the AiSOC deterministic verdict engine. Verdicts, suppression rationale, and prioritization in a PR comment or job summary."
+author: "AiSOC"
+branding:
+  icon: "shield"
+  color: "purple"
+
+inputs:
+  github-token:
+    description: "Token with security-events:read and (for PR comments) pull-requests:write."
+    required: false
+    default: ${{ github.token }}
+  mode:
+    description: "job-summary | pr-comment | digest"
+    required: false
+    default: "job-summary"
+  min-severity:
+    description: "Lowest severity to include: info | low | medium | high | critical"
+    required: false
+    default: "low"
+  fail-on:
+    description: "Fail the job if any finding lands at this verdict or higher: none | needs_review | true_positive"
+    required: false
+    default: "none"
+  sources:
+    description: "Comma-separated: dependabot,code-scanning,secret-scanning"
+    required: false
+    default: "dependabot,code-scanning,secret-scanning"
+
+outputs:
+  total:
+    description: "Total findings triaged."
+  escalate:
+    description: "Count of findings recommended for escalation."
+  review:
+    description: "Count of findings needing review."
+  suppress:
+    description: "Count of findings recommended for suppression."
+  headline:
+    description: "One-line summary."
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

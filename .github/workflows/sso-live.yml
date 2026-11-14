@@ -1,0 +1,351 @@
+# SSO completes a sign-in — through the real app, against real providers.
+#
+# Why this exists
+# ---------------
+# `services/api/tests/test_sso_provisioning.py` asserts the *shape* of the
+# provisioning path: that the tenant is not an argument, that a group cannot
+# confer `admin`, that the token is signed with the key the API verifies
+# with. All true, and none of it answers whether anybody can sign in.
+#
+# Nothing drove either handler end to end, which is how fix-pass 4.1's
+# defect survived: `_saml_settings()` read its IdP trust anchor from
+# `SAML_IDP_*` while `aisoc_sso_connections.metadata_url` and
+# `.metadata_xml` — written by `POST /sso-connections`, returned by
+# `GET /sso-connections` — were read by nothing. On a stock install the
+# environment is empty, so every assertion was refused while the console
+# showed a configured connection.
+#
+# The three jobs below are deliberately different kinds of evidence; each
+# one's header says what it does and does not prove.
+name: SSO (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Per commit on push and per pull request on a PR. Keying on `github.ref`
+# makes a push to `main` cancel the run before it, which is how required
+# checks end up ungraded on the commits that matter most.
+concurrency:
+  group: sso-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  sso-live:
+    name: SAML and OIDC sign in through the real app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY, and the SSO callback
+      # path writes `aisoc_sso_identities` under a policy whose WITH CHECK
+      # has no null escape — so running as the owner would pass for a
+      # reason no deployment enjoys.
+      SSO_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # NOT `development`: that is in `AUTH_BYPASS_ENVIRONMENTS`, so an
+      # uncredentialed request would resolve to a demo administrator —
+      # inside the one suite whose point is that the principal comes from
+      # the assertion.
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # xmlsec1 is a C library and `python3-saml` will not import without
+      # it. Installed before the lockfile so a missing system package is a
+      # loud failure here rather than a skip later.
+      - name: System libraries python3-saml links against
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Refuse to continue without the SAML stack
+        run: |
+          python -c "import onelogin.saml2.auth" \
+            || { echo "python3-saml did not import; this suite would skip rather than grade."; exit 1; }
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: A signed assertion and a real id_token sign somebody in
+        working-directory: services/api
+        env:
+          ISOLATION_SSO_DSN: ${{ env.SSO_DSN }}
+          DATABASE_URL: ${{ env.SSO_DSN }}
+        run: python -m pytest ../../tests/isolation/test_sso_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Putting the IdP trust anchor back where 4.1 found it — the
+      # environment — must make the suite go red. Without this, "alice
+      # signed in" would pass equally well against a deployment that was
+      # still ignoring the connection the operator configured, because the
+      # environment in that suite happens to name an IdP it does not hold
+      # the key for only by construction.
+      #
+      # Measured on the fix commit: two tests fail,
+      # `test_login_redirects_to_the_sso_url_in_the_connection_metadata`
+      # and `test_an_assertion_signed_by_the_connections_key_signs_someone_in`.
+      - name: The suite fails when SAML trust goes back to the environment
+        working-directory: services/api
+        env:
+          ISOLATION_SSO_DSN: ${{ env.SSO_DSN }}
+          DATABASE_URL: ${{ env.SSO_DSN }}
+        run: |
+          cp app/auth/saml.py /tmp/saml.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/auth/saml.py")
+          s = p.read_text()
+          needle = "        idp, connection_issuer = await _resolve_idp(db, issuer=claimed_issuer)"
+          if needle not in s:
+              print("negative control could not find the connection lookup to remove; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          s = s.replace(needle, "        idp, connection_issuer = environment_idp_settings(), (claimed_issuer or '')", 1)
+          p.write_text(s)
+          PY
+          if python -m pytest ../../tests/isolation/test_sso_live.py -q >/dev/null 2>&1; then
+            cp /tmp/saml.bak app/auth/saml.py
+            echo "FAIL: the suite passed with SAML trust read from the environment."
+            exit 1
+          fi
+          cp /tmp/saml.bak app/auth/saml.py
+          echo "OK: reverting to environment-sourced SAML trust makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_sso_live.py -q
+
+  # ───────────────────────────────────────────────────────────────────────
+  # The containerised identity provider, OIDC half.
+  #
+  # This job was authored where no container runtime would start, so for
+  # its first weeks it had never been observed to pass and said so here.
+  # It has since been **observed to pass on `main`**: run 38118951217,
+  # job 114409519883, 2026-10-11, printing
+  #
+  #     OK: a real Keycloak id_token verified against its published JWKS
+  #     OK: the same token is refused when it names another audience.
+  #
+  # What it proves is narrower than "a user signed in through Keycloak",
+  # and that part of the original caveat stands: there is no browser
+  # here, so the authorization *hop* is not exercised by this job. It
+  # takes a real Keycloak-issued `id_token` through the resource-owner
+  # grant and runs the API's own `_verify_id_token` against Keycloak's
+  # published JWKS — real discovery, real key rotation semantics, real
+  # RS256 from a real provider. The hop against a real provider is the
+  # `keycloak-saml` job below.
+  # ───────────────────────────────────────────────────────────────────────
+  keycloak-oidc:
+    name: A real Keycloak id_token verifies against its published JWKS
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # `docker run`, not a `services:` container: Keycloak's entrypoint
+      # needs the `start-dev` argument and a service container has no way
+      # to supply one. Digest-pinned, resolved from quay's own tag API at
+      # the time this file was written.
+      - name: Start Keycloak
+        run: |
+          docker run -d --name keycloak -p 8080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            start-dev
+          for _ in $(seq 1 60); do
+            curl -sf http://localhost:8080/realms/master >/dev/null && exit 0
+            sleep 5
+          done
+          echo "Keycloak never became ready. Container log follows."
+          docker logs keycloak | tail -50
+          exit 1
+
+      # The whole api lockfile, because the probe imports
+      # `app.auth.oidc` — the production verifier — and that module's
+      # import chain reaches `app.api.v1.deps`. A hand-curated pip list
+      # here would mean the probe runs against software nobody ships,
+      # which is the anti-pattern this repository already removed from its
+      # images.
+      - name: System libraries and the api lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+
+      # One script for both halves so a bootstrap that half-succeeded
+      # cannot leave the verification step reading a realm that is not
+      # there and reporting it as a verification failure.
+      - name: Bootstrap a realm, then verify a real id_token through the API's own code
+        env:
+          ENVIRONMENT: test
+          OTEL_SDK_DISABLED: "true"
+        run: python3 scripts/ci/keycloak_oidc_probe.py
+
+  # ───────────────────────────────────────────────────────────────────────
+  # The containerised identity provider, SAML half. Depth 8.1.
+  #
+  # This is the strongest of the three and the only one that walks the
+  # whole flow against software this repository does not author: the app
+  # builds an AuthnRequest from the trust material an operator stored on
+  # the connection, a real Keycloak renders its own login page, real
+  # credentials are posted to it, Keycloak signs a real Response, and
+  # that document goes to the real `/auth/saml/acs` of an application
+  # built by `create_application()` against real Postgres with every
+  # migration applied.
+  #
+  # Two shipped defects were invisible until it existed, both of which
+  # the self-authored provider in `tests/isolation/test_sso_live.py`
+  # could not have found:
+  #
+  #   * `resolve_saml_connection` bound `:i` untyped, so the `IS NULL`
+  #     branch — the one the console takes — raised on asyncpg and was
+  #     swallowed into "no enabled SAML connection is configured".
+  #   * Keycloak's default role-list mapper emits one `<Attribute
+  #     Name="Role">` per role and python3-saml refuses repeated names,
+  #     so the ACS answered an unhandled 500 to a stock Keycloak.
+  #
+  # The negative control is inside the probe, because it needs the same
+  # assertion: the certificate on the connection is swapped for another
+  # realm's and the identical Response must be refused.
+  # ───────────────────────────────────────────────────────────────────────
+  keycloak-saml:
+    name: A real Keycloak signs somebody in over SAML
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY, and the SSO callback
+      # writes `aisoc_sso_identities` under a policy whose WITH CHECK has
+      # no null escape — so running as the owner would pass for a reason
+      # no deployment enjoys.
+      SSO_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # NOT `development`: that is in `AUTH_BYPASS_ENVIRONMENTS`, so an
+      # uncredentialed request would resolve to a demo administrator —
+      # inside the one job whose point is that the principal comes from
+      # the assertion.
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+      # `127.0.0.1`, never `localhost`. Python's `http.cookiejar` stores a
+      # cookie from a single-label host under the domain `localhost.local`
+      # and then matches nothing, so Keycloak's login POST arrives without
+      # the session it set and answers "cookies are disabled in your
+      # browser" — a failure that looks like a broken sign-in and is a
+      # resolver detail.
+      KEYCLOAK_URL: http://127.0.0.1:8080
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # `docker run`, not a `services:` container: Keycloak's entrypoint
+      # needs the `start-dev` argument and a service container has no way
+      # to supply one. Same digest as the OIDC job above, so the two
+      # cannot drift onto different providers.
+      - name: Start Keycloak
+        run: |
+          docker run -d --name keycloak -p 8080:8080 \
+            -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+            -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            start-dev
+          for _ in $(seq 1 60); do
+            curl -sf http://127.0.0.1:8080/realms/master >/dev/null && exit 0
+            sleep 5
+          done
+          echo "Keycloak never became ready. Container log follows."
+          docker logs keycloak | tail -50
+          exit 1
+
+      # xmlsec1 is a C library and `python3-saml` will not import without
+      # it. Installed before the lockfile so a missing system package is a
+      # loud failure here rather than a skip later.
+      - name: System libraries and the api lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+
+      - name: Refuse to continue without the SAML stack
+        run: |
+          python -c "import onelogin.saml2.auth" \
+            || { echo "python3-saml did not import; this job would report a provider problem for a missing dependency."; exit 1; }
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # A script rather than a pytest suite, deliberately: a script
+      # cannot skip. There is no fixture to go missing and no
+      # `importorskip` to turn an absent dependency into a green run,
+      # which is the failure mode a job named "live" must not have.
+      - name: A real Keycloak signs somebody in, and an untrusted key does not
+        env:
+          ISOLATION_SSO_DSN: ${{ env.SSO_DSN }}
+          DATABASE_URL: ${{ env.SSO_DSN }}
+        run: python3 scripts/ci/keycloak_saml_probe.py
+
+      - name: Keycloak log on failure
+        if: failure()
+        run: docker logs keycloak | tail -80

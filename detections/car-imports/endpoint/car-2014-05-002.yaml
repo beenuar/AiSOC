@@ -1,0 +1,65 @@
+id: mitre-car-car-2014-05-002
+name: Services launching Cmd
+description: 'Windows runs the [Service Control Manager](https://en.wikipedia.org/wiki/Service_Control_Manager)
+  (SCM) within the process `services.exe`. Windows launches services as independent
+  processes or DLL loads within a [svchost.exe](https://en.wikipedia.org/wiki/svchost.exe)
+  group. To be a legitimate service, a process (or DLL) must have the appropriate
+  service entry point [SvcMain](https://msdn.microsoft.com/en-us/library/windows/desktop/ms687414.aspx).
+  If an application does not have the entry point, then it will timeout (default is
+  30 seconds) and the process will be killed.
+
+
+  To survive the timeout, [adversaries and red teams](https://www.operationblockbuster.com/wp-content/uploads/2016/02/Operation-Blockbuster-RAT-and-Staging-Report.pdf)
+  can create services that direct to `cmd.exe` with the flag `/c`, followed by the
+  desired command. The `/c` flag causes the command shell to run a command and immediately
+  exit. As a result, the desired program will remain running and it will report an
+  error starting the service. This analytic will catch that command prompt instance
+  that is used to launch the actual malicious executable. Additionally, the children
+  and descendants of services.exe will run as a SYSTEM user by default. Thus, services
+  are a convenient way for an adversary to gain [Persistence](https://attack.mitre.org/tactics/TA0003)
+  and [Privilege Escalation](https://attack.mitre.org/tactics/TA0004).'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Process
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'process = search Process:Create
+
+      cmd = filter process where (exe == "cmd.exe" and parent_exe == "services.exe")
+
+      output cmd'
+  - name: ''
+    type: Splunk
+    code: index=__your_sysmon_index__ EventCode=1 Image="C:\\Windows\\*\\cmd.exe"
+      ParentImage="C:\\Windows\\*\\services.exe"
+  - name: ''
+    type: EQL
+    code: "process where subtype.create and\n  (process_name == \"cmd.exe\" and parent_process_name\
+      \ == \"services.exe\")"
+  - name: ''
+    type: DNIF
+    code: _fetch * from event where $LogName=WINDOWS-SYSMON AND $EventID=1 AND $App=cmd.exe
+      AND $ParentProcess=regex(.*services.exe.*)i limit 30
+  - name: ''
+    type: LogPoint
+    code: norm_id=WindowsSysmon event_id=1 image="C:\Windows\System32\cmd.exe" parent_image="C:\Windows\System32\services.exe"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-05-002
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-05-002.yaml
+notes:
+  car_status: needs_implementation

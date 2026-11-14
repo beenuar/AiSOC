@@ -1,0 +1,56 @@
+id: splunk-security-content-350837b5-13d3-4c06-b688-db07afbe5050
+name: O365 Exfiltration via File Sync Download
+description: The following analytic detects when an excessive number of files are
+  sync from o365 by the same user over a short period of time. A malicious actor abuse
+  the user-agent string through GUI or API access to evade triggering the FileDownloaded
+  event. This behavior may indicate an attacker staging data for exfiltration or an
+  insider threat removing organizational data. Additional attention should be taken
+  with any Azure Guest (#EXT#) accounts.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1567
+  - T1530
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1567/exfil
+- https://www.varonis.com/blog/sidestepping-detection-while-exfiltrating-sharepoint-data
+- https://thedfirjournal.com/posts/m365-data-exfiltration-rclone/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Operation IN ("filesyncdownload*") UserAgent="*SkyDriveSync*"
+
+    | eval user = replace(mvindex(split(lower(UserId),"#ext#"),0),"_","@"), user_flat
+    = replace(UserId, "[^A-Za-z0-9]","_")
+
+    | where NOT match(SiteUrl,user_flat)
+
+    | stats values(user) as user, latest(ClientIP) as src values(ZipFileName) as file_name,
+    values(Operation) as signature, values(UserAgent) as http_user_agent, dc(SourceFileName)
+    as count, min(_time) as firstTime, max(_time) as lastTime by Workload,UserId,SiteUrl
+
+    | rename SiteUrl as file_path,Workload as app
+
+    | where count > 50
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_exfiltration_via_file_sync_download_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 350837b5-13d3-4c06-b688-db07afbe5050
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_exfiltration_via_file_sync_download.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

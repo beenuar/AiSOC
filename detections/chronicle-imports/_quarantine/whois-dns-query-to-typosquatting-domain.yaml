@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-whois-dns-query-to-typosquatting-domain
+name: whois_dns_query_to_typosquatting_domain
+description: whois_dns_query_to_typosquatting_domain
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule whois_dns_query_to_typosquatting_domain {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Provides example usage of WHOIS data,\
+    \ detecting a DNS query for a domain that contains a specific string and is not\
+    \ registered with the defined domain registrar.\"\n    rule_id = \"mr_32cd8835-d328-4a89-8265-f19cffe89346\"\
+    \n    rule_name = \"WHOIS DNS Query To Typesquatting Domain\"\n    // This rule\
+    \ must be customized to alert on DNS queries for possible typosquatting domains\
+    \ that contain your organization's domain name(s) that are not registered with\
+    \ your approved domain registrar.\n    type = \"hunt\"\n    tags = \"whois\"\n\
+    \    data_source = \"microsoft sysmon\"\n    severity = \"low\"\n    priority\
+    \ = \"low\"\n\n  events:\n    // Match on DNS queries for domains that contain\
+    \ a specific string or company name(s).\n    $dns.metadata.event_type = \"NETWORK_DNS\"\
+    \n    // Customize the value for $dns.network.dns.questions.name to fit your environment.\n\
+    \    $dns.network.dns.questions.name = /threatpunter/ nocase\n    $dns.network.dns.questions.name\
+    \ = $dns_query_name\n\n    // Join DNS query events with WHOIS data.\n    $whois.graph.entity.hostname\
+    \ = $dns_query_name\n    $whois.graph.metadata.entity_type = \"DOMAIN_NAME\"\n\
+    \    $whois.graph.metadata.vendor_name = \"WHOIS\"\n    $whois.graph.metadata.product_name\
+    \ = \"WHOISXMLAPI Simple Whois\"\n    $whois.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\
+    \n\n    // Check if the domain is registered with a registrar other than Mark\
+    \ Monitor.\n    // Customize the values for $whois.graph.entity.domain.registrar\
+    \ based on the approved/expected registrar(s) used by your organization.\n   \
+    \ $whois.graph.entity.domain.registrar != \"MarkMonitor Inc.\"\n\n    // Check\
+    \ if the domain was first seen in our environment within the last 30 days (2592000\
+    \ seconds).\n    $seen.graph.entity.domain.name = $dns_query_name\n    $seen.graph.entity.domain.first_seen_time.seconds\
+    \ > 0\n    2592000 > timestamp.current_seconds() - $seen.graph.entity.domain.first_seen_time.seconds\n\
+    \n  match:\n    // Return the DNS query name when the rule finds a match within\
+    \ a 1 hour time window.\n    $dns_query_name over 1h\n\n  outcome:\n    $event_count\
+    \ = count_distinct($dns.metadata.id)\n    $principal_hostname = array_distinct($dns.principal.hostname)\n\
+    \    $network_dns_questions_name = array_distinct($dns.network.dns.questions.name)\n\
+    \    $network_dns_answers_data = array_distinct($dns.network.dns.answers.data)\n\
+    \    $principal_ip = array_distinct($dns.principal.ip)\n    $target_ip = array_distinct($dns.target.ip)\n\
+    \    $principal_process_pid = array_distinct($dns.principal.process.pid)\n   \
+    \ $principal_process_file_full_path = array_distinct($dns.principal.process.file.full_path)\n\
+    \    $principal_process_product_specific_process_id = array_distinct($dns.principal.process.product_specific_process_id)\n\
+    \    $principal_process_command_line = array_distinct($dns.principal.process.command_line)\n\
+    \    $principal_process_file_sha256 = array_distinct($dns.principal.process.file.sha256)\n\
+    \    $principal_process_parent_process_product_specific_process_id = array_distinct($dns.principal.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($dns.principal.user.userid)\n\n \
+    \ condition:\n    // Trigger rule if a match is found for the following events.\n\
+    \    $dns and $whois and $seen\n}"
+  chronicle_rule_name: whois_dns_query_to_typosquatting_domain
+provenance:
+  source: chronicle/detection-rules
+  source_id: whois_dns_query_to_typosquatting_domain
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/whois_dns_query_to_typosquatting_domain.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

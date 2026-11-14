@@ -1,0 +1,40 @@
+[
+  {
+    "uuid": "8d2c8b9a-6b1a-4f9a-9b9f-0e0e0e0e0e0e",
+    "output": "Terminal shell in container (user=root container_id=abc123 container_name=app shell=bash parent=runc cmdline=bash)",
+    "priority": "CRITICAL",
+    "rule": "Terminal shell in container",
+    "time": "2099-01-01T12:00:00.123456789Z",
+    "output_fields": {
+      "container.id": "abc123",
+      "container.name": "app",
+      "k8s.ns.name": "prod",
+      "k8s.pod.name": "app-xyz",
+      "proc.cmdline": "bash",
+      "user.name": "root"
+    },
+    "hostname": "ip-10-0-0-5"
+  },
+  {
+    "uuid": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "output": "Write below etc detected (user=user1 command=sed -i s/x/y/ /etc/passwd)",
+    "priority": "ERROR",
+    "rule": "Write below etc",
+    "time": "2099-01-01T12:00:30Z",
+    "output_fields": {
+      "user.name": "user1",
+      "fd.name": "/etc/passwd",
+      "container.id": "host"
+    },
+    "hostname": "ip-10-0-0-6"
+  },
+  {
+    "uuid": "11111111-2222-3333-4444-555555555555",
+    "output": "File access (file=/var/log/messages)",
+    "priority": "INFORMATIONAL",
+    "rule": "Read sensitive file untrusted",
+    "time": "2099-01-01T12:01:00Z",
+    "output_fields": {"user.name": "appuser"},
+    "hostname": "ip-10-0-0-7"
+  }
+]

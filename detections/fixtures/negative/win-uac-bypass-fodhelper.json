@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "parent_process": "head-powershell.exe",
+  "process_name": "head-fodhelper.exe"
+}

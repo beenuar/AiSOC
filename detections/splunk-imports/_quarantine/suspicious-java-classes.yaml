@@ -1,0 +1,44 @@
+id: splunk-security-content-6ed33786-5e87-4f55-b62c-cb5f1168b831
+name: Suspicious Java Classes
+description: 'The following analytic identifies suspicious Java classes often used
+  for remote command execution exploits in Java frameworks like Apache Struts.
+
+  It detects this activity by analyzing HTTP POST requests with specific content patterns
+  using Splunk''s `stream_http` data source.
+
+  This behavior is significant because it may indicate an attempt to exploit vulnerabilities
+  in web applications, potentially leading to unauthorized remote code execution.
+
+  If confirmed malicious, this activity could allow attackers to execute arbitrary
+  commands on the server, leading to data breaches, system compromise, and further
+  network infiltration.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`stream_http`\nhttp_method=POST\nhttp_content_length>1\n| regex form_data=\"\
+    (?i)java\\.lang\\.(?:runtime|processbuilder)\"\n| rename src_ip as src\n| stats\
+    \ count earliest(_time) as firstTime\n              latest(_time) as lastTime\n\
+    \              values(url) as uri\n              values(status) as status\n  \
+    \            values(http_user_agent) as http_user_agent\n  BY src dest\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `suspicious_java_classes_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6ed33786-5e87-4f55-b62c-cb5f1168b831
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/suspicious_java_classes.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

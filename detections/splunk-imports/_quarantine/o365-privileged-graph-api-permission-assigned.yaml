@@ -1,0 +1,48 @@
+id: splunk-security-content-868f3131-d5e1-4bf1-af5b-9b0fbaaaedbb
+name: O365 Privileged Graph API Permission Assigned
+description: The following analytic detects the assignment of critical Graph API permissions
+  in Azure AD using the O365 Unified Audit Log. It focuses on permissions such as
+  Application.ReadWrite.All, AppRoleAssignment.ReadWrite.All, and RoleManagement.ReadWrite.Directory.
+  The detection method leverages Azure Active Directory workload events, specifically
+  'Update application' operations. This activity is significant as these permissions
+  provide extensive control over Azure AD settings, posing a high risk if misused.
+  If confirmed malicious, this could allow unauthorized modifications, leading to
+  potential data breaches or privilege escalation. Immediate investigation is crucial.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1003.002
+  categories:
+  - cloud
+references:
+- https://cloudbrothers.info/en/azure-attack-paths/
+- https://github.com/mandiant/Mandiant-Azure-AD-Investigator/blob/master/MandiantAzureADInvestigator.json
+- https://learn.microsoft.com/en-us/graph/permissions-reference
+- https://www.microsoft.com/en-us/security/blog/2024/01/25/midnight-blizzard-guidance-for-responders-on-nation-state-attack/
+- https://posts.specterops.io/azure-privilege-escalation-via-azure-api-permissions-abuse-74aee1006f48
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` Workload=AzureActiveDirectory Operation="Update
+    application." | eval newvalue = mvindex(''ModifiedProperties{}.NewValue'',0) |
+    spath input=newvalue | search "{}.RequiredAppPermissions{}.EntitlementId"="1bfefb4e-e0b5-418b-a88f-73c46d2cc8e9"
+    OR "{}.RequiredAppPermissions{}.EntitlementId"="06b708a9-e830-4db3-a914-8e69da51d44f"
+    OR "{}.RequiredAppPermissions{}.EntitlementId"="9e3f62cf-ca93-4989-b6ce-bf83c28f9fe8"
+    | eval Permissions = ''{}.RequiredAppPermissions{}.EntitlementId'' | fillnull
+    | stats count earliest(_time) as firstTime latest(_time) as lastTime values(Permissions)
+    by user src object user_agent signature vendor_account vendor_product dest | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)` | `o365_privileged_graph_api_permission_assigned_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 868f3131-d5e1-4bf1-af5b-9b0fbaaaedbb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_privileged_graph_api_permission_assigned.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

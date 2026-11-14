@@ -1,0 +1,24 @@
+title: AWS STS AssumeRole Chain Across Accounts
+id: aisoc-id-cl-0005-sts-chain
+status: stable
+description: |
+  AssumeRole called against a role in a different account by a session
+  that was itself created from AssumeRole — classic privilege-escalation
+  chain when paired with a misconfigured trust policy.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1078.004
+  - attack.privilege_escalation
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'sts.amazonaws.com'
+    event.action: 'AssumeRole'
+    aws.user_identity.type: 'AssumedRole'
+    enrich.iam.crosses_account: true
+  condition: selection

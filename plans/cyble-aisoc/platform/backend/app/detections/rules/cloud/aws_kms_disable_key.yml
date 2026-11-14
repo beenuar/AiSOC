@@ -1,0 +1,25 @@
+title: AWS KMS Key Disabled or Scheduled for Deletion
+id: aisoc-id-cl-0006-kms-disable
+status: stable
+description: |
+  Disabling or scheduling a KMS key for deletion can break access to
+  encrypted resources and is a common destructive / ransomware-pivot
+  action against AWS environments.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: aws
+  service: cloudtrail
+tags:
+  - attack.t1485
+  - attack.impact
+  - aisoc.cloud
+detection:
+  selection:
+    event.module: aws
+    aws.event_source: 'kms.amazonaws.com'
+    event.action|contains:
+      - 'DisableKey'
+      - 'ScheduleKeyDeletion'
+      - 'DeleteAlias'
+  condition: selection

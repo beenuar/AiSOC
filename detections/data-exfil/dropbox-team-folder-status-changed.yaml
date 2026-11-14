@@ -1,0 +1,23 @@
+id: det-data-exfil-043
+name: Dropbox Team Folder Status Changed
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Team
+  Folder Status Changed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: data-exfil
+log_source:
+  product: dropbox
+  service: events
+detection:
+  condition: |
+    event_type == "dropbox.team_folder_change_status"
+false_positives:
+- Team restructure with a change ticket
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

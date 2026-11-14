@@ -1,0 +1,69 @@
+id: splunk-security-content-9a8d5516-4c5e-11ef-9d42-acde48001122
+name: Curl Execution with Percent Encoded URL
+description: 'The following analytic detects the execution of the curl utility where
+  the command line includes percent-encoded characters and explicit file output options
+  (such as -o or --output).
+
+  It leverages process execution telemetry from Endpoint Detection and Response (EDR)
+  data sources to identify curl commands that may be using URL encoding to obfuscate
+  download locations or payload paths.
+
+  This behavior is notable because percent-encoded URLs are commonly used by adversaries
+  to evade simple string-based detections, hide malicious infrastructure, or bypass
+  network security controls.
+
+  When combined with file download behavior, this activity may indicate malware staging,
+  payload retrieval, or secondary tool deployment.
+
+  Analysts should review the decoded URL, destination host, parent process, and downloaded
+  file to determine whether the activity is authorized or malicious.
+
+  The analytic calculates the number of percent (%) characters in the curl command
+  line and triggers when a threshold of three or more is met, indicating potential
+  URL encoding.
+
+  Adjust the threshold as needed based on your environment and tuning requirements.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027
+  - T1105
+  categories:
+  - endpoint
+references:
+- https://github.com/nasbench/Misc-Research/blob/main/LOLBINs/Curl.md
+- https://attack.mitre.org/techniques/T1027/
+- https://attack.mitre.org/techniques/T1105/
+- https://curl.se/docs/manpage.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\nfrom datamodel=Endpoint.Processes where\n(\n\
+    \  Processes.process_name IN (\"curl.exe\", \"curl\")\n  OR\n  Processes.original_file_name=\"\
+    curl.exe\"\n)\nProcesses.process IN (\n  \"* --output *\",\n  \"* -o *\"\n)\n\
+    Processes.process IN (\"*%*\")\nby Processes.action Processes.dest Processes.original_file_name\n\
+    \   Processes.parent_process Processes.parent_process_exec\n   Processes.parent_process_guid\
+    \ Processes.parent_process_id\n   Processes.parent_process_name Processes.parent_process_path\n\
+    \   Processes.process Processes.process_exec Processes.process_guid\n   Processes.process_hash\
+    \ Processes.process_id\n   Processes.process_integrity_level Processes.process_name\n\
+    \   Processes.process_path Processes.user\n   Processes.user_id Processes.vendor_product\n\
+    \n| `drop_dm_object_name(Processes)`\n\n```\n  Count the number of % characters\
+    \ in the process command line.\n  Change this threshold based on your environment\
+    \ and tuning needs.\n```\n| eval percent_count = mvcount(split(process, \"%\"\
+    )) - 1\n| where percent_count >= 3\n\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `curl_execution_with_percent_encoded_url_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9a8d5516-4c5e-11ef-9d42-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/curl_execution_with_percent_encoded_url.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

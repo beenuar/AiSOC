@@ -1,0 +1,5 @@
+{
+  "event_type": "role_grant",
+  "is_business_hours": false,
+  "role_priv": true
+}

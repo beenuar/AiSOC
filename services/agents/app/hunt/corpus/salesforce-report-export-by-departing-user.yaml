@@ -1,0 +1,41 @@
+id: hunt-salesforce-report-export-by-departing-user
+name: Large CRM export by an account in its notice period
+description: |
+  Large exports are part of sales operations. The same export by someone whose last day is scheduled is the single most common insider-risk pattern.
+version: 1.0.0
+severity: high
+category: data-exfil
+tags:
+  - mitre.attack.t1567
+  - hunt.insider
+log_sources:
+  - salesforce
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did an account flagged as leaving export a large report?
+  indicators:
+    - field: "source"
+      equals: "salesforce"
+    - field: "EventType"
+      in: ["ReportExport"]
+    - field: "rowsExported"
+      gte: 5000
+    - field: "userIsInNoticePeriod"
+      equals: true
+expected:
+  positive_incident_id: INC-HUNT-038
+  positive_template_id: hunt-salesforce-report-export-by-departing-user
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-038-NEG
+  # The negative inverts userIsInNoticePeriod, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1567/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

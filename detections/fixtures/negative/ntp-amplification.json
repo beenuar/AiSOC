@@ -1,0 +1,8 @@
+{
+  "dst_port": 123,
+  "ntp_command": "version",
+  "protocol": "UDP",
+  "src_ip": "10.0.5.7",
+  "src_ip_class": "internal",
+  "src_port": 123
+}

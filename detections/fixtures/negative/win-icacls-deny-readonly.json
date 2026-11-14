@@ -1,0 +1,5 @@
+{
+  "event_id": 2.0,
+  "process_command_line": "/deny everyone",
+  "process_name": "head-icacls.exe"
+}

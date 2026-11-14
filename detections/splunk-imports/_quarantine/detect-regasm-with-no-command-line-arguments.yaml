@@ -1,0 +1,48 @@
+id: splunk-security-content-c3bc1430-04e7-4178-835f-047d8e6e97df
+name: Detect Regasm with no Command Line Arguments
+description: The following analytic detects instances of regasm.exe running without
+  command line arguments. This behavior typically indicates process injection, where
+  another process manipulates regasm.exe. The detection leverages Endpoint Detection
+  and Response (EDR) data, focusing on process names and command-line executions.
+  This activity is significant as it may signal an attempt to evade detection or execute
+  malicious code. If confirmed malicious, attackers could achieve code execution,
+  potentially leading to privilege escalation, persistence, or access to sensitive
+  information. Investigate network connections, parallel processes, and suspicious
+  module loads for further context.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.009
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/009/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.009/T1218.009.md
+- https://lolbas-project.github.io/lolbas/Binaries/Regasm/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count FROM datamodel=Endpoint.Processes\
+    \ where\n(Processes.process_name=regasm.exe OR Processes.original_file_name=RegAsm.exe)\n\
+    Processes.process IN (\"*regasm\",\"*regasm.exe\", \"*regasm.exe\\\"\")\nby Processes.action\
+    \ Processes.dest Processes.original_file_name\n   Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n   Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n   Processes.process Processes.process_exec Processes.process_guid\
+    \ Processes.process_hash\n   Processes.process_id Processes.process_integrity_level\
+    \ Processes.process_name Processes.process_path\n   Processes.user Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `detect_regasm_with_no_command_line_arguments_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c3bc1430-04e7-4178-835f-047d8e6e97df
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/detect_regasm_with_no_command_line_arguments.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

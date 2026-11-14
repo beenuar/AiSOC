@@ -1,0 +1,72 @@
+id: chronicle-detection-rules-google-safebrowsing-file-contacts-tor-exit-node
+name: google_safebrowsing_file_contacts_tor_exit_node
+description: google_safebrowsing_file_contacts_tor_exit_node
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule google_safebrowsing_file_contacts_tor_exit_node {\n\n  meta:\n    author\
+    \ = \"Google Cloud Security\"\n    description = \"A malicious file contacting\
+    \ a known Tor Exit Node.\"\n    rule_id = \"mr_f6733319-50b3-477e-bad6-96bb4c14c632\"\
+    \n    rule_name = \"Google Safebrowsing File Contacts Tor Exit Node\"\n    tactic\
+    \ = \"TA0011\"\n    technique = \"T1090.003\"\n    type = \"alert\"\n    data_source\
+    \ = \"microsoft defender atp, crowdstrike, microsoft sysmon\"\n    severity =\
+    \ \"Critical\"\n    priority = \"High\"\n\n  events:\n    $network.metadata.event_type\
+    \ = \"NETWORK_CONNECTION\"\n    $network.principal.process.file.sha256 != \"\"\
+    \n    $network.principal.process.file.sha256 = $file_hash\n    $network.principal.hostname\
+    \ = $hostname\n    $network.target.ip = $ip\n\n    // Safe Browsing file hashes\
+    \ provided by GCTI Feed\n    $safebrowse.graph.metadata.product_name = \"Google\
+    \ Safe Browsing\"\n    $safebrowse.graph.metadata.entity_type = \"FILE\"\n   \
+    \ $safebrowse.graph.metadata.source_type = \"GLOBAL_CONTEXT\"\n    $safebrowse.graph.metadata.threat.category\
+    \ = \"SOFTWARE_MALICIOUS\"\n    $safebrowse.graph.entity.file.sha256 = $file_hash\n\
+    \n    // Tor IP listing provided by GCTI Feed\n    $gcti.graph.entity.artifact.ip\
+    \ = $ip\n    $gcti.graph.metadata.entity_type = \"IP_ADDRESS\"\n    $gcti.graph.metadata.source_type\
+    \ = \"GLOBAL_CONTEXT\"\n    $gcti.graph.metadata.threat.threat_feed_name = \"\
+    Tor Exit Nodes\"\n    $gcti.graph.metadata.vendor_name = \"Google Cloud Threat\
+    \ Intelligence\"\n    $gcti.graph.metadata.product_name = \"GCTI Feed\"\n\n  match:\n\
+    \    $hostname over 1h\n\n  outcome:\n    $risk_score = 95\n    $event_count =\
+    \ count_distinct($network.metadata.id)\n    //added to populate alert graph with\
+    \ additional context\n    $principal_ip = array_distinct($network.principal.ip)\n\
+    \    $target_ip = array_distinct($network.target.ip)\n    $principal_process_pid\
+    \ = array_distinct($network.principal.process.pid)\n    $principal_process_command_line\
+    \ = array_distinct($network.principal.process.command_line)\n    $principal_process_file_sha256\
+    \ = array_distinct($network.principal.process.file.sha256)\n    $principal_process_file_full_path\
+    \ = array_distinct($network.principal.process.file.full_path)\n    $principal_process_product_specific_process_id\
+    \ = array_distinct($network.principal.process.product_specific_process_id)\n \
+    \   $principal_process_parent_process_product_specific_process_id = array_distinct($network.principal.process.parent_process.product_specific_process_id)\n\
+    \    //$target_process_pid = array_distinct($network.target.process.pid)\n   \
+    \ $target_process_command_line = array_distinct($network.target.process.command_line)\n\
+    \    $target_process_file_sha256 = array_distinct($network.target.process.file.sha256)\n\
+    \    $target_process_file_full_path = array_distinct($network.target.process.file.full_path)\n\
+    \    $target_process_product_specific_process_id = array_distinct($network.target.process.product_specific_process_id)\n\
+    \    $target_process_parent_process_product_specific_process_id = array_distinct($network.target.process.parent_process.product_specific_process_id)\n\
+    \    $principal_user_userid = array_distinct($network.principal.user.userid)\n\
+    \    $target_user_userid = array_distinct($network.target.user.userid)\n\n  condition:\n\
+    \    $network and $gcti and $safebrowse\n}"
+  chronicle_rule_name: google_safebrowsing_file_contacts_tor_exit_node
+provenance:
+  source: chronicle/detection-rules
+  source_id: google_safebrowsing_file_contacts_tor_exit_node
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/threat_intel/google_safebrowsing_file_contacts_tor_exit_node.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

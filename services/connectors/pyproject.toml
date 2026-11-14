@@ -1,0 +1,97 @@
+[tool.poetry]
+name = "aisoc-connectors"
+version = "0.1.0"
+description = "AiSOC Security Source Connectors"
+authors = ["Beenu Arora <beenu@cyble.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+# Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
+# "204 must not have a response body" assert at import. One range for
+# every service — see services/api/pyproject.toml for the measurement.
+fastapi = ">=0.117,<0.163"
+uvicorn = {extras = ["standard"], version = "^0.27.0"}
+httpx = "^0.26.0"
+pydantic = "^2.5.0"
+pydantic-settings = "^2.1.0"
+structlog = "^24.1.0"
+boto3 = "^1.34.0"
+# Scheduler + DB access for the connector polling loop. apscheduler runs
+# in-process (one job per enabled connector instance); SQLAlchemy + asyncpg
+# read the canonical connectors table that lives in the API service's
+# Postgres so this microservice stays a stateless poller — no schema
+# ownership, no migrations.
+#
+# The `asyncio` extra is what pulls `greenlet`, and `app/db/engine.py` calls
+# `create_async_engine`, so without it the poller cannot open its connection.
+# It resolved anyway up to SQLAlchemy 2.0.x, which required `greenlet` outside
+# the extra on this platform; 2.1.0 dropped that and the extra became the only
+# thing that installs it. Every other service reaching
+# `sqlalchemy.ext.asyncio` already declared it — this one was the exception.
+apscheduler = "^3.10.0"
+sqlalchemy = { version = "^2.0.0", extras = ["asyncio"] }
+asyncpg = "^0.29.0"
+# Cryptography is required to decrypt the auth_config blob written by the
+# API service's CredentialVault. We share AISOC_CREDENTIAL_KEY across both
+# services via the deployment's secret store.
+# One range across every service that touches the vault: the Fernet /
+# MultiFernet token format is a contract between the writer (api) and the
+# readers (connectors, agents, osquery-tls), and they share one
+# AISOC_CREDENTIAL_KEY. The floor is 46 rather than the 44.0.1 that cleared
+# CVE-2024-12797 because agents already required 46 and CI was installing
+# `>=41,<46` — a range disjoint from what the image shipped.
+cryptography = ">=46,<51"
+
+[tool.poetry.group.dev.dependencies]
+# Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
+# pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
+# resolve together or not at all.
+pytest = ">=9.0.3,<10.0"
+pytest-asyncio = ">=1.0,<2.0"
+# The CI job that runs this suite reads a coverage floor out of the
+# `[tool.coverage.report]` table below, and the plugin that enforces it was
+# installed by the workflow rather than declared here. A floor whose reader
+# lives somewhere else is a floor that can be dropped by editing a file this
+# service does not own.
+pytest-cov = ">=5,<8"
+respx = "^0.20.0"
+
+# Phase 2.2 — coverage floor for CI gate.
+#
+# Measured baseline at the time of introduction: 70%. Floor is set at
+# 68% (current - 2pp) so flaky branch-execution variance doesn't break
+# main, while still catching any real regression. Raise this number as
+# the suite grows — never lower it. The pyproject is consulted by
+# `pytest --cov-config=pyproject.toml --cov=app` in
+# `python-services-wave-2-test`.
+#
+# Why pyproject instead of pytest.ini: keeps the floor next to the dep
+# constraint that produced it, so a bump in either is reviewed in the
+# same diff.
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 66
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]
+
+# Same shape as services/api and services/osquery-tls rather than a third
+# strictness level. `python_version` is pinned so the finding set does not
+# move with whatever interpreter mypy happens to run on.
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

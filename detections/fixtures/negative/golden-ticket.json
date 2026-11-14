@@ -1,0 +1,6 @@
+{
+  "event_id": 4624,
+  "logon_type": 3,
+  "ticket_lifetime_hours": 8,
+  "user": "user@corp.com"
+}

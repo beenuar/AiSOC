@@ -1,0 +1,4 @@
+{
+  "enable_rbac": false,
+  "operation_name": "head-managedClusters/write"
+}

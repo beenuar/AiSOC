@@ -1,0 +1,47 @@
+id: splunk-security-content-e02af35c-1de5-4afe-b4be-f45aba57272b
+name: GetNetTcpconnection with PowerShell
+description: The following analytic identifies the execution of `powershell.exe` with
+  the `Get-NetTcpConnection` command, which lists current TCP connections on a system.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions. Monitoring this activity
+  is significant as it may indicate an adversary or Red Team performing network reconnaissance
+  or situational awareness. If confirmed malicious, this activity could allow attackers
+  to map network connections, aiding in lateral movement or further exploitation within
+  the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1049
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1049/
+- https://docs.microsoft.com/en-us/powershell/module/nettcpip/get-nettcpconnection?view=windowsserver2019-ps
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  Processes.process_name=\"powershell.exe\"\n    )\n    (Processes.process=*Get-NetTcpConnection*)\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `getnettcpconnection_with_powershell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e02af35c-1de5-4afe-b4be-f45aba57272b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/getnettcpconnection_with_powershell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

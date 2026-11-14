@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-public-cyber-enemy-emotet-has-returned
+name: public_cyber_enemy_emotet_has_returned
+description: public_cyber_enemy_emotet_has_returned
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule public_cyber_enemy_emotet_has_returned {\n meta:\n    author\
+    \ = \"Osman Demir\"\n    description = \"Detects Emotet  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/mX8YnI2czLHA\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1193, Initial_Access\"\n\n  events:\n(($selection.metadata.product_event_type\
+    \ = \"1\" and ((re.regex($selection.target.process.file.full_path, `.*/powershell\\\
+    .exe`) and re.regex($selection.target.process.command_line, `powersheLL -e .*[Net\\\
+    .ServicePointManager]::\\\\\\\"SecuRiTYPrOTOcoL\\\\\\\" = .*sPlIT\\\\\\\"\\([char]42\\\
+    );.*DOWNLoADFIlE\\\\\\\".* {\\([wmiclass]'win32_Process'\\)\\.\\\\\\\"crEAte\\\
+    \\\\\".*}}catch{}}.*`)) or (re.regex($selection.principal.process.file.full_path,\
+    \ `C:\\\\Users\\\\.*\\\\988\\.exe`) and re.regex($selection.target.process.file.full_path,\
+    \ `C:\\\\Users\\\\.*\\\\AppData\\\\Local\\\\wmidx\\\\tsbyuv\\.exe`)))) or ($selection.metadata.product_event_type\
+    \ = \"13\" and re.regex($selection.target.process.file.full_path, `.*\\\\tsbyuv\\\
+    .exe`) and $selection.target.registry.registry_key = \"HKEY_CURRENT_USER\\\\Software\\\
+    \\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run\" and re.regex($selection.target.registry.registry_value_data,\
+    \ `\\\"C:\\\\Users\\\\.*\\\\AppData\\\\Local\\\\wmidx\\\\tsbyuv\\.exe\\\\\\\"\
+    `)) or ($selection.target.file.md5 = \"5d2c6110f2ea87a6b7fe9256affbac0eebdeee18081d59e05df4b4a17417492b\"\
+    \ or $selection.target.file.md5 = \"4fdff0ebd50d37a32eb5c3a1b2009cb9764e679d8ee95ca7551815b7e8406206\"\
+    \ or $selection.target.file.md5 = \"bb5602ea74258ccad36d28f6a5315d07fbeb442a02d0c91b39ca6ba0a0fe71a2\"\
+    \ or $selection.target.file.md5 = \"6d86e68c160b25d25765a4f1a2f8f1f032b2d5cb0d1f39d1d504eeaa69492de0\"\
+    \ or $selection.target.file.md5 = \"18fab1420a6a968e88909793b3d87af2e8e1e968bf7279d981276a2aa8aa678e\"\
+    \ or $selection.target.file.md5 = \"d5213404d4cc40494af138f8051b01ec3f1856b72de3e24f75aca8c024783e89\"\
+    ))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: public_cyber_enemy_emotet_has_returned
+provenance:
+  source: chronicle/detection-rules
+  source_id: public_cyber_enemy_emotet_has_returned
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/public_cyber_enemy_emotet_has_returned.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

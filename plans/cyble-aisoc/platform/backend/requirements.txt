@@ -1,0 +1,14 @@
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlmodel>=0.0.22
+pydantic>=2.9
+pydantic-settings>=2.6
+httpx>=0.28
+websockets>=13.1
+python-multipart>=0.0.12
+rich>=13.9
+anthropic>=0.39
+openai>=1.54
+redis>=5.2
+qdrant-client>=1.12
+neo4j>=5.25

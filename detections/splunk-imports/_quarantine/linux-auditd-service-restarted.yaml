@@ -1,0 +1,39 @@
+id: splunk-security-content-8eb3e858-18d3-44a4-a514-52cfa39f154a
+name: Linux Auditd Service Restarted
+description: The following analytic detects the restarting or re-enabling of services
+  on Linux systems using the `systemctl` or `service` commands. It leverages data
+  from Linux Auditd, focusing on process and command-line execution logs. This activity
+  is significant as adversaries may use it to maintain persistence or execute unauthorized
+  actions. If confirmed malicious, this behavior could lead to repeated execution
+  of malicious payloads, unauthorized access, or data destruction. Security analysts
+  should investigate these events to mitigate risks and prevent further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1053.006
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1543/003/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  proctitle IN (\"*systemctl *\", \"*service *\") AND\
+    \ proctitle IN (\"*restart*\", \"*reenable*\", \"*reload*\")\n  | rename host\
+    \ as dest\n  | stats count min(_time) as firstTime max(_time) as lastTime\n  \
+    \  BY proctitle dest\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_service_restarted_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8eb3e858-18d3-44a4-a514-52cfa39f154a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_service_restarted.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

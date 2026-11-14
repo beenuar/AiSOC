@@ -1,0 +1,44 @@
+id: splunk-security-content-b5cd5526-cce7-11eb-b3bd-acde48001122
+name: WMI Recon Running Process Or Services
+description: The following analytic identifies suspicious PowerShell script execution
+  via EventCode 4104, where WMI performs an event query to list running processes
+  or services. This detection leverages PowerShell Script Block Logging to capture
+  and analyze script block text for specific WMI queries. This activity is significant
+  as it is commonly used by malware and APT actors to map security applications or
+  services on a compromised machine. If confirmed malicious, this could allow attackers
+  to identify and potentially disable security defenses, facilitating further compromise
+  and persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1592
+  categories:
+  - endpoint
+references:
+- https://news.sophos.com/en-us/2020/05/12/maze-ransomware-1-year-counting/
+- https://www.eideon.com/2018-03-02-THL03-WMIBackdoors/
+- https://github.com/trustedsec/SysmonCommunityGuide/blob/master/chapters/WMI-events.md
+- https://in.security/2019/04/03/an-intro-into-abusing-and-identifying-wmi-event-subscriptions-for-persistence/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText= \"*SELECT*\" AND (ScriptBlockText=\"\
+    *Win32_Process*\" OR ScriptBlockText=\"*Win32_Service*\")\n  | fillnull\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY dest signature\
+    \ signature_id\n       user_id vendor_product EventID\n       Guid Opcode Name\n\
+    \       Path ProcessID ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `wmi_recon_running_process_or_services_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b5cd5526-cce7-11eb-b3bd-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/wmi_recon_running_process_or_services.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

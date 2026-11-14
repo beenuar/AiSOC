@@ -1,0 +1,40 @@
+{
+  "disclaimer": "reference list prices; verify against your provider/region and negotiated rates",
+  "rate_card_usd_per_gb_month": {
+    "cold_archive": 0.0125,
+    "hot_block": 0.08,
+    "warm_object": 0.023
+  },
+  "raw_tb_ingested_per_month": 30.0,
+  "scenario": {
+    "compression_ratio": 8.0,
+    "raw_tb_per_day": 1.0,
+    "retention_days": {
+      "cold_archive": 275,
+      "hot_block": 30,
+      "warm_object": 60
+    }
+  },
+  "tiers": {
+    "cold_archive": {
+      "monthly_usd": 429.69,
+      "rate_usd_per_gb_month": 0.0125,
+      "resident_gb": 34375.0,
+      "retention_days": 275
+    },
+    "hot_block": {
+      "monthly_usd": 300.0,
+      "rate_usd_per_gb_month": 0.08,
+      "resident_gb": 3750.0,
+      "retention_days": 30
+    },
+    "warm_object": {
+      "monthly_usd": 172.5,
+      "rate_usd_per_gb_month": 0.023,
+      "resident_gb": 7500.0,
+      "retention_days": 60
+    }
+  },
+  "total_monthly_usd": 902.19,
+  "usd_per_raw_tb_ingested": 30.07
+}

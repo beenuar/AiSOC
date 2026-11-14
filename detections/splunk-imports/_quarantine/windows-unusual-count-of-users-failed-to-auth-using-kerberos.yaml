@@ -1,0 +1,43 @@
+id: splunk-security-content-bc9cb715-08ba-40c3-9758-6e2b26e455cb
+name: Windows Unusual Count Of Users Failed To Auth Using Kerberos
+description: The following analytic identifies a source endpoint failing to authenticate
+  multiple valid users using the Kerberos protocol, potentially indicating a Password
+  Spraying attack. It leverages Event 4771, which is generated when the Key Distribution
+  Center fails to issue a Kerberos Ticket Granting Ticket (TGT) due to a wrong password
+  (failure code 0x18). This detection uses statistical analysis, specifically the
+  3-sigma rule, to identify unusual authentication failures. If confirmed malicious,
+  this activity could allow an attacker to gain initial access or elevate privileges
+  within an Active Directory environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1110/003/
+- https://docs.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/dn319109(v=ws.11)
+- https://docs.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4771
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4771 TargetUserName!=\"*$\" Status=0x18\n\
+    \  | bucket span=5m _time\n  | stats dc(TargetUserName) AS unique_accounts values(TargetUserName)\
+    \ as user values(dest) as dest\n    BY _time, IpAddress\n  | eventstats avg(unique_accounts)\
+    \ as comp_avg , stdev(unique_accounts) as comp_std\n    BY IpAddress\n  | eval\
+    \ upperBound=(comp_avg+comp_std*3)\n  | eval isOutlier=if(unique_accounts > 10\
+    \ and unique_accounts >= upperBound, 1, 0)\n  | search isOutlier=1\n  | `windows_unusual_count_of_users_failed_to_auth_using_kerberos_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bc9cb715-08ba-40c3-9758-6e2b26e455cb
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unusual_count_of_users_failed_to_auth_using_kerberos.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

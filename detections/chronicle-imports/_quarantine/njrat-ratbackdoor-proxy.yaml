@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-njrat-ratbackdoor-proxy
+name: njrat_ratbackdoor_proxy
+description: njrat_ratbackdoor_proxy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule njrat_ratbackdoor_proxy {\n meta:\n    author = \"Alexandr\
+    \ Yampolskyi, SOC Prime\"\n    description = \"NjRAT RAT/Backdoor Detector.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/InMMGPzClfBy\"\n    version\
+    \ = \"0.01\"\n    created = \"2016/11/24\"\n    product = \"proxy\"\n    mitre\
+    \ = \"Command and Control, t1071\"\n\n  events:\n($selectionURL.target.url = \"\
+    http://ghancommercialbank.com/msn/newclient.exe\" or $selectionURL.target.url\
+    \ = \"http://f.top4top.net/p_3667b75e1.png\" or $selectionURL.target.url = \"\
+    http://f.top4top.net/p_42526hb61.png\" or $selectionURL.target.url = \"http://cdn.discordapp.com/attachments/482228034632548363/506077641061826561/doublepumpcheck.exe\"\
+    \ or $selectionURL.target.url = \"http://cdn.discordapp.com/attachments/482925954109276160/507526114491498496/photoshop.exe\"\
+    \ or $selectionURL.target.url = \"https://cdn.discordapp.com/attachments/436298448665575427/481620773501534208/111111111.exe\"\
+    \ or $selectionURL.target.url = \"http://ldrldr.icu/njr.exe\" or $selectionURL.target.url\
+    \ = \"http://kapitanbomba.hopto.org/file.exe\" or $selectionURL.target.url = \"\
+    https://s3.us-east-2.amazonaws.com/qued/xwizard.exe\" or $selectionURL.target.url\
+    \ = \"https://cdn.discordapp.com/attachments/498525611422121996/507533173954183170/Server.exe\"\
+    )\n\n  condition:\n    $selectionURL\n}"
+  chronicle_rule_name: njrat_ratbackdoor_proxy
+provenance:
+  source: chronicle/detection-rules
+  source_id: njrat_ratbackdoor_proxy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/proxy/njrat_rat_backdoor__proxy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

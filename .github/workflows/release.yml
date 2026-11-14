@@ -1,0 +1,1503 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  # Re-run the image half of a release that only partly published.
+  #
+  # v11.0.0 is the case: twelve images carried the tag and the console did
+  # not, because its arm64 leg livelocked under QEMU and was still running
+  # hours later. Without this the only way to finish that release was to
+  # invent a new tag for a commit that had already shipped — so the registry
+  # stayed wrong because correcting it was more disruptive than leaving it.
+  #
+  # Dispatch this from `main` so the current workflow definition runs, and
+  # name the tag to publish; the build checks that tag out for its source.
+  # The GitHub Release stays skipped, because re-cutting a release note is not
+  # a thing anyone wants, and no package is ever *uploaded* on a dispatch,
+  # because re-publishing a package version is not a thing registries allow.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag whose images should be (re)published, e.g. v11.0.0. Ignored when packages_only is set.'
+        required: true
+        type: string
+      promote_stable:
+        description: 'Move the `stable` tag onto this release. A major does not move it automatically, because a major means an operator must act.'
+        required: false
+        default: false
+        type: boolean
+      # A workflow change nobody can exercise is a claim. The packaging half
+      # of a release otherwise runs only on a tag push, which is the worst
+      # possible moment to discover it is wrong — so this runs it on demand:
+      # build, pack, validate and report, with the image rebuild skipped and
+      # no upload reachable. It is also how a maintainer checks that every
+      # package is still publishable before cutting a tag.
+      packages_only:
+        description: 'Run only the packaging and publication report. Skips the image rebuild, uploads nothing, and ignores `tag`.'
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  packages: write
+  # Keyless cosign signing + SLSA provenance attestation need an OIDC token.
+  id-token: write
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      # Before anything publishes. A release whose version and notes disagree
+      # is far cheaper to stop than to withdraw: images carry the tag,
+      # registries refuse a re-upload of a package version, and the release
+      # note is the first thing an operator reads. Both directions are
+      # checked: a major with no BREAKING section, and a BREAKING section on
+      # something that is not a major.
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: The tag and its changelog section agree about breakage
+        run: python3 scripts/check_release_policy.py --tag "${GITHUB_REF_NAME}"
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
+
+      # The body is written to a file and handed to the action by path. It used
+      # to travel through a step output into an action *input*, which becomes a
+      # process argument — and v10.0.0's section is 263,761 characters, so the
+      # runner died with `Argument list too long` before the API was reached.
+      # Because docker-build, npm-publish and pypi-publish all `needs: release`,
+      # one oversized note skipped every image and every package in the
+      # release: the whole publish, lost to a shell limit.
+      #
+      # GitHub separately caps a release body at 125,000 characters, which that
+      # same section exceeds on its own, so length has to be handled rather
+      # than merely passed differently. An over-long note is cut at a top-level
+      # bullet boundary so it never ends mid-sentence, and it says in the body
+      # that it was cut, how many entries are missing and where the complete
+      # text is. A note silently missing half its entries is the failure this
+      # repository keeps auditing for; a truncation that announces itself is
+      # not that. Sections are ordered BREAKING first, so what survives a cut
+      # is the part an upgrader has to read.
+      - name: Build release body
+        id: changelog
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          CLEAN="${VERSION#v}"
+          awk -v v="$CLEAN" '
+            $0 ~ "^## \\[" v "\\]" {found=1; next}
+            found && /^## \[/ {exit}
+            found {print}
+          ' CHANGELOG.md > release-body.md
+          if [ ! -s release-body.md ]; then
+            echo "::error::CHANGELOG.md has no [${CLEAN}] section, so the release body would be empty."
+            exit 1
+          fi
+          CLEAN="$CLEAN" python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          LIMIT = 125_000   # GitHub's hard cap on a release body.
+          MARGIN = 2_000    # Room for the truncation notice itself.
+
+          path = Path("release-body.md")
+          body = path.read_text(encoding="utf-8")
+          if len(body) <= LIMIT:
+              print(f"release body: {len(body)} characters, within GitHub's {LIMIT}")
+              raise SystemExit(0)
+
+          # Split on the boundaries a reader recognises, so a cut lands between
+          # entries rather than inside one.
+          blocks: list[str] = []
+          current: list[str] = []
+          for line in body.splitlines(keepends=True):
+              if current and (line.startswith("- ") or line.startswith("### ")):
+                  blocks.append("".join(current))
+                  current = [line]
+              else:
+                  current.append(line)
+          if current:
+              blocks.append("".join(current))
+
+          kept: list[str] = []
+          used = 0
+          stopped = False
+          dropped = 0
+          for block in blocks:
+              if not stopped and used + len(block) <= LIMIT - MARGIN:
+                  kept.append(block)
+                  used += len(block)
+              else:
+                  stopped = True
+                  dropped += block.lstrip().startswith("- ")
+
+          # A single entry larger than the whole budget would leave nothing.
+          if not kept:
+              kept = [body[: LIMIT - MARGIN].rsplit("\n", 1)[0] + "\n"]
+          # Do not end on a section header with nothing under it.
+          while len(kept) > 1 and kept[-1].lstrip().startswith("### "):
+              kept.pop()
+
+          url = f"https://github.com/{os.environ['REPOSITORY']}/blob/{os.environ['VERSION']}/CHANGELOG.md"
+          notice = (
+              f"\n---\n\n**This note is truncated.** The `[{os.environ['CLEAN']}]` section is "
+              f"{len(body):,} characters and a GitHub release body holds {LIMIT:,}, so "
+              f"{dropped} further entries are not shown above. The complete section — every "
+              f"entry, in the same order — is in [`CHANGELOG.md` at this tag]({url}).\n"
+          )
+          path.write_text("".join(kept).rstrip("\n") + "\n" + notice, encoding="utf-8")
+          print(
+              f"release body: {len(body)} characters truncated to "
+              f"{len(path.read_text(encoding='utf-8'))}; {dropped} entries omitted"
+          )
+          PY
+
+      # Reproducible source tarball — excludes the .git directory but keeps
+      # everything a user needs to build / inspect the release contents
+      # offline.
+      - name: Build source tarball
+        run: |
+          mkdir -p dist
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          git archive --format=tar.gz \
+            --prefix="aisoc-${VERSION#v}/" \
+            -o "dist/aisoc-${VERSION}-source.tar.gz" \
+            "$GITHUB_REF_NAME"
+
+      # SBOM (SPDX 2.3 JSON) so downstream users can vet what's in the
+      # release without re-running their own scanners.
+      - name: Generate SBOM (SPDX JSON)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/aisoc-sbom-${{ steps.version.outputs.VERSION }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      # Checksums for every file in dist/ — both SHA-256 and SHA-512 so we
+      # cover both common verification preferences.
+      - name: Compute checksums
+        working-directory: dist
+        run: |
+          : > checksums.txt
+          for f in *; do
+            if [ "$f" = "checksums.txt" ]; then continue; fi
+            sha256sum "$f" >> checksums.txt
+            sha512sum "$f" >> checksums.txt
+          done
+          cat checksums.txt
+
+      # `action-gh-release` defaults `fail_on_unmatched_files` to **false**,
+      # so a `files:` entry that matches nothing is dropped and the release is
+      # created without it — green. The SBOM is produced by a third-party
+      # action into a path this job constructs by string, which is exactly the
+      # kind of pairing that silently stops matching one day. An advertised
+      # asset that is absent is a claim the release page makes and cannot
+      # keep, so both halves are closed: named here, and enforced by the
+      # action below.
+      - name: Every advertised release asset exists and is not empty
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for asset in \
+            "dist/aisoc-${VERSION}-source.tar.gz" \
+            "dist/aisoc-sbom-${VERSION}.spdx.json" \
+            "dist/checksums.txt"; do
+            if [ ! -s "$asset" ]; then
+              echo "::error::${asset} is missing or empty, and the release advertises it." >&2
+              missing=$((missing + 1))
+            else
+              echo "ok: ${asset} ($(wc -c < "$asset") bytes)"
+            fi
+          done
+          [ "$missing" -eq 0 ]
+
+      - name: Create Release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          name: "AiSOC ${{ steps.version.outputs.VERSION }}"
+          body_path: release-body.md
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          files: |
+            dist/aisoc-${{ steps.version.outputs.VERSION }}-source.tar.gz
+            dist/aisoc-sbom-${{ steps.version.outputs.VERSION }}.spdx.json
+            dist/checksums.txt
+
+  # ── Which uploads are armed, decided once and named in the job titles ──
+  #
+  # The defect this job exists to fix: on the v12.2.0 release run, all eight
+  # `npm — publish …` / `PyPI — publish …` jobs reported **success** and all
+  # eight packages returned 404. Only the final upload step is credential-
+  # gated, so each job built the artefact, reached the upload, skipped it, and
+  # exited 0. The Actions page showed eight green publishes for nothing.
+  #
+  # The gate itself is right — the blocker is an account action, not code, and
+  # the release must still complete without it, because the images and the
+  # GitHub Release genuinely do publish. What was wrong is the signal.
+  #
+  # A job's `name:` can read `needs`, so deciding here and naming the answer
+  # there makes the Actions list itself honest: `npm — publish aisoc` when an
+  # upload can happen, `npm — pack only, NOT uploaded: aisoc` when it cannot.
+  # It has to be a separate job because `secrets` is not available in a
+  # job-level `name:` or `if:` — only in a job `env:` — so the NPM_TOKEN half
+  # of the question cannot be asked where the answer is needed.
+  package-credentials:
+    name: Packages — which uploads are armed
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || inputs.packages_only
+    timeout-minutes: 5
+    outputs:
+      npm: ${{ steps.probe.outputs.npm }}
+      pypi: ${{ steps.probe.outputs.pypi }}
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    steps:
+      - id: probe
+        env:
+          NPM_TRUSTED: ${{ vars.AISOC_NPM_TRUSTED_PUBLISHING }}
+          PYPI_TRUSTED: ${{ vars.AISOC_PYPI_TRUSTED_PUBLISHING }}
+          # Nothing is uploaded on a dispatch even with a credential present:
+          # a registry refuses a version it already holds, so a republish of
+          # the package half is not a thing that can succeed.
+          UPLOADS_POSSIBLE: ${{ github.event_name == 'push' }}
+        run: |
+          set -euo pipefail
+          npm=unarmed
+          pypi=unarmed
+          if [ "$UPLOADS_POSSIBLE" = "true" ]; then
+            if [ "$NPM_TRUSTED" = "true" ] || [ -n "$NPM_TOKEN" ]; then npm=armed; fi
+            if [ "$PYPI_TRUSTED" = "true" ]; then pypi=armed; fi
+          fi
+          echo "npm=$npm" >> "$GITHUB_OUTPUT"
+          echo "pypi=$pypi" >> "$GITHUB_OUTPUT"
+          {
+            echo "## Package uploads"
+            echo
+            echo "| Registry | This run | Why |"
+            echo "| --- | --- | --- |"
+            if [ "$npm" = "armed" ]; then
+              echo "| npm | uploads | a credential is configured |"
+            elif [ "$UPLOADS_POSSIBLE" != "true" ]; then
+              echo "| npm | packs only | not a tag push; a registry will not accept a version twice |"
+            else
+              echo "| npm | packs only | neither trusted publishing nor \`NPM_TOKEN\` is configured |"
+            fi
+            if [ "$pypi" = "armed" ]; then
+              echo "| PyPI | uploads | trusted publishing is enabled |"
+            elif [ "$UPLOADS_POSSIBLE" != "true" ]; then
+              echo "| PyPI | packs only | not a tag push; a registry will not accept a version twice |"
+            else
+              echo "| PyPI | packs only | \`AISOC_PYPI_TRUSTED_PUBLISHING\` is not set |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "npm=$npm pypi=$pypi"
+
+  # Build & push Docker images
+  #
+  # Most services build from their own service directory. The `web` app is
+  # special: its Dockerfile copies workspace packages and pnpm config from the
+  # monorepo root, so its build context must be `.` (the repo root) with the
+  # Dockerfile path explicitly set.
+  #
+  # The matrix here must stay aligned with publish-images.yml — every service
+  # whose `:main` / `:latest` tag is published on push-to-main also needs a
+  # pinned `:vX.Y.Z` tag on release, so users who set `AISOC_VERSION=vX.Y.Z`
+  # in their .env get a reproducible deploy across the full stack.
+  # ── Per-architecture build, each on a runner of that architecture ────────
+  #
+  # Same split, and the same reason, as publish-images.yml. It was this
+  # workflow that proved the point: in the v11.0.0 release run every image
+  # published except the console, whose arm64 `pnpm install --frozen-lockfile`
+  # ran for 6,358 seconds under QEMU without finishing — 56x its own normal
+  # 114s — while the amd64 leg of the identical build completed in 100s. The
+  # release was green, `aisoc-web:v11.0.0` simply never existed, and a partial
+  # release is worse than a failed one because nothing says so.
+  #
+  # Native runners remove the emulator rather than budgeting for it. arm64
+  # stays because Apple Silicon is the majority of contributor laptops and an
+  # amd64-only manifest turns the quickstart into a long silent build there.
+  docker-build:
+    name: Docker — Build (${{ matrix.service }}, ${{ matrix.platform }})
+    runs-on: ${{ matrix.platform == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
+    needs: release
+    # `needs` alone would skip this whenever `release` is skipped, which is
+    # every dispatched run — the one path that exists to publish images.
+    # `packages_only` is the one dispatch that deliberately leaves the
+    # registry alone, so the whole image chain below sits out with it.
+    if: always() && !inputs.packages_only && needs.release.result != 'failure' && needs.release.result != 'cancelled'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [amd64, arm64]
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - teams-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        # `include` entries whose `service` matches an existing combination add
+        # their remaining keys to it rather than creating new ones, so each
+        # block below applies to both platforms of that one service.
+        include:
+          # Demo-stack images (pulled by `pnpm aisoc:demo`).
+          - service: api
+            context: services/api
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            context: services/agents
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-agents
+          - service: realtime
+            context: services/realtime
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-realtime
+          - service: web
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+
+          # The demo build of the console. Kept off `vX.Y.Z` and `latest` — see
+          # the matching entry in publish-images.yml for why: Next inlines
+          # NEXT_PUBLIC_* at build time, so a demo bundle on the tag a
+          # self-hoster pulls is a console that calls their real data a demo,
+          # with no runtime way out.
+          - service: web-demo
+            context: .
+            dockerfile: apps/web/Dockerfile
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+
+          # Full-stack backend images (pulled by `docker compose up -d` with
+          # `pull_policy: missing` when AISOC_VERSION is pinned).
+          - service: ingest
+            context: services/ingest
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            context: services/enrichment
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            context: services/fusion
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            context: services/actions
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            context: services/connectors
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            context: services/threatintel
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            context: services/ueba
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            context: services/slack-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-slack-bot
+          # teams-bot shipped in the matrix with no include block, so it had
+          # no image to be tagged with and `docker/build-push-action` refused
+          # with "tag is needed when pushing to registry" on both
+          # architectures — the one image a release could not publish.
+          - service: teams-bot
+            context: services/teams-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-teams-bot
+
+          # Named by docker-compose.yml and the Helm chart since they were
+          # written, and published by nothing until now. The chart has no
+          # build fallback, so `helm install` could only ever have produced
+          # ImagePullBackOff for these three.
+          - service: honeytokens
+            context: services/honeytokens
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            context: services/purple-team
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            context: services/osquery-tls
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-osquery-tls
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+
+      # On a dispatched run the GitHub context describes the ref the workflow
+      # was launched from — `main` — while the source checked out above is the
+      # tag being republished. metadata-action reads the context, so it
+      # stamped `org.opencontainers.image.revision` with main's commit onto an
+      # image built from v11.0.0. That is the field
+      # scripts/check_published_images.py trusts to decide what an image
+      # contains, so a wrong value there is worse than none.
+      - id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Labels only. The release tags are attached by docker-manifest below,
+      # once both architectures exist — a `vX.Y.Z` tag that resolves to half a
+      # manifest is not a release anybody can reproduce.
+      - id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
+        with:
+          images: ${{ matrix.image }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.source.outputs.sha }}
+            org.opencontainers.image.version=${{ inputs.tag || github.ref_name }}
+
+      # Only the demo build gets the NEXT_PUBLIC_DEMO_* flags, and only it is
+      # published under a demo tag. Mirrors publish-images.yml. Other images
+      # gate demo behaviour at runtime via AISOC_DEMO_MODE so they need no
+      # build args. The credentials live here rather than in the Dockerfile so
+      # a non-demo build cannot inline them into a shipped bundle.
+      - id: web-build-args
+        if: matrix.demo == 'true'
+        run: |
+          {
+            echo 'build_args<<EOF'
+            echo 'NEXT_PUBLIC_DEMO_MODE=true'
+            echo 'NEXT_PUBLIC_DEMO_DEEPLINK=/cases/INC-RT-001?tab=ledger'
+            echo 'NEXT_PUBLIC_DEMO_BANNER=Demo data resets daily at 00:00 UTC. All write actions are disabled.'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_EMAIL=demo@example.com'
+            echo 'NEXT_PUBLIC_DEMO_AUTOLOGIN_PASSWORD=aisoc-demo'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - id: build
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ steps.web-build-args.outputs.build_args }}
+          # Scoped per architecture now that the two are separate jobs, and
+          # shared with publish-images.yml so a release reuses the layers the
+          # merge that preceded it already built.
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.platform }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.platform }}
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          # SLSA provenance + SPDX SBOM attached to the image by BuildKit.
+          provenance: mode=max
+          sbom: true
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          test -n "$DIGEST"
+          mkdir -p /tmp/digests
+          touch "/tmp/digests/${DIGEST#sha256:}"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: digest.${{ matrix.service }}.${{ matrix.platform }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # ── Assemble the manifest list and attach the release tags ──────────────
+  docker-manifest:
+    name: Docker — Publish (${{ matrix.service }})
+    runs-on: ubuntu-24.04
+    needs: docker-build
+    # A skip propagates the whole way down a `needs` chain, not just one link:
+    # `docker-build` overrode it with `always()`, and this job — which has no
+    # condition of its own — was skipped anyway because `release` was. The
+    # dispatched run then reported **success** having built both architectures
+    # of sixteen images and published none of them, which is the same silent
+    # green this workflow was being fixed for. Every job below the conditional
+    # one has to say `always()` and then state what it actually requires.
+    if: always() && needs.docker-build.result == 'success'
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - api
+          - agents
+          - realtime
+          - web
+          - web-demo
+          - ingest
+          - enrichment
+          - fusion
+          - actions
+          - connectors
+          - threatintel
+          - ueba
+          - slack-bot
+          - teams-bot
+          - honeytokens
+          - purple-team
+          - osquery-tls
+        include:
+          - service: api
+            image: ghcr.io/beenuar/aisoc-core-api
+          - service: agents
+            image: ghcr.io/beenuar/aisoc-agents
+          - service: realtime
+            image: ghcr.io/beenuar/aisoc-realtime
+          - service: web
+            image: ghcr.io/beenuar/aisoc-web
+          - service: web-demo
+            image: ghcr.io/beenuar/aisoc-web
+            demo: 'true'
+          - service: ingest
+            image: ghcr.io/beenuar/aisoc-ingest
+          - service: enrichment
+            image: ghcr.io/beenuar/aisoc-enrichment
+          - service: fusion
+            image: ghcr.io/beenuar/aisoc-fusion
+          - service: actions
+            image: ghcr.io/beenuar/aisoc-actions
+          - service: connectors
+            image: ghcr.io/beenuar/aisoc-connectors
+          - service: threatintel
+            image: ghcr.io/beenuar/aisoc-threatintel
+          - service: ueba
+            image: ghcr.io/beenuar/aisoc-ueba
+          - service: slack-bot
+            image: ghcr.io/beenuar/aisoc-slack-bot
+          - service: teams-bot
+            image: ghcr.io/beenuar/aisoc-teams-bot
+          - service: honeytokens
+            image: ghcr.io/beenuar/aisoc-honeytokens
+          - service: purple-team
+            image: ghcr.io/beenuar/aisoc-purple-team
+          - service: osquery-tls
+            image: ghcr.io/beenuar/aisoc-osquery-tls
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          # Dot-separated, not hyphen-separated: `digest-web-*` also matches
+          # `digest-web-demo-amd64`, so the console's manifest job downloaded
+          # four digests — two of them the demo bundle — and would have pushed
+          # a mixed manifest as `:latest`. The count check below caught it; the
+          # separator is what stops it happening. `digest.web.*` cannot match
+          # `digest.web-demo.amd64`.
+          path: /tmp/digests
+          pattern: digest.${{ matrix.service }}.*
+          merge-multiple: true
+
+      - uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # `vX.Y.Z-demo` is pinnable the same way `vX.Y.Z` is, and `demo` tracks
+      # the newest one. Neither `vX.Y.Z` nor `latest` ever carries a demo
+      # bundle.
+      # A dispatched run repairs a tag that already shipped, so it publishes
+      # only that tag. Moving `latest` and `demo` there would hand a
+      # self-hoster older content than `main` on the tag they pull by default
+      # — which is the defect this whole workflow was being changed to fix,
+      # inflicted by the tool built to fix it. The first republish of v11.0.0
+      # did exactly that to eight images before this was caught.
+      #
+      # `stable` is the third tag, and it is not a synonym for `latest`.
+      # `latest` moves on every release, majors included. A deployment that
+      # pulls by tag would therefore be dragged across a breaking change by a
+      # tag whose name promises the opposite, with no operator decision in
+      # between, and the release policy says a major means an operator must
+      # act. So `stable` moves on a minor or a patch automatically and stops
+      # at a major until someone dispatches the workflow with
+      # `promote_stable: true`. See apps/docs/docs/operations/release-policy.md.
+      #
+      # tests/test_release_channel_tags.py runs this exact block under bash
+      # with each combination, because a tag-selection rule expressed only in
+      # a workflow is a rule nothing checks.
+      # Which major is `stable` on right now? Ask the registry, not the
+      # repository: a tag is a registry fact, and a tree can be any commit.
+      # Resolved per image because a republish or a half-release can leave one
+      # image's channel behind the others, and each must be judged on its own.
+      #
+      # Read through the registry HTTP API — manifest, then config blob —
+      # exactly as the chart half below already does, NEVER through a
+      # `docker buildx imagetools inspect` template. The template's shape is
+      # a property of whatever buildx the runner image ships that day, and
+      # when it broke (`.Image` stopped resolving on multi-arch indexes) the
+      # old read returned empty with stderr discarded, "empty" read as
+      # "first release", and the v20.0.0 and v20.1.0 publishes each carried
+      # `stable` across the v19 -> v20 boundary the guard exists to refuse —
+      # silently, under a green run.
+      #
+      # Three states, not two. A **404** is the ordinary first-release state:
+      # the channel may be taken. A tag that is **present but unreadable** —
+      # a non-404 registry answer, or a manifest whose version label cannot
+      # be resolved — BLOCKS the channel for this release: refusing is
+      # recoverable (the next release or a deliberate promotion moves it),
+      # a wrong crossing is not. That is the same fail-closed reasoning the
+      # chart guard already documents, applied to the read as well as the
+      # decision.
+      - id: stable-major
+        env:
+          IMAGE: ${{ matrix.image }}
+          IS_DEMO: ${{ matrix.demo }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json"
+          repo="${IMAGE#ghcr.io/}"
+          major=""
+          blocked="false"
+          if [ "${IS_DEMO}" != "true" ]; then
+            reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+              "https://ghcr.io/token?scope=repository:${repo}:pull&service=ghcr.io" \
+              | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])' || true)
+            code=$(curl -s -o /tmp/stable-manifest.json -w '%{http_code}' \
+              -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+              "https://ghcr.io/v2/${repo}/manifests/stable" || echo "000")
+            if [ "$code" = "404" ]; then
+              echo "::notice::no \`stable\` tag for ${IMAGE} (404); treating as a first release"
+            elif [ "$code" = "200" ]; then
+              # index -> a platform manifest -> config blob -> version label.
+              digest=$(python3 -c '
+          import json,sys
+          m = json.load(open("/tmp/stable-manifest.json"))
+          if "manifests" in m:
+              plats = [x["digest"] for x in m["manifests"] if x.get("platform",{}).get("architecture") in ("amd64","arm64")]
+              print(plats[0] if plats else "")
+          else:
+              print("self")' || true)
+              if [ "$digest" = "self" ]; then
+                cp /tmp/stable-manifest.json /tmp/stable-image.json
+              elif [ -n "$digest" ]; then
+                curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                  "https://ghcr.io/v2/${repo}/manifests/${digest}" > /tmp/stable-image.json || : > /tmp/stable-image.json
+              else
+                : > /tmp/stable-image.json
+              fi
+              config=$(python3 -c '
+          import json,sys
+          try:
+              print(json.load(open("/tmp/stable-image.json"))["config"]["digest"])
+          except Exception:
+              print("")' || true)
+              current=""
+              if [ -n "$config" ]; then
+                current=$(curl -fsSL -H "Authorization: Bearer ${reg_token}" \
+                  "https://ghcr.io/v2/${repo}/blobs/${config}" \
+                  | python3 -c 'import json,sys; c=json.load(sys.stdin); print((c.get("config",{}).get("Labels") or {}).get("org.opencontainers.image.version",""))' || true)
+              fi
+              case "${current}" in
+                v[0-9]*|[0-9]*)
+                  major="${current#v}"
+                  major="${major%%.*}"
+                  ;;
+                *)
+                  blocked="true"
+                  echo "::error::\`${IMAGE}:stable\` exists but its version label could not be read (got '${current}'); the channel is held for this release — dispatch image-channel.yml to move it deliberately"
+                  ;;
+              esac
+            else
+              blocked="true"
+              echo "::error::reading \`${IMAGE}:stable\` answered HTTP ${code}; the channel is held for this release — a present-but-unreadable channel must never be mistaken for a first release"
+            fi
+          fi
+          echo "major=${major}" >> "$GITHUB_OUTPUT"
+          echo "blocked=${blocked}" >> "$GITHUB_OUTPUT"
+          echo "stable channel for ${IMAGE} is on major '${major:-<none>}' (blocked=${blocked})"
+
+
+      - id: image-tags
+        env:
+          VERSION: ${{ inputs.tag || github.ref_name }}
+          REPUBLISH: ${{ github.event_name == 'workflow_dispatch' }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          STABLE_MAJOR: ${{ steps.stable-major.outputs.major }}
+          STABLE_BLOCKED: ${{ steps.stable-major.outputs.blocked }}
+          IMAGE: ${{ matrix.image }}
+          IS_DEMO: ${{ matrix.demo }}
+        run: |
+          set -euo pipefail
+          # A major is `vX.0.0`. Anything else in the line is a minor or a
+          # patch and carries no operator action by policy.
+          IS_MAJOR=false
+          case "${VERSION#v}" in
+            *.0.0) IS_MAJOR=true ;;
+            esac
+            # Blocking `vX.0.0` alone is not enough, and this is the bug that
+            # carried `stable` to v12, v13 and v15. `v16.0.0` correctly refuses
+            # the tag; `v16.1.0` is a minor, so it took it the next day and the
+            # channel crossed the major with nobody deciding to. The channel has
+            # to know which major it is *on*, not only whether the incoming
+            # version is itself a major.
+            #
+            # STABLE_MAJOR is resolved from the registry by the step above. An
+            # empty value means no `stable` tag exists yet, which is a first
+            # release and must take the channel rather than read as a mismatch.
+            INCOMING_MAJOR="${VERSION#v}"
+            INCOMING_MAJOR="${INCOMING_MAJOR%%.*}"
+            SAME_MAJOR=true
+            if [ -n "${STABLE_MAJOR:-}" ] && [ "${STABLE_MAJOR}" != "${INCOMING_MAJOR}" ]; then
+              SAME_MAJOR=false
+            fi
+          {
+            echo 'tags<<EOF'
+            if [ "$IS_DEMO" = "true" ]; then
+              echo "${IMAGE}:${VERSION}-demo"
+              [ "$REPUBLISH" = "true" ] || echo "${IMAGE}:demo"
+            else
+              echo "${IMAGE}:${VERSION}"
+              [ "$REPUBLISH" = "true" ] || echo "${IMAGE}:latest"
+              # Automatic on a non-major push; deliberate on a dispatch. The
+              # dispatch arm is the only way `stable` ever reaches a major,
+              # and it is separate from the republish arm above so repairing
+              # an old tag cannot drag `stable` backwards with it.
+              # STABLE_BLOCKED means the channel exists but could not be
+              # read; moving it then would be a guess, so only the deliberate
+              # promotion arm may move a blocked channel.
+              if { [ "$REPUBLISH" != "true" ] && [ "$IS_MAJOR" != "true" ] && [ "$SAME_MAJOR" = "true" ] && [ "${STABLE_BLOCKED:-false}" != "true" ]; } || [ "$PROMOTE_STABLE" = "true" ]; then
+                echo "${IMAGE}:stable"
+              fi
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create manifest list and push
+        id: manifest
+        working-directory: /tmp/digests
+        env:
+          IMAGE: ${{ matrix.image }}
+          TAGS: ${{ steps.image-tags.outputs.tags }}
+        run: |
+          set -euo pipefail
+          # One digest file per architecture. Fewer means a leg did not run,
+          # and a `vX.Y.Z` tag resolving to a single-architecture manifest is
+          # the silent half-release this job exists to prevent.
+          count=$(find . -type f | wc -l | tr -d ' ')
+          if [ "$count" -ne 2 ]; then
+            echo "::error::expected 2 per-architecture digests for ${IMAGE}, found ${count}" >&2
+            exit 1
+          fi
+          mapfile -t tags <<< "$TAGS"
+          docker buildx imagetools create \
+            "${tags[@]/#/--tag=}" \
+            $(printf "${IMAGE}@sha256:%s " *)
+          digest=$(docker buildx imagetools inspect "${tags[0]}" --format '{{json .Manifest}}' | jq -r '.digest')
+          echo "digest=${digest}" >> "$GITHUB_OUTPUT"
+          echo "Published ${IMAGE} @ ${digest} as: ${tags[*]}"
+
+      # ── Supply-chain attestation (mirrors publish-images.yml) ────────────
+      # Keyless cosign signature + CycloneDX SBOM attestation per released
+      # image. Verification commands: docs/operations/verifying-releases.md.
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+
+      - name: Install syft
+        run: |
+          set -euo pipefail
+          curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh \
+            | sh -s -- -b /usr/local/bin v1.18.1
+
+      - name: Sign image (cosign keyless)
+        env:
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+        # Hardened against the two ways one signing can observe itself and
+        # fail (mirrors publish-images.yml, where the second was measured):
+        #
+        #  * A job rerun after a *later* step failed re-signs a digest that
+        #    already carries this repository's valid signature. Verify-first
+        #    makes that a skip instead of a second signature.
+        #  * Rekor can accept the entry while the client times out and
+        #    retries the identical payload, which answers 409
+        #    createLogEntryConflict against the step's own first POST and
+        #    aborts before the registry attachment is written (measured on
+        #    the 2026-10-21 main publish: the conflicting entry's
+        #    integratedTime sat inside the failing step's own window, and the
+        #    digest had no registry signature afterwards). A fresh attempt
+        #    uses a fresh ephemeral key and cannot conflict, so retry once;
+        #    the trailing verify turns "the artifact ended up signed anyway"
+        #    into a pass and anything else stays a hard failure.
+        run: |
+          set -euo pipefail
+          verify() {
+            cosign verify \
+              --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              "${{ matrix.image }}@${DIGEST}" >/dev/null 2>&1
+          }
+          if verify; then
+            echo "already signed by this repository's workflows; skipping re-sign of ${DIGEST}"
+            exit 0
+          fi
+          if cosign sign --yes "${{ matrix.image }}@${DIGEST}"; then
+            exit 0
+          fi
+          echo "first sign attempt failed; retrying once with a fresh ephemeral key"
+          sleep 10
+          if cosign sign --yes "${{ matrix.image }}@${DIGEST}"; then
+            exit 0
+          fi
+          echo "second sign attempt failed; accepting only if a valid signature exists"
+          verify
+
+      - name: Attach CycloneDX SBOM attestation
+        env:
+          DIGEST: ${{ steps.manifest.outputs.digest }}
+        run: |
+          set -euo pipefail
+          syft "${{ matrix.image }}@${DIGEST}" -o cyclonedx-json > /tmp/sbom.cdx.json
+          cosign attest --yes \
+            --type cyclonedx \
+            --predicate /tmp/sbom.cdx.json \
+            "${{ matrix.image }}@${DIGEST}"
+
+  # ── Publish the npm packages ───────────────────────────────────────────────
+  #
+  # Every package is built and packed on every release, whether or not the
+  # upload is enabled, so this job fails the moment a package stops being
+  # publishable — a broken `npx aisoc` must never reach the README again.
+  #
+  # Only the final upload is gated on `NPM_TOKEN`, so the release does not go
+  # red before the registry credential exists. One-time setup (including the
+  # move to token-free trusted publishing after the first release) is in
+  # docs/operations/publishing.md.
+  #
+  # `pnpm pack` rather than `npm pack`: it rewrites `workspace:*` dependency
+  # specifiers to real versions, which npm would otherwise reject. The tarball
+  # is then handed to `npm publish`, which is what supports `--provenance`.
+  npm-publish:
+    # The job title states what the job did, so a reader does not have to open
+    # a log to find out whether anything was uploaded. `needs` is one of the
+    # few contexts available in a job `name:`, which is why the credential
+    # question is answered in its own job above.
+    name: npm — ${{ needs.package-credentials.outputs.npm == 'armed' && 'publish' || 'pack only, NOT uploaded:' }} ${{ matrix.pkg }}
+    runs-on: ubuntu-latest
+    needs: [release, package-credentials]
+    # `always()` because `release` is skipped on a dispatch and a skip
+    # propagates down a `needs` chain unless each job restates what it needs.
+    if: always() && needs.package-credentials.result == 'success' && needs.release.result != 'failure' && needs.release.result != 'cancelled'
+    permissions:
+      contents: read
+      id-token: write # npm provenance attestation
+    # Job-level so the step-level `if` guards below can read it. A step cannot
+    # see its own `env` block from its `if` expression.
+    env:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: aisoc
+            dir: packages/aisoc-lite
+          - pkg: '@aisoc/mcp'
+            dir: services/mcp
+          - pkg: '@aisoc/sdk'
+            dir: packages/sdk-ts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build ${{ matrix.pkg }}
+        # The `...` suffix means "and its workspace dependencies", built
+        # topologically. Without it, `aisoc` and `@aisoc/mcp` fail with
+        # `Could not resolve "@aisoc/report-card"`: that dependency's `main`
+        # points at `./dist/index.js`, a build artifact, and a plain
+        # `--filter <pkg>` never builds it. The failure only shows up on a tag,
+        # because nothing else builds these packages in isolation.
+        run: pnpm --filter '${{ matrix.pkg }}...' build
+
+      - name: Pack tarball
+        id: pack
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          TARBALL=$(ls -t "$RUNNER_TEMP"/*.tgz | head -1)
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p 'require("./package.json").version')" >> "$GITHUB_OUTPUT"
+          # Listed via a file rather than `tar ... | head`: head closes the pipe
+          # after 20 lines, GNU tar takes EPIPE and exits 2, and pipefail turns
+          # that into a failed release job. It only bites packages with more
+          # than 20 entries, so `aisoc` and `@aisoc/sdk` passed while
+          # `@aisoc/mcp` (78) failed on a diagnostic line.
+          LISTING="$RUNNER_TEMP/tarball-listing.txt"
+          tar -tzf "$TARBALL" > "$LISTING"
+          echo "$(wc -l < "$LISTING") entries; first 20:"
+          head -20 "$LISTING"
+
+      # Republishing an unchanged version is a hard error on npm, and package
+      # versions move independently of the monorepo tag, so most releases will
+      # legitimately have nothing to push for some packages.
+      #
+      # `npm view … >/dev/null 2>&1` treated *every* failure as "not
+      # published" and threw the reason away with it, so a registry outage, a
+      # rate limit and a genuine 404 were one answer. The direction is safe —
+      # an unknown becomes an attempted publish, which npm rejects if it was
+      # wrong — but an operator reading the log could not tell which happened.
+      # E404 is the only answer that means absent; anything else is recorded
+      # as unknown, out loud.
+      - name: Is this version already on npm?
+        id: exists
+        env:
+          SPEC: ${{ matrix.pkg }}@${{ steps.pack.outputs.version }}
+        run: |
+          set -uo pipefail
+          if output=$(npm view "$SPEC" version 2>&1); then
+            echo "$SPEC is already on npm ($output)."
+            echo "already=true" >> "$GITHUB_OUTPUT"
+          elif grep -q 'E404' <<< "$output"; then
+            echo "$SPEC is not on npm yet."
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=npm::Could not establish whether $SPEC is published; npm said: ${output//$'\n'/ }. Treating it as absent, which means an upload will be attempted and the registry gets the last word."
+            echo "already=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Trusted publishing (OIDC) needs npm 11.5.1 or newer. Node 22 ships
+      # npm 10, which silently falls back to token authentication and then
+      # fails with ENEEDAUTH when there is no token, so the upgrade is what
+      # makes the token-free path reachable at all rather than a nicety.
+      - name: Upgrade npm for trusted publishing
+        if: needs.package-credentials.outputs.npm == 'armed' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: |
+          set -euo pipefail
+          npm install -g npm@latest
+          npm --version
+
+      # Token-free. npm exchanges the workflow's OIDC token for a short-lived
+      # publish credential, which cannot be exfiltrated from a log or left
+      # unrotated in repository settings. Provenance is generated
+      # automatically on this path, so `--provenance` is not passed.
+      - name: Publish to npm (trusted publishing)
+        if: needs.package-credentials.outputs.npm == 'armed' && steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING == 'true'
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --access public
+
+      # The fallback, for as long as it is needed. npm configures a trusted
+      # publisher on a package's settings page, so a package that has never
+      # been published has no settings page and no way to register one: the
+      # very first upload of each package needs a token, and every upload
+      # after it does not.
+      - name: Publish to npm (token)
+        if: needs.package-credentials.outputs.npm == 'armed' && steps.exists.outputs.already == 'false' && vars.AISOC_NPM_TRUSTED_PUBLISHING != 'true' && env.NPM_TOKEN != ''
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --access public --provenance
+
+      # Reached whenever nothing was uploaded, which — while no credential
+      # exists — is every run. It states the outcome in the log; the job's own
+      # title states it in the Actions list, and `Packages — publication
+      # report` states it in the run summary. Three places, one decision.
+      - name: Say plainly that nothing was uploaded
+        if: needs.package-credentials.outputs.npm != 'armed' || steps.exists.outputs.already == 'true'
+        env:
+          ARMED: ${{ needs.package-credentials.outputs.npm }}
+          ALREADY: ${{ steps.exists.outputs.already }}
+          PKG: ${{ matrix.pkg }}
+          VERSION: ${{ steps.pack.outputs.version }}
+        run: |
+          if [ "$ALREADY" = "true" ]; then
+            echo "::notice title=npm::${PKG}@${VERSION} is already on npm, so this release uploaded nothing for it."
+          elif [ "${{ github.event_name }}" != "push" ]; then
+            echo "::notice title=npm::${PKG} was built, packed and validated. Nothing was uploaded: a dispatched run never publishes, because a registry will not accept a version twice."
+          else
+            echo "::warning title=npm::${PKG} was built, packed and validated, and NOT uploaded — neither trusted publishing nor NPM_TOKEN is configured. npm still has no ${PKG}. See docs/operations/publishing.md."
+          fi
+
+  # ── Publish the PyPI packages ──────────────────────────────────────────────
+  #
+  # Uses PyPI Trusted Publishing (OIDC), so there is no API token to store or
+  # rotate. PyPI supports "pending" publishers, which means the trust
+  # relationship can be registered before the project exists — that is how the
+  # first upload of each of these works. Setup: docs/operations/publishing.md.
+  pypi-publish:
+    name: PyPI — ${{ needs.package-credentials.outputs.pypi == 'armed' && 'publish' || 'pack only, NOT uploaded:' }} ${{ matrix.pkg }}
+    runs-on: ubuntu-latest
+    needs: [release, package-credentials]
+    if: always() && needs.package-credentials.result == 'success' && needs.release.result != 'failure' && needs.release.result != 'cancelled'
+    permissions:
+      contents: read
+      id-token: write # PyPI trusted publishing
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pkg: aisoc-sandbox
+            dir: packages/aisoc-sandbox
+          - pkg: aisoc-cli
+            dir: packages/aisoc-cli
+          - pkg: aisoc-sdk
+            dir: packages/sdk-py
+          - pkg: aisoc-plugin-sdk
+            dir: packages/plugin-sdk-py
+          - pkg: aisoc-detections
+            dir: packages/aisoc-detections
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Build sdist + wheel
+        working-directory: ${{ matrix.dir }}
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade build twine
+          python -m build
+          python -m twine check dist/*
+          ls -la dist/
+
+      # `skip-existing` because package versions move independently of the
+      # monorepo tag, so a release often has nothing new for a given package.
+      - name: Publish to PyPI
+        if: needs.package-credentials.outputs.pypi == 'armed'
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
+        with:
+          packages-dir: ${{ matrix.dir }}/dist
+          skip-existing: true
+
+      - name: Say plainly that nothing was uploaded
+        if: needs.package-credentials.outputs.pypi != 'armed'
+        env:
+          PKG: ${{ matrix.pkg }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "::notice title=PyPI::${PKG} was built and twine-checked. Nothing was uploaded: a dispatched run never publishes, because a registry will not accept a version twice."
+          else
+            echo "::warning title=PyPI::${PKG} was built and twine-checked, and NOT uploaded — AISOC_PYPI_TRUSTED_PUBLISHING is not set, so the upload step did not run. PyPI still has no ${PKG}. See docs/operations/publishing.md."
+          fi
+
+  # ── Ask the registries what this release actually published ────────────
+  #
+  # The loop the package half never closed, and the same one `docker-verify`
+  # closes for images. A release is the set of artefacts it published, not the
+  # set of jobs that finished, so the question has to be put to npm and PyPI
+  # rather than to the workflow's own statuses — which is exactly how eight
+  # green publish jobs coexisted with eight 404s.
+  #
+  # `.github/release-packages.yml` declares which packages are expected to be
+  # on their registry and, for each one that is not, why. The gate fails when
+  # a package declared published does not resolve (a job claimed an upload
+  # that did not happen) and equally when one declared unpublished does (the
+  # knowingly-absent set has to shrink in a commit, not in silence).
+  #
+  # It writes the run summary either way, so the answer is on the run page
+  # without opening a log: every package, its version in the tree, whether the
+  # registry holds it, and the reason for each one that was packed and not
+  # uploaded.
+  package-report:
+    name: Packages — publication report
+    runs-on: ubuntu-latest
+    needs: [package-credentials, npm-publish, pypi-publish]
+    # `always()` so the report still runs — and still tells the truth — when a
+    # package fails to build. A report that only appears on the happy path is
+    # not a report.
+    if: always() && needs.package-credentials.result == 'success'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      # `--require-network` because an unreachable registry during a release
+      # is an unanswered question, and this is the one job whose entire
+      # purpose is to answer it. Elsewhere the same gate skips offline so a
+      # contributor on a train is not told the README is wrong.
+      - name: Every package the release claims to have published resolves
+        run: python3 scripts/check_published_packages.py --require-network --summary "$GITHUB_STEP_SUMMARY"
+
+  # ── Publish the Helm chart ────────────────────────────────────────────────
+  #
+  # `apps/docs/docs/deployment/kubernetes.md` told operators to run
+  # `helm show chart oci://ghcr.io/beenuar/aisoc` to find out what a default
+  # install resolves to, and no chart has ever been pushed there: the command
+  # answers `not found`. A published command is a claim, and this is the job
+  # that makes it true rather than the sentence that deletes it.
+  #
+  # Package and lint run unconditionally so the job fails the moment the chart
+  # stops being publishable, rather than only discovering it on a tag. Only
+  # the push is conditional, and only on the event: GITHUB_TOKEN already has
+  # `packages: write`, so unlike npm and PyPI there is no missing credential
+  # here.
+  chart-publish:
+    name: Helm - publish the chart
+    runs-on: ubuntu-latest
+    # `docker-manifest` as well as `release`, because a step below runs
+    # check_published_images against the registry and the chart's appVersion
+    # names the tag being published *by* docker-manifest. Needing only
+    # `release` let this job start while the manifests were still pushing, so
+    # it asked GHCR for images that did not exist yet: on v12.0.0 it failed
+    # with 17 image-missing findings and then passed unchanged on a re-run.
+    # The gate was right both times; the ordering was not.
+    needs: [release, docker-manifest]
+    # Was `always() && (github.event_name == 'push' || needs.release.result ==
+    # 'success')`. `release` runs only on a push, so the second arm implied
+    # the first and the whole condition reduced to "this is a push" — which
+    # made the `Explain a packaged-but-unpushed chart` step below, whose `if`
+    # is `github.event_name != 'push'`, unreachable. A branch that documents
+    # what happens on a dispatch, and cannot run on one, is a comment wearing
+    # a step's clothing.
+    #
+    # Requiring the manifests instead fixes both ends: the chart is linted,
+    # packaged and checked against the registry on a dispatch too (where the
+    # notice is now reachable and honest), and on a push it no longer starts
+    # when the images it names were never built.
+    if: always() && needs.docker-manifest.result == 'success'
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # check_chart_version.py reads every release tag to find a chart
+          # version declared twice, and compares this tree against the commit
+          # it descends from. Neither is in a depth-1 checkout.
+          fetch-depth: 0
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
+
+      - name: Fetch dependencies, lint and package
+        id: package
+        run: |
+          set -euo pipefail
+          helm repo add bitnami https://charts.bitnami.com/bitnami
+          helm repo update
+          helm dependency build infra/helm/aisoc
+          helm lint infra/helm/aisoc
+          # The chart's own version, not the release tag. They move
+          # independently: appVersion names the images, version names the
+          # chart, and pinning one to the other would force a chart release
+          # for a change that did not touch it.
+          version=$(helm show chart infra/helm/aisoc | awk '/^version:/ {print $2}')
+          test -n "$version"
+          helm package infra/helm/aisoc --destination "$RUNNER_TEMP"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "package=$RUNNER_TEMP/aisoc-$version.tgz" >> "$GITHUB_OUTPUT"
+
+      # The chart's appVersion is what every unpinned image tag in values.yaml
+      # falls back to. A chart published naming a version no image carries is
+      # an install that goes straight to ImagePullBackOff, which is what
+      # appVersion 5.2.0 would have done for months.
+      - name: The appVersion names images that exist
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet pyyaml
+          python3 scripts/check_published_images.py --require-network --list
+
+      # `helm push` overwrites an existing version without a word, so this is
+      # the last moment anything can refuse. v13.0.0 pushed 5.9.2 on top of
+      # the chart v12.3.2 had published because `appVersion` moved and
+      # `version` did not; the replaced bytes cannot be recovered, which is
+      # why this has to run *before* the push rather than verify after it.
+      #
+      # `--require-network` unlike the pull-request job: a registry that
+      # cannot be reached at the moment of publication leaves the one question
+      # this step exists to answer unanswered, and a release is not the place
+      # to assume the answer.
+      - name: The chart version is not already published naming something else
+        run: |
+          set -euo pipefail
+          python3 scripts/check_chart_version.py --check --require-network
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push'
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push to the OCI registry
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          helm push "${{ steps.package.outputs.package }}" oci://ghcr.io/beenuar/charts
+          echo "::notice title=Helm::Published oci://ghcr.io/beenuar/charts/aisoc:${{ steps.package.outputs.version }}"
+
+      - name: Prove it resolves
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          helm show chart "oci://ghcr.io/beenuar/charts/aisoc" --version "${{ steps.package.outputs.version }}"
+
+      # The chart channel the release policy promised alongside the image one.
+      # It was scoped as "a `stable` image tag and chart channel" and only the
+      # image half was built, so `helm install` with no `--version` has always
+      # resolved to whatever the registry hands back.
+      #
+      # TWO version lines guard the channel, not one. The chart's own major
+      # announces a values-schema break. But the chart's values default every
+      # unpinned image tag to `Chart.AppVersion`, so the channel also carries
+      # operators across *application* majors — which is how v20.0.0 (chart
+      # 7.9.0, not a chart major) moved chart `stable` onto a breaking app
+      # release while every image `stable` tag correctly stayed on v19 (#1440).
+      # A channel is a property of history, so both majors are read from where
+      # the channel IS (the registry), never from the release in hand.
+      #
+      # The work is split across three steps so the *decision* is a pure block
+      # tests/test_release_channel_tags.py executes with each ladder of
+      # releases — the same lift-the-exact-block pattern as `image-tags`,
+      # because a copy of the logic would agree with itself while the
+      # workflow drifted.
+      #
+      # NOT `docker buildx imagetools create`. That tool composes image
+      # *indexes*: on v17.1.0, the first release to reach this far, it wrapped
+      # the chart manifest in a fresh single-entry OCI index with no
+      # annotations — so `:stable` pointed at a wrapper no helm client should
+      # be handed, and the verify below correctly refused it ("resolves to
+      # '<nothing>'"). A channel tag must serve the *same bytes* as the
+      # version tag: GET the manifest, PUT it under `stable`, unchanged.
+      - name: Read where the chart channel is
+        id: chart-state
+        if: github.event_name == 'push'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.manifest.v1+json"
+          reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+          # Where the channel is now, read from the tag's OCI manifest.
+          #
+          # NOT `helm show chart --version stable`. `--version` takes a semver
+          # *constraint*, so helm rejects a channel name client-side with
+          # `improper constraint: stable` in under half a second -- and with
+          # `pipefail` set and the shell invoked `bash -e`, that failed
+          # assignment killed the whole step before it printed anything. This
+          # step was added after v16.0.1, so v17.0.0 was the first release to
+          # run it, and it failed on its first execution while the chart it
+          # was supposed to be channelling published perfectly.
+          #
+          # The manifest carries `org.opencontainers.image.version`, which is
+          # the chart version helm packaged. `|| true` because a missing tag
+          # is the ordinary state before the first promotion, not an error.
+          current=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                      "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
+                      | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
+                      2>/dev/null || true)
+
+          # A chart tag's appVersion, without pulling a tarball: the helm OCI
+          # *config blob* is Chart.yaml serialized as JSON, so it is manifest
+          # -> config.digest -> blob. Empty on any failure — the decide step
+          # owns the failure semantics, this step only reports facts.
+          app_major_of() {
+            local tag="$1" digest
+            digest=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                       "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${tag}" 2>/dev/null \
+                       | python3 -c 'import json,sys; print(json.load(sys.stdin)["config"]["digest"])' 2>/dev/null || true)
+            if [ -n "$digest" ]; then
+              curl -fsSL -H "Authorization: Bearer ${reg_token}" \
+                   "https://ghcr.io/v2/beenuar/charts/aisoc/blobs/${digest}" 2>/dev/null \
+                | python3 -c 'import json,sys; v=(json.load(sys.stdin).get("appVersion") or "").lstrip("v"); print(v.split(".")[0] if v and v.split(".")[0].isdigit() else "")' \
+                  2>/dev/null || true
+            fi
+          }
+
+          channel_app_major=""
+          if [ -n "$current" ]; then
+            channel_app_major=$(app_major_of stable)
+          fi
+          incoming_app_major=$(app_major_of "${CHART_VERSION}")
+
+          echo "channel: chart '${current:-<none>}', app major '${channel_app_major:-<none>}'; incoming: chart ${CHART_VERSION}, app major '${incoming_app_major:-<none>}'"
+          {
+            echo "channel_chart_version=${current}"
+            echo "channel_app_major=${channel_app_major}"
+            echo "incoming_app_major=${incoming_app_major}"
+          } >> "$GITHUB_OUTPUT"
+
+      # The decision, pure over the facts above so the ladder tests can run
+      # this exact block. Everything here is a string comparison; no network.
+      - name: Decide whether the chart channel moves
+        id: chart-decide
+        if: github.event_name == 'push'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          CHANNEL_CHART_VERSION: ${{ steps.chart-state.outputs.channel_chart_version }}
+          CHANNEL_APP_MAJOR: ${{ steps.chart-state.outputs.channel_app_major }}
+          INCOMING_APP_MAJOR: ${{ steps.chart-state.outputs.incoming_app_major }}
+        run: |
+          set -uo pipefail
+          incoming_major="${CHART_VERSION%%.*}"
+          is_major=false
+          case "$CHART_VERSION" in
+            *.0.0) is_major=true ;;
+          esac
+
+          channel_major=""
+          case "$CHANNEL_CHART_VERSION" in
+            [0-9]*) channel_major="${CHANNEL_CHART_VERSION%%.*}" ;;
+          esac
+
+          same_major=true
+          if [ -n "$channel_major" ] && [ "$channel_major" != "$incoming_major" ]; then
+            same_major=false
+          fi
+
+          # The appVersion guard (#1440). An empty *channel* app major is the
+          # ordinary first-release state and allows movement, exactly like the
+          # chart-major read above. An empty *incoming* app major while the
+          # channel names one is different: refusing is recoverable (the next
+          # release or a deliberate promotion moves the channel), a wrong
+          # crossing is not, so that direction fails closed.
+          app_same_major=true
+          reason=""
+          if [ -n "$CHANNEL_APP_MAJOR" ]; then
+            if [ -z "$INCOMING_APP_MAJOR" ]; then
+              app_same_major=false
+              reason="the incoming chart's appVersion could not be read"
+            elif [ "$CHANNEL_APP_MAJOR" != "$INCOMING_APP_MAJOR" ]; then
+              app_same_major=false
+              reason="appVersion crosses v${CHANNEL_APP_MAJOR} -> v${INCOMING_APP_MAJOR}"
+            fi
+          fi
+
+          if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ] && [ "$app_same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
+            echo "move=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Helm::stable chart channel left at ${CHANNEL_CHART_VERSION:-<none>}${reason:+ (${reason})}; dispatch chart-channel.yml (or release with promote_stable: true) to move it deliberately."
+            echo "move=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move the `stable` chart channel
+        id: chart-channel
+        if: github.event_name == 'push' && steps.chart-decide.outputs.move == 'true'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.manifest.v1+json"
+          reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+          # GET the version tag's manifest and refuse to promote anything
+          # whose own annotation does not name CHART_VERSION — then PUT the
+          # identical bytes under `stable`.
+          curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${CHART_VERSION}" -o /tmp/chart-manifest.json
+          source_version=$(python3 -c 'import json; print((json.load(open("/tmp/chart-manifest.json")).get("annotations") or {}).get("org.opencontainers.image.version",""))')
+          if [ "$source_version" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::the ${CHART_VERSION} tag's manifest names '${source_version:-<nothing>}'; refusing to promote it"
+            exit 1
+          fi
+          curl -fsS -X PUT -H "Authorization: Bearer ${reg_token}" -H "Content-Type: ${MEDIA}" \
+            --data-binary @/tmp/chart-manifest.json \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" > /dev/null
+          # Read the tag back and require it to name the version we just
+          # pushed. `helm show chart --version stable` cannot do this for
+          # the reason above, and a promotion nobody verified is how a
+          # channel silently points at the wrong chart.
+          moved_to=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                       "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
+                       | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
+                       2>/dev/null || true)
+          if [ "$moved_to" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::stable was pushed but resolves to '${moved_to:-<nothing>}', not ${CHART_VERSION}"
+            exit 1
+          fi
+          echo "::notice title=Helm::stable chart channel now resolves to ${CHART_VERSION}"
+          echo "moved=true" >> "$GITHUB_OUTPUT"
+
+
+      - name: Explain a packaged-but-unpushed chart
+        if: github.event_name != 'push'
+        run: |
+          echo "::notice title=Helm::Chart ${{ steps.package.outputs.version }} was packaged and linted but not pushed; this run was not a tag push."
+
+  # ── Prove the release actually published every image ────────────────────
+  #
+  # v11.0.0 is why this exists: twelve images carried the tag, the console did
+  # not, and the release reported success because every job that finished had
+  # finished. A release is the set of artefacts it published, so it has to be
+  # checked against the registry rather than against its own job statuses.
+  docker-verify:
+    name: Docker — Released images match the tree
+    runs-on: ubuntu-24.04
+    needs: docker-manifest
+    if: always() && needs.docker-manifest.result == 'success'
+    timeout-minutes: 10
+    steps:
+      # The workflow's own ref, not the tag being published: the question is
+      # whether today's deployment files resolve, and the gate that asks it
+      # only exists on the default branch. Checking out v11.0.0 ran a script
+      # that was not in that tree.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --quiet pyyaml
+      # Deliberately without --require-current, which image-availability.yml
+      # and publish-images.yml both pass. That flag asks whether the moving
+      # tags have kept up with the tip of `main`; this job runs on a tag push,
+      # where the checkout is the release commit and `main` has usually moved
+      # on already. Asking here would either red every release for a race it
+      # cannot win or, worse, compare against whatever happens to be checked
+      # out. The release's own question — did every image publish, at the
+      # version its tag names — is what --require-fresh answers, and that is
+      # the question this job exists for.
+      - name: Every image docker-compose.yml and the chart name resolves
+        run: python3 scripts/check_published_images.py --require-fresh --require-network --list

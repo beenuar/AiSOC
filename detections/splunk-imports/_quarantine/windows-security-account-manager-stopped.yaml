@@ -1,0 +1,45 @@
+id: splunk-security-content-69c12d59-d951-431e-ab77-ec426b8d65e6
+name: Windows Security Account Manager Stopped
+description: The following analytic detects the stopping of the Windows Security Account
+  Manager (SAM) service via command-line, typically using the "net stop samss" command.
+  This detection leverages data from Endpoint Detection and Response (EDR) agents,
+  focusing on process names and command-line executions. This activity is significant
+  because stopping the SAM service can disrupt authentication mechanisms and is often
+  associated with ransomware attacks like Ryuk. If confirmed malicious, this action
+  could lead to unauthorized access, privilege escalation, and potential system-wide
+  compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1489
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE (\n      \
+    \  \"Processes.process_name\"=\"net*.exe\" \"Processes.process\"=\"*stop \\\"\
+    samss\\\"*\"\n    )\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `windows_security_account_manager_stopped_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 69c12d59-d951-431e-ab77-ec426b8d65e6
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_security_account_manager_stopped.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

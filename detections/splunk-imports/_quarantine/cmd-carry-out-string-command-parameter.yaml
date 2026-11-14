@@ -1,0 +1,45 @@
+id: splunk-security-content-54a6ed00-3256-11ec-b031-acde48001122
+name: CMD Carry Out String Command Parameter
+description: The following analytic detects the use of `cmd.exe /c` to execute commands,
+  a technique often employed by adversaries and malware to run batch commands or invoke
+  other shells like PowerShell. This detection leverages data from Endpoint Detection
+  and Response (EDR) agents, focusing on command-line executions and process metadata.
+  Monitoring this activity is crucial as it can indicate script-based attacks or unauthorized
+  command execution. If confirmed malicious, this behavior could lead to unauthorized
+  code execution, privilege escalation, or persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.003
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2021/10/18/icedid-to-xinglocker-ransomware-in-24-hours/
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_cmd`\n    AND\n\
+    \    Processes.process IN (\"*/c*\", \"*/k*\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `cmd_carry_out_string_command_parameter_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 54a6ed00-3256-11ec-b031-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/cmd_carry_out_string_command_parameter.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

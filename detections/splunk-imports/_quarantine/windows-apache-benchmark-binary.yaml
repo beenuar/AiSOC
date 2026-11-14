@@ -1,0 +1,45 @@
+id: splunk-security-content-894f48ea-8d85-4dcd-9132-c66cdb407c9b
+name: Windows Apache Benchmark Binary
+description: The following analytic detects the execution of the Apache Benchmark
+  binary (ab.exe), commonly used by MetaSploit payloads. It leverages data from Endpoint
+  Detection and Response (EDR) agents, focusing on process creation events where the
+  original file name is ab.exe. This activity is significant as it may indicate the
+  presence of a MetaSploit attack, which uses Apache Benchmark to generate malicious
+  payloads. If confirmed malicious, this could lead to unauthorized network connections,
+  further system compromise, and potential data exfiltration. Immediate investigation
+  is required to determine the intent and scope of the activity.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059
+  categories:
+  - endpoint
+references:
+- https://seclists.org/metasploit/2013/q3/13
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.original_file_name=ab.exe\n\
+    \  BY Processes.action Processes.dest Processes.original_file_name\n     Processes.parent_process\
+    \ Processes.parent_process_exec Processes.parent_process_guid\n     Processes.parent_process_id\
+    \ Processes.parent_process_name Processes.parent_process_path\n     Processes.process\
+    \ Processes.process_exec Processes.process_guid\n     Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n     Processes.process_name Processes.process_path\
+    \ Processes.user\n     Processes.user_id Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_apache_benchmark_binary_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 894f48ea-8d85-4dcd-9132-c66cdb407c9b
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_apache_benchmark_binary.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

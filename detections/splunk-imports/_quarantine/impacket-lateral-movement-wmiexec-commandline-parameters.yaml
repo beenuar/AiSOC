@@ -1,0 +1,57 @@
+id: splunk-security-content-d6e464e4-5c6a-474e-82d2-aed616a3a492
+name: Impacket Lateral Movement WMIExec Commandline Parameters
+description: The following analytic detects the use of Impacket's `wmiexec.py` tool
+  for lateral movement by identifying specific command-line parameters. It leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on processes spawned
+  by `wmiprvse.exe` with command-line patterns indicative of Impacket usage. This
+  activity is significant as Impacket tools are commonly used by adversaries for remote
+  code execution and lateral movement within a network. If confirmed malicious, this
+  could allow attackers to execute arbitrary commands on remote systems, potentially
+  leading to further compromise and data exfiltration.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.002
+  - T1021.003
+  - T1047
+  - T1543.003
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1021/002/
+- https://attack.mitre.org/techniques/T1021/003/
+- https://attack.mitre.org/techniques/T1047/
+- https://attack.mitre.org/techniques/T1053/
+- https://attack.mitre.org/techniques/T1053/005/
+- https://github.com/SecureAuthCorp/impacket
+- https://vk9-sec.com/impacket-remote-code-execution-rce-on-windows-from-linux/
+- https://www.microsoft.com/security/blog/2022/01/15/destructive-malware-targeting-ukrainian-organizations/
+- https://www.microsoft.com/en-us/security/blog/2023/05/24/volt-typhoon-targets-us-critical-infrastructure-with-living-off-the-land-techniques/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime from datamodel=Endpoint.Processes where Processes.parent_process_name=wmiprvse.exe
+    by Processes.action Processes.dest Processes.original_file_name Processes.parent_process
+    Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id
+    Processes.parent_process_name Processes.parent_process_path Processes.process
+    Processes.process_exec Processes.process_guid Processes.process_hash Processes.process_id
+    Processes.process_integrity_level Processes.process_name Processes.process_path
+    Processes.user Processes.user_id Processes.vendor_product | `drop_dm_object_name(Processes)`
+    | where match(process, "(?i)cmd\.exe\s+\/Q\s+\/c") AND match(process, "\\\\127\.0\.0\.1\\.*")
+    AND match(process, "__\\d{1,10}\\.\\d{1,10}") | `security_content_ctime(firstTime)`
+    | `security_content_ctime(lastTime)`| `impacket_lateral_movement_wmiexec_commandline_parameters_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: d6e464e4-5c6a-474e-82d2-aed616a3a492
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/impacket_lateral_movement_wmiexec_commandline_parameters.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

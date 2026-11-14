@@ -1,0 +1,4 @@
+{
+  "cmdline": "prefix-dd if=-suffix",
+  "event_type": "osquery_query_row"
+}

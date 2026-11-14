@@ -1,0 +1,7 @@
+{
+  "destination_is_internal": false,
+  "event_type": "http_request",
+  "method": "POST",
+  "request_size_bytes": 50000100.0,
+  "src_role": "workstation"
+}

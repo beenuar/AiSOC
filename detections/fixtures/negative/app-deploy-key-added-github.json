@@ -1,0 +1,4 @@
+{
+  "action": "public_key.create",
+  "actor": "user@corp.com"
+}

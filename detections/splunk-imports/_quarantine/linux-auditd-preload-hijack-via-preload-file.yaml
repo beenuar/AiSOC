@@ -1,0 +1,52 @@
+id: splunk-security-content-c1b7abca-55cb-4a39-bdfb-e28c1c12745f
+name: Linux Auditd Preload Hijack Via Preload File
+description: 'The following analytic detects suspicious preload hijacking via the
+  `preload` file, which may indicate an attacker''s attempt to intercept or manipulate
+  library loading processes.
+
+  The `preload` file can be used to force the loading of specific libraries before
+  others, potentially allowing malicious code to execute or alter application behavior.
+
+  By monitoring for unusual or unauthorized modifications to the `preload` file, this
+  analytic helps identify attempts to hijack preload mechanisms, enabling security
+  teams to investigate and address potential threats to system integrity and security.
+
+  Correlate this with related EXECVE or PROCTITLE events to identify the process or
+  user responsible for the access or modification.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.006
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`\n(type=PATH OR type=CWD)\n| rex \"msg=audit\\([^)]*:(?<audit_id>\\\
+    d+)\\)\"\n\n| stats\n  values(type) as types\n  values(name) as names\n  values(nametype)\
+    \ as nametype\n  values(cwd) as cwd_list\n  values(_time) as event_times\n  by\
+    \ audit_id, host\n\n| eval current_working_directory = coalesce(mvindex(cwd_list,\
+    \ 0), \"N/A\")\n| eval candidate_paths = mvmap(names, if(match(names, \"^/\"),\
+    \ names, current_working_directory + \"/\" + names))\n| eval matched_paths = mvfilter(match(candidate_paths,\
+    \ \"/etc/ld.so.preload.*\"))\n| eval match_count = mvcount(matched_paths)\n| eval\
+    \ reconstructed_path = mvindex(matched_paths, 0)\n| eval e_time = mvindex(event_times,\
+    \ 0)\n| where match_count > 0\n| rename host as dest\n\n| stats count min(e_time)\
+    \ as firstTime max(e_time) as lastTime\n  values(nametype) as nametype\n  by current_working_directory\n\
+    \     reconstructed_path\n     match_count\n     dest\n     audit_id\n\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_auditd_preload_hijack_via_preload_file_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c1b7abca-55cb-4a39-bdfb-e28c1c12745f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_preload_hijack_via_preload_file.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

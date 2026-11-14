@@ -1,0 +1,49 @@
+id: splunk-security-content-0661c2de-93de-11ec-9833-acde48001122
+name: Windows WMI Process Call Create
+description: The following analytic detects the execution of WMI command lines used
+  to create or execute processes. It leverages data from Endpoint Detection and Response
+  (EDR) agents, focusing on command-line events that include specific keywords like
+  "process," "call," and "create." This activity is significant because adversaries
+  often use WMI to execute malicious payloads on local or remote hosts, potentially
+  bypassing traditional security controls. If confirmed malicious, this behavior could
+  allow attackers to execute arbitrary code, escalate privileges, or maintain persistence
+  within the environment, posing a severe threat to organizational security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1047
+  categories:
+  - endpoint
+references:
+- https://github.com/NVISOsecurity/sigma-public/blob/master/rules/windows/process_creation/win_susp_wmi_execution.yml
+- https://github.com/redcanaryco/atomic-red-team/blob/2b804d25418004a5f1ba50e9dc637946ab8733c7/atomics/T1047/T1047.md
+- https://www.microsoft.com/en-us/security/blog/2023/05/24/volt-typhoon-targets-us-critical-infrastructure-with-living-off-the-land-techniques/
+- https://thedfirreport.com/2023/05/22/icedid-macro-ends-in-nokoyawa-ransomware/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_wmic`\
+    \ Processes.process = \"* process *\" Processes.process = \"* call *\" Processes.process\
+    \ = \"* create *\"\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_wmi_process_call_create_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0661c2de-93de-11ec-9833-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_wmi_process_call_create.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

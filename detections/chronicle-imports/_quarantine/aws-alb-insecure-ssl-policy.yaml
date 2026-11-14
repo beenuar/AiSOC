@@ -1,0 +1,73 @@
+id: chronicle-detection-rules-aws-alb-insecure-ssl-policy
+name: aws_alb_insecure_ssl_policy
+description: aws_alb_insecure_ssl_policy
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2024 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule aws_alb_insecure_ssl_policy {\n\n  meta:\n    author = \"Google Cloud Security\"\
+    \n    description = \"Detects when an insecure SSL policy is configured for an\
+    \ AWS Application Load Balancer.\"\n    rule_id = \"mr_8aace83b-f9f0-45b8-95c5-a4b0bb2cbb85\"\
+    \n    rule_name = \"AWS Application Load Balancer Insecure SSL Policy\"\n    mitre_attack_tactic\
+    \ = \"Defense Evasion\"\n    mitre_attack_technique = \"Weaken Encryption: Reduce\
+    \ Key Space\"\n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1600/001/\"\
+    \n    mitre_attack_version = \"v15.1\"\n    type = \"Alert\"\n    data_source\
+    \ = \"AWS CloudTrail\"\n    platform = \"AWS\"\n    severity = \"Low\"\n    priority\
+    \ = \"Low\"\n\n  events:\n    $cloudtrail.metadata.vendor_name = \"AMAZON\"\n\
+    \    $cloudtrail.metadata.product_name = \"AWS CloudTrail\"\n    ($cloudtrail.metadata.product_event_type\
+    \ = \"ModifyListener\" or $cloudtrail.metadata.product_event_type = \"CreateListener\"\
+    )\n    $cloudtrail.target.resource.attribute.labels[\"requestParameters.sslPolicy\"\
+    ] = \"ELBSecurityPolicy-2016-08\" or\n    $cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"] = \"ELBSecurityPolicy-TLS13-1-1-2021-06\" or\n\
+    \    $cloudtrail.target.resource.attribute.labels[\"requestParameters.sslPolicy\"\
+    ] = \"ELBSecurityPolicy-TLS13-1-0-2021-06\" or\n    $cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"] = \"ELBSecurityPolicy-TLS13-1-1-FIPS-2023-04\"\
+    \ or\n    $cloudtrail.target.resource.attribute.labels[\"requestParameters.sslPolicy\"\
+    ] = \"ELBSecurityPolicy-TLS13-1-0-FIPS-2023-04\" or\n    $cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"] = \"ELBSecurityPolicy-TLS-1-1-2017-01\" or\n  \
+    \  $cloudtrail.target.resource.attribute.labels[\"requestParameters.sslPolicy\"\
+    ] = \"ELBSecurityPolicy-FS-2018-06\" or\n    $cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"] = \"ELBSecurityPolicy-2015-05\" or\n    $cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"] = \"ELBSecurityPolicy-TLS-1-0-2015-04\" or\n  \
+    \  $cloudtrail.target.resource.attribute.labels[\"requestParameters.sslPolicy\"\
+    ] = \"ELBSecurityPolicy-FS-1-1-2019-08\"\n\n  outcome:\n    $risk_score = max(35)\n\
+    \    $mitre_attack_tactic = \"Defense Evasion\"\n    $mitre_attack_technique =\
+    \ \"Weaken Encryption: Reduce Key Space\"\n    $mitre_attack_technique_id = \"\
+    T1600.001\"\n    $event_count = count_distinct($cloudtrail.metadata.id)\n    $network_http_user_agent\
+    \ = array_distinct($cloudtrail.network.http.user_agent)\n    $principal_ip = array_distinct($cloudtrail.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($cloudtrail.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($cloudtrail.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_display_name = array_distinct($cloudtrail.principal.user.user_display_name)\n\
+    \    $recipient_aws_account_id = array_distinct($cloudtrail.additional.fields[\"\
+    recipientAccountId\"])\n    $aws_region = array_distinct($cloudtrail.principal.location.name)\n\
+    \    $accessed_via_console = array_distinct($cloudtrail.target.resource.attribute.labels[\"\
+    sessionCredentialFromConsole\"])\n    $target_resource_name = array_distinct($cloudtrail.target.resource.name)\n\
+    \    $ssl_security_policy = array_distinct($cloudtrail.target.resource.attribute.labels[\"\
+    requestParameters.sslPolicy\"])\n\n  condition:\n    $cloudtrail\n}"
+  chronicle_rule_name: aws_alb_insecure_ssl_policy
+provenance:
+  source: chronicle/detection-rules
+  source_id: aws_alb_insecure_ssl_policy
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/aws/cloudtrail/aws_alb_insecure_ssl_policy.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

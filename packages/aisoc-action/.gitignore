@@ -1,0 +1,5 @@
+# GitHub Actions run the committed bundle directly (no npm install at runtime),
+# so — unlike every other package — this dist/ MUST be committed. Re-include it
+# past the repo-root `dist/` ignore.
+!dist/
+!dist/**

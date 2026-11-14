@@ -1,0 +1,61 @@
+name: Feature Request
+description: Suggest a new feature or enhancement for AiSOC
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees: []
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement to AiSOC! Please provide as much context as possible.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: Is your feature request related to a problem? Describe the pain point.
+      placeholder: "I'm always frustrated when..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you'd like and how it should work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you've considered?
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component area
+      multiple: true
+      options:
+        - Web UI
+        - Detection / Rules
+        - SOAR / Playbooks
+        - Threat Intelligence
+        - AI Agents
+        - Plugin Platform
+        - API / SDK
+        - Docs
+        - Infra / DevOps
+        - Other
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues and this is not a duplicate
+          required: true
+        - label: This feature aligns with the AiSOC roadmap or is a reasonable addition
+          required: false

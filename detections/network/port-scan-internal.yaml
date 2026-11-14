@@ -1,0 +1,28 @@
+id: det-network-003
+name: Internal Network Port Scan
+description: Detects horizontal and vertical port scanning activity originating from inside the network.
+  Often the first sign of an attacker performing reconnaissance after gaining initial foothold.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1046
+- tlp.white
+category: network
+log_source:
+  product: ndr
+  service: flow
+detection:
+  condition: |
+    distinct_ports_per_src > 50
+    AND distinct_dst_per_src > 25
+    AND time_window_minutes < 5
+false_positives:
+- Vulnerability scanners (must be allowlisted)
+playbook: tpl-recon
+enabled: false
+quarantine_reason: 'not executable (multi-distinct): requires distinct destination ports *and* distinct
+  destinations per source. The engine holds one distinct operand per rule; splitting this into two rules
+  would fire twice on one scan and once on neither half.'
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

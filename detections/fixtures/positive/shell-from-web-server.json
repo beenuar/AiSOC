@@ -1,0 +1,5 @@
+{
+  "host": "web-01",
+  "image_basename": "bash",
+  "parent_image_basename": "php-fpm"
+}

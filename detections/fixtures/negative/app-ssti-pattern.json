@@ -1,0 +1,4 @@
+{
+  "body": "prefix-{{7*7}}-suffix",
+  "event_type": "not-http_request"
+}

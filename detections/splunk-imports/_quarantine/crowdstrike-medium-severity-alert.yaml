@@ -1,0 +1,40 @@
+id: splunk-security-content-7e80d92a-6ec3-4eb1-a444-1480acfe2d14
+name: Crowdstrike Medium Severity Alert
+description: The following analytic detects a CrowdStrike alert with MEDIUM severity
+  indicates a potential threat that requires prompt attention. This alert level suggests
+  suspicious activity that may compromise security but is not immediately critical.
+  It typically involves detectable but non-imminent risks, such as unusual behavior
+  or attempted policy violations, which should be investigated further and mitigated
+  quickly to prevent escalation of attacks.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1110
+  categories:
+  - endpoint
+references:
+- https://www.crowdstrike.com/wp-content/uploads/2022/12/CrowdStrike-Falcon-Event-Streams-Add-on-Guide-v3.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`crowdstrike_stream`\n  | rename event.EndpointIp as src_ip, event.EndpointName\
+    \ as src_host, event.UserName as user, event.IncidentDescription as description,\
+    \ event.IncidentType as type, event.NumbersOfAlerts as count_alerts, event.SeverityName\
+    \ as severity\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY src_ip, src_host, user,\n       description, type, count_alerts,\n   \
+    \    severity\n  | where LIKE (severity, \"%MEDIUM%\")\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `crowdstrike_medium_severity_alert_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7e80d92a-6ec3-4eb1-a444-1480acfe2d14
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/crowdstrike_medium_severity_alert.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,44 @@
+id: mitre-car-car-2014-11-006
+name: Windows Remote Management (WinRM)
+description: When a [Windows Remote Management](https://attack.mitre.org/techniques/T1021/006)
+  connection is opened, the client sends HTTP requests to port 5985 for HTTP or 5986
+  for HTTPS on the target host. Each HTTP(S) request to the URI "/wsman" is called,
+  and other information is set in the headers. Depending on the operation, the HTTP
+  method may vary (i.e., GET, POST, etc.). This analytic would detect Remote PowerShell,
+  as well as other communications that rely on WinRM. Additionally, it outputs the
+  executable on the client host, the connection information, and the hostname of the
+  target host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Network,Netflow
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'flow = search Flow:Start
+
+      winrm = filter flow where (dest_port == 5985)
+
+      winrm_s = filter flow where (dest_port == 5986)
+
+      output winrm, winrm_s
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-11-006
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-11-006.yaml
+notes:
+  car_status: needs_implementation

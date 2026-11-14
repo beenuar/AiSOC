@@ -1,0 +1,5 @@
+{
+  "options": "prefix-rw-suffix",
+  "syscall": "mount",
+  "target": "/proc-tail"
+}

@@ -1,0 +1,4 @@
+{
+  "host": "store.corp.com",
+  "request_uri": "/products?id=1' UNION SELECT username,password FROM users--"
+}

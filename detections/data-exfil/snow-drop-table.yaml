@@ -1,0 +1,23 @@
+id: det-data-exfil-079
+name: Snowflake Table Dropped
+description: Dropping a table after reading it is the cleanup half of an extract.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "DROP"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

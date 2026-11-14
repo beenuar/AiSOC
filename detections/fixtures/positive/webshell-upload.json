@@ -1,0 +1,6 @@
+{
+  "file_extension": ".php",
+  "host": "blog.corp.com",
+  "method": "POST",
+  "request_uri": "/wp-content/uploads/cmd.php"
+}

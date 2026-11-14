@@ -1,0 +1,47 @@
+id: sysdig
+name: Sysdig Secure Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Sysdig Secure runtime / cloud detection events. Polls the Secure Events
+  API for Falco-style policy hits across Kubernetes workloads and cloud
+  accounts. Each event is a runtime policy hit keyed by rule name with
+  severity 0..7 on the Falco syslog ladder; the connector normalises that
+  to the AiSOC alert shape (host + rule + severity + timestamps) and
+  emits one alert per event so downstream correlation can fan out
+  without re-querying Sysdig.
+author: AiSOC Core Team
+tags: [siem, sysdig, falco, runtime, kubernetes, cloud, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/sysdig.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, api_token]
+  properties:
+    region:
+      type: string
+      enum: [us1, us2, us3, us4, eu1, au1, me2]
+      description: >
+        Sysdig region prefix. us1 = secure.sysdig.com (default US),
+        us2 = us2.app.sysdig.com, eu1 = eu1.app.sysdig.com, etc. The
+        connector resolves this to the per-region base URL.
+    api_token:
+      type: string
+      description: >
+        Sysdig Secure API token from Settings → API → Tokens. Needs
+        read access to Secure Events (the principal of least privilege
+        for this connector — do not reuse an admin token).
+      secret: true
+    poll_interval_seconds:
+      type: integer
+      default: 300
+      minimum: 60
+      maximum: 3600
+      description: >
+        How often the connector polls the Secure Events API. The
+        endpoint returns events in near-real-time so 5 minutes is the
+        recommended floor; below that the Falco engine is faster than
+        the upstream batching window and you get more API calls without
+        more events.

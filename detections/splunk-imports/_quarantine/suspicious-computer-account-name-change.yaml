@@ -1,0 +1,39 @@
+id: splunk-security-content-35a61ed8-61c4-11ec-bc1e-acde48001122
+name: Suspicious Computer Account Name Change
+description: The following analytic detects a suspicious computer account name change
+  in Active Directory. It leverages Event ID 4781, which logs account name changes,
+  to identify instances where a computer account name is changed to one that does
+  not end with a `$`. This behavior is significant as it may indicate an attempt to
+  exploit CVE-2021-42278 and CVE-2021-42287, which can lead to domain controller impersonation
+  and privilege escalation. If confirmed malicious, this activity could allow an attacker
+  to gain elevated privileges and potentially control the domain.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.002
+  categories:
+  - endpoint
+references:
+- https://exploit.ph/cve-2021-42287-cve-2021-42278-weaponisation.html
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42278
+- https://msrc.microsoft.com/update-guide/vulnerability/CVE-2021-42287
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=4781 OldTargetUserName=\"*$\" NewTargetUserName!=\"\
+    *$\"\n  | table _time, Computer, Caller_User_Name, OldTargetUserName, NewTargetUserName\n\
+    \  | rename Computer as dest\n  | `suspicious_computer_account_name_change_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 35a61ed8-61c4-11ec-bc1e-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_computer_account_name_change.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

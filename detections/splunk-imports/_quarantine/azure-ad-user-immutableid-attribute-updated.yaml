@@ -1,0 +1,47 @@
+id: splunk-security-content-0c0badad-4536-4a84-a561-5ff760f3c00e
+name: Azure AD User ImmutableId Attribute Updated
+description: The following analytic identifies the modification of the SourceAnchor
+  (ImmutableId) attribute for an Azure Active Directory user. This detection leverages
+  Azure AD audit logs, specifically monitoring the "Update user" operation and changes
+  to the SourceAnchor attribute. This activity is significant as it is a step in setting
+  up an Azure AD identity federation backdoor, allowing an adversary to establish
+  persistence. If confirmed malicious, the attacker could impersonate any user, bypassing
+  password and MFA requirements, leading to unauthorized access and potential data
+  breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1098
+  categories:
+  - cloud
+references:
+- https://docs.microsoft.com/en-us/azure/active-directory/hybrid/plan-connect-design-concepts
+- https://www.mandiant.com/resources/remediation-and-hardening-strategies-microsoft-365-defend-against-apt29-v13
+- https://o365blog.com/post/federation-vulnerability/
+- https://www.inversecos.com/2021/11/how-to-detect-azure-active-directory.html
+- https://www.mandiant.com/resources/blog/detecting-microsoft-365-azure-active-directory-backdoors
+- https://attack.mitre.org/techniques/T1098/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` operationName=\"Update user\" properties.targetResources{}.modifiedProperties{}.displayName=SourceAnchor\n\
+    \  | rename properties.* as *\n  | rename initiatedBy.user.userPrincipalName as\
+    \ initiatedBy\n  | rename targetResources{}.modifiedProperties{}.newValue as modifiedProperties\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY dest user src\n       vendor_account vendor_product initiatedBy\n    \
+    \   signature\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `azure_ad_user_immutableid_attribute_updated_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 0c0badad-4536-4a84-a561-5ff760f3c00e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_user_immutableid_attribute_updated.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

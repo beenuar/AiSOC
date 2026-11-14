@@ -1,0 +1,104 @@
+# Every package `release.yml` uploads, and whether it is on its registry.
+#
+# This file exists because a green publish job is not a published package. On
+# the v12.2.0 release run all eight `npm — publish …` / `PyPI — publish …`
+# jobs reported success and all eight packages returned 404: only the final
+# upload step is credential-gated, so each job built the artefact, reached the
+# upload, skipped it, and exited 0. A reader of the Actions page saw eight
+# green publishes and nine packages that do not exist.
+#
+# The credential gate is correct — the blocker is an account action, described
+# in docs/operations/publishing.md — so the fix is not to publish but to stop
+# the signal lying. Part of that is naming the knowingly-absent set here,
+# where it is reviewable in a diff, instead of leaving it to be inferred from
+# a 404.
+#
+# `scripts/check_published_packages.py` enforces this file in three
+# directions, because a gate that only runs one way passes while drift
+# accumulates in the other:
+#
+#   1. this file <-> the npm and PyPI matrices in `.github/workflows/release.yml`
+#      A package the workflow builds and this file does not declare is a
+#      package nothing will ever check. A package declared here that the
+#      workflow does not build is a claim with no pipeline behind it.
+#
+#   2. `published: false` -> the registry must 404
+#      When a credential arrives and an upload succeeds, this entry becomes
+#      false and must be corrected. That is the point: the knowingly-absent
+#      set has to shrink visibly, in a commit, rather than quietly stop being
+#      true.
+#
+#   3. `published: true` -> the registry must resolve, at `version`
+#      This is the direction the release run cannot check itself. A job that
+#      claims a publish and uploaded nothing fails here.
+#
+# `version` is read from each package's own manifest by the gate, not copied
+# here — a version in two places is a version that disagrees with itself.
+
+packages:
+  # ── npm ────────────────────────────────────────────────────────────────
+  - name: aisoc
+    registry: npm
+    directory: packages/aisoc-lite
+    install: npx aisoc
+    published: false
+    reason: >-
+      npm configures trusted publishing on a package's settings page, and a
+      package that has never been published has no settings page — so the
+      first upload of each npm package needs an `NPM_TOKEN` secret and every
+      upload after it does not. This repository's only secret is
+      `FLY_API_TOKEN`. See docs/operations/publishing.md#one-time-setup-npm.
+
+  - name: '@aisoc/mcp'
+    registry: npm
+    directory: services/mcp
+    install: npx -y @aisoc/mcp
+    published: false
+    reason: >-
+      Same first-upload token requirement as `aisoc`, and no `NPM_TOKEN` is
+      configured. See docs/operations/publishing.md#one-time-setup-npm.
+
+  - name: '@aisoc/sdk'
+    registry: npm
+    directory: packages/sdk-ts
+    install: npm install @aisoc/sdk
+    published: false
+    reason: >-
+      Same first-upload token requirement as `aisoc`, and no `NPM_TOKEN` is
+      configured. See docs/operations/publishing.md#one-time-setup-npm.
+
+  # ── PyPI ───────────────────────────────────────────────────────────────
+  #
+  # PyPI needs no token: it supports *pending* trusted publishers, so the
+  # trust relationship can be registered before the project exists. The
+  # blocker is only that nobody has registered them and set the
+  # `AISOC_PYPI_TRUSTED_PUBLISHING` repository variable, which is what arms
+  # the upload step. The repository currently has no variables at all.
+  - name: aisoc-sandbox
+    registry: pypi
+    directory: packages/aisoc-sandbox
+    install: pip install aisoc-sandbox
+    published: true
+
+  - name: aisoc-cli
+    registry: pypi
+    directory: packages/aisoc-cli
+    install: pip install aisoc-cli
+    published: true
+
+  - name: aisoc-sdk
+    registry: pypi
+    directory: packages/sdk-py
+    install: pip install aisoc-sdk
+    published: true
+
+  - name: aisoc-plugin-sdk
+    registry: pypi
+    directory: packages/plugin-sdk-py
+    install: pip install aisoc-plugin-sdk
+    published: true
+
+  - name: aisoc-detections
+    registry: pypi
+    directory: packages/aisoc-detections
+    published: true

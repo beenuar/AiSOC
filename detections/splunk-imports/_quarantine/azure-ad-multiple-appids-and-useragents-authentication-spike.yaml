@@ -1,0 +1,48 @@
+id: splunk-security-content-5d8bb1f0-f65a-4b4e-af2e-fcdb88276314
+name: Azure AD Multiple AppIDs and UserAgents Authentication Spike
+description: The following analytic detects unusual authentication activity in Azure
+  AD, specifically when a single user account has over 8 authentication attempts using
+  3+ unique application IDs and 5+ unique user agents within a short period. It leverages
+  Azure AD audit logs, focusing on authentication events and using statistical thresholds.
+  This behavior is significant as it may indicate an adversary probing for MFA requirements.
+  If confirmed malicious, it suggests a compromised account, potentially leading to
+  further exploitation, lateral movement, and data exfiltration. Early detection is
+  crucial to prevent substantial harm.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1078/
+- https://www.blackhillsinfosec.com/exploiting-mfa-inconsistencies-on-microsoft-services/
+- https://github.com/dafthack/MFASweep
+- https://www.youtube.com/watch?v=SK1zgqaAZ2E
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`azure_monitor_aad` category=SignInLogs operationName=\"Sign-in activity\"\
+    \ (properties.authenticationRequirement=\"multiFactorAuthentication\" properties.status.additionalDetails=\"\
+    MFA required in Azure AD\") OR (properties.authenticationRequirement=singleFactorAuthentication\
+    \ \"properties.authenticationDetails{}.succeeded\"=true)\n  | bucket span=5m _time\n\
+    \  | rename properties.* as *\n  | rename userAgent as user_agent\n  | fillnull\n\
+    \  | stats count dc(appId) as unique_app_ids dc(user_agent) as unique_user_agents\
+    \ min(_time) as firstTime max(_time) as lastTime values(dest) as dest values(user_agent)\
+    \ as user_agent\n    BY user src vendor_account\n       vendor_product signature\n\
+    \  | where count > 5 and unique_app_ids > 2 and unique_user_agents > 5\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `azure_ad_multiple_appids_and_useragents_authentication_spike_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5d8bb1f0-f65a-4b4e-af2e-fcdb88276314
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/azure_ad_multiple_appids_and_useragents_authentication_spike.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

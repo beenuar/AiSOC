@@ -1,0 +1,59 @@
+id: splunk-security-content-6ca919db-52f3-4c95-a4e9-7b189e8a043d
+name: O365 SharePoint Suspicious Search Behavior
+description: The following analytic identifies when Office 365 users search for suspicious
+  keywords or have an excessive number of queries to a SharePoint site within a limited
+  timeframe. This behavior may indicate that a malicious actor has gained control
+  of a user account and is conducting discovery or enumeration activities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1213.002
+  - T1552
+  categories:
+  - cloud
+references:
+- https://learn.microsoft.com/en-us/purview/audit-get-started#step-3-enable-searchqueryinitiated-events
+- https://www.cisa.gov/sites/default/files/2025-01/microsoft-expanded-cloud-logs-implementation-playbook-508c.pdf
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-320a
+- https://attack.mitre.org/techniques/T1213/002/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`o365_management_activity` (Workload=SharePoint Operation="SearchQueryPerformed"
+    SearchQueryText=* EventData=*search*) OR Operation=SearchQueryInitiatedSharepoint
+
+    | eval command = case(Operation=="SearchQueryPerformed",SearchQueryText,true(),QueryText),
+    UserId = lower(UserId), signature_id = CorrelationId, signature=Operation, src
+    = ClientIP, user = lower(UserId), object_name=case(Operation=="SearchQueryPerformed",''EventData'',true(),QuerySource),
+    -time = _time, suspect_terms = case(match(command, `o365_suspect_search_terms_regex`),command,true(),null())
+
+    | where command != "*" AND command != "(*)"
+
+    | bin _time span=1hr
+
+    | stats values(ScenarioName) as app, values(object_name) as object_name values(command)
+    as command, values(suspect_terms) as suspect_terms, values(src) as src, dc(suspect_terms)
+    as suspect_terms_count, dc(command) as count, min(-time) as firstTime, max(-time)
+    as lastTime by user,signature,_time
+
+    | where count > 20 OR suspect_terms_count >= 2
+
+    | `security_content_ctime(firstTime)`
+
+    | `security_content_ctime(lastTime)`
+
+    | `o365_sharepoint_suspicious_search_behavior_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 6ca919db-52f3-4c95-a4e9-7b189e8a043d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/o365_sharepoint_suspicious_search_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

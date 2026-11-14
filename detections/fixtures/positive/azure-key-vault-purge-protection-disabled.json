@@ -1,0 +1,7 @@
+{
+  "operation_name": "Microsoft.KeyVault/vaults/write",
+  "properties": {
+    "enableSoftDelete": true,
+    "enablePurgeProtection": false
+  }
+}

@@ -1,0 +1,42 @@
+id: chronicle-detection-rules-persistence-of-ryuk-ransomware
+name: persistence_of_ryuk_ransomware
+description: persistence_of_ryuk_ransomware
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule persistence_of_ryuk_ransomware {\n meta:\n    author = \"\
+    Emir Erdogan\"\n    description = \"Ryuk has been know to be a part of a bigger\
+    \ \\\"Triple Threat\\\" attack that involves Emotet and TrickBot.  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/eWyQLgWZwv3v\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1055, T1060, T1112, T1012, T1486\"\n\n  events:\n\
+    (re.regex($selection1.target.process.file.full_path, `.*\\\\reg\\.exe`) and re.regex($selection1.principal.process.file.full_path,\
+    \ `.*\\\\cmd\\.exe`) and (re.regex($selection1.target.process.command_line, `REG\
+    \ ADD \\\"HKEY_CURRENT_USER\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\
+    \\Run\\\" /v \\\"svchos\\\" /t REG_SZ /d \\\".*\\\\BPWPc\\.exe\\\" /f`) or re.regex($selection1.target.process.command_line,\
+    \ `REG  ADD \\\"HKEY_CURRENT_USER\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\
+    \\Run\\\" /v \\\"svchos\\\" /t REG_SZ /d \\\".*\\\\YLZHK\\.exe\\\" /f`) or re.regex($selection1.target.process.command_line,\
+    \ `REG  ADD \\\"HKEY_CURRENT_USER\\\\SOFTWARE\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\
+    \\Run\\\" /v \\\"svchos\\\" /t REG_SZ /d \\\".*\\\\rojwa\\.exe\\\" /f`)) and ($selection1.target.process.command_line\
+    \ = \"vssadmin Delete Shadows /all /quiet\" or re.regex($selection1.target.process.command_line,\
+    \ `vssadmin resize shadowstorage.*.*`)))\n\n  condition:\n    $selection1\n}"
+  chronicle_rule_name: persistence_of_ryuk_ransomware
+provenance:
+  source: chronicle/detection-rules
+  source_id: persistence_of_ryuk_ransomware
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/persistence_of_ryuk_ransomware.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

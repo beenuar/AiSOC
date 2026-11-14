@@ -1,0 +1,39 @@
+id: chronicle-detection-rules-hawkeye-keylogger-file-creation-and-create-process-detector-sysmon-behavior
+name: hawkeye_keylogger_file_creation_and_create_process_detector_sysmon_behavior
+description: hawkeye_keylogger_file_creation_and_create_process_detector_sysmon_behavior
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule hawkeye_keylogger_file_creation_and_create_process_detector_sysmon_behavior\
+    \ {\n meta:\n    author = \"Lee Archinal\"\n    description = \"Detects characteristics\
+    \ of the Hawkeye Keylogger strain of malware  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/Mge8t2HyZUCa\"\n    version\
+    \ = \"0.01\"\n    created = \"2019/07/15\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1059, t1204, Defense_evasion, t1112\"\
+    \n\n  events:\n(re.regex($selection1.target.process.file.full_path, `C:\\\\Windows\\\
+    \\Microsoft\\.NET\\\\Framework.*\\\\vbc\\.exe`) and (($selection1.metadata.product_event_type\
+    \ = \"11\" and re.regex($selection1.target.file.full_path, `C:\\\\Users.*\\\\\
+    AppData\\\\Local\\\\Temp.*\\.tmp`)) or ($selection1.metadata.product_event_type\
+    \ = \"1\" and re.regex($selection1.target.process.command_line, `.* /stext \\\"\
+    \\\"C:\\\\Users.*\\\\AppData\\\\Local\\\\Temp.*\\.tmp`))))\n\n  condition:\n \
+    \   $selection1\n}"
+  chronicle_rule_name: hawkeye_keylogger_file_creation_and_create_process_detector_sysmon_behavior
+provenance:
+  source: chronicle/detection-rules
+  source_id: hawkeye_keylogger_file_creation_and_create_process_detector_sysmon_behavior
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/hawkeye_keylogger_file_creation_and_create_process_detector__sysmon_behavior.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

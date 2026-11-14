@@ -1,0 +1,306 @@
+"""
+Investigation Agent: synthesizes findings from triage and enrichment,
+generates a structured investigation report with recommended actions.
+"""
+
+from __future__ import annotations
+
+import os
+from typing import Any
+
+import httpx
+import structlog
+
+from app.agents.dispositions import BENIGN, BENIGN_TRUE_POSITIVE, FALSE_POSITIVE, NEEDS_REVIEW
+from app.confidence import score_investigation
+from app.context.bundle import ContextBundle
+from app.investigator.deep_investigation import run_deep_investigation
+from app.investigator.splunk_evidence import collect_splunk_evidence
+from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
+from app.tools.mitre import lookup_technique
+
+logger = structlog.get_logger()
+
+# Address of the threat intel service that hosts the attribution endpoint.
+# Defaults to the in-cluster Docker Compose hostname; override via env in
+# Kubernetes / Fly / standalone deployments.
+THREAT_INTEL_SERVICE_URL = os.getenv("AISOC_THREATINTEL_URL", "http://threatintel:8005").rstrip("/")
+ATTRIBUTION_TIMEOUT_SECONDS = float(os.getenv("AISOC_ATTRIBUTION_TIMEOUT_SECONDS", "30.0"))
+# Optional shared secret presented to the threatintel ``/api/v1/actors/*``
+# endpoints when that service is configured to require one (its own
+# ``AISOC_THREATINTEL_SERVICE_TOKEN``). Left empty for internal-only
+# deployments, where the endpoints accept unauthenticated calls.
+THREAT_INTEL_SERVICE_TOKEN = os.getenv("AISOC_THREATINTEL_SERVICE_TOKEN", "").strip()
+
+
+def _bundle_findings(bundle: dict[str, Any] | None) -> list[str]:
+    """Salient facts from a ContextBundle, as investigation findings.
+
+    Deliberately narrow: only the summary fields the bundle itself declares
+    safe to surface, never raw OCSF or log payloads.
+    """
+    if not bundle:
+        return []
+    try:
+        summary = ContextBundle.model_validate(bundle).summary_for_llm()
+    except Exception as exc:  # noqa: BLE001 — context is additive, never fatal
+        logger.debug("investigation.bundle_unreadable", error=str(exc))
+        return []
+
+    findings: list[str] = []
+    if summary.get("blast_radius_max"):
+        findings.append(f"Blast radius of the affected entities scores {summary['blast_radius_max']:.2f}.")
+    for line in (summary.get("neighborhood_summaries") or [])[:3]:
+        findings.append(f"Graph context: {line}")
+    historical = summary.get("historical_verdicts") or []
+    if historical:
+        verdicts = ", ".join(f"{h['verdict']} (similarity {h['similarity']:.2f})" for h in historical[:3])
+        findings.append(f"{len(historical)} similar historical case(s) resolved as: {verdicts}.")
+    return findings
+
+
+async def run_investigation(state: InvestigationState) -> InvestigationState:
+    """
+    Synthesize findings and generate an investigation report.
+    """
+    logger.info("Investigation agent starting", incident_id=str(state.incident_id))
+
+    state.iteration_count += 1
+
+    # --- Pull surrounding SIEM evidence for Splunk-originated alerts (#570) ---
+    # Bounded, read-only, credential-vault-backed. Failure => missing evidence
+    # (handled after scoring below), never a silent dismissal.
+    splunk_evidence = await collect_splunk_evidence(state)
+
+    # Analyze enrichment results for threat patterns
+    malicious_iocs = {k: v for k, v in state.ioc_enrichments.items() if v.get("threat_classification") in ("malicious", "suspicious")}
+
+    # Analyze MITRE techniques for attack stage
+    attack_stages = set()
+    for tid in state.mitre_mappings:
+        info = lookup_technique(tid)
+        attack_stages.add(info.get("tactic_name", "Unknown"))
+
+    # --- Perform threat actor attribution (best-effort, non-blocking on error) ---
+    await _perform_threat_actor_attribution(state, malicious_iocs)
+
+    # --- Pre-fetched context, when the escalation path supplied it ---
+    # This agent is deterministic, so the bundle is surfaced as findings
+    # rather than appended to a prompt. Without it, an auto-escalated alert
+    # was investigated with no knowledge of the entity's graph neighbourhood
+    # or how identical alerts had previously resolved.
+    for line in _bundle_findings(state.context_bundle):
+        state.add_finding(line)
+
+    # --- Recursive, tool-driven investigation ---
+    # Everything above is deterministic: it reasons over evidence already
+    # gathered. This is the part that goes and looks — the model pivots
+    # through the estate via the investigation toolset, following the
+    # strategy selected for this alert shape.
+    #
+    # Additive and fail-soft by construction. A deep investigation that
+    # errors, times out or is disabled leaves the deterministic findings
+    # untouched; it never removes a conclusion, only adds evidence for one.
+    deep = await run_deep_investigation(state)
+    for line in deep.findings():
+        state.add_finding(line)
+    # Recorded on the state so the depth gate can grade the run and the
+    # ledger can show what was actually checked, rather than the narrative
+    # being the only evidence that anything was.
+    state.investigation_depth = deep.as_dict()
+
+    # --- Generate narrative findings ---
+    if malicious_iocs:
+        state.add_finding(f"CONFIRMED THREAT: {len(malicious_iocs)} malicious IOC(s) identified. Immediate containment recommended.")
+
+    if attack_stages:
+        state.add_finding(
+            f"Attack stages observed: {', '.join(sorted(attack_stages))}. "
+            f"This indicates a {_classify_attack_complexity(attack_stages)} attack."
+        )
+
+    # --- Recommend actions based on findings ---
+    if malicious_iocs:
+        for ioc, data in malicious_iocs.items():
+            if data.get("ioc_type") == "ip":
+                state.proposed_actions.append(
+                    ProposedAction(
+                        action_type="block_ip",
+                        description=f"Block malicious IP: {ioc}",
+                        risk_level=ActionRisk.MEDIUM,
+                        target=ioc,
+                        requires_approval=False,
+                        parameters={"ip": ioc},
+                        rationale=f"Malicious score: {data.get('malicious_score', 'N/A')}",
+                    )
+                )
+            elif data.get("ioc_type") == "domain":
+                state.proposed_actions.append(
+                    ProposedAction(
+                        action_type="block_domain",
+                        description=f"Block malicious domain: {ioc}",
+                        risk_level=ActionRisk.MEDIUM,
+                        target=ioc,
+                        requires_approval=False,
+                        parameters={"domain": ioc},
+                        rationale=f"Malicious score: {data.get('malicious_score', 'N/A')}",
+                    )
+                )
+
+    # --- Exfiltration detection ---
+    if "Exfiltration" in attack_stages or "Command and Control" in attack_stages:
+        state.add_finding(
+            "CRITICAL: Evidence of C2 or exfiltration stage detected. Recommend immediate network isolation and forensic acquisition."
+        )
+        state.proposed_actions.append(
+            ProposedAction(
+                action_type="capture_forensics",
+                description="Initiate memory and disk forensic acquisition",
+                risk_level=ActionRisk.LOW,
+                target=state.raw_alert.get("hostname", "unknown"),
+                requires_approval=True,
+                rationale="Exfiltration/C2 stage detected — preserve evidence",
+            )
+        )
+
+    confidence, basis, verdict = score_investigation(state)
+
+    # #570: never dismiss a Splunk-originated alert on MISSING evidence. If the
+    # bounded evidence query failed/timed out (applicable but not queried), a
+    # dismissive verdict is downgraded to needs_review so a human decides.
+    if splunk_evidence.applicable and not splunk_evidence.queried and verdict in (FALSE_POSITIVE, BENIGN, BENIGN_TRUE_POSITIVE):
+        state.add_finding("Splunk evidence unavailable — cannot confirm a benign/false-positive verdict; escalating to needs_review.")
+        verdict = NEEDS_REVIEW
+
+    state.confidence = confidence
+    state.confidence_basis = basis
+    state.verdict = verdict
+    state.add_finding(f"Investigation verdict: {verdict} (confidence={confidence:.2f})")
+
+    state.status = AgentStatus.COMPLETED
+    state.add_finding(f"Investigation complete. Total proposed actions: {len(state.proposed_actions)}")
+
+    logger.info(
+        "Investigation complete",
+        findings_count=len(state.findings),
+        proposed_actions=len(state.proposed_actions),
+        confidence=round(confidence, 2),
+        verdict=verdict,
+    )
+    return state
+
+
+def _classify_attack_complexity(stages: set[str]) -> str:
+    if len(stages) >= 4:
+        return "multi-stage sophisticated"
+    if len(stages) >= 2:
+        return "multi-stage"
+    return "single-stage"
+
+
+async def _perform_threat_actor_attribution(state: InvestigationState, malicious_iocs: dict[str, dict[str, Any]]) -> None:
+    """Attribute the incident to a known threat actor.
+
+    Posts only the IOCs already classified as ``malicious``/``suspicious``
+    plus the observed MITRE techniques to the threat intel service's
+    ``/api/v1/actors/attribute`` endpoint and records the result on
+    ``state.threat_intel["attribution"]``. Failure is soft — a finding is
+    added and the rest of the investigation continues.
+
+    Severity in findings uses AiSOC's four-tier ladder
+    (``info``, ``low``, ``medium``, ``high``) to stay consistent with
+    detection content and connector normalization.
+    """
+    try:
+        # Only ship the iocs that triage already flagged. This keeps the
+        # request small and avoids leaking benign indicators into the
+        # attribution model. Fall back to all enrichments if triage didn't
+        # mark anything (so MITRE-only attribution still works).
+        ioc_source = malicious_iocs if malicious_iocs else state.ioc_enrichments
+        iocs_payload = [{"value": ioc, "type": data.get("ioc_type", "unknown")} for ioc, data in ioc_source.items()]
+        if not iocs_payload and not state.mitre_mappings:
+            state.add_finding("Threat actor attribution skipped: no IOCs or MITRE techniques available")
+            return
+
+        mitre_techniques: list[str] = list(state.mitre_mappings)
+
+        # raw_alert is the only structured input we currently surface to the
+        # agent. Anything richer (target sectors, industry, geography) belongs
+        # in alert metadata and can be promoted to first-class fields later.
+        raw = state.raw_alert or {}
+        case_metadata = {
+            "targets": raw.get("targets", []),
+            "industry": raw.get("industry", ""),
+            "geography": raw.get("geography", ""),
+            "severity": raw.get("severity", "medium"),
+        }
+
+        attribution_result = await _call_attribution_service(
+            iocs=iocs_payload,
+            mitre_techniques=mitre_techniques,
+            case_metadata=case_metadata,
+        )
+
+        state.threat_intel["attribution"] = attribution_result
+
+        if attribution_result and attribution_result.get("actor_id") != "unknown":
+            actor_name = attribution_result.get("actor_name", "Unknown")
+            confidence = float(attribution_result.get("confidence_score", 0.0))
+            severity = "high" if confidence > 0.7 else "medium"
+            state.add_finding(f"[{severity}] Attributed incident to {actor_name} (confidence={confidence:.2f})")
+            for reason in attribution_result.get("reasoning", []):
+                state.add_finding(f"Attribution factor: {reason}")
+            logger.info(
+                "Threat actor attribution successful",
+                actor=actor_name,
+                confidence=confidence,
+            )
+        else:
+            state.add_finding("No strong threat actor attribution possible with current intelligence")
+            logger.info("No strong threat actor attribution possible")
+
+    except Exception as exc:
+        logger.warning("Threat actor attribution failed", error=str(exc))
+        state.add_finding(f"Threat actor attribution failed: {exc}")
+
+
+async def _call_attribution_service(
+    iocs: list[dict],
+    mitre_techniques: list[str],
+    case_metadata: dict,
+) -> dict:
+    """Call the threat intel service's attribution endpoint.
+
+    Args:
+        iocs: List of indicators of compromise; each item must include
+            ``value`` and ``type``. Other fields (``source``, ``first_seen``,
+            ``last_seen``) are forwarded as-is when present.
+        mitre_techniques: MITRE ATT&CK technique IDs (e.g. ``["T1566", "T1059"]``).
+        case_metadata: Free-form case metadata; ``targets`` (list of sector
+            strings) is the only field consulted by attribution today.
+
+    Returns:
+        Decoded JSON response from the attribution endpoint with at least
+        ``actor_id``, ``actor_name``, ``confidence_score``, and ``reasoning``.
+
+    Raises:
+        httpx.HTTPError: on transport or non-2xx responses; the caller
+            converts these into a non-fatal finding.
+    """
+    headers = {"Authorization": f"Bearer {THREAT_INTEL_SERVICE_TOKEN}"} if THREAT_INTEL_SERVICE_TOKEN else {}
+    try:
+        async with httpx.AsyncClient(timeout=ATTRIBUTION_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{THREAT_INTEL_SERVICE_URL}/api/v1/actors/attribute",
+                json={
+                    "iocs": iocs,
+                    "mitre_techniques": mitre_techniques,
+                    "case_metadata": case_metadata,
+                },
+                headers=headers,
+            )
+            response.raise_for_status()
+            return response.json()
+    except httpx.HTTPError as exc:
+        logger.error("HTTP error calling attribution service", error=str(exc))
+        raise

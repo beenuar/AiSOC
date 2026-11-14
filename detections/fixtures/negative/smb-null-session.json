@@ -1,0 +1,7 @@
+{
+  "auth_package": "Kerberos",
+  "event_id": 4624,
+  "logon_type": 3,
+  "src_ip": "10.0.5.7",
+  "user": "user@corp.com"
+}

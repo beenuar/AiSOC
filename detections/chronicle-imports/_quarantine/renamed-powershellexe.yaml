@@ -1,0 +1,37 @@
+id: chronicle-detection-rules-renamed-powershellexe
+name: renamed_powershellexe
+description: renamed_powershellexe
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule renamed_powershellexe {\n meta:\n    author = \"Tom Ueltschi\
+    \ (@c_APT_ure)\"\n    description = \"Detects copying and renaming of powershell.exe\
+    \ before execution (RETEFE malware DOC/macro starting Sept 2018)  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/WIUXMdiAiDDv\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    category = \"process_creation\"\
+    \n    product = \"windows\"\n    mitre = \"t1086, execution\"\n\n  events:\n(($selection.metadata.description\
+    \ = \"Windows PowerShell\" and ($selection.metadata.product_event_type = \"4688\"\
+    \ or $selection.metadata.product_event_type = \"1\")) and not (((re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\powershell\\.exe`) or re.regex($selection.target.process.file.full_path,\
+    \ `.*\\\\powershell_ise\\.exe`)) or $selection.metadata.description = \"Windows\
+    \ PowerShell ISE\")))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: renamed_powershellexe
+provenance:
+  source: chronicle/detection-rules
+  source_id: renamed_powershellexe
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/process_creation/renamed_powershell_exe.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

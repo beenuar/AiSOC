@@ -1,0 +1,5 @@
+{
+  "event_type": "ScheduledTaskCreate",
+  "host": "wks-001",
+  "task_command_path": "C:\\Users\\Public\\beacon.exe"
+}

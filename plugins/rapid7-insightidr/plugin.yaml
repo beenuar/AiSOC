@@ -1,0 +1,24 @@
+id: rapid7-insightidr
+name: Rapid7 InsightIDR Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Rapid7 InsightIDR cloud SIEM/XDR. Pulls investigations and supports log
+  search across collected sources.
+author: AiSOC Core Team
+tags: [siem, rapid7, insightidr, udba]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/rapid7_insightidr.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [region, api_key]
+  properties:
+    region:
+      type: string
+      description: Region
+    api_key:
+      type: string
+      description: Insight API Key
+      secret: true

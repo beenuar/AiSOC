@@ -1,0 +1,19 @@
+# Template tenant manifest. Copy to ./{slug}.yaml and fill in real
+# values. The file name SHOULD match the `slug` field below — the
+# auto-provision workflow keys off it.
+#
+# Files prefixed with `_` (underscore) are ignored by the workflow so
+# this example never accidentally provisions a real tenant.
+
+slug: example
+display_name: Example Inc
+plan: standard            # one of: starter | standard | enterprise
+region: iad               # primary Fly region
+base_domain: aisoc.example.com
+contact_email: ops@example.com
+
+# Optional knobs (defaults shown):
+api_vm_size: shared-cpu-1x
+agents_vm_size: shared-cpu-2x
+postgres_plan: development
+realtime_min_machines: 1

@@ -1,0 +1,35 @@
+# Generic JSON inbox template — fallback for any vendor without a
+# dedicated mapping. Pulls common-shape fields if present and stamps
+# everything else as raw_data so detection content can still pivot.
+#
+# Operators reach for this template when they have a webhook source
+# that doesn't match anything in the catalog; better to ingest with a
+# best-effort projection than refuse the event.
+id: generic-json
+vendor_name: Generic
+product_name: Generic JSON
+class_uid: 2001
+class_name: Security Finding
+activity_id: 1
+field_map:
+  title: finding.title
+  message: message
+  description: finding.description
+  source: source
+  url: url
+  alert_id: finding.uid
+  id: finding.uid
+severity_field: severity
+severity_map:
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  warning: 3
+  high: 4
+  critical: 5
+  fatal: 6
+time_field: timestamp
+message_field: message
+constants:
+  source_type: generic-json

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <title>Triage queue shortcut</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0d14"/>
+      <stop offset="100%" stop-color="#11151f"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="20" ry="20" fill="url(#bg)"/>
+  <!-- Stacked alert rows -->
+  <rect x="20" y="22" width="56" height="12" rx="3" fill="#1e2533" stroke="#ef4444" stroke-width="1.5"/>
+  <circle cx="26" cy="28" r="2.5" fill="#ef4444"/>
+  <rect x="33" y="26" width="36" height="2" rx="1" fill="#cbd5f5"/>
+  <rect x="33" y="30" width="22" height="2" rx="1" fill="#64748b"/>
+  <rect x="20" y="40" width="56" height="12" rx="3" fill="#1e2533" stroke="#f59e0b" stroke-width="1.5"/>
+  <circle cx="26" cy="46" r="2.5" fill="#f59e0b"/>
+  <rect x="33" y="44" width="36" height="2" rx="1" fill="#cbd5f5"/>
+  <rect x="33" y="48" width="28" height="2" rx="1" fill="#64748b"/>
+  <rect x="20" y="58" width="56" height="12" rx="3" fill="#1e2533" stroke="#3b82f6" stroke-width="1.5"/>
+  <circle cx="26" cy="64" r="2.5" fill="#3b82f6"/>
+  <rect x="33" y="62" width="36" height="2" rx="1" fill="#cbd5f5"/>
+  <rect x="33" y="66" width="20" height="2" rx="1" fill="#64748b"/>
+</svg>

@@ -1,0 +1,65 @@
+id: snowflake
+name: Snowflake Account Activity Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Snowflake audit + account-usage connector. Distinct from the existing
+  snowflake-events plugin (which is the reference Python + Go SDK
+  implementation under plugins/snowflake-events/): this is the
+  first-party AiSOC core connector that ships with the platform. Polls
+  the SNOWFLAKE.ACCOUNT_USAGE schema for LOGIN_HISTORY and QUERY_HISTORY
+  views, normalises rows to AiSOC alert shape, and emits anomaly
+  candidates (failed login bursts, large-result-set downloads, queries
+  from unexpected regions, service-account queries from human-named
+  warehouses).
+author: AiSOC Core Team
+tags: [data, snowflake, warehouse, exfil, audit, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/snowflake.py
+license: MIT
+min_aisoc_version: "4.0.0"
+config_schema:
+  type: object
+  required: [account, user, password, warehouse]
+  properties:
+    account:
+      type: string
+      description: >
+        Snowflake account identifier (e.g. xy12345.us-east-1). This is
+        the same value that prefixes your Snowflake URL.
+    user:
+      type: string
+      description: >
+        Snowflake user with read access to SNOWFLAKE.ACCOUNT_USAGE. We
+        recommend creating a dedicated AISOC_AUDIT_READER user with
+        only that schema's USAGE + SELECT grants.
+    password:
+      type: string
+      description: >
+        Password or programmatic access token for the user above.
+        Stored in the AiSOC credential vault and decrypted only at
+        connect time.
+      secret: true
+    warehouse:
+      type: string
+      description: >
+        Warehouse used to execute the audit queries. Use a dedicated
+        X-Small warehouse so audit-poll cost is predictable and does
+        not contend with production analytical workloads.
+    role:
+      type: string
+      default: ACCOUNTADMIN
+      description: >
+        Role with access to SNOWFLAKE.ACCOUNT_USAGE. ACCOUNTADMIN is
+        the default in Snowflake but you can substitute a custom role
+        with the SHOW_PRIVILEGES or MONITOR_USAGE system privileges.
+    poll_interval_seconds:
+      type: integer
+      default: 300
+      minimum: 60
+      maximum: 3600
+      description: >
+        How often the connector polls. ACCOUNT_USAGE views have a
+        latency of up to 45 minutes from real-time per Snowflake docs,
+        so going below 60s gives no detection-latency benefit but
+        increases warehouse cost.

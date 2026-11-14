@@ -1,0 +1,120 @@
+id: cloud-takeover-response-v1
+name: Cloud Account Takeover Response
+description: >
+  Responds to cloud account takeover or unauthorized IAM activity. Disables
+  compromised credentials, revokes suspicious API keys, audits recent API
+  calls, and alerts the cloud security team.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - cloud
+  - account-takeover
+  - iam
+  - aws
+  - gcp
+  - azure
+
+trigger:
+  on: alert
+  severity:
+    - high
+    - critical
+  tags:
+    - cloud-takeover
+
+steps:
+  - id: enrich-cloud-user
+    name: Enrich Cloud Principal
+    type: enrich
+    params:
+      source: cloud_iam
+      fields:
+        - principal_id
+        - principal_type
+        - cloud_provider
+        - access_key_id
+        - region
+        - recent_api_calls
+        - last_login_ip
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-api-calls
+    name: Investigate Recent API Activity
+    type: investigate
+    params:
+      query: >
+        cloud_api principal={{ alert.principal_id }}
+        anomalous=true last_hours=24
+      context_fields:
+        - alert.principal_id
+        - alert.access_key_id
+    timeout_seconds: 60
+    on_failure: continue
+
+  - id: check-key-type
+    name: Check If Access Key Involved
+    type: condition
+    condition:
+      field: alert.access_key_id
+      operator: exists
+    next_true: disable-key
+    next_false: notify-team
+
+  - id: disable-key
+    name: Disable Compromised Access Key
+    type: http
+    params:
+      method: POST
+      url: "{{ env.CLOUD_IAM_API_URL }}/keys/{{ alert.access_key_id }}/disable"
+      body:
+        reason: "Cloud account takeover — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: revoke-sessions
+    name: Revoke Cloud Console Sessions
+    type: http
+    params:
+      method: POST
+      url: "{{ env.CLOUD_IAM_API_URL }}/users/{{ alert.principal_id }}/revoke-sessions"
+      body:
+        reason: "Suspected cloud account takeover"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-team
+    name: Notify Cloud Security Team
+    type: notify
+    params:
+      channel: "#cloud-security"
+      message: |
+        ☁️ *Cloud Account Takeover Detected*
+        Provider: `{{ alert.cloud_provider }}`
+        Principal: `{{ alert.principal_id }}`
+        Access Key: `{{ alert.access_key_id }}`
+        Source IP: `{{ alert.last_login_ip }}`
+        Key disabled: {{ steps.disable-key.status }}
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create Cloud ATO Ticket
+    type: create_ticket
+    params:
+      title: "CLOUD-ATO: {{ alert.principal_id }} on {{ alert.cloud_provider }}"
+      severity: P1
+      assignee_group: cloud-security
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close Cloud ATO Case
+    type: close_case
+    params:
+      status: contained
+      resolution: "Access key disabled; sessions revoked; cloud security team notified."
+    timeout_seconds: 15
+    on_failure: continue

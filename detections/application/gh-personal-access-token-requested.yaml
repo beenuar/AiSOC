@@ -1,0 +1,23 @@
+id: det-application-136
+name: GitHub Fine-Grained Token Access Requested
+description: The request precedes the grant, so it is the earlier signal.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.personal_access_token.request_created"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

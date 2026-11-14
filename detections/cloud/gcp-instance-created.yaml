@@ -1,0 +1,23 @@
+id: det-cloud-226
+name: GCP Compute Instance Created
+description: An instance created outside the deployment pipeline runs whatever its startup script says.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1578.002
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: compute
+detection:
+  condition: |
+    method_name == "v1.compute.instances.insert"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

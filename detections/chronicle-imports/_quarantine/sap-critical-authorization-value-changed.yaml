@@ -1,0 +1,49 @@
+id: chronicle-detection-rules-sap-critical-authorization-value-changed
+name: sap_critical_authorization_value_changed
+description: sap_critical_authorization_value_changed
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2026 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule sap_critical_authorization_value_changed {\n\n  meta:\n    author = \"\
+    Google Cloud Security\"\n    description = \"Detects the modification of sensitive\
+    \ authorization objects (CD1251) within a role. This identifies potential 'backdoor'\
+    \ privilege escalation where a standard role is granted administrative powers\
+    \ (e.g., Debugging or System Table access) via PFCG.\"\n    severity = \"Critical\"\
+    \n    tactic = \"TA0004\"\n    technique = \"T1098\"\n\n  events:\n    $change.metadata.log_type\
+    \ = \"SAP_CHANGE_DOCUMENT\"\n    $change.target.resource.attribute.labels[\"TABNAME\"\
+    ] = \"CD1251\"\n    $change.target.resource.attribute.labels[\"CHNGIND\"] = /J|U/\n\
+    \    $change.target.application = \"PFCG\"\n\n    $role = $change.target.resource.product_object_id\n\
+    \    $admin = $change.principal.user.userid\n\n    $auth_object = re.capture($change.target.resource.attribute.labels[\"\
+    TABKEY\"], \"^.{33}(.{10})\")\n\n  match:\n    $admin, $role over 1h\n\n  outcome:\n\
+    \    $admin_user = array_distinct($admin)\n    $modified_role = array_distinct($role)\n\
+    \    $impacted_object = array_distinct($auth_object)\n    $new_value = array_distinct($change.additional.fields[\"\
+    VALUE_NEW\"])\n    $system_id = array_distinct($change.target.application)\n \
+    \   $risk_score = 75\n\n  condition:\n    $change\n}"
+  chronicle_rule_name: sap_critical_authorization_value_changed
+provenance:
+  source: chronicle/detection-rules
+  source_id: sap_critical_authorization_value_changed
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/sap/sap_critical_authorization_value_changed.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

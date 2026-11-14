@@ -1,0 +1,6 @@
+{
+  "baseline_action_rarity": 0.06,
+  "event_name": "CHANGE_USER_ORGANIZATION_UNIT",
+  "event_type": "admin",
+  "user": "workspace-admin@example.com"
+}

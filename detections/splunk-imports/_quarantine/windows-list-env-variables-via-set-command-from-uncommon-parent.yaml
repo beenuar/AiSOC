@@ -1,0 +1,47 @@
+id: splunk-security-content-aec157f4-8783-4584-aca6-754c4dc7fba9
+name: Windows List ENV Variables Via SET Command From Uncommon Parent
+description: The following analytic identifies a suspicious process command line fetching
+  environment variables using the cmd.exe "set" command, with a non-shell parent process.
+  It leverages data from Endpoint Detection and Response (EDR) agents, focusing on
+  command-line executions and parent process names. This activity could be significant
+  as it is commonly associated with malware like Qakbot, which uses this technique
+  to gather system information. If confirmed malicious, this behavior could indicate
+  that the parent process has been compromised, potentially allowing attackers to
+  execute arbitrary commands, escalate privileges, or persist within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055
+  categories:
+  - endpoint
+references:
+- https://twitter.com/pr0xylife/status/1585612370441031680?s=46&t=Dc3CJi4AnM-8rNoacLbScg
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE Processes.process_name=\"\
+    cmd.exe\" Processes.process IN (\"*/c set\", \"*/c \\\"set\")\n    AND\n    NOT\
+    \ Processes.parent_process_name IN (\"cmd.exe\", \"explorer.exe\", \"powershell*\"\
+    \ \"pwsh.exe\")\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_list_env_variables_via_set_command_from_uncommon_parent_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: aec157f4-8783-4584-aca6-754c4dc7fba9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_list_env_variables_via_set_command_from_uncommon_parent.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,20 @@
+# Operator-supplied values — never commit
+terraform.tfvars
+*.auto.tfvars
+
+# Local state when running without a remote backend
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate.*.backup
+
+# Plan artifacts
+tfplan
+*.tfplan
+
+# Module + provider cache
+.terraform/
+.terraform.lock.hcl.local
+
+# OS / editor noise
+.DS_Store
+*.swp

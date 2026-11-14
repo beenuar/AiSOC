@@ -1,0 +1,79 @@
+id: splunk-security-content-e9d05aa2-32f0-411b-930c-5b8ca5c4fcee
+name: Windows MSIExec Spawn Discovery Command
+description: 'The following analytic detects MSIExec spawning multiple discovery commands.
+
+  This behavior is identified using data from Endpoint Detection and Response (EDR)
+  agents, focusing on process creation events where MSIExec is the parent process.
+
+  If confirmed malicious, an attacker could use these discovery commands to gather
+  system information, potentially leading to further exploitation or lateral movement
+  within the network.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.007
+  categories:
+  - endpoint
+references:
+- https://thedfirreport.com/2022/06/06/will-the-real-msiexec-please-stand-up-exploit-leads-to-data-exfiltration/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.007/T1218.007.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Endpoint.Processes WHERE\n\n\
+    Processes.parent_process_name=msiexec.exe\n\n(\n    Processes.process_name IN\
+    \ (\n        \"arp.exe\"\n        \"dsget.exe\",\n        \"hostname.exe\",\n\
+    \        \"ipconfig.exe\",\n        \"nbtstat.exe\",\n        \"netdom.exe\",\n\
+    \        \"nltest.exe\",\n        \"ntdsutil.exe\",\n        \"qprocess.exe\"\
+    ,\n        \"qwinsta.exe\",\n        \"systeminfo.exe\"\n        \"wmic.exe\"\n\
+    \    )\n    OR\n    (\n        Processes.process_name IN (\n            \"bash.exe\"\
+    ,\n            \"cmd.exe\",\n            \"powershell.exe\",\n            \"powershell_ise.exe\"\
+    ,\n            \"pwsh.exe\"\n        )\n\n        (\n            Processes.process\
+    \ IN (\n                \"*arp *\",\n                \"*dsget*\",\n          \
+    \      \"*hostname*\",\n                \"*ipconfig*\",\n                \"*nbtstat*\"\
+    ,\n                \"*netdom*\",\n                \"*nltest*\",\n            \
+    \    \"*ntdsutil*\",\n                \"*qprocess *\",\n                \"*qwinsta*\"\
+    ,\n                \"*systeminfo*\",\n                \"*wmic *\"\n          \
+    \  )\n            OR\n            (\n                (\n                    Processes.process\
+    \ IN (\n                        \"*net *\",\n                        \"*net.exe\
+    \ *\",\n                        \"*net1*\"\n                        \"*net1.exe*\"\
+    \n                    )\n                    OR\n                    Processes.process_name\
+    \ IN (\n                        \"net.exe\",\n                        \"net1.exe\"\
+    \n                    )\n                )\n                Processes.process\
+    \ = \"*view*\"\n            )\n            OR\n            (\n               \
+    \ (\n                    Processes.process IN (\n                        \"*reg\
+    \ *\",\n                        \"*reg.exe *\"\n                        \"*sc\
+    \ *\",\n                        \"*sc.exe *\",\n                    )\n      \
+    \              OR\n                    Processes.process_name IN (\n         \
+    \               \"reg.exe\",\n                        \"sc.exe\"\n           \
+    \         )\n                )\n                Processes.process = \"*query*\"\
+    \n                NOT Processes.process = \"* /SC *\"\n            )\n       \
+    \     OR\n            (\n                (\n                    Processes.process\
+    \ IN (\n                        \"*query *\",\n                        \"*query.exe*\"\
+    \n                    )\n                    OR\n                    Processes.process_name\
+    \ = \"query.exe\"\n                )\n                Processes.process IN (\n\
+    \                    \"* process\",\n                    \"* session\",\n    \
+    \                \"* user\",\n                )\n            )\n        )\n  \
+    \  )\n)\nBY Processes.action Processes.dest Processes.original_file_name\n   Processes.parent_process\
+    \ Processes.parent_process_exec\n   Processes.parent_process_guid Processes.parent_process_id\n\
+    \   Processes.parent_process_name Processes.parent_process_path\n   Processes.process\
+    \ Processes.process_exec Processes.process_guid\n   Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n   Processes.process_name Processes.process_path\
+    \ Processes.user\n   Processes.user_id Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_msiexec_spawn_discovery_command_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: e9d05aa2-32f0-411b-930c-5b8ca5c4fcee
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_msiexec_spawn_discovery_command.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,35 @@
+id: splunk-security-content-b4d4217a-6673-4fb6-837d-07a522bdf9f7
+name: ESXi System Information Discovery
+description: This detection identifies the use of ESXCLI system-level commands that
+  retrieve configuration details. While used for legitimate administration, this behavior
+  may also indicate adversary reconnaissance aimed at profiling the ESXi host's capabilities,
+  build information, or system role in preparation for further compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1082
+  categories:
+  - application
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`esxi_syslog` Message="*system*" AND Message="*esxcli*" AND Message
+    IN ("*get*","*list*") AND Message="*user=*" NOT Message="*filesystem*" | rex field=_raw
+    "user=(?<user>\w+)\]\s+Dispatch\s+(?<command>[^\s]+)" | rex field=_raw "Z (?<dest>[\w\.]+)\s"
+    | stats min(_time) as firstTime max(_time) as lastTime count by dest user command
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `esxi_system_information_discovery_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: b4d4217a-6673-4fb6-837d-07a522bdf9f7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/esxi_system_information_discovery.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

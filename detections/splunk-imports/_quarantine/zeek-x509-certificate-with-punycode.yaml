@@ -1,0 +1,42 @@
+id: splunk-security-content-029d6fe4-a5fe-43af-827e-c78c50e81d81
+name: Zeek x509 Certificate with Punycode
+description: The following analytic detects the presence of punycode within x509 certificates
+  using Zeek x509 logs. It identifies punycode in the subject alternative name email
+  and other fields by searching for the "xn--" prefix. This activity is significant
+  as punycode can be used in phishing attacks or to bypass domain filters, posing
+  a security risk. If confirmed malicious, attackers could use these certificates
+  to impersonate legitimate domains, potentially leading to unauthorized access or
+  data breaches.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1573
+  categories:
+  - network
+references:
+- https://community.emergingthreats.net/t/out-of-band-ruleset-update-summary-2022-11-01/117
+- https://github.com/corelight/CVE-2022-3602/tree/master/scripts
+- https://docs.zeek.org/en/master/logs/x509.html
+- https://www.splunk.com/en_us/blog/security/nothing-puny-about-cve-2022-3602.html
+- https://www.openssl.org/blog/blog/2022/11/01/email-address-overflows/
+- https://docs.zeek.org/en/master/scripts/base/init-bare.zeek.html#type-X509::SubjectAlternativeName
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`zeek_x509`\n  | rex field=san.email{} \"\\@(?<domain_detected>xn--.*)\"\
+    \n  | rex field=san.other_fields{} \"\\@(?<domain_detected>xn--.*)\"\n  | stats\
+    \ values(domain_detected)\n    BY basic_constraints.ca source host\n  | `zeek_x509_certificate_with_punycode_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 029d6fe4-a5fe-43af-827e-c78c50e81d81
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/zeek_x509_certificate_with_punycode.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

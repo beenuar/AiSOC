@@ -1,0 +1,44 @@
+id: splunk-security-content-f3eb471c-16d0-404d-897c-7653f0a78cba
+name: ASL AWS Defense Evasion Update Cloudtrail
+description: The following analytic detects `UpdateTrail` events within AWS CloudTrail
+  logs, aiming to identify attempts by attackers to evade detection by altering logging
+  configurations. By updating CloudTrail settings with incorrect parameters, such
+  as changing multi-regional logging to a single region, attackers can impair the
+  logging of their activities across other regions. This behavior is crucial for Security
+  Operations Centers (SOCs) to identify, as it indicates an adversary's intent to
+  operate undetected within a compromised AWS environment. The impact of such evasion
+  tactics is significant, potentially allowing malicious activities to proceed without
+  being logged, thereby hindering incident response and forensic investigations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.008
+  categories:
+  - cloud
+references:
+- https://attack.mitre.org/techniques/T1562/008/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`amazon_security_lake` api.operation=UpdateTrail\n  | fillnull\n  |\
+    \ stats count min(_time) as firstTime max(_time) as lastTime\n    BY actor.user.uid\
+    \ api.operation api.service.name\n       http_request.user_agent src_endpoint.ip\
+    \ actor.user.account.uid\n       cloud.provider cloud.region\n  | rename actor.user.uid\
+    \ as user api.operation as action api.service.name as dest http_request.user_agent\
+    \ as user_agent src_endpoint.ip as src actor.user.account.uid as vendor_account\
+    \ cloud.provider as vendor_product cloud.region as vendor_region\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `asl_aws_defense_evasion_update_cloudtrail_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: f3eb471c-16d0-404d-897c-7653f0a78cba
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/asl_aws_defense_evasion_update_cloudtrail.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

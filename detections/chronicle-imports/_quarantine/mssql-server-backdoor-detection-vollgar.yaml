@@ -1,0 +1,52 @@
+id: chronicle-detection-rules-mssql-server-backdoor-detection-vollgar
+name: mssql_server_backdoor_detection_vollgar
+description: mssql_server_backdoor_detection_vollgar
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule mssql_server_backdoor_detection_vollgar {\n meta:\n    author\
+    \ = \"Emir Erdogan\"\n    description = \"Newly discovered Vollgar attack uses\
+    \ brute force to infect vulnerable Microsoft SQL servers at a high rate.  License:\
+    \ https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\n\
+    \    reference = \"https://tdm.socprime.com/tdm/info/JjWtzMSfOzEp\"\n    version\
+    \ = \"0.01\"\n    created = \"2021-03-09\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"T1005, T1190\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"11\" and ($selection.target.file.full_path = \"C:\\\\ProgramData\\\\wget.vbs\"\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\SQLAGENTIDC\\.exe`) or\
+    \ $selection.target.file.full_path = \"C:\\\\RECYCLER\\\\wget.vbs\" or $selection.target.file.full_path\
+    \ = \"C:\\\\ProgramData\\\\emsda.vbs\" or $selection.target.file.full_path = \"\
+    C:\\\\RECYCLER\\\\emsda.vbs\" or re.regex($selection.target.file.full_path, `.*\\\
+    \\SQLAGENTSWA\\.exe`) or re.regex($selection.target.file.full_path, `.*\\\\SQLIOMDSD\\\
+    .exe`) or re.regex($selection.target.file.full_path, `.*\\\\SQLSernsf\\.exe`)\
+    \ or $selection.target.file.full_path = \"C:\\\\Program Files (x86)\\\\Microsoft\
+    \ SQL Server\\\\SQLSerasi.exe\" or $selection.target.file.full_path = \"C:\\\\\
+    Users\\\\MSSQL~1\\\\AppData\\\\Local\\\\Temp\\\\startas.bat\" or $selection.target.file.full_path\
+    \ = \"C:\\\\Users\\\\MSSQLSERVER\\\\AppData\\\\Local\\\\Temp\\\\startas.bat\"\
+    \ or $selection.target.file.full_path = \"C:\\\\Windows\\\\Temp\\\\startas.bat\"\
+    \ or $selection.target.file.full_path = \"C:\\\\Windows\\\\ServiceProfiles\\\\\
+    NetworkService\\\\AppData\\\\Local\\\\Temp\\\\startas.bat\" or $selection.target.file.full_path\
+    \ = \"C:\\\\Users\\\\MSSQLSERVER\\\\AppData\\\\Local\\\\Temp\\\\startae.bat\"\
+    \ or $selection.target.file.full_path = \"C:\\\\Windows\\\\Temp\\\\startae.bat\"\
+    \ or $selection.target.file.full_path = \"C:\\\\Windows\\\\ServiceProfiles\\\\\
+    NetworkService\\\\AppData\\\\Local\\\\Temp\\\\startae.bat\"))\n\n  condition:\n\
+    \    $selection\n}"
+  chronicle_rule_name: mssql_server_backdoor_detection_vollgar
+provenance:
+  source: chronicle/detection-rules
+  source_id: mssql_server_backdoor_detection_vollgar
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/ioc_sigma/windows/ms_sql_server_backdoor_detection__vollgar.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

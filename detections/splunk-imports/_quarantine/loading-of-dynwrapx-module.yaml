@@ -1,0 +1,47 @@
+id: splunk-security-content-eac5e8ba-4857-11ec-9371-acde48001122
+name: Loading Of Dynwrapx Module
+description: The following analytic detects the loading of the dynwrapx.dll module,
+  which is associated with the DynamicWrapperX ActiveX component. This detection leverages
+  Sysmon EventCode 7 to identify processes that load or register dynwrapx.dll. This
+  activity is significant because DynamicWrapperX can be used to call Windows API
+  functions in scripts, making it a potential tool for malicious actions. If confirmed
+  malicious, this could allow an attacker to execute arbitrary code, escalate privileges,
+  or maintain persistence on the host. Immediate investigation of parallel processes
+  and registry modifications is recommended.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1055.001
+  categories:
+  - endpoint
+references:
+- https://blog.f-secure.com/hunting-for-koadic-a-com-based-rootkit/
+- https://www.script-coding.com/dynwrapx_eng.html
+- https://bohops.com/2018/06/28/abusing-com-registry-structure-clsid-localserver32-inprocserver32/
+- https://tria.ge/210929-ap75vsddan
+- https://www.virustotal.com/gui/file/cb77b93150cb0f7fe65ce8a7e2a5781e727419451355a7736db84109fa215a89
+- https://malpedia.caad.fkie.fraunhofer.de/details/win.asyncrat
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=7 (ImageLoaded = "*\\dynwrapx.dll" OR OriginalFileName
+    = "dynwrapx.dll" OR  Product = "DynamicWrapperX") | fillnull | stats count min(_time)
+    as firstTime max(_time) as lastTime by Image ImageLoaded dest loaded_file loaded_file_path
+    original_file_name process_exec process_guid process_hash process_id process_name
+    process_path service_dll_signature_exists service_dll_signature_verified signature
+    signature_id user_id vendor_product | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)`
+    | `loading_of_dynwrapx_module_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: eac5e8ba-4857-11ec-9371-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/loading_of_dynwrapx_module.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

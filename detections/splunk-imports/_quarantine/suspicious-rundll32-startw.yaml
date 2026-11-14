@@ -1,0 +1,49 @@
+id: splunk-security-content-9319dda5-73f2-4d43-a85a-67ce961bddb7
+name: Suspicious Rundll32 StartW
+description: The following analytic identifies the execution of rundll32.exe with
+  the DLL function names "Start" and "StartW," commonly associated with Cobalt Strike
+  payloads. This detection leverages data from Endpoint Detection and Response (EDR)
+  agents, focusing on command-line executions and process metadata. This activity
+  is significant as it often indicates the presence of malicious payloads, such as
+  Cobalt Strike, which can lead to unauthorized code execution. If confirmed malicious,
+  this activity could allow attackers to inject shellcode, escalate privileges, and
+  maintain persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.011
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1218/011/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1218.011/T1218.011.md
+- https://hstechdocs.helpsystems.com/manuals/cobaltstrike/current/userguide/index.htm#cshid=1036
+- https://lolbas-project.github.io/lolbas/Binaries/Rundll32/
+- https://bohops.com/2018/02/26/leveraging-inf-sct-fetch-execute-techniques-for-bypass-evasion-persistence/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_rundll32`\
+    \ Processes.process IN (\"*startw\", \"*startw *\")\n  BY Processes.action Processes.dest\
+    \ Processes.original_file_name\n     Processes.parent_process Processes.parent_process_exec\
+    \ Processes.parent_process_guid\n     Processes.parent_process_id Processes.parent_process_name\
+    \ Processes.parent_process_path\n     Processes.process Processes.process_exec\
+    \ Processes.process_guid\n     Processes.process_hash Processes.process_id Processes.process_integrity_level\n\
+    \     Processes.process_name Processes.process_path Processes.user\n     Processes.user_id\
+    \ Processes.vendor_product\n| `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `suspicious_rundll32_startw_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 9319dda5-73f2-4d43-a85a-67ce961bddb7
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/suspicious_rundll32_startw.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

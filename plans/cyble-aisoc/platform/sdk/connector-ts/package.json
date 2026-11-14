@@ -1,0 +1,52 @@
+{
+  "name": "@cyble/aisoc-connector",
+  "version": "0.1.0-beta.1",
+  "description": "TypeScript SDK for authoring Cyble AiSOC connectors with hot-reload.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md",
+    "src"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./dev": "./dist/dev.js"
+  },
+  "bin": {
+    "aisoc-connector": "./bin/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsx watch src/dev.ts",
+    "test": "tsx --test test/*.test.ts",
+    "lint": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "chokidar": "^3.6.0",
+    "zod": "^4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  },
+  "engines": {
+    "node": ">=18.18"
+  },
+  "keywords": [
+    "cyble",
+    "aisoc",
+    "soc",
+    "siem",
+    "edr",
+    "connector",
+    "sdk"
+  ],
+  "publishConfig": {
+    "access": "public"
+  }
+}

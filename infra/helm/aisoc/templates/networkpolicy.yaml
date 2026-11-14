@@ -1,0 +1,71 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- /*
+  Egress default-deny.
+
+  README says AiSOC "runs entirely on your infrastructure — no data
+  exfiltration". The redaction half of that was gated (`test_privacy_redactor`
+  proves no raw PII survives), and the network half was not: nothing stopped a
+  pod opening a socket to anywhere. A claim about where data goes is a claim
+  about egress, and redaction is what happens to data that is *about* to go
+  somewhere.
+
+  This policy is opt-in (`networkPolicy.enabled`) rather than on by default,
+  because a cluster with no CNI that enforces NetworkPolicy silently ignores
+  it — and a control that is silently ignored is worse than one an operator
+  consciously turned on. The values file says so at the switch.
+
+  What is allowed out, and nothing else:
+    - DNS, or nothing resolves
+    - other AiSOC pods, by release label
+    - the CIDRs an operator declares in `networkPolicy.allowedEgressCIDRs`,
+      which is where a vendor API or an LLM endpoint goes
+
+  Cloud metadata is excluded from every allowed CIDR below, because
+  169.254.169.254 sits inside the link-local range an operator would
+  otherwise wave through without thinking about it.
+*/}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "aisoc.fullname" . }}-egress
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS. Without this nothing resolves, including in-cluster service names.
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+
+    # Other pods in this release: the datastores and the sibling services.
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: {{ .Release.Name }}
+
+    {{- with .Values.networkPolicy.allowedEgressCIDRs }}
+    # Operator-declared destinations: vendor APIs, an LLM endpoint, a SIEM.
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . | quote }}
+            except:
+              # The metadata service is never a legitimate destination for
+              # this workload, and it sits inside ranges an operator would
+              # otherwise allow wholesale.
+              - 169.254.169.254/32
+        {{- end }}
+    {{- end }}
+{{- end }}

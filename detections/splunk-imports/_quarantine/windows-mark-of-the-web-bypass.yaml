@@ -1,0 +1,41 @@
+id: splunk-security-content-8ca13343-7405-4916-a2d1-ae34ce0c28ae
+name: Windows Mark Of The Web Bypass
+description: The following analytic identifies a suspicious process that deletes the
+  Mark-of-the-Web (MOTW) data stream. It leverages Sysmon EventCode 23 to detect when
+  a file's Zone.Identifier stream is removed. This activity is significant because
+  it is a common technique used by malware, such as Ave Maria RAT, to bypass security
+  restrictions on files downloaded from the internet. If confirmed malicious, this
+  behavior could allow an attacker to execute potentially harmful files without triggering
+  security warnings, leading to further compromise of the system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1553.005
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1553/005/
+- https://github.com/nmantani/PS-MOTW#remove-motwps1
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=23 TargetFilename = \"*:Zone.Identifier\"\n  | stats\
+    \ count min(_time) as firstTime, max(_time) as lastTime\n    BY action dest dvc\n\
+    \       file_path file_hash file_name\n       file_modify_time process_exec process_guid\n\
+    \       process_id process_name process_path\n       signature signature_id user\n\
+    \       user_id vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_mark_of_the_web_bypass_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8ca13343-7405-4916-a2d1-ae34ce0c28ae
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_mark_of_the_web_bypass.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

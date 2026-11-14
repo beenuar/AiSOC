@@ -1,0 +1,47 @@
+id: splunk-security-content-fcf4bd3f-a79f-4b7a-83bf-2692d60b859d
+name: Microsoft SharePoint Server Elevation of Privilege
+description: 'The following analytic detects potential exploitation attempts against
+  Microsoft SharePoint Server vulnerability CVE-2023-29357.
+
+  It leverages the Web datamodel to monitor for specific API calls and HTTP methods
+  indicative of privilege escalation attempts.
+
+  This activity is significant as it may indicate an attacker is trying to gain unauthorized
+  privileged access to the SharePoint environment.
+
+  If confirmed malicious, the impact could include unauthorized access to sensitive
+  data, potential data theft, and further compromise of the SharePoint server, leading
+  to a broader security breach.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1068
+  categories:
+  - application
+references:
+- https://socradar.io/microsoft-sharepoint-server-elevation-of-privilege-vulnerability-exploit-cve-2023-29357/
+- https://github.com/LuemmelSec/CVE-2023-29357/blob/main/CVE-2023-29357/Program.cs
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nFROM datamodel=Web WHERE\n\nWeb.url IN (\n\
+    \    \"*/_api/web/siteusers*\",\n    \"*/_api/web/currentuser*\"\n)\nWeb.status=200\n\
+    Web.http_method=\"GET\"\n\nBY Web.http_user_agent Web.status Web.http_method\n\
+    \   Web.url Web.url_length Web.src Web.dest\n\n| `drop_dm_object_name(\"Web\"\
+    )`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `microsoft_sharepoint_server_elevation_of_privilege_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: fcf4bd3f-a79f-4b7a-83bf-2692d60b859d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/web/microsoft_sharepoint_server_elevation_of_privilege.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

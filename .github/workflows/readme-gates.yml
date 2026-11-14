@@ -1,0 +1,246 @@
+name: README · onramp gates
+
+# This workflow is the contract behind the AiSOC GitHub front door. Every
+# claim the README makes about quick-win paths gets gated here:
+#
+#   1. README must stay ≤ 250 lines so visitors hit the value props before
+#      they scroll off the page.
+#   2. Every npm / PyPI package the README directs visitors to must
+#      either resolve on the public registry today, or be paired with a
+#      "Coming in v8.0" guard.
+#   3. Any `apps/web/public/demo/<asset>` path the README points at must
+#      exist on disk (or be paired with the same kind of guard).
+#   4. Figures the README quotes from generated artifacts (executable
+#      detection count, claim-gate tally) must match those artifacts.
+#   5. `aisoc-sandbox demo --scenario <each>` must run to completion
+#      offline on both Linux and macOS — that's the README's
+#      "Try AiSOC in 60 seconds, no Docker" promise.
+#
+# Gates 1–4 share a single Python driver at scripts/readme_gates.py so
+# contributors can reproduce the same checks locally with one command.
+# Gate 5 needs the cross-platform matrix, so it runs separately.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'README.md'
+      - 'packages/aisoc-sandbox/**'
+      - 'apps/web/public/demo/**'
+      - 'scripts/readme_gates.py'
+      - 'scripts/check_published_packages.py'
+      - 'tests/test_readme_figures_gate.py'
+      - 'docs/detections/truth-table.md'
+      - 'docs/audit/CLAIM_TO_GATE_MATRIX.md'
+      - '.github/workflows/readme-gates.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'packages/aisoc-sandbox/**'
+      - 'apps/web/public/demo/**'
+      - 'scripts/readme_gates.py'
+      - 'scripts/check_published_packages.py'
+      - 'tests/test_readme_figures_gate.py'
+      - 'docs/detections/truth-table.md'
+      - 'docs/audit/CLAIM_TO_GATE_MATRIX.md'
+      - '.github/workflows/readme-gates.yml'
+  workflow_dispatch:
+  # The published-onramp job below checks the public registries, so it has to
+  # run on a clock as well as on diff — a package can break (or be yanked)
+  # without anyone touching this repo.
+  schedule:
+    - cron: '0 6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  # Supersede a pull request's own earlier runs; never supersede a push.
+  # Only a branch's head commit needs grading, but every commit that lands
+  # on a protected branch must be graded — and `cancel-in-progress: false`
+  # alone does not achieve that, because a run left *pending* in a busy
+  # group is cancelled when the next one queues. Gate:
+  # scripts/check_workflow_concurrency.py
+  group: readme-gates-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  static:
+    name: README · static gates (line-count, packages, demo assets, figures)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Unit-test the gate driver
+        run: |
+          python3 -m pip install --quiet pytest
+          python3 -m pytest tests/test_readme_figures_gate.py -q
+
+      - name: Run scripts/readme_gates.py
+        run: |
+          python3 scripts/readme_gates.py --skip-sandbox
+
+  sandbox-offline:
+    name: aisoc-sandbox · offline smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install aisoc-sandbox from source
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install -e packages/aisoc-sandbox
+
+      - name: Smoke-test each bundled scenario
+        run: |
+          set -euo pipefail
+          for s in lateral-movement aws-credential-exfil phishing-payload kubernetes-privesc github-token-theft; do
+            echo "── $s ──"
+            out=$(aisoc-sandbox demo --scenario "$s" --json)
+            python3 -c "
+          import json, sys
+          payload = json.loads(sys.argv[1])
+          steps = payload['ledger']
+          assert len(steps) == 4, f'expected 4 steps, got {len(steps)}'
+          assert steps[0]['agent'] == 'DetectAgent', steps[0]
+          assert steps[-1]['agent'] == 'RespondAgent', steps[-1]
+          print(f\"  {len(steps)} steps · final-agent={steps[-1]['agent']}\")
+          " "$out"
+          done
+
+      - name: Run sandbox unit tests
+        run: |
+          python3 -m pip install pytest
+          cd packages/aisoc-sandbox
+          PYTHONPATH=src python3 -m pytest tests/ -q
+
+  # The README states a fact — "Ready, unpublished" — rather than a date,
+  # because the blocker is registry credentials and a milestone cannot be
+  # scheduled by writing a version number. A fact goes stale in the direction
+  # a promise cannot: the moment somebody adds an NPM_TOKEN the claim becomes
+  # false, and nothing here would have noticed.
+  #
+  # `published-onramp` below is the other half. It arms when a package appears
+  # and hard-fails if the advertised command then breaks; this one hard-fails
+  # if a package appears and the README still says nothing is published. Both
+  # directions, and both on the same daily clock, because either can change
+  # without anyone touching the repo.
+  #
+  # The script shipped with v9.0, RELEASES.md cited it as the reason the claim
+  # cannot go stale, and no workflow ran it.
+  published-claim:
+    name: README · publishing claim matches the registries
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # The gate reads `.github/release-packages.yml` and `release.yml`'s
+      # publish matrices, so it needs a YAML parser. Installed rather than
+      # worked around: the alternative is a gate that drops its
+      # manifest-versus-workflow check when the import fails, which is the
+      # silent skip this whole area is being fixed for.
+      - run: python -m pip install --quiet pyyaml
+
+      # `--require-network` on a hosted runner: the script skips when a
+      # registry is unreachable so a contributor on a plane is not told the
+      # README is wrong, but a runner that cannot reach npm has not checked
+      # anything and must say so rather than report a clean result.
+      - name: README publishing claim vs npm + PyPI
+        run: python3 scripts/check_published_packages.py --require-network
+
+  # The `static` gate above proves the README does not *reference* a package
+  # that fails to resolve. It cannot prove the advertised command actually
+  # works, and the `sandbox-offline` gate installs from source rather than
+  # from PyPI. Between them, `npx aisoc triage --demo` could sit on the front
+  # page indefinitely while no such package existed — which is exactly what
+  # happened.
+  #
+  # This job closes that by running the on-ramps a visitor would run, against
+  # the public registries, on a clean machine. It is self-arming: while a
+  # package is unpublished it warns and passes, and the moment it exists the
+  # command becomes a hard requirement.
+  published-onramp:
+    name: Published on-ramp · registry install (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v6
+        with:
+          node-version: '22'
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      # Deliberately no checkout: a visitor running the README's hero command
+      # does not have the repo, and neither should this job.
+      - name: npx aisoc triage --demo
+        run: |
+          set -uo pipefail
+          if ! npm view aisoc version >/dev/null 2>&1; then
+            echo "::warning title=on-ramp::'aisoc' is not on npm yet, so the README hero command cannot be verified. This gate arms itself on first publish."
+            exit 0
+          fi
+          echo "npm has aisoc@$(npm view aisoc version) — the hero command must work."
+          out=$(npx --yes aisoc@latest triage --demo --no-telemetry 2>&1) || {
+            echo "$out"
+            echo "::error title=on-ramp::'npx aisoc triage --demo' is published but failed. The README's hero command is broken for every visitor."
+            exit 1
+          }
+          echo "$out"
+          echo "$out" | grep -qi 'triaged' || {
+            echo "::error title=on-ramp::'npx aisoc triage --demo' ran but printed no triage summary."
+            exit 1
+          }
+
+      - name: pip install aisoc-sandbox && aisoc-sandbox demo
+        run: |
+          set -uo pipefail
+          if ! python3 -m pip download aisoc-sandbox --no-deps --dest "$RUNNER_TEMP/probe" >/dev/null 2>&1; then
+            echo "::warning title=on-ramp::'aisoc-sandbox' is not on PyPI yet, so the documented pip path cannot be verified. This gate arms itself on first publish."
+            exit 0
+          fi
+          echo "PyPI has aisoc-sandbox — the documented pip path must work."
+          python3 -m pip install --quiet aisoc-sandbox || {
+            echo "::error title=on-ramp::'pip install aisoc-sandbox' is published but failed to install."
+            exit 1
+          }
+          out=$(aisoc-sandbox demo --json 2>&1) || {
+            echo "$out"
+            echo "::error title=on-ramp::'aisoc-sandbox demo' is published but failed to run."
+            exit 1
+          }
+          python3 -c "
+          import json, sys
+          steps = json.loads(sys.argv[1])['ledger']
+          assert len(steps) == 4, f'expected 4 ledger steps, got {len(steps)}'
+          print(f'  {len(steps)} steps · final-agent={steps[-1][\"agent\"]}')
+          " "$out"

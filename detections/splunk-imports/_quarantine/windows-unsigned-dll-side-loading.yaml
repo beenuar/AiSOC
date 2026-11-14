@@ -1,0 +1,43 @@
+id: splunk-security-content-5a83ce44-8e0f-4786-a775-8249a525c879
+name: Windows Unsigned DLL Side-Loading
+description: The following analytic detects the creation of potentially malicious
+  unsigned DLLs in the c:\windows\system32 or c:\windows\syswow64 folders. It leverages
+  Sysmon EventCode 7 logs to identify unsigned DLLs with unavailable signatures loaded
+  in these critical directories. This activity is significant as it may indicate a
+  DLL hijacking attempt, a technique used by attackers to gain unauthorized access
+  and execute malicious code. If confirmed malicious, this could lead to privilege
+  escalation, allowing the attacker to gain elevated privileges and further compromise
+  the target system.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://asec.ahnlab.com/en/17692/
+- https://www.blackberry.com/us/en/solutions/endpoint-security/ransomware-protection/warzone#:~:text=Warzone%20RAT%20(AKA%20Ave%20Maria)%20is%20a%20remote%20access%20trojan,is%20as%20an%20information%20stealer.
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` EventCode=7 Signed=false OriginalFileName = "-" SignatureStatus="unavailable"
+    ImageLoaded IN ("*:\\windows\\system32\\*", "*:\\windows\\syswow64\\*") | fillnull
+    | stats count min(_time) as firstTime max(_time) as lastTime by Image ImageLoaded
+    dest loaded_file loaded_file_path original_file_name process_exec process_guid
+    process_hash process_id process_name process_path service_dll_signature_exists
+    service_dll_signature_verified signature signature_id user_id vendor_product |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_unsigned_dll_side_loading_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: 5a83ce44-8e0f-4786-a775-8249a525c879
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_unsigned_dll_side_loading.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,7 @@
+{
+  "baseline_client_family_rarity": 0.993,
+  "event_type": "user.session.start",
+  "outcome": "SUCCESS",
+  "user": "priya.n@example.com",
+  "user_agent": "okta-sdk-golang/2.18.0"
+}

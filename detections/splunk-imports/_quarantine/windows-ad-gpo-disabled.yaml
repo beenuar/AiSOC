@@ -1,0 +1,41 @@
+id: splunk-security-content-72793bc0-c0cd-400e-9e60-fdf36f278917
+name: Windows AD GPO Disabled
+description: This detection identifies when an Active Directory Group Policy is disabled
+  using the Group Policy Management Console.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1484.001
+  categories:
+  - endpoint
+references:
+- https://lantern.splunk.com/Security/Product_Tips/Enterprise_Security/Enabling_an_audit_trail_from_Active_Directory
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`wineventlog_security` EventCode=5136 AttributeLDAPDisplayName=flags\
+    \ OperationType=\"%%14674\" AttributeValue!=0\n  | eval AttributeValueExp=case(AttributeValue==0,\"\
+    Enabled\",AttributeValue==1,\"User configuration settings disabled\",AttributeValue==2,\"\
+    Computer configuration settings disabled\",AttributeValue==3,\"Disabled\"), ObjectDN=upper(ObjectDN)\n\
+    \  | join ObjectDN type=inner [\n  | search `admon` objectCategory=\"CN=Group-Policy-Container*\"\
+    \ admonEventType=Update\n  | eval ObjectDN=upper(distinguishedName)\n  | stats\
+    \ latest(displayName) as displayName\n    BY ObjectDN ]\n  | stats min(_time)\
+    \ as _time values(AttributeValue) as AttributeValue values(AttributeValueExp)\
+    \ as AttributeValueExp values(OpCorrelationID) as OpCorrelationID values(displayName)\
+    \ as policyName values(src_user) as src_user\n    BY ObjectDN SubjectLogonId dest\n\
+    \  | `windows_ad_gpo_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 72793bc0-c0cd-400e-9e60-fdf36f278917
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_ad_gpo_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

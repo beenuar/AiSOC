@@ -1,0 +1,5 @@
+{
+  "action": "organization_public_channel_export_enabled",
+  "baseline_action_rarity": 0.999,
+  "user": "ken.o@example.com"
+}

@@ -1,0 +1,6 @@
+{
+  "fw": "prod-bastion",
+  "method_name": "compute.firewalls.insert",
+  "port": 22,
+  "source_range": "0.0.0.0/0"
+}

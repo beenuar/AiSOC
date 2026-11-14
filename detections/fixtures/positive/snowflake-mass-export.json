@@ -1,0 +1,7 @@
+{
+  "event_type": "QUERY",
+  "query": "SELECT * FROM CUSTOMER",
+  "rows_produced": 5000000,
+  "user": "user@corp.com",
+  "user_type": "human"
+}

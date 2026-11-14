@@ -1,0 +1,25 @@
+id: det-identity-020
+name: Kubernetes ClusterRoleBinding to cluster-admin
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Kubernetes ClusterRoleBinding
+  to cluster-admin'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1078.004
+- tlp.white
+category: identity
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    verb == "create"
+    AND object_resource == "clusterrolebindings"
+    AND role_ref == "cluster-admin"
+false_positives:
+- Initial cluster bootstrap (one-time)
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,54 @@
+id: splunk-security-content-7e9c3f8a-4b2d-4c5e-9a1f-6d8e5b3c2a9f
+name: Cisco ASA - Packet Capture Activity
+description: 'This analytic detects execution of packet capture commands on Cisco
+  ASA devices via CLI or ASDM.
+
+  Adversaries may abuse the built-in packet capture functionality to perform network
+  sniffing, intercept credentials transmitted over the network, capture sensitive
+  data in transit, or gather intelligence about network traffic patterns and internal
+  communications. Packet captures can reveal usernames, passwords, session tokens,
+  and confidential business data.
+
+  The detection monitors for command execution events (message ID 111008 or 111010)
+  containing "capture" commands, which are used to initiate packet capture sessions
+  on specific interfaces or for specific traffic patterns on the ASA device.
+
+  Investigate unauthorized packet capture activities, especially captures targeting
+  sensitive interfaces (internal network segments, DMZ), captures configured to capture
+  large volumes of traffic, captures with suspicious filter criteria, captures initiated
+  by non-administrative accounts, or captures during unusual hours.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1040
+  - T1557
+  categories:
+  - application
+references:
+- https://www.cisco.com/c/en/us/td/docs/security/asa/asa-cli-reference/A-H/asa-command-ref-A-H/ca-cld-commands.html
+- https://www.cisco.com/c/en/us/support/docs/security/asa-5500-x-series-next-generation-firewalls/118097-configure-asa-00.html
+- https://www.ncsc.gov.uk/static-assets/documents/malware-analysis-reports/RayInitiator-LINE-VIPER/ncsc-mar-rayinitiator-line-viper.pdf
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cisco_asa`\nmessage_id IN (111008, 111010)\ncommand IN (\"capture\
+    \ *\")\n| fillnull\n| stats count\n        earliest(_time) as firstTime\n    \
+    \    latest(_time) as lastTime\n        values(user) as user\n        values(action)\
+    \ as action\n        values(message_id) as message_id\n        values(command)\
+    \ as command\n        values(src_ip) as src_ip\n        values(process_name) as\
+    \ process_name\n  by host\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `cisco_asa___packet_capture_activity_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7e9c3f8a-4b2d-4c5e-9a1f-6d8e5b3c2a9f
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/cisco_asa___packet_capture_activity.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

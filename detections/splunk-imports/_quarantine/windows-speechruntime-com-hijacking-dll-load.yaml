@@ -1,0 +1,45 @@
+id: splunk-security-content-bd35738c-e93a-4e4f-be24-f6a3680b950a
+name: Windows SpeechRuntime COM Hijacking DLL Load
+description: SpeechRuntime is vulnerable to an attack that allows a user to run code
+  on another user's session remotely and stealthily by exploiting a Windows COM class.
+  When this class is invoked, it launches SpeechRuntime.exe in the context of the
+  currently logged-on user. Because this COM class is susceptible to COM Hijacking,
+  the attacker can alter the registry remotely to point to a malicious DLL. By dropping
+  that DLL on the target system (e.g., via SMB) and triggering the COM object, the
+  attacker causes the malicious DLL to load into SpeechRuntime.exe and executing under
+  the user's context. This detection identifies suspicious DLL loads by SpeechRuntime.exe
+  from outside the expected locations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1021.003
+  categories:
+  - endpoint
+references:
+- https://github.com/rtecCyberSec/SpeechRuntimeMove
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`sysmon` EventCode=7 Image=\"*SpeechRuntime.exe\"\n  | eval image_loaded_lower\
+    \ = lower(ImageLoaded)\n  | search NOT image_loaded_lower=\"*system32*\"\n  |\
+    \ fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n \
+    \   BY Image ImageLoaded dest\n       loaded_file loaded_file_path original_file_name\n\
+    \       parent_process_name parent_process_guid process_exec\n       process_guid\
+    \ process_hash process_id\n       process_name process_path service_dll_signature_exists\n\
+    \       service_dll_signature_verified signature signature_id\n       user_id\
+    \ vendor_product\n  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `windows_speechruntime_com_hijacking_dll_load_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bd35738c-e93a-4e4f-be24-f6a3680b950a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_speechruntime_com_hijacking_dll_load.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

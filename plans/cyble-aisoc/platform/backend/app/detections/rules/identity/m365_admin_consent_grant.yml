@@ -1,0 +1,27 @@
+title: M365 Admin Consent Granted to Third-Party App
+id: aisoc-id-id-0020-admin-consent
+status: stable
+description: |
+  Global admin grants tenant-wide consent to a third-party
+  application. This bypasses per-user consent and grants the app
+  access to all users — major risk if the application is malicious
+  or compromised.
+author: Cyble AiSOC
+level: critical
+logsource:
+  product: m365
+  service: audit
+tags:
+  - attack.t1098.003
+  - attack.privilege_escalation
+  - aisoc.identity
+detection:
+  selection:
+    event.module: m365
+    event.action:
+      - 'Consent to application.'
+      - 'Add app role assignment grant to user.'
+      - 'Add delegated permission grant.'
+  tenant_wide:
+    m365.target.consent_type: 'AllPrincipals'
+  condition: selection and tenant_wide

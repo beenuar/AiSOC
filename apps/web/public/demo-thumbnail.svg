@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AiSOC demo screencast thumbnail (T6.4).
+
+  Used as the poster image for the 90-second screencast linked from the
+  landing-page hero. 1280x720 (YouTube/Vimeo native  also Open Graph
+  friendly). Inline SVG, no fonts or images outside the standard system
+  font stack so the build doesn't add any new asset deps.
+
+  Replace this file when the brand refreshes  keep the dimensions stable
+  so the <img>/<video poster> hookups in StartHero.tsx don't reflow.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" role="img"
+     aria-labelledby="aisoc-demo-title aisoc-demo-desc">
+  <title id="aisoc-demo-title">AiSOC Demo  4 cases in 4 minutes</title>
+  <desc id="aisoc-demo-desc">
+    Thumbnail for the AiSOC 90-second product demo. A play button sits
+    over a dark gradient with the AiSOC wordmark and a tagline reading
+    "Demo: 4 cases in 4 minutes".
+  </desc>
+
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#0b1120"/>
+      <stop offset="55%" stop-color="#111c33"/>
+      <stop offset="100%" stop-color="#08101c"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="48%" r="55%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.32"/>
+      <stop offset="60%" stop-color="#1e3a8a" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="play-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#60a5fa"/>
+      <stop offset="100%" stop-color="#2563eb"/>
+    </linearGradient>
+    <filter id="play-shadow" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14"
+                    flood-color="#1d4ed8" flood-opacity="0.55"/>
+    </filter>
+  </defs>
+
+  <!-- Backdrop -->
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <rect width="1280" height="720" fill="url(#glow)"/>
+
+  <!-- Faint grid for that "console UI" vibe -->
+  <g stroke="#1e2a44" stroke-width="1" opacity="0.45">
+    <path d="M0 180 H1280" />
+    <path d="M0 360 H1280" />
+    <path d="M0 540 H1280" />
+    <path d="M213 0 V720" />
+    <path d="M427 0 V720" />
+    <path d="M640 0 V720" />
+    <path d="M853 0 V720" />
+    <path d="M1067 0 V720" />
+  </g>
+
+  <!-- Status pill: open-source -->
+  <g transform="translate(72 76)">
+    <rect width="218" height="34" rx="17"
+          fill="#1e3a8a" fill-opacity="0.32"
+          stroke="#60a5fa" stroke-opacity="0.6" stroke-width="1"/>
+    <circle cx="20" cy="17" r="5" fill="#34d399"/>
+    <text x="36" y="22"
+          font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+          font-size="13" fill="#93c5fd" letter-spacing="1.5">
+      OPEN-SOURCE · MIT
+    </text>
+  </g>
+
+  <!-- AiSOC wordmark -->
+  <text x="72" y="208"
+        font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="92" font-weight="800" fill="#f8fafc"
+        letter-spacing="-2">
+    AiSOC
+  </text>
+  <text x="72" y="262"
+        font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="28" font-weight="500" fill="#93c5fd" letter-spacing="0">
+    The open-source AI Security Operations Center
+  </text>
+
+  <!-- Headline -->
+  <text x="72" y="430"
+        font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif"
+        font-size="84" font-weight="700" fill="#ffffff" letter-spacing="-1.5">
+    Demo: 4 cases in 4 minutes.
+  </text>
+
+  <!-- Case strip -->
+  <g transform="translate(72 488)"
+     font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+     font-size="16" fill="#cbd5e1" letter-spacing="0.5">
+    <g>
+      <rect width="248" height="46" rx="6" fill="#0f172a" stroke="#1e293b"/>
+      <circle cx="20" cy="23" r="5" fill="#f97316"/>
+      <text x="36" y="29">DEMO-001 · Phishing</text>
+    </g>
+    <g transform="translate(264 0)">
+      <rect width="248" height="46" rx="6" fill="#0f172a" stroke="#1e293b"/>
+      <circle cx="20" cy="23" r="5" fill="#ef4444"/>
+      <text x="36" y="29">DEMO-002 · Cloud takeover</text>
+    </g>
+    <g transform="translate(0 60)">
+      <rect width="248" height="46" rx="6" fill="#0f172a" stroke="#1e293b"/>
+      <circle cx="20" cy="23" r="5" fill="#f97316"/>
+      <text x="36" y="29">DEMO-003 · Insider exfil</text>
+    </g>
+    <g transform="translate(264 60)">
+      <rect width="248" height="46" rx="6" fill="#0f172a" stroke="#1e293b"/>
+      <circle cx="20" cy="23" r="5" fill="#ef4444"/>
+      <text x="36" y="29">DEMO-004 · Ransomware</text>
+    </g>
+  </g>
+
+  <!-- Footer brand chip -->
+  <text x="72" y="660"
+        font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+        font-size="14" fill="#64748b" letter-spacing="2">
+    PNPM AISOC:DEMO  4 CASES IN 4 MINUTES
+  </text>
+
+  <!-- Play button (centered in the right half) -->
+  <g transform="translate(960 360)" filter="url(#play-shadow)">
+    <circle r="92" fill="#0b1224" fill-opacity="0.72"
+            stroke="#60a5fa" stroke-opacity="0.55" stroke-width="2"/>
+    <circle r="82" fill="url(#play-grad)"/>
+    <!-- Triangle slightly right-of-centre so optical-centre lands on origin -->
+    <polygon points="-22,-34 -22,34 34,0" fill="#0b1120"/>
+  </g>
+
+  <!-- Outer border to keep contrast on white backgrounds (e.g. README badge) -->
+  <rect x="0.5" y="0.5" width="1279" height="719"
+        fill="none" stroke="#0b1120" stroke-opacity="0.4"/>
+</svg>

@@ -1,0 +1,21 @@
+id: securonix
+name: Securonix Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Pull incidents from Securonix Next-Gen SIEM / UEBA. Incident priority
+  (Low/Medium/High/Critical) maps directly onto the five-tier severity ladder.
+  Auth is a tenant API token.
+author: AiSOC Core Team
+tags: [siem, ueba, securonix, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/securonix.py
+license: MIT
+min_aisoc_version: "7.0.0"
+config_schema:
+  type: object
+  required: [tenant_url, api_token]
+  properties:
+    tenant_url: {type: string, description: Securonix tenant base URL (…/Snypr).}
+    api_token: {type: string, secret: true, description: Tenant API token.}
+    verify_tls: {type: boolean, default: true}

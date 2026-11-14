@@ -1,0 +1,43 @@
+id: splunk-security-content-7c0348ce-bdf9-45f6-8a57-c18b5976f00a
+name: Okta Multi-Factor Authentication Disabled
+description: The following analytic identifies an attempt to disable multi-factor
+  authentication (MFA) for an Okta user. It leverages OktaIM2 logs to detect when
+  the 'user.mfa.factor.deactivate' command is executed. This activity is significant
+  because disabling MFA can allow an adversary to maintain persistence within the
+  environment using a compromised valid account. If confirmed malicious, this action
+  could enable attackers to bypass additional security layers, potentially leading
+  to unauthorized access to sensitive information and prolonged undetected presence
+  in the network.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1556.006
+  categories:
+  - application
+references:
+- https://attack.mitre.org/techniques/T1556/
+- https://splunkbase.splunk.com/app/6553
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count max(_time) as lastTime,\
+    \ min(_time) as firstTime FROM datamodel=Change\n  WHERE sourcetype=\"OktaIM2:log\"\
+    \ All_Changes.object_category=User\n    AND\n    All_Changes.action=modified All_Changes.command=user.mfa.factor.deactivate\n\
+    \  BY All_Changes.user All_Changes.result All_Changes.command\n     sourcetype\
+    \ All_Changes.src All_Changes.dest\n| `drop_dm_object_name(\"All_Changes\")`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `okta_multi_factor_authentication_disabled_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7c0348ce-bdf9-45f6-8a57-c18b5976f00a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_multi_factor_authentication_disabled.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

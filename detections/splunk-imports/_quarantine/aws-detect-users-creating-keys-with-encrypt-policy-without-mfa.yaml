@@ -1,0 +1,49 @@
+id: splunk-security-content-c79c164f-4b21-4847-98f9-cf6a9f49179e
+name: AWS Detect Users creating keys with encrypt policy without MFA
+description: The following analytic detects the creation of AWS KMS keys with an encryption
+  policy accessible to everyone, including external entities. It leverages AWS CloudTrail
+  logs to identify `CreateKey` or `PutKeyPolicy` events where the `kms:Encrypt` action
+  is granted to all principals. This activity is significant as it may indicate a
+  compromised account, allowing an attacker to misuse the encryption key to target
+  other organizations. If confirmed malicious, this could lead to unauthorized data
+  encryption, potentially disrupting operations and compromising sensitive information
+  across multiple entities.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1486
+  categories:
+  - cloud
+references:
+- https://rhinosecuritylabs.com/aws/s3-ransomware-part-1-attack-vector/
+- https://github.com/d1vious/git-wild-hunt
+- https://www.youtube.com/watch?v=PgzNib37g0M
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=CreateKey OR eventName=PutKeyPolicy\n  | spath\
+    \ input=requestParameters.policy output=key_policy_statements path=Statement{}\n\
+    \  | mvexpand key_policy_statements\n  | spath input=key_policy_statements output=key_policy_action_1\
+    \ path=Action\n  | spath input=key_policy_statements output=key_policy_action_2\
+    \ path=Action{}\n  | eval key_policy_action=mvappend(key_policy_action_1,key_policy_action_2)\n\
+    \  | spath input=key_policy_statements output=key_policy_principal path=Principal.AWS\n\
+    \  | search key_policy_action=\"kms:Encrypt\" AND key_policy_principal=\"*\"\n\
+    \  | rename user_name as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime\n    BY signature dest user\n       user_agent src vendor_account\n\
+    \       vendor_region vendor_product key_policy_action\n       key_policy_principal\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_detect_users_creating_keys_with_encrypt_policy_without_mfa_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: c79c164f-4b21-4847-98f9-cf6a9f49179e
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_detect_users_creating_keys_with_encrypt_policy_without_mfa.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,38 @@
+id: splunk-security-content-2a9b80d3-6220-4345-b5ad-290bf5d0d222
+name: Detect Spike in AWS Security Hub Alerts for User
+description: The following analytic identifies a spike in the number of AWS Security
+  Hub alerts for an AWS IAM User within a 4-hour interval. It leverages AWS Security
+  Hub findings data, calculating the average and standard deviation of alerts to detect
+  significant deviations. This activity is significant as a sudden increase in alerts
+  for a specific user may indicate suspicious behavior or a potential security incident.
+  If confirmed malicious, this could signify an ongoing attack, unauthorized access,
+  or misuse of IAM credentials, potentially leading to data breaches or further exploitation.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`aws_securityhub_finding` \"findings{}.Resources{}.Type\"= AwsIamUser\n\
+    \  | rename findings{}.Resources{}.Id as user\n  | bucket span=4h _time\n  | stats\
+    \ count AS alerts\n    BY _time user\n  | eventstats avg(alerts) as total_launched_avg,\
+    \ stdev(alerts) as total_launched_stdev\n  | eval threshold_value = 2\n  | eval\
+    \ isOutlier=if(alerts > total_launched_avg+(total_launched_stdev * threshold_value),\
+    \ 1, 0)\n  | search isOutlier=1\n  | table _time user alerts\n  | `detect_spike_in_aws_security_hub_alerts_for_user_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a9b80d3-6220-4345-b5ad-290bf5d0d222
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/detect_spike_in_aws_security_hub_alerts_for_user.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

@@ -1,0 +1,44 @@
+id: splunk-security-content-2a9b80d3-6340-4345-b5ad-212bf3d0dac4
+name: AWS Create Policy Version to allow all resources
+description: The following analytic identifies the creation of a new AWS IAM policy
+  version that allows access to all resources. It detects this activity by analyzing
+  AWS CloudTrail logs for the CreatePolicyVersion event with a policy document that
+  grants broad permissions. This behavior is significant because it violates the principle
+  of least privilege, potentially exposing the environment to misuse or abuse. If
+  confirmed malicious, an attacker could gain extensive access to AWS resources, leading
+  to unauthorized actions, data exfiltration, or further compromise of the AWS environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  categories:
+  - cloud
+references:
+- https://bishopfox.com/blog/privilege-escalation-in-aws
+- https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation-part-2/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`cloudtrail` eventName=CreatePolicyVersion eventSource = iam.amazonaws.com\
+    \ errorCode = success\n  | spath input=requestParameters.policyDocument output=key_policy_statements\
+    \ path=Statement{}\n  | mvexpand key_policy_statements\n  | spath input=key_policy_statements\
+    \ output=key_policy_action_1 path=Action\n  | where key_policy_action_1 = \"*\"\
+    \n  | rename user_name as user\n  | stats count min(_time) as firstTime max(_time)\
+    \ as lastTime values(key_policy_statements) as policy_added\n    BY signature\
+    \ dest user\n       user_agent src vendor_account\n       vendor_region vendor_product\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `aws_create_policy_version_to_allow_all_resources_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2a9b80d3-6340-4345-b5ad-212bf3d0dac4
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/aws_create_policy_version_to_allow_all_resources.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

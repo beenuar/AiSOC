@@ -1,0 +1,7 @@
+{
+  "baseline_resource_rarity": 0.07,
+  "eventName": "PutObject",
+  "eventSource": "s3.amazonaws.com",
+  "resource": "arn:aws:s3:::mara-scratch",
+  "user": "mara.l@example.com"
+}

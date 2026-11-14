@@ -1,0 +1,59 @@
+id: splunk-security-content-8fdb41ad-091c-4d7a-af1d-9123fe94b539
+name: Web or Application Server Spawning a Shell
+description: 'The following analytic detects instances where Java, or Tomcat
+
+  processes spawn a Linux shell, which may indicate exploitation attempts, such as
+
+  those related to CVE-2021-44228 (Log4Shell). This detection leverages Endpoint Detection
+
+  and Response (EDR) telemetry, focusing on process names and parent-child process
+
+  relationships. This activity is significant as it can signify a compromised Java
+
+  application, potentially leading to unauthorized shell access. If confirmed malicious,
+
+  attackers could execute arbitrary commands, escalate privileges, or maintain persistent
+
+  access, posing a severe threat to the environment.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1190
+  - T1133
+  categories:
+  - endpoint
+references:
+- https://blog.netlab.360.com/ten-families-of-malicious-samples-are-spreading-using-the-log4j2-vulnerability-now/
+- https://gist.github.com/olafhartong/916ebc673ba066537740164f7e7e1d72
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly`\n  count min(_time) as firstTime\n\
+    \        max(_time) as lastTime\n\nfrom datamodel=Endpoint.Processes where\n\n\
+    (\n  Processes.parent_process_name IN (\"java\", \"tomcat*\", \"httpd\", \"lighttpd\"\
+    , \"apache2\", \"nginx\", \"node\", \"caddy\")\n  `linux_shells`\n)\nOR\n(\n \
+    \ Processes.parent_process_name IN (\"httpd.exe\", \"nginx.exe\", \"php*.exe\"\
+    , \"php-cgi.exe\", \"tomcat*.exe\", \"caddy.exe\", \"UMWorkerProcess.exe\", \"\
+    w3wp.exe\", \"ws_TomcatService.exe\", \"node.exe\", \"java.exe\")\n  `windows_shells`\n\
+    )\n\nby Processes.action Processes.dest Processes.original_file_name Processes.parent_process\n\
+    \   Processes.parent_process_exec Processes.parent_process_guid Processes.parent_process_id\n\
+    \   Processes.parent_process_name Processes.parent_process_path Processes.process\
+    \ Processes.process_exec\n   Processes.process_guid Processes.process_hash Processes.process_id\
+    \ Processes.process_integrity_level\n   Processes.process_name Processes.process_path\
+    \ Processes.user Processes.user_id Processes.vendor_product\n\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `web_or_application_server_spawning_a_shell_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 8fdb41ad-091c-4d7a-af1d-9123fe94b539
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/web_or_application_server_spawning_a_shell.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

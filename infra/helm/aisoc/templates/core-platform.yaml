@@ -1,0 +1,323 @@
+{{/*
+Depth plan 4.5 / parity 6.8 — the three CORE services that are not ours.
+
+These are deliberately NOT entries in `.Values.services`. Everything in
+that map is rendered by one generic Deployment template that defaults the
+image tag to `.Chart.AppVersion`, and these are third-party images with
+their own release cadences: tagging LiteLLM, Ollama or Qdrant with AiSOC's
+version produces a chart that renders perfectly and pulls a tag that does
+not exist. Two of them also need storage, which a stateless Deployment
+template has nowhere to put.
+
+Each is individually toggleable, because a deployment pointing at a hosted
+model provider wants LiteLLM and not Ollama, and one with an external
+vector store wants neither Qdrant nor its volume.
+*/}}
+
+{{- if .Values.llmGateway.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aisoc.fullname" . }}-litellm-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: litellm
+data:
+  config.yaml: |
+{{ .Values.llmGateway.config | indent 4 }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aisoc.fullname" . }}-litellm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: litellm
+spec:
+  replicas: {{ .Values.llmGateway.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: litellm
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: litellm
+      annotations:
+        checksum/litellm-config: {{ .Values.llmGateway.config | sha256sum }}
+    spec:
+      serviceAccountName: {{ include "aisoc.serviceAccountName" . }}
+      # None of these processes talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: litellm
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [\"ALL\"]
+          image: "{{ .Values.llmGateway.image.repository }}:{{ .Values.llmGateway.image.tag }}"
+          imagePullPolicy: {{ .Values.llmGateway.image.pullPolicy }}
+          args: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            {{- range $key, $value := .Values.llmGateway.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{/*
+            The gateway serves /health/liveliness 200 while failing every
+            completion when its request timeout resolves to nothing, so
+            liveness alone is not evidence it works -- it is evidence the
+            process is up, which is all a liveness probe should claim.
+          */}}
+          livenessProbe:
+            httpGet:
+              path: /health/liveliness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.llmGateway.resources | nindent 12 }}
+          # The args above name /etc/litellm/config.yaml; without this mount
+          # the gateway boots into a config that does not exist and the probe
+          # below reports a live process that fails every completion.
+          volumeMounts:
+            - name: config
+              mountPath: /etc/litellm
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: {{ include "aisoc.fullname" . }}-litellm-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-litellm
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: litellm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4000
+      targetPort: http
+      name: http
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: litellm
+{{- end }}
+
+{{- if .Values.ollama.enabled }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aisoc.fullname" . }}-ollama
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama
+spec:
+  serviceName: {{ include "aisoc.fullname" . }}-ollama
+  {{/*
+    One replica, and a StatefulSet rather than a Deployment. The model
+    weights are several gigabytes on a volume; two replicas behind one
+    Service would each pull their own copy and the first request after a
+    rollout would block for minutes on a cold one.
+  */}}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ollama
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: ollama
+    spec:
+      serviceAccountName: {{ include "aisoc.serviceAccountName" . }}
+      # None of these processes talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ollama
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [\"ALL\"]
+          image: "{{ .Values.ollama.image.repository }}:{{ .Values.ollama.image.tag }}"
+          imagePullPolicy: {{ .Values.ollama.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 11434
+          env:
+            - name: OLLAMA_HOST
+              value: "0.0.0.0"
+            {{- range $key, $value := .Values.ollama.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{/*
+            A generous initialDelay: the first start pulls the model named
+            in `.Values.ollama.model`, which is gigabytes. A probe tuned
+            for a stateless service kills the pod mid-pull, forever.
+          */}}
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            failureThreshold: {{ .Values.ollama.startupFailureThreshold }}
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.ollama.resources | nindent 12 }}
+          volumeMounts:
+            - name: models
+              mountPath: /root/.ollama
+  volumeClaimTemplates:
+    - metadata:
+        name: models
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.ollama.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.ollama.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-ollama
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama
+spec:
+  type: ClusterIP
+  ports:
+    - port: 11434
+      targetPort: http
+      name: http
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: ollama
+{{- end }}
+
+{{- if .Values.qdrant.enabled }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "aisoc.fullname" . }}-qdrant
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+spec:
+  serviceName: {{ include "aisoc.fullname" . }}-qdrant
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "aisoc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: qdrant
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: qdrant
+    spec:
+      serviceAccountName: {{ include "aisoc.serviceAccountName" . }}
+      # None of these processes talks to the Kubernetes API.
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: qdrant
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [\"ALL\"]
+          image: "{{ .Values.qdrant.image.repository }}:{{ .Values.qdrant.image.tag }}"
+          imagePullPolicy: {{ .Values.qdrant.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 6333
+            - name: grpc
+              containerPort: 6334
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.qdrant.resources | nindent 12 }}
+          volumeMounts:
+            - name: storage
+              mountPath: /qdrant/storage
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with .Values.qdrant.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.qdrant.persistence.size }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aisoc.fullname" . }}-qdrant
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6333
+      targetPort: http
+      name: http
+    - port: 6334
+      targetPort: grpc
+      name: grpc
+  selector:
+    {{- include "aisoc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: qdrant
+{{- end }}

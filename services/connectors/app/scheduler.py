@@ -1,0 +1,1523 @@
+"""APScheduler-driven polling loop for enabled connector instances.
+
+The connectors microservice runs a single ``ConnectorScheduler`` per process,
+started in the FastAPI lifespan and stopped on shutdown. The scheduler:
+
+1. Periodically reloads the enabled-connector list from Postgres (the API
+   service owns the ``connectors`` table; we read it directly via SQLAlchemy
+   Core).
+2. For each enabled instance, schedules an async job that runs every
+   ``connector_config.poll_interval_seconds`` (default 300s = 5 min).
+3. On each tick, the job decrypts ``auth_config`` via the vendored
+   ``CredentialVault``, instantiates the connector class with the merged
+   config, calls ``fetch_alerts()``, normalizes each event, and pushes the
+   batch to ``services/ingest`` via ``IngestClient``.
+4. Records success or failure on the connector row so the UI / health
+   dashboards can show per-connector status.
+
+Design rationale
+----------------
+
+* **APScheduler in-process** instead of Celery / RQ / a Go daemon: the
+  poll workload is tiny (one HTTP round-trip per source per 5 min) and
+  the per-connector logic is already async Python. Standing up a broker
+  for this would be over-engineering, and we'd lose direct access to the
+  connector classes' Python types. APScheduler's ``AsyncIOScheduler`` runs
+  on the existing FastAPI event loop with effectively zero overhead for
+  idle connectors.
+
+* **Reload from DB, don't watch**: the API service can create / disable
+  / update connectors at any time. Rather than wire up a pub/sub
+  notification channel (LISTEN/NOTIFY, Redis pubsub, etc.) we just refetch
+  the enabled set every ``RELOAD_INTERVAL_SECONDS`` (60s by default).
+  Worst case a newly-created connector waits up to 60s for its first
+  poll, which is fine — humans don't care about that latency for a thing
+  that polls every 5 minutes anyway.
+
+* **One async job per instance**: APScheduler schedules each connector
+  by ``connector_id`` (UUID string). When we reload, any connector_id we
+  no longer see gets ``remove_job``'d, any new one gets ``add_job``'d,
+  and any existing one stays put. Idempotent reloads keep the scheduler
+  state in sync with the DB without restart races.
+
+* **Failures are recorded, not raised**: ``record_poll_failure`` updates
+  the row's health status; we never let an exception escape the job
+  function because APScheduler would then start de-prioritising the job.
+  We *do* emit the exception via ``logger.exception`` so it shows up in
+  centralized logs.
+"""
+
+from __future__ import annotations
+
+import contextlib
+import json
+import logging
+import os
+import uuid
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from sqlalchemy.ext.asyncio import AsyncEngine
+
+from app.connectors import CONNECTOR_REGISTRY
+from app.db.connector_repo import (
+    ConnectorInstance,
+    fetch_enabled_connectors,
+    record_backfill_run,
+    record_checkpoint,
+    record_poll_failure,
+    record_poll_success,
+    record_schema_drift,
+)
+from app.db.engine import get_engine
+from app.ingest_client import IngestClient, IngestClientError
+from app.leader_lease import LeaderLease, election_enabled
+from app.pipeline import (
+    apply_filter_rules,
+    compute_fingerprint,
+    diff_fingerprints,
+)
+from app.security.credential_vault import CredentialVault, CredentialVaultError, get_vault
+from app.security.egress import EgressRefused, refuse_internal_destinations
+from app.vuln_promotion_sql import (
+    MARK_OVERDUE_SQL,
+    MARK_PROMOTED_SQL,
+    PROMOTE_CANDIDATES_SQL,
+    RESOLVE_REMEDIATED_SQL,
+    UPSERT_ALERT_SQL,
+)
+
+logger = logging.getLogger("aisoc.connectors.scheduler")
+
+# How often we re-read the connectors table to pick up new / disabled
+# instances. Tuned to balance UI-perceived latency against DB load — at
+# 60s with N connectors, we issue 1 SELECT/min regardless of N.
+_DEFAULT_RELOAD_INTERVAL_S = 60.0
+
+#: Hours between patch-window promotion sweeps. Six hours means an
+#: overdue-vs-due transition is visible to analysts within half a working
+#: day without hammering the inventory table; the windows themselves are
+#: weekly, so this is generous.
+_PROMOTION_INTERVAL_S = 6 * 3600.0
+
+# Default poll cadence per connector instance when ``connector_config``
+# doesn't override it. Five minutes is the standard SOC poll interval and
+# matches every connector's default ``since_seconds=300`` parameter.
+_DEFAULT_POLL_INTERVAL_S = 300
+
+# Hard floor / ceiling so a misconfigured ``connector_config`` can't DoS
+# either the source API (too short) or render polling pointless (too long).
+_MIN_POLL_INTERVAL_S = 30
+_MAX_POLL_INTERVAL_S = 86400  # 24 hours
+
+# Workstream 5: backfill-on-outage tunables.
+#
+# When a connector recovers from an outage that lasted at least
+# ``_BACKFILL_OUTAGE_THRESHOLD_S`` we kick off a one-shot poll with an
+# extended lookback window so the customer doesn't have a hole in their
+# data for the duration of the outage. The threshold matches the v2 plan
+# spec ("backfill-on-outage worker fires when a connector is unhealthy
+# for >30 min and then recovers").
+#
+# We also enforce a flap-suppression window: if a backfill ran within the
+# last ``_BACKFILL_FLAP_WINDOW_S`` we won't fire another one even if
+# ``last_outage_at`` looks long. This prevents re-firing on a recovery
+# that briefly toggled back to unhealthy and then to healthy again.
+#
+# ``_MAX_BACKFILL_LOOKBACK_S`` caps the lookback we ask the source for
+# regardless of outage length, to prevent a 3-day outage from triggering
+# a 3-day query that the source rate-limits or rejects.
+_BACKFILL_OUTAGE_THRESHOLD_S = 30 * 60  # 30 minutes
+_BACKFILL_FLAP_WINDOW_S = 10 * 60  # 10 minutes
+_MAX_BACKFILL_LOOKBACK_S = 24 * 60 * 60  # 24 hours
+# Small buffer added to the computed backfill window to cover the gap
+# between the last successful poll and ``last_outage_at`` (which is set
+# at *first failed* poll, not at the last successful one).
+_BACKFILL_LOOKBACK_BUFFER_S = 5 * 60
+
+
+def _coerce_poll_interval(connector_config: dict[str, Any]) -> int:
+    """Pull ``poll_interval_seconds`` out of the config blob, with bounds."""
+    raw = connector_config.get("poll_interval_seconds", _DEFAULT_POLL_INTERVAL_S)
+    try:
+        seconds = int(raw)
+    except (TypeError, ValueError):
+        return _DEFAULT_POLL_INTERVAL_S
+    if seconds < _MIN_POLL_INTERVAL_S:
+        return _MIN_POLL_INTERVAL_S
+    if seconds > _MAX_POLL_INTERVAL_S:
+        return _MAX_POLL_INTERVAL_S
+    return seconds
+
+
+def _job_id(connector_id: uuid.UUID) -> str:
+    """Stable APScheduler job_id for an instance."""
+    return f"connector:{connector_id}"
+
+
+class ConnectorScheduler:
+    """Owns the APScheduler instance and the DB-reload loop."""
+
+    def __init__(
+        self,
+        *,
+        engine: AsyncEngine | None = None,
+        ingest_client: IngestClient | None = None,
+        vault: CredentialVault | None = None,
+        reload_interval_seconds: float = _DEFAULT_RELOAD_INTERVAL_S,
+    ) -> None:
+        # Lazily resolve everything so tests can inject fakes; production
+        # callers just construct ``ConnectorScheduler()`` and rely on env.
+        self._engine = engine
+        self._ingest_client = ingest_client
+        self._vault = vault
+        self._reload_interval_s = reload_interval_seconds
+        self._scheduler: AsyncIOScheduler | None = None
+        # None when leader election is off, which is the default and
+        # means this replica always schedules.
+        self._lease: LeaderLease | None = None
+        # Cache of {connector_id_str: last_seen_config_signature} so reloads
+        # can detect when an instance's poll interval / config changed and
+        # need its job rescheduled, vs leaving an unchanged job alone.
+        self._known_signatures: dict[str, str] = {}
+        # Last patch-window promotion sweep's outcome, so a failing sweep is
+        # visible somewhere an operator looks rather than only in a log line.
+        # The upsert in that sweep raised on every tenant on every deployment
+        # for its whole life and the only symptom was `logger.exception` —
+        # nothing on /readyz, no counter, no metric. ``None`` means the sweep
+        # has not run yet, which is not the same as having run cleanly.
+        self._promotion_failures: dict[str, str] = {}
+        self._promotion_last_error: str | None = None
+
+    # ------------------------------------------------------------------ lifecycle
+
+    async def start(self) -> None:
+        """Construct the scheduler and kick off the reload loop.
+
+        Safe to call once per process. Calling twice is a programming error;
+        we raise rather than silently start a second scheduler.
+        """
+        if self._scheduler is not None:
+            raise RuntimeError("ConnectorScheduler.start() called twice")
+
+        # Resolve dependencies now that we're inside an event loop.
+        if self._engine is None:
+            self._engine = get_engine()
+        if self._ingest_client is None:
+            self._ingest_client = IngestClient.from_env()
+        if self._vault is None:
+            try:
+                self._vault = get_vault()
+            except CredentialVaultError as exc:
+                # If the vault isn't configured we *cannot* decrypt creds, so
+                # polling can never succeed. Log and bail rather than silently
+                # poll-and-fail forever.
+                logger.error("connector.scheduler.vault_unavailable: %s", exc)
+                raise
+
+        # Parity 6.8. Without an election, two replicas each add one job
+        # per connector instance and every vendor is polled twice on every
+        # cycle — which on a rate-limited API is worse than duplication,
+        # because the second replica's poll is what gets throttled and a
+        # throttled connector looks identical to one whose credentials
+        # expired. Off by default: a single-replica deployment gains
+        # nothing from an election and gains a new way to fail to start.
+        if election_enabled():
+            self._lease = LeaderLease(self._engine)
+            if not await self._lease.acquire():
+                state = await self._lease.state()
+                logger.info(
+                    "connector.scheduler.follower holder=%s term=%s — not scheduling any poll jobs",
+                    state.holder,
+                    state.term,
+                )
+
+        self._scheduler = AsyncIOScheduler(timezone="UTC")
+        self._scheduler.start()
+
+        if self._lease is not None:
+            # Renewal runs whether or not this replica is the leader: a
+            # follower has to keep trying to acquire, or a dead leader is
+            # never replaced. The same job does both, because "renew if I
+            # hold it, otherwise try to take it" is one decision.
+            self._scheduler.add_job(
+                self._maintain_lease,
+                "interval",
+                seconds=self._lease.renew_after,
+                id="_leader_lease",
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True,
+            )
+
+        # Fire one reload immediately so we don't wait
+        # ``reload_interval`` seconds for the first poll cycle.
+        await self.reload_jobs()
+
+        # Then schedule the periodic reload. ``id`` is fixed so we can't
+        # accidentally double-schedule.
+        self._scheduler.add_job(
+            self.reload_jobs,
+            "interval",
+            seconds=self._reload_interval_s,
+            id="_reload_loop",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Patch-window promotion (docs/cve-patch-policy.md rule 5): the ONLY
+        # path from asset_vulnerabilities back into the alert queue. Every
+        # 6h it flips due-tracked rows to overdue and raises one grouped
+        # alert per CVE that is overdue, CVSS>9, KEV, or exploited.
+        self._scheduler.add_job(
+            self._promote_overdue_findings,
+            "interval",
+            seconds=_PROMOTION_INTERVAL_S,
+            id="_vuln_promotion_loop",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        logger.info(
+            "connector.scheduler.started reload_interval=%ss",
+            self._reload_interval_s,
+        )
+
+    def _remove_all_poll_jobs(self) -> None:
+        """Drop every connector poll job, keeping the control jobs.
+
+        Called when leadership is lost. The reload and lease jobs stay,
+        because a follower still has to notice when the leader dies.
+        """
+        if self._scheduler is None:
+            return
+        keep = {"_reload_loop", "_leader_lease", "_vuln_promotion_loop"}
+        removed = 0
+        for job in list(self._scheduler.get_jobs()):
+            if job.id in keep:
+                continue
+            with contextlib.suppress(Exception):
+                self._scheduler.remove_job(job.id)
+                removed += 1
+        self._known_signatures.clear()
+        if removed:
+            logger.info("connector.scheduler.follower_dropped_jobs count=%s", removed)
+
+    def _is_leader(self) -> bool:
+        """Whether this replica should be scheduling polls.
+
+        True when election is off, which is the default: a deployment
+        that has not asked for an election must not stop polling because
+        a lease table it never populated says nobody leads.
+        """
+        return self._lease is None or self._lease.held
+
+    async def _maintain_lease(self) -> None:
+        """Renew the lease, or try to take one.
+
+        A leadership change in either direction reshapes the job set, and
+        it does so by calling the same reload the periodic job calls — a
+        second code path for "schedule everything" is a second place for
+        the two to disagree about what everything is.
+        """
+        lease = self._lease
+        if lease is None:
+            return
+        was_leader = lease.held
+        still_leader = await lease.renew() if was_leader else await lease.acquire()
+        if still_leader == was_leader:
+            return
+        if still_leader:
+            logger.info("connector.scheduler.became_leader term=%s", lease.term)
+        else:
+            logger.warning("connector.scheduler.lost_leadership term=%s", lease.term)
+        await self.reload_jobs()
+
+    async def stop(self) -> None:
+        """Stop the scheduler and release resources."""
+        if self._scheduler is not None:
+            # ``wait=False`` so we don't block shutdown waiting for an
+            # in-flight poll to finish; the next start picks up where we
+            # left off (record_poll_success has already been written for
+            # successful polls before this point).
+            self._scheduler.shutdown(wait=False)
+            self._scheduler = None
+        if self._ingest_client is not None:
+            await self._ingest_client.aclose()
+        self._known_signatures.clear()
+        logger.info("connector.scheduler.stopped")
+
+    # ------------------------------------------------------------------ reload
+
+    async def reload_jobs(self) -> None:
+        """Sync APScheduler jobs with the enabled-connectors set in Postgres.
+
+        Three actions per reload tick:
+
+        * **add**: instances we haven't scheduled yet
+        * **update**: instances whose config signature changed (e.g. the user
+          tightened the poll interval)
+        * **remove**: instances we previously scheduled but are no longer
+          enabled / no longer present
+        """
+        if self._scheduler is None or self._engine is None:
+            # ``stop()`` was called between ticks, or ``start()`` was never
+            # called. Either way: nothing to do.
+            return
+
+        if not self._is_leader():
+            # A follower removes whatever it was running rather than just
+            # declining to add more. A replica that loses leadership while
+            # holding jobs keeps polling every vendor from the jobs it
+            # already had, which is the double-poll the election exists to
+            # prevent — only now it is invisible, because the follower is
+            # reporting itself as a follower.
+            self._remove_all_poll_jobs()
+            return
+
+        try:
+            async with self._engine.begin() as conn:
+                instances = await fetch_enabled_connectors(conn)
+        except Exception:
+            # DB transient errors shouldn't take the scheduler down. Log and
+            # try again at the next reload tick.
+            logger.exception("connector.scheduler.reload_failed")
+            return
+
+        seen: set[str] = set()
+        for inst in instances:
+            cid = str(inst.id)
+            seen.add(cid)
+            sig = self._signature(inst)
+            existing = self._known_signatures.get(cid)
+            if existing == sig:
+                # Unchanged — leave the existing job alone.
+                continue
+
+            interval = _coerce_poll_interval(inst.connector_config)
+            # APScheduler 3.x treats ``next_run_time=None`` as "add the job
+            # PAUSED": it registers but never fires and nothing resumes it, so
+            # enabled connectors silently never auto-poll (#527). Compute an
+            # explicit, timezone-aware first-run time instead. The offset is a
+            # STABLE per-connector jitter derived from the UUID (deterministic
+            # across reloads so a config change doesn't randomly re-phase the
+            # job) that spreads first-fire to avoid a stampede when many
+            # connectors load at once. It's bounded by the poll interval, and
+            # capped at 60s so long-interval connectors still start promptly.
+            jitter_window = max(1, min(interval, 60))
+            first_run = datetime.now(UTC) + timedelta(seconds=inst.id.int % jitter_window)
+            self._scheduler.add_job(
+                self._poll_one,
+                "interval",
+                seconds=interval,
+                id=_job_id(inst.id),
+                replace_existing=True,
+                max_instances=1,
+                # Don't pile up missed polls if the source was slow/dead.
+                coalesce=True,
+                next_run_time=first_run,
+                kwargs={"connector_id": inst.id},
+            )
+            self._known_signatures[cid] = sig
+            logger.info(
+                "connector.scheduler.scheduled id=%s type=%s interval=%ss",
+                cid,
+                inst.connector_type,
+                interval,
+            )
+
+        # Remove jobs for instances that disappeared from the enabled set
+        # (deleted, disabled, or moved to another tenant we don't poll).
+        for cid in list(self._known_signatures.keys()):
+            if cid in seen:
+                continue
+            try:
+                # uuid.UUID round-trip protects against malformed cache keys.
+                self._scheduler.remove_job(_job_id(uuid.UUID(cid)))
+            except Exception:  # pragma: no cover - APScheduler raises JobLookupError
+                pass
+            self._known_signatures.pop(cid, None)
+            logger.info("connector.scheduler.unscheduled id=%s", cid)
+
+    def job_diagnostics(self) -> list[dict[str, Any]]:
+        """Return per-job scheduling diagnostics.
+
+        Each entry reports the job id and its ``next_run_time``; a null
+        ``next_run_time`` means APScheduler has the job PAUSED (the #527
+        failure mode), so operators / tests can assert every polling job is
+        actually active. Returns an empty list when the scheduler isn't
+        running.
+        """
+        if self._scheduler is None:
+            return []
+        out: list[dict[str, Any]] = []
+        for job in self._scheduler.get_jobs():
+            if not job.id.startswith("connector:"):
+                continue
+            nrt = getattr(job, "next_run_time", None)
+            out.append(
+                {
+                    "job_id": job.id,
+                    "next_run_time": nrt.isoformat() if nrt is not None else None,
+                    "paused": nrt is None,
+                }
+            )
+        return out
+
+    @staticmethod
+    def _signature(inst: ConnectorInstance) -> str:
+        """Cheap fingerprint for change detection.
+
+        We don't include ``auth_config`` because the auth blob is
+        encrypted and we don't want to decrypt it just to check whether a
+        secret rotated — every poll cycle reads fresh creds anyway.
+        Including connector_type catches the (rare) case where a row was
+        re-typed; including the poll interval catches the common case
+        where the user adjusts cadence.
+        """
+        interval = _coerce_poll_interval(inst.connector_config)
+        return f"{inst.connector_type}|{interval}"
+
+    # ------------------------------------------------------------------ polling
+
+    async def _poll_one(
+        self,
+        *,
+        connector_id: uuid.UUID,
+        backfill_seconds: int | None = None,
+    ) -> None:
+        """Single-connector poll cycle.
+
+        Always wraps the entire body in try/except so a misbehaving
+        connector class can't take down the scheduler. Records success or
+        failure on the row, then returns.
+
+        When ``backfill_seconds`` is provided this is a one-shot recovery
+        poll triggered by the backfill-on-outage worker. We use that value
+        as the lookback instead of the connector's normal poll cadence and
+        we skip the recovery-detection branch at the end (we don't want
+        the backfill itself to schedule another backfill).
+        """
+        if self._engine is None or self._ingest_client is None or self._vault is None:
+            logger.warning(
+                "connector.scheduler.poll_skipped id=%s reason=scheduler_not_ready",
+                connector_id,
+            )
+            return
+
+        # Re-fetch the row at poll time rather than relying on a cached
+        # copy from the reload tick — credentials may have been rotated
+        # since the last reload.
+        try:
+            async with self._engine.begin() as conn:
+                instances = await fetch_enabled_connectors(conn)
+        except Exception:
+            logger.exception(
+                "connector.scheduler.poll_load_failed id=%s",
+                connector_id,
+            )
+            return
+
+        target: ConnectorInstance | None = next((i for i in instances if i.id == connector_id), None)
+        if target is None:
+            # Instance was deleted / disabled between reload and poll.
+            # Reload will clean up the job on its next tick.
+            logger.info(
+                "connector.scheduler.poll_skipped id=%s reason=not_enabled",
+                connector_id,
+            )
+            return
+
+        connector_class = CONNECTOR_REGISTRY.get(target.connector_type)
+        if connector_class is None:
+            # Catalog drift — the API service stored a connector_type this
+            # build doesn't know about. Mark unhealthy and bail; the human
+            # operator will see the bad type in the UI.
+            logger.error(
+                "connector.scheduler.unknown_type id=%s type=%s",
+                connector_id,
+                target.connector_type,
+            )
+            await self._record_failure(target.id)
+            return
+
+        # Decrypt creds and instantiate. We do this inside the try block
+        # so InvalidToken / TypeError / etc all funnel into the same
+        # failure recorder.
+        try:
+            auth = self._vault.decrypt_dict(target.auth_config or {})
+        except CredentialVaultError as exc:
+            logger.error(
+                "connector.scheduler.decrypt_failed id=%s err=%s",
+                connector_id,
+                exc,
+            )
+            await self._record_failure(target.id)
+            return
+
+        # Filter out the scheduler-only knobs from connector_config before
+        # passing to the constructor — connectors don't accept
+        # ``poll_interval_seconds`` (or the ingest ``checkpoint``) as a kwarg.
+        runtime_config = {k: v for k, v in (target.connector_config or {}).items() if k not in {"poll_interval_seconds", "checkpoint"}}
+        kwargs = {**auth, **runtime_config}
+
+        # A stored destination inside the deployment must not be polled —
+        # rows saved before registration-time validation existed were never
+        # checked, and a hostname can rebind between saves and polls
+        # (GHSA-cq4g-g6wp-4m2w). The failure is recorded so the instance
+        # shows unhealthy in the UI rather than silently doing nothing; an
+        # on-prem SIEM on RFC 1918 space is re-admitted by setting
+        # AISOC_SSRF_ALLOW_PRIVATE=1.
+        try:
+            refuse_internal_destinations(kwargs)
+        except EgressRefused as exc:
+            logger.error(
+                "connector.scheduler.destination_refused id=%s type=%s field=%s err=%s "
+                "(set AISOC_SSRF_ALLOW_PRIVATE=1 if this deployment's SIEM lives on a private range)",
+                connector_id,
+                target.connector_type,
+                exc.field_name,
+                exc.reason,
+            )
+            await self._record_failure(target.id)
+            return
+
+        started = datetime.now(UTC)
+        try:
+            connector = connector_class(**kwargs)
+        except TypeError as exc:
+            logger.error(
+                "connector.scheduler.bad_config id=%s type=%s err=%s",
+                connector_id,
+                target.connector_type,
+                exc,
+            )
+            await self._record_failure(target.id)
+            return
+
+        # Seed the connector's ingest checkpoint (#529) so a restart resumes
+        # from the last-accepted event instead of re-scanning.
+        #
+        # This used to be `getattr(connector, "set_checkpoint", None)`. The
+        # method is on BaseConnector now (10b), so the call is direct — and
+        # the reason that matters is that the getattr had no failing state.
+        # It was simply absent on eighty-three of the eighty-four connectors,
+        # so the seed silently did nothing for almost all of them at
+        # `logger.debug`, and nothing could report which. Whether a connector
+        # checkpoints is now a question its class answers.
+        try:
+            connector.set_checkpoint((target.connector_config or {}).get("checkpoint"))
+        except Exception:  # never let checkpoint seeding break a poll
+            logger.debug("connector.scheduler.checkpoint_seed_failed id=%s", connector_id)
+
+        # The schema lives in connector_config; use it for fetch lookback.
+        # We deliberately default to the same poll interval, so a 5-min
+        # poll fetches the last 5 min of events. This keeps the source
+        # query window aligned with the scheduler cadence.
+        #
+        # Workstream 5: when this is a backfill-on-outage poll, the worker
+        # passes an explicit ``backfill_seconds`` window covering the outage
+        # duration (capped at _MAX_BACKFILL_LOOKBACK_S). The cap matters
+        # because some sources rate-limit or outright reject very large
+        # query windows.
+        if backfill_seconds is not None:
+            since_seconds = max(1, min(int(backfill_seconds), _MAX_BACKFILL_LOOKBACK_S))
+            logger.info(
+                "connector.scheduler.backfill_poll id=%s type=%s since_seconds=%d",
+                connector_id,
+                target.connector_type,
+                since_seconds,
+            )
+        else:
+            since_seconds = _coerce_poll_interval(target.connector_config)
+        try:
+            raw_events = await connector.fetch_alerts(since_seconds=since_seconds)
+        except Exception:
+            logger.exception(
+                "connector.scheduler.fetch_failed id=%s type=%s",
+                connector_id,
+                target.connector_type,
+            )
+            # A fetch that raised part-way may already have staged handles for
+            # the batches it did read. None of it reached ingest, so none of
+            # it may be acknowledged.
+            self._discard_acknowledgements(connector, connector_id, reason="fetch_failed", staged=0)
+            await self._record_failure(target.id)
+            return
+
+        # A scanner's findings are asset state, not events. The alert path
+        # above carries neither the asset nor the CVE a vulnerability row
+        # needs, which is why `asset_vulnerabilities` stayed empty on every
+        # deployment and KEV exposure answered "no vulnerability data" for
+        # every tenant whose scanner was Tenable. Connectors that can answer
+        # the question opt in by defining `fetch_vulnerability_findings`.
+        #
+        # Deliberately outside the `try` around `fetch_alerts` and in its own:
+        # a scanner sync that fails must not cost the poll its events, and a
+        # fetch that fails must not be reported as a successful sync.
+        await self._sync_vulnerability_findings(connector, target)
+
+        # A CNAPP's configuration findings and runtime detections are posture
+        # context about a resource, not events about a moment, so they take
+        # the same shape of detour: their own hook, their own `try`, and a
+        # failure that costs the poll nothing. Depth-2 item 8.1.
+        await self._sync_cloud_security_findings(connector, target)
+
+        # Workforce and device context, for the same reason and by the same
+        # route. `import_context` in the API had exactly one production
+        # caller before this -- a manual POST -- so a tenant's HR data was
+        # only ever as current as the last file somebody uploaded, and a
+        # termination that happened on Friday reached triage on Monday if
+        # anyone remembered. Depth plan wave 2 item 1.3 says this runs on
+        # the schedule, which means here.
+        await self._sync_workforce_context(connector, target)
+
+        # Normalize defensively: connectors *should* normalize themselves
+        # in fetch_alerts, but we double-tap so a connector that returns
+        # raw events still produces consistent shapes downstream.
+        normalized = [_safe_normalize(connector, e) for e in raw_events]
+
+        # ---- Security Data Pipeline: pre-ingest filter rules ----
+        #
+        # Rules live on the connector's ``connector_config["filter_rules"]``
+        # array. ``apply_filter_rules`` is pure: it just decides drop/keep.
+        # We count drops here so they show up in ``events_dropped`` on the
+        # row and emit one info-level log per drop so an operator can audit
+        # filter behavior without trawling the database.
+        filter_rules = (target.connector_config or {}).get("filter_rules") or []
+        kept: list[dict[str, Any]] = []
+        dropped_count = 0
+        for event in normalized:
+            decision = apply_filter_rules(event, filter_rules)
+            if decision.action == "drop":
+                dropped_count += 1
+                # Keep the log line short — high-volume connectors can drop
+                # hundreds of events per poll, and we don't want the log to
+                # become the bottleneck. The rule_index is enough to find
+                # the offending rule in the connector config.
+                logger.debug(
+                    "connector.scheduler.filter_drop id=%s rule_index=%s",
+                    connector_id,
+                    decision.rule_index,
+                )
+                continue
+            kept.append(event)
+
+        # ---- Schema-Drift Sentinel: fingerprint the kept batch ----
+        #
+        # We fingerprint *kept* events (post-filter) because the filter
+        # rules are tenant-controlled and shouldn't be allowed to mask a
+        # legitimate upstream schema change by dropping all instances of
+        # the new field. Empty batches return None and we don't update
+        # the baseline in that case (see fingerprint.compute_fingerprint).
+        new_fingerprint = compute_fingerprint(kept)
+        drift_detected = False
+        drift_details: dict[str, Any] | None = None
+
+        if new_fingerprint is not None and target.schema_fingerprint is not None:
+            if new_fingerprint != target.schema_fingerprint:
+                drift_detected = True
+                # Recompute the union of keys so we can describe what
+                # changed. We don't store prior keys in the row (only the
+                # hash), so we approximate "removed" by diffing against
+                # the current batch's keys vs. the keys set we'd expect
+                # from the prior fingerprint. Since we don't have the
+                # prior keys, we record the new key set and ``added`` is
+                # the entire new set. This is good enough for the UI to
+                # surface "schema changed at <timestamp>"; a future
+                # iteration can persist the prior key list.
+                current_keys = sorted({k for ev in kept for k in ev.keys()})
+                drift_details = diff_fingerprints(
+                    previous_keys=[],  # baseline keys not persisted yet
+                    current_keys=current_keys,
+                )
+                drift_details["sample_event_count"] = len(kept)
+                drift_details["new_fingerprint"] = new_fingerprint
+                drift_details["previous_fingerprint"] = target.schema_fingerprint
+                logger.warning(
+                    "connector.scheduler.schema_drift id=%s type=%s added=%d",
+                    connector_id,
+                    target.connector_type,
+                    len(drift_details.get("added", [])),
+                )
+
+        try:
+            result = await self._ingest_client.push_events(
+                tenant_id=target.tenant_id,
+                connector_id=target.id,
+                connector_type=target.connector_type,
+                events=kept,
+            )
+        except IngestClientError:
+            logger.exception(
+                "connector.scheduler.ingest_failed id=%s events=%d",
+                connector_id,
+                len(kept),
+            )
+            # Nothing may be acknowledged. Dropping the staged handles leaves
+            # the messages on the source to be redelivered; discarding
+            # explicitly rather than letting the connector fall out of scope
+            # so the intent is legible here, at the one place that knows
+            # ingest refused.
+            #
+            # Note this no longer means "nothing reached Kafka": a poll larger
+            # than the ingest cap is pushed as several chunks, so a refusal on
+            # a later chunk leaves the earlier ones accepted. Withholding the
+            # acks and the checkpoint anyway is still right, because the
+            # alternative is a gap — the accepted chunks are simply redelivered
+            # and deduplicated downstream, which is the same duplicates-over-
+            # gaps trade this function already makes between its checkpoint
+            # write and its acks.
+            self._discard_acknowledgements(connector, connector_id, reason="ingest_failed", staged=len(kept))
+            await self._record_failure(target.id)
+            return
+
+        accepted = int(result.get("accepted", 0) or 0)
+        rejected = int(result.get("rejected", 0) or 0)
+        elapsed_ms = int((datetime.now(UTC) - started).total_seconds() * 1000)
+
+        # Persist the staged cursor only after *every submitted event* was
+        # accepted. Ingest deliberately reports per-event normalization
+        # failures as HTTP 200 with accepted/rejected counts, so HTTP success
+        # alone does not prove that advancing is safe. Replaying an accepted
+        # event on the next overlapping poll is preferable to moving past a
+        # rejected event and losing it permanently.
+        counts_present = "accepted" in result and "rejected" in result
+        batch_fully_accepted = counts_present and rejected == 0 and accepted == len(kept)
+        try:
+            new_checkpoint = connector.get_checkpoint()
+        except Exception:  # never let checkpoint bookkeeping break a poll
+            new_checkpoint = None
+        if isinstance(new_checkpoint, dict) and new_checkpoint:
+            if batch_fully_accepted:
+                await self._record_checkpoint(target.id, new_checkpoint)
+            else:
+                logger.warning(
+                    "connector.scheduler.checkpoint_withheld id=%s type=%s submitted=%d accepted=%d rejected=%d counts_present=%s",
+                    connector_id,
+                    target.connector_type,
+                    len(kept),
+                    accepted,
+                    rejected,
+                    counts_present,
+                )
+
+        # Only now may the source be told to forget the messages. Withholding
+        # a cursor is not enough on a queue: a cursor over data that has
+        # already been deleted from the queue protects nothing, which is why
+        # the connectors stage their receipt handles and ack ids instead of
+        # answering the source inside their own fetch.
+        #
+        # After the checkpoint write, deliberately. A crash between the two
+        # leaves messages that will be redelivered and a cursor that
+        # recognises them; the other order leaves a source that has forgotten
+        # them and a cursor that has not recorded them.
+        if batch_fully_accepted:
+            await self._commit_acknowledgements(connector, connector_id, target.connector_type)
+        else:
+            self._discard_acknowledgements(
+                connector,
+                connector_id,
+                reason="batch_not_fully_accepted",
+                staged=len(kept),
+            )
+
+        # If drift was detected, persist that fact *before* marking the
+        # poll successful so the UI reflects "drifted" status alongside
+        # "healthy". Both writes are independent transactions; the order
+        # protects against a race where the operator views the row mid-
+        # poll and sees a stale fingerprint.
+        if drift_detected and drift_details is not None:
+            await self._record_drift(
+                target.id,
+                fingerprint=new_fingerprint or "",
+                details=drift_details,
+            )
+
+        # Workstream 5: derive ``last_event_at`` from the kept batch so the
+        # freshness-SLO badge in the UI reflects the freshest event we
+        # actually shipped to the lake (not the poll wall-clock, which can
+        # be misleading for low-volume connectors). We look at the standard
+        # ECS-ish ``@timestamp`` first and fall back to ``timestamp``; if
+        # neither is present or parseable we leave ``last_event_at`` as
+        # None and ``record_poll_success`` won't touch the column.
+        last_event_at = _extract_last_event_at(kept) if accepted > 0 else None
+        last_event_kind = target.connector_type if accepted > 0 else None
+
+        # Workstream 5: detect recovery-from-outage *before* writing
+        # success. ``record_poll_success`` clears ``last_outage_at``, so we
+        # must read it from the in-memory ``target`` snapshot. We also
+        # never schedule a backfill for a backfill poll itself (avoid
+        # cascading) or for connectors that just flapped (last_backfill_at
+        # within the flap window).
+        should_backfill = False
+        backfill_window_seconds = 0
+        if backfill_seconds is None and target.last_outage_at is not None:
+            outage_duration = (datetime.now(UTC) - target.last_outage_at).total_seconds()
+            if outage_duration >= _BACKFILL_OUTAGE_THRESHOLD_S:
+                # Suppress flapping: don't re-fire a backfill if we already
+                # ran one within _BACKFILL_FLAP_WINDOW_S.
+                flap_ok = True
+                if target.last_backfill_at is not None:
+                    since_last = (datetime.now(UTC) - target.last_backfill_at).total_seconds()
+                    if since_last < _BACKFILL_FLAP_WINDOW_S:
+                        flap_ok = False
+                        logger.info(
+                            "connector.scheduler.backfill_suppressed id=%s reason=flap since_last=%ds",
+                            connector_id,
+                            int(since_last),
+                        )
+                if flap_ok:
+                    should_backfill = True
+                    backfill_window_seconds = min(
+                        int(outage_duration) + _BACKFILL_LOOKBACK_BUFFER_S,
+                        _MAX_BACKFILL_LOOKBACK_S,
+                    )
+                    logger.info(
+                        "connector.scheduler.backfill_scheduled id=%s outage_duration_s=%d window_s=%d",
+                        connector_id,
+                        int(outage_duration),
+                        backfill_window_seconds,
+                    )
+
+        await self._record_success(
+            target.id,
+            events_added=accepted,
+            events_dropped=dropped_count,
+            schema_fingerprint=new_fingerprint,
+            last_event_at=last_event_at,
+            last_event_kind=last_event_kind,
+        )
+        logger.info(
+            "connector.scheduler.poll_complete id=%s type=%s accepted=%d rejected=%d dropped=%d drift=%s elapsed_ms=%d backfill=%s",
+            connector_id,
+            target.connector_type,
+            accepted,
+            rejected,
+            dropped_count,
+            "yes" if drift_detected else "no",
+            elapsed_ms,
+            "scheduled" if should_backfill else ("running" if backfill_seconds is not None else "no"),
+        )
+
+        # Fire the backfill *after* the success write so the UI shows
+        # "healthy" before the backfill traffic kicks in. We mark the
+        # backfill timestamp before invoking _poll_one to suppress any
+        # racing recovery detection from a parallel job.
+        if should_backfill:
+            await self._record_backfill_run(target.id)
+            try:
+                await self._poll_one(
+                    connector_id=connector_id,
+                    backfill_seconds=backfill_window_seconds,
+                )
+            except Exception:  # pragma: no cover - defensive only
+                logger.exception(
+                    "connector.scheduler.backfill_run_failed id=%s",
+                    connector_id,
+                )
+
+    # ------------------------------------------------------------------ db helpers
+
+    async def _record_success(
+        self,
+        connector_id: uuid.UUID,
+        *,
+        events_added: int,
+        events_dropped: int = 0,
+        schema_fingerprint: str | None = None,
+        last_event_at: datetime | None = None,
+        last_event_kind: str | None = None,
+    ) -> None:
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_poll_success(
+                    conn,
+                    connector_id,
+                    events_added=events_added,
+                    events_dropped=events_dropped,
+                    schema_fingerprint=schema_fingerprint,
+                    last_event_at=last_event_at,
+                    last_event_kind=last_event_kind,
+                )
+        except Exception:  # pragma: no cover
+            logger.exception(
+                "connector.scheduler.record_success_failed id=%s",
+                connector_id,
+            )
+
+    async def _record_backfill_run(self, connector_id: uuid.UUID) -> None:
+        """Stamp ``last_backfill_at`` to suppress flap-driven re-fires.
+
+        Workstream 5: invoked by ``_poll_one`` immediately before kicking
+        off the one-shot backfill poll. Even if the backfill itself fails,
+        the timestamp prevents a re-fire while the connector is bouncing
+        between healthy/unhealthy.
+        """
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_backfill_run(conn, connector_id)
+        except Exception:  # pragma: no cover
+            logger.exception(
+                "connector.scheduler.record_backfill_failed id=%s",
+                connector_id,
+            )
+
+    async def _record_drift(
+        self,
+        connector_id: uuid.UUID,
+        *,
+        fingerprint: str,
+        details: dict[str, Any],
+    ) -> None:
+        """Persist a detected schema drift for the connector row.
+
+        Kept separate from ``_record_success`` so a drift write that
+        races with a future poll's success write doesn't clobber the
+        ``last_schema_drift_at`` timestamp.
+        """
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_schema_drift(
+                    conn,
+                    connector_id,
+                    fingerprint=fingerprint,
+                    details=details,
+                )
+        except Exception:  # pragma: no cover
+            logger.exception(
+                "connector.scheduler.record_drift_failed id=%s",
+                connector_id,
+            )
+
+    async def _record_checkpoint(self, connector_id: uuid.UUID, checkpoint: dict[str, Any]) -> None:
+        """Persist an advanced ingest checkpoint into ``connector_config`` (#529).
+
+        Best-effort: a failed write leaves the previous checkpoint in place, so
+        the next poll simply re-scans a small overlap rather than skipping
+        events. One job per instance (``max_instances=1``) means no concurrent
+        writer races here.
+        """
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_checkpoint(conn, connector_id, checkpoint)
+        except Exception:  # pragma: no cover
+            logger.debug(
+                "connector.scheduler.record_checkpoint_failed id=%s",
+                connector_id,
+            )
+
+    async def _commit_acknowledgements(self, connector: Any, connector_id: uuid.UUID, connector_type: str) -> None:
+        """Answer the source for a batch ingest confirmed is durable.
+
+        Never raises into the poll. A failed acknowledgement costs a
+        redelivery, which the connector's identity cursor de-duplicates, so
+        the poll was still a success — but the count is logged because a
+        connector whose acknowledgements never land is a queue that never
+        drains, and that is otherwise indistinguishable from a quiet source.
+        """
+        try:
+            result = await connector.commit_acknowledgements()
+        except NotImplementedError:
+            # A connector that stages handles without implementing the commit.
+            # Loud: the queue will not drain, and nothing else would say so.
+            logger.error(
+                "connector.scheduler.acknowledge_unimplemented id=%s type=%s",
+                connector_id,
+                connector_type,
+            )
+            return
+        except Exception:
+            logger.exception(
+                "connector.scheduler.acknowledge_failed id=%s type=%s",
+                connector_id,
+                connector_type,
+            )
+            return
+
+        requested = int(getattr(result, "requested", 0) or 0)
+        failed = int(getattr(result, "failed", 0) or 0)
+        if failed:
+            logger.warning(
+                "connector.scheduler.acknowledge_partial id=%s type=%s requested=%d confirmed=%d failed=%d",
+                connector_id,
+                connector_type,
+                requested,
+                int(getattr(result, "confirmed", 0) or 0),
+                failed,
+            )
+        elif requested:
+            logger.debug(
+                "connector.scheduler.acknowledged id=%s type=%s count=%d",
+                connector_id,
+                connector_type,
+                requested,
+            )
+
+    def _discard_acknowledgements(self, connector: Any, connector_id: uuid.UUID, *, reason: str, staged: int) -> None:
+        """Leave the source holding its messages, and say that it happened.
+
+        The silent version of this is the defect: a poll that fetched, failed
+        to ship and left no trace reads as a quiet source on the next poll.
+        """
+        try:
+            pending = len(connector.pending_acknowledgements())
+            connector.discard_acknowledgements()
+        except Exception:  # never let acknowledgement bookkeeping break a poll
+            logger.debug("connector.scheduler.discard_failed id=%s", connector_id)
+            return
+        if pending:
+            logger.warning(
+                "connector.scheduler.acknowledgement_withheld id=%s reason=%s messages=%d events=%d",
+                connector_id,
+                reason,
+                pending,
+                staged,
+            )
+
+    async def _sync_vulnerability_findings(self, connector: Any, target: Any) -> None:
+        """Materialise a scanner's findings as vulnerability rows, if it has any.
+
+        Fix-pass item 5.2. Written here rather than posted to the API because
+        the service principal is deliberately read-only -- its own docstring
+        says anything that changes the database is absent on purpose -- and
+        this service already holds both a database engine and the tenant id it
+        is polling for.
+        """
+        fetch = getattr(connector, "fetch_vulnerability_findings", None)
+        if fetch is None:
+            return
+
+        try:
+            findings = await fetch()
+        except Exception:
+            logger.exception(
+                "connector.scheduler.vulnerability_fetch_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+            return
+
+        if not findings:
+            return
+
+        try:
+            from app.vulnerabilities import sync_findings
+
+            counts = await sync_findings(
+                self._engine,
+                tenant_id=target.tenant_id,
+                findings=findings,
+            )
+            logger.info(
+                "connector.scheduler.vulnerabilities_synced id=%s inserted=%d touched=%d skipped=%d",
+                target.id,
+                counts["findings_inserted"],
+                counts["findings_touched"],
+                counts["skipped"],
+            )
+        except Exception:
+            logger.exception(
+                "connector.scheduler.vulnerability_sync_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+
+    async def _sync_cloud_security_findings(self, connector: Any, target: Any) -> None:
+        """Materialise a CNAPP's posture findings as triage context, if it has any.
+
+        Depth-2 item 8.1. Written here rather than posted to the API for the
+        same reason as the vulnerability sync directly above: the API's
+        service principal is deliberately read-only, and this service already
+        holds both a database engine and the tenant id it is polling for.
+
+        Nothing here becomes an alert. Phase 8 is read-only, and a CNAPP's
+        standing backlog of misconfigurations pushed into an analyst queue is
+        the noise a CNAPP exists to triage.
+        """
+        fetch = getattr(connector, "fetch_cloud_security_findings", None)
+        if fetch is None:
+            return
+
+        started = datetime.now(UTC)
+        try:
+            findings = await fetch()
+        except Exception:
+            logger.exception(
+                "connector.scheduler.cloud_security_fetch_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+            return
+
+        if not findings:
+            # Deliberately no run row. A connector whose three context reads
+            # are all switched off returns `[]` every poll, and writing a run
+            # for it would make `GET /posture/summary` report "collected,
+            # nothing found" for a tenant that has collected nothing — the
+            # confident zero this item exists to stop publishing.
+            return
+
+        try:
+            from app.cloud_security import sync_cloud_security_findings
+
+            counts = await sync_cloud_security_findings(
+                self._engine,
+                tenant_id=target.tenant_id,
+                source=str(target.connector_type),
+                findings=findings,
+                started_at=started,
+            )
+            logger.info(
+                "connector.scheduler.cloud_security_synced id=%s inserted=%d touched=%d skipped=%d",
+                target.id,
+                counts["findings_inserted"],
+                counts["findings_touched"],
+                counts["skipped"],
+            )
+        except Exception:
+            logger.exception(
+                "connector.scheduler.cloud_security_sync_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+
+    async def _sync_workforce_context(self, connector: Any, target: Any) -> None:
+        """Materialise an HR or MDM connector's context, if it has any.
+
+        Written here rather than posted to the API for the same reason
+        `_sync_vulnerability_findings` above is: the service principal is
+        deliberately read-only, and this service already holds a database
+        engine and the tenant id it is polling for.
+
+        Deliberately in its own `try`: a context sync that fails must not
+        cost the poll its events, and a fetch that fails must not be
+        reported as a successful sync.
+        """
+        fetch_workers = getattr(connector, "fetch_workforce", None)
+        fetch_devices = getattr(connector, "fetch_devices", None)
+        if fetch_workers is None and fetch_devices is None:
+            return
+
+        workers = []
+        devices = []
+        try:
+            if fetch_workers is not None:
+                workers = await fetch_workers()
+            if fetch_devices is not None:
+                devices = await fetch_devices()
+        except Exception:
+            logger.exception(
+                "connector.scheduler.workforce_fetch_failed id=%s type=%s",
+                getattr(target, "id", None),
+                getattr(target, "connector_type", None),
+            )
+            return
+
+        if not workers and not devices:
+            return
+
+        try:
+            from app.workforce_store import sync_workforce
+
+            report = await sync_workforce(
+                self._engine,
+                tenant_id=target.tenant_id,
+                connector_type=target.connector_type,
+                workers=workers,
+                devices=devices,
+            )
+            logger.info(
+                "connector.scheduler.workforce_synced id=%s workers=%d devices=%d rejected=%d",
+                target.id,
+                report.workers,
+                report.devices,
+                len(report.rejected),
+            )
+            for rejection in report.rejected[:20]:
+                # Named rather than counted. "synced 900 of 1000" does not
+                # say whether the missing hundred are one malformed
+                # department or every contractor.
+                logger.warning(
+                    "connector.scheduler.workforce_record_rejected id=%s kind=%s record=%s reason=%s",
+                    target.id,
+                    rejection["kind"],
+                    rejection["id"],
+                    rejection["reason"],
+                )
+        except Exception:
+            logger.exception(
+                "connector.scheduler.workforce_sync_failed id=%s type=%s",
+                getattr(target, "id", None),
+                getattr(target, "connector_type", None),
+            )
+
+    async def _promote_overdue_findings(self) -> None:
+        """Patch-window promotion sweep (docs/cve-patch-policy.md rule 5).
+
+        The single sanctioned path from ``asset_vulnerabilities`` back into
+        ``alerts``. Per enabled tenant, in one transaction:
+
+        1. flip ``tracked`` rows past their due date to ``overdue``;
+        2. auto-resolve promoted alerts whose CVE vanished from the open
+           inventory (patch day done);
+        3. select the candidate CVEs — overdue, CVSS>9, exploited, or
+           KEV-listed — grouped per CVE with host roll-up;
+        4. upsert one alert per CVE keyed by ``vuln-promo:<cve>`` so the
+           partial unique index makes re-promotion a touch, not a duplicate
+           (this is the "1 CVE on 4 hosts is 1 alert" rule).
+
+        Never raises: a failed sweep logs and waits for the next tick; a
+        promotion bug must not take the connector poll loop with it.
+        """
+        if self._engine is None:
+            return
+        from sqlalchemy import text
+
+        try:
+            async with self._engine.connect() as conn:
+                tenants = (await conn.execute(text("SELECT DISTINCT tenant_id FROM connectors WHERE is_enabled"))).scalars().all()
+        except Exception as exc:
+            # Recorded under its own key rather than against a tenant, because
+            # this handler returns *before* the per-tenant loop: a sweep that
+            # cannot even list tenants would otherwise leave the failure map
+            # empty and read as a clean sweep.
+            self._promotion_failures["<tenant enumeration>"] = f"{type(exc).__name__}: {exc}"[:300]
+            self._promotion_last_error = f"{type(exc).__name__}: {exc}"[:300]
+            logger.exception("connector.scheduler.promotion_tenant_enum_failed")
+            return
+        else:
+            self._promotion_failures.pop("<tenant enumeration>", None)
+
+        for tenant_id in tenants:
+            try:
+                async with self._engine.begin() as conn:
+                    # Bind the tenant so the RLS policies on
+                    # asset_vulnerabilities / alerts apply to this sweep.
+                    #
+                    # The setting is `app.current_tenant_id`, which is what
+                    # `current_tenant_id()` reads. This said `aisoc.tenant_id`,
+                    # a name no policy consults, so the bind did nothing and
+                    # every statement here passed on the policies' permissive
+                    # `OR current_tenant_id() IS NULL` arm instead — a comment
+                    # asserting a property the code did not have, over a sweep
+                    # that writes to `alerts`.
+                    await conn.execute(
+                        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+                        {"tid": str(tenant_id)},
+                    )
+                    overdue = (await conn.execute(text(MARK_OVERDUE_SQL), {"tenant_id": tenant_id})).rowcount
+                    resolved = (await conn.execute(text(RESOLVE_REMEDIATED_SQL), {"tenant_id": tenant_id})).rowcount
+                    candidates = (await conn.execute(text(PROMOTE_CANDIDATES_SQL), {"tenant_id": tenant_id})).fetchall()
+
+                    promoted = 0
+                    for row in candidates:
+                        cve = str(row.cve_id)
+                        score = float(row.cvss_score) if row.cvss_score is not None else None
+                        sev = "critical" if (score is not None and score >= 9.0) or row.is_exploited else "high"
+                        hosts = row.affected_hosts or []
+                        why = []
+                        if row.patch_due_date is not None:
+                            why.append(f"patch window closed {row.patch_due_date}")
+                        if score is not None and score > 9:
+                            why.append(f"CVSS {score}")
+                        if row.is_exploited:
+                            why.append("actively exploited")
+                        await conn.execute(
+                            text(UPSERT_ALERT_SQL),
+                            {
+                                "tenant_id": tenant_id,
+                                "title": f"{cve} overdue / urgent on {row.host_count} host(s)",
+                                "description": (
+                                    f"{cve} is open on {row.host_count} asset(s) and meets the "
+                                    f"patch-policy exception path: {'; '.join(why) or 'KEV-listed'}. "
+                                    f"Hosts: {', '.join(str(h) for h in hosts[:20])}"
+                                ),
+                                "severity": sev,
+                                "affected_hosts": json.dumps(hosts),
+                                "tags": json.dumps(["patch-window", "vulnerability", cve.lower()]),
+                                "idempotency_key": f"vuln-promo:{cve.lower()}",
+                                "connector_id": None,
+                                "raw_event": json.dumps(
+                                    {
+                                        "cve": cve,
+                                        "cvss_score": score,
+                                        "is_exploited": bool(row.is_exploited),
+                                        "patch_due_date": str(row.patch_due_date),
+                                        "host_count": row.host_count,
+                                        "affected_hosts": hosts,
+                                    }
+                                ),
+                            },
+                        )
+                        await conn.execute(
+                            text(MARK_PROMOTED_SQL),
+                            {"tenant_id": tenant_id, "cve_id": cve.lower()},
+                        )
+                        promoted += 1
+
+                if overdue or promoted or resolved:
+                    logger.info(
+                        "connector.scheduler.vuln_promotion tenant=%s marked_overdue=%d alerts_promoted=%d alerts_resolved=%d",
+                        tenant_id,
+                        overdue,
+                        promoted,
+                        resolved,
+                    )
+            except Exception as exc:
+                # One tenant's failure must not stop the others' sweep — but
+                # it must not vanish into the log either. This sweep is the
+                # only path from `asset_vulnerabilities` back into the alert
+                # queue, it runs every six hours, and when its upsert raised
+                # on every tenant the sole observable was this line. Record it
+                # so `/readyz` reports a degraded sweep with the reason.
+                self._promotion_failures[str(tenant_id)] = f"{type(exc).__name__}: {exc}"[:300]
+                self._promotion_last_error = f"{type(exc).__name__}: {exc}"[:300]
+                logger.exception("connector.scheduler.vuln_promotion_failed tenant=%s", tenant_id)
+            else:
+                self._promotion_failures.pop(str(tenant_id), None)
+
+        if not self._promotion_failures:
+            self._promotion_last_error = None
+
+    def promotion_sweep_healthy(self) -> bool:
+        """Whether the last patch-window sweep got through every tenant.
+
+        Registered on ``/readyz`` as a **non-required** dependency, so a
+        failing six-hourly background sweep reports ``ready_degraded`` with
+        the reason instead of pulling the connector API's front door out of
+        the load balancer. The same reasoning ingest applies to its opt-in
+        WebSocket: failing readiness over an auxiliary job drops the traffic
+        that still works in order to flag the job that does not.
+
+        True before the first sweep. That is the one dishonest-looking answer
+        here and it is deliberate: the alternative is a brand-new deployment
+        reporting degraded for up to six hours for no reason. "Has not run
+        yet" is reported as the empty failure map rather than as a verdict.
+        """
+        return not self._promotion_failures
+
+    def promotion_sweep_detail(self) -> dict[str, Any]:
+        """The sweep's last outcome, for an operator reading the body."""
+        return {
+            "tenants_failing": sorted(self._promotion_failures),
+            "last_error": self._promotion_last_error,
+        }
+
+    async def _record_failure(self, connector_id: uuid.UUID) -> None:
+        if self._engine is None:  # pragma: no cover
+            return
+        try:
+            async with self._engine.begin() as conn:
+                await record_poll_failure(conn, connector_id)
+        except Exception:  # pragma: no cover
+            logger.exception(
+                "connector.scheduler.record_failure_failed id=%s",
+                connector_id,
+            )
+
+
+def _is_canonical_event(event: Any) -> bool:
+    """True if ``event`` is already a normalized connector envelope.
+
+    Connectors normalize inside ``fetch_alerts`` and return this shape; the
+    scheduler must NOT re-normalize it (#528). A second ``normalize`` pass
+    treats the envelope as a raw vendor row and corrupts it (blanks the
+    external_id, resets severity, double-nests ``raw_event``). We detect the
+    envelope structurally — a canonical event carries the original vendor row
+    under ``raw_event`` plus a ``source`` label — which no raw vendor row has.
+    """
+    return isinstance(event, dict) and "raw_event" in event and "source" in event
+
+
+def _safe_normalize(connector: Any, event: dict[str, Any]) -> dict[str, Any]:
+    """Normalize an event once, never raising out of the loop.
+
+    Idempotent: an already-canonical event is passed through untouched so
+    self-normalizing connectors aren't double-normalized (#528).
+    """
+    if _is_canonical_event(event):
+        return event
+    try:
+        out = connector.normalize(event)
+    except Exception:
+        logger.exception(
+            "connector.scheduler.normalize_failed connector=%s",
+            getattr(connector, "connector_id", "?"),
+        )
+        return event
+    if not isinstance(out, dict):
+        return event
+    return out
+
+
+def _extract_last_event_at(events: list[dict[str, Any]]) -> datetime | None:
+    """Return the freshest event timestamp from a normalized batch.
+
+    Workstream 5: powers the freshness-SLO badge in the UI. We prefer
+    the ECS-ish ``@timestamp`` field, fall back to ``timestamp``, and
+    accept either ISO-8601 strings (with ``Z`` or offset) or epoch
+    seconds. A batch with no parseable timestamps yields ``None`` so
+    ``record_poll_success`` won't overwrite a previously-good value.
+    """
+    if not events:
+        return None
+    best: datetime | None = None
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        raw = event.get("@timestamp") or event.get("timestamp")
+        parsed: datetime | None = None
+        if isinstance(raw, datetime):
+            parsed = raw
+        elif isinstance(raw, str):
+            try:
+                # ``fromisoformat`` rejects trailing ``Z`` until 3.11+;
+                # normalize to ``+00:00`` so we work on 3.10+.
+                parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+            except ValueError:
+                parsed = None
+        elif isinstance(raw, int | float):
+            try:
+                parsed = datetime.fromtimestamp(float(raw), tz=UTC)
+            except (OverflowError, OSError, ValueError):
+                parsed = None
+        if parsed is None:
+            continue
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        if best is None or parsed > best:
+            best = parsed
+    return best
+
+
+# ---------------------------------------------------------------------------
+# Lifespan integration helper
+#
+# ``app/main.py`` imports ``scheduler_lifespan`` and uses it as the
+# FastAPI ``lifespan=`` argument so the scheduler starts on app boot and
+# stops cleanly on SIGTERM.
+# ---------------------------------------------------------------------------
+
+
+_SCHEDULER_DISABLED_ENV = "AISOC_CONNECTORS_DISABLE_SCHEDULER"
+
+
+def scheduler_disabled() -> bool:
+    """Allow tests / one-shot CLI invocations to skip the scheduler entirely."""
+    return os.getenv(_SCHEDULER_DISABLED_ENV, "").lower() in {"1", "true", "yes"}
+
+
+__all__ = [
+    "ConnectorScheduler",
+    "scheduler_disabled",
+]

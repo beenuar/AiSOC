@@ -1,0 +1,50 @@
+id: splunk-security-content-5eb479b1-a5ea-4e01-8365-780078613776
+name: Windows Modify Registry Risk Behavior
+description: The following analytic identifies instances where three or more distinct
+  registry modification events associated with MITRE ATT&CK Technique T1112 are detected.
+  It leverages data from the Risk data model in Splunk, focusing on registry-related
+  sources and MITRE technique annotations. This activity is significant because multiple
+  registry modifications can indicate an attempt to persist, hide malicious configurations,
+  or erase forensic evidence. If confirmed malicious, this behavior could allow attackers
+  to maintain persistent access, execute malicious code, and evade detection, posing
+  a severe threat to the integrity and security of the affected host.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/do-not-cross-the-redline-stealer-detections-and-analysis.html
+- https://www.splunk.com/en_us/blog/security/asyncrat-crusade-detections-and-defense.html
+- https://www.splunk.com/en_us/blog/security/from-registry-with-love-malware-registry-abuses.html
+- https://www.splunk.com/en_us/blog/security/-applocker-rules-as-defense-evasion-complete-analysis.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as risk_score, count(All_Risk.calculated_risk_score)\
+    \ as risk_event_count, values(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as annotations.mitre_attack.mitre_tactic_id, dc(All_Risk.annotations.mitre_attack.mitre_tactic_id)\
+    \ as mitre_tactic_id_count, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count, values(All_Risk.tag) as tag, values(source) as\
+    \ source, dc(source) as source_count FROM datamodel=Risk.All_Risk\n  WHERE source\
+    \ IN (\"*registry*\") All_Risk.annotations.mitre_attack.mitre_technique_id IN\
+    \ (\"*T1112*\")\n  BY All_Risk.risk_object All_Risk.risk_object_type All_Risk.annotations.mitre_attack.mitre_tactic\n\
+    | `drop_dm_object_name(All_Risk)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count >= 3\n| `windows_modify_registry_risk_behavior_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5eb479b1-a5ea-4e01-8365-780078613776
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_risk_behavior.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,53 @@
+id: splunk-security-content-bfdaabe7-3db8-48c5-80c1-220f9b8f22be
+name: Windows Indirect Command Execution Via Series Of Forfiles
+description: The following analytic detects excessive usage of the forfiles.exe process,
+  which is often indicative of post-exploitation activities. The detection leverages
+  data from Endpoint Detection and Response (EDR) agents, focusing on process execution
+  logs that include process GUID, process name, and parent process. This activity
+  is significant because forfiles.exe can be abused to execute commands on multiple
+  files, a technique used by ransomware like Prestige. If confirmed malicious, this
+  behavior could allow attackers to enumerate files, potentially leading to data exfiltration
+  or further malicious actions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1202
+  categories:
+  - endpoint
+references:
+- https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/forfiles
+- https://github.com/carlospolop/PEASS-ng/tree/master/winPEAS
+- https://www.microsoft.com/en-us/security/blog/2022/10/14/new-prestige-ransomware-impacts-organizations-in-ukraine-and-poland/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` values(Processes.action)\
+    \ as action values(Processes.original_file_name) as original_file_name values(Processes.parent_process_exec)\
+    \ as parent_process_exec values(Processes.parent_process_guid) as parent_process_guid\
+    \ values(Processes.parent_process_id) as parent_process_id values(Processes.parent_process_path)\
+    \ as parent_process_path values(Processes.process) as process values(Processes.process_exec)\
+    \ as process_exec values(Processes.process_guid) as process_guid values(Processes.process_hash)\
+    \ as process_hash values(Processes.process_id) as process_id values(Processes.process_integrity_level)\
+    \ as process_integrity_level values(Processes.process_name) as process_name values(Processes.process_path)\
+    \ as process_path values(Processes.user) as user  values(Processes.user_id) as\
+    \ user_id values(Processes.vendor_product) as vendor_product count min(_time)\
+    \ as firstTime max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE\
+    \ Processes.process_name = \"forfiles.exe\"\n    OR\n    Processes.original_file_name\
+    \ = \"forfiles.exe\"\n  BY Processes.parent_process_name Processes.parent_process\
+    \ Processes.dest\n     Processes.user _time span=1m\n| where count >=20\n| `drop_dm_object_name(Processes)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_indirect_command_execution_via_series_of_forfiles_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: bfdaabe7-3db8-48c5-80c1-220f9b8f22be
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_indirect_command_execution_via_series_of_forfiles.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

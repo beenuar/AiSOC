@@ -1,0 +1,257 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/beenuar/AiSOC/schemas/playbook.schema.json",
+  "title": "AiSOC Playbook",
+  "description": "The authoring contract for AiSOC playbooks. Every step type listed in `properties.steps.items.properties.type.enum` is accepted by the runtime model (`services/agents/app/playbook/models.py::StepType`), and `x-aisoc-execution` records what the engine actually does with it. Kept in lockstep with the engine by `scripts/check_playbook_schema_parity.py`.",
+  "type": "object",
+  "required": ["name", "steps"],
+  "additionalProperties": false,
+
+  "x-aisoc-execution": {
+    "description": "What `services/agents/app/playbook/engine.py` does with each step type. `executed` = a handler runs and has a real effect (an outbound call to a service, or engine-internal control flow). `governed` = the step is dispatched through the action registry in `services/actions`, where the capability contract and the tenant autonomy policy decide whether a vendor is touched; the step reports which happened and `executed` is the single field that means one was, so a preview, an approval queue and a missing integration are each named rather than reported as a success. `unimplemented` = no handler is registered; the engine fails the step closed rather than reporting a success it did not achieve. `approval` became `executed` in parity 5.2: it suspends the run to Postgres and resumes on the decision, where before it had nowhere to pause to and failed closed while 12 shipped playbooks aborted on it. `wait`, `parallel` and `loop` are `executed` and are answered in the run loop rather than from the handler table: they need the run, the HTTP client and the dry-run flag, none of which a handler receives. This map is machine-checked against the engine's handler table *and* its control-flow table, so it cannot drift into an aspirational claim.",
+    "enrich": "executed",
+    "investigate": "executed",
+    "notify": "governed",
+    "http": "executed",
+    "close_case": "executed",
+    "condition": "executed",
+    "osquery_live_query": "governed",
+    "block_ip": "governed",
+    "isolate_host": "governed",
+    "create_ticket": "governed",
+    "approval": "executed",
+    "block_ioc": "governed",
+    "disable_user": "governed",
+    "reset_password": "governed",
+    "revoke_session": "governed",
+    "force_mfa": "governed",
+    "kill_process": "governed",
+    "quarantine_file": "governed",
+    "run_av_scan": "governed",
+    "run_script": "governed",
+    "search_siem": "governed",
+    "create_notable_event": "governed",
+    "wait": "executed",
+    "parallel": "executed",
+    "loop": "executed",
+    "verify_user": "executed",
+    "ask_model": "executed"
+  },
+
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "Unique playbook identifier (UUID or slug)."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "description": "Human-readable playbook name."
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 1000
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version string, e.g. '1.0.0'."
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "uniqueItems": true
+    },
+    "trigger": {
+      "type": "object",
+      "required": ["on"],
+      "properties": {
+        "on": {
+          "type": "string",
+          "enum": ["alert", "case", "manual", "schedule"],
+          "description": "Event type that fires this playbook."
+        },
+        "severity": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["info", "low", "medium", "high", "critical"]
+          },
+          "description": "Optional severity filter."
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Alert/case must carry at least one of these tags."
+        },
+        "cron": {
+          "type": "string",
+          "description": "Cron expression for schedule trigger."
+        }
+      },
+      "additionalProperties": true
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/PlaybookStep" }
+    },
+    "author": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "inputs": {
+      "type": "object",
+      "description": "Authored documentation of the trigger-context fields this playbook expects. The engine does NOT bind, inject or validate these — a step reads its own values from `params` and from the run context. Present so a pack can describe its interface to a reader; do not treat it as a parameter-binding mechanism.",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "field": {
+            "type": "string",
+            "description": "Dot-path on the trigger event where this input is expected to be found."
+          },
+          "required": { "type": "boolean" }
+        },
+        "additionalProperties": true
+      }
+    },
+    "dry_run_support": {
+      "type": "boolean",
+      "description": "Authored assertion that this playbook is safe to run with the engine's `dry_run` flag. The engine's `dry_run` applies uniformly to every step regardless of this value, so it is catalogue metadata rather than a runtime switch."
+    }
+  },
+
+  "definitions": {
+    "StepCondition": {
+      "type": "object",
+      "description": "Structured condition form. Every field has a runtime default, so none is required; an empty object is a condition that always passes.",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "type": "string",
+          "description": "Dot-path into run context, e.g. 'alert.severity'."
+        },
+        "operator": {
+          "type": "string",
+          "enum": ["eq", "ne", "gt", "lt", "contains", "exists"]
+        },
+        "value": {
+          "description": "Expected value (not required for 'exists' operator)."
+        },
+        "expression": {
+          "type": "string",
+          "description": "Expression form, e.g. \"inputs.source_ip != null\". Mutually exclusive with field/operator/value; evaluated at runtime by the engine."
+        }
+      }
+    },
+    "PlaybookStep": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Short unique identifier within the playbook (used for branching)."
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "description": "The step verb. See `x-aisoc-execution` at the root of this schema for what the engine does with each one — a type listed there as `unimplemented` is a valid authoring vocabulary word that the engine will fail closed on rather than execute.",
+          "enum": [
+            "enrich",
+            "investigate",
+            "notify",
+            "http",
+            "close_case",
+            "condition",
+        "wait",
+        "parallel",
+        "loop",
+            "osquery_live_query",
+            "block_ip",
+            "isolate_host",
+            "create_ticket",
+            "approval",
+            "verify_user",
+            "ask_model",
+            "block_ioc",
+            "disable_user",
+            "reset_password",
+            "revoke_session",
+            "force_mfa",
+            "kill_process",
+            "quarantine_file",
+            "run_av_scan",
+            "run_script",
+            "search_siem",
+            "create_notable_event"
+          ]
+        },
+        "params": {
+          "type": "object",
+          "description": "Step-specific parameters. Keys depend on the step type.",
+          "additionalProperties": true
+        },
+        "condition": {
+          "description": "Guard that must pass before the step runs. Accepts either an expression string or the structured form; the engine coerces a bare string into `{\"expression\": ...}`.",
+          "oneOf": [
+            {
+              "type": "string",
+              "description": "Expression form, e.g. \"steps.approval_isolate.outcome == 'approved'\"."
+            },
+            { "$ref": "#/definitions/StepCondition" }
+          ]
+        },
+        "on_failure": {
+          "type": "string",
+          "enum": ["abort", "continue", "retry"],
+          "default": "abort"
+        },
+        "retry_max": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25,
+          "default": 0,
+          "description": "Retry attempts. Ceiling mirrors `bounds.ABSOLUTE_MAX_RETRIES`."
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600,
+          "default": 30,
+          "description": "Per-step timeout. Ceiling mirrors `bounds.ABSOLUTE_MAX_TIMEOUT_SECONDS`; long values exist for `approval` steps that wait on a human. Note that handlers reading `params.timeout_seconds` are separately clamped to `bounds.ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS`."
+        },
+        "next_true": {
+          "type": "string",
+          "description": "Step ID to jump to when condition is true (branching)."
+        },
+        "steps": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/PlaybookStep" },
+          "default": [],
+          "description": "Child steps, for `parallel` (run concurrently, then joined) and `loop` (run in order, once per item). Empty for every other type; the engine fails a `parallel` or `loop` that declares none rather than reporting a success for work it did not do. Nesting is capped at `bounds.MAX_CONTROL_FLOW_DEPTH`."
+        },
+        "next_false": {
+          "type": "string",
+          "description": "Step ID to jump to when condition is false (branching)."
+        }
+      }
+    }
+  }
+}

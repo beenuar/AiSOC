@@ -1,0 +1,112 @@
+id: splunk-security-content-d6f2b006-0041-11ec-8885-acde48001122
+name: PowerShell 4104 Hunting
+description: The following analytic identifies suspicious PowerShell execution using
+  Script Block Logging (EventCode 4104). It leverages specific patterns and keywords
+  within the ScriptBlockText field to detect potentially malicious activities. This
+  detection is significant for SOC analysts as PowerShell is commonly used by attackers
+  for various malicious purposes, including code execution, privilege escalation,
+  and persistence. If confirmed malicious, this activity could allow attackers to
+  execute arbitrary commands, exfiltrate data, or maintain long-term access to the
+  compromised system, posing a severe threat to the organization's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.001
+  categories:
+  - endpoint
+references:
+- https://github.com/inodee/threathunting-spl/blob/master/hunt-queries/powershell_qualifiers.md
+- https://help.splunk.com/en/security-offerings/splunk-user-behavior-analytics/get-data-in/5.4.1/add-other-data-to-splunk-uba/configure-powershell-logging-to-see-powershell-anomalies-in-splunk-uba
+- https://github.com/marcurdy/dfir-toolset/blob/master/Powershell%20Blueteam.txt
+- https://devblogs.microsoft.com/powershell/powershell-the-blue-team/
+- https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_logging?view=powershell-5.1
+- https://www.mandiant.com/resources/greater-visibilityt
+- https://hurricanelabs.com/splunk-tutorials/how-to-use-powershell-transcription-logs-in-splunk/
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+- https://adlumin.com/post/powerdrop-a-new-insidious-powershell-script-for-command-and-control-attacks-targets-u-s-aerospace-defense-industry/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104\n  | eval DoIt = if(match(ScriptBlockText,\"\
+    (?i)(\\$doit)\"), \"4\", 0)\n  | eval enccom=if(match(ScriptBlockText,\"[A-Za-z0-9+\\\
+    /]{44,}([A-Za-z0-9+\\/]{4}\n  | [A-Za-z0-9+\\/]{3}=\n  | [A-Za-z0-9+\\/]{2}==)\"\
+    ) OR match(ScriptBlockText, \"(?i)[-]e(nc*o*d*e*d*c*o*m*m*a*n*d*)*\\s+[^-]\"),4,0)\n\
+    \  | eval suspcmdlet=if(match(ScriptBlockText, \"(?i)Add-Exfiltration\n  | Add-Persistence\n\
+    \  | Add-RegBackdoor\n  | Add-ScrnSaveBackdoor\n  | Check-VM\n  | Do-Exfiltration\n\
+    \  | Enabled-DuplicateToken\n  | Exploit-Jboss\n  | Find-Fruit\n  | Find-GPOLocation\n\
+    \  | Find-TrustedDocuments\n  | Get-ApplicationHost\n  | Get-ChromeDump\n  | Get-ClipboardContents\n\
+    \  | Get-FoxDump\n  | Get-GPPPassword\n  | Get-IndexedItem\n  | Get-Keystrokes\n\
+    \  | LSASecret\n  | Get-PassHash\n  | Get-RegAlwaysInstallElevated\n  | Get-RegAutoLogon\n\
+    \  | Get-RickAstley\n  | Get-Screenshot\n  | Get-SecurityPackages\n  | Get-ServiceFilePermission\n\
+    \  | Get-ServicePermission\n  | Get-ServiceUnquoted\n  | Get-SiteListPassword\n\
+    \  | Get-System\n  | Get-TimedScreenshot\n  | Get-UnattendedInstallFile\n  | Get-Unconstrained\n\
+    \  | Get-VaultCredential\n  | Get-VulnAutoRun\n  | Get-VulnSchTask\n  | Gupt-Backdoor\n\
+    \  | HTTP-Login\n  | Install-SSP\n  | Install-ServiceBinary\n  | Invoke-ACLScanner\n\
+    \  | Invoke-ADSBackdoor\n  | Invoke-ARPScan\n  | Invoke-AllChecks\n  | Invoke-BackdoorLNK\n\
+    \  | Invoke-BypassUAC\n  | Invoke-CredentialInjection\n  | Invoke-DCSync\n  |\
+    \ Invoke-DllInjection\n  | Invoke-DowngradeAccount\n  | Invoke-EgressCheck\n \
+    \ | Invoke-Inveigh\n  | Invoke-InveighRelay\n  | Invoke-Mimikittenz\n  | Invoke-NetRipper\n\
+    \  | Invoke-NinjaCopy\n  | Invoke-PSInject\n  | Invoke-Paranoia\n  | Invoke-PortScan\n\
+    \  | Invoke-PoshRat\n  | Invoke-PostExfil\n  | Invoke-PowerDump\n  | Invoke-PowerShellTCP\n\
+    \  | Invoke-PsExec\n  | Invoke-PsUaCme\n  | Invoke-ReflectivePEInjection\n  |\
+    \ Invoke-ReverseDNSLookup\n  | Invoke-RunAs\n  | Invoke-SMBScanner\n  | Invoke-SSHCommand\n\
+    \  | Invoke-Service\n  | Invoke-Shellcode\n  | Invoke-Tater\n  | Invoke-ThunderStruck\n\
+    \  | Invoke-Token\n  | Invoke-UserHunter\n  | Invoke-VoiceTroll\n  | Invoke-WScriptBypassUAC\n\
+    \  | Invoke-WinEnum\n  | MailRaider\n  | New-HoneyHash\n  | Out-Minidump\n  |\
+    \ Port-Scan\n  | PowerBreach\n  | PowerUp\n  | PowerView\n  | Remove-Update\n\
+    \  | Set-MacAttribute\n  | Set-Wallpaper\n  | Show-TargetScreen\n  | Start-CaptureServer\n\
+    \  | VolumeShadowCopyTools\n  | NEEEEWWW\n  | (Computer\n  | User)Property\n \
+    \ | CachedRDPConnection\n  | get-net\\S+\n  | invoke-\\S+hunter\n  | Install-Service\n\
+    \  | get-\\S+(credent\n  | password)\n  | remoteps\n  | Kerberos.*(policy\n  |\
+    \ ticket)\n  | netfirewall\n  | Uninstall-Windows\n  | Verb\\s+Runas\n  | AmsiBypass\n\
+    \  | nishang\n  | Invoke-Interceptor\n  | EXEonRemote\n  | NetworkRelay\n  | PowerShelludp\n\
+    \  | PowerShellIcmp\n  | CreateShortcut\n  | copy-vss\n  | invoke-dll\n  | invoke-mass\n\
+    \  | out-shortcut\n  | Invoke-ShellCommand\"),1,0)\n  | eval base64 = if(match(lower(ScriptBlockText),\"\
+    frombase64\"), \"4\", 0)\n  | eval empire=if(match(lower(ScriptBlockText),\"system.net.webclient\"\
+    ) AND match(lower(ScriptBlockText), \"frombase64string\") ,5,0)\n  | eval mimikatz=if(match(lower(ScriptBlockText),\"\
+    mimikatz\") OR match(lower(ScriptBlockText), \"-dumpcr\") OR match(lower(ScriptBlockText),\
+    \ \"SEKURLSA::Pth\") OR match(lower(ScriptBlockText), \"kerberos::ptt\") OR match(lower(ScriptBlockText),\
+    \ \"kerberos::golden\") ,5,0)\n  | eval iex=if(match(ScriptBlockText, \"(?i)iex\n\
+    \  | invoke-expression\"),2,0)\n  | eval webclient=if(match(lower(ScriptBlockText),\"\
+    http\") OR match(lower(ScriptBlockText),\"web(client\n  | request)\") OR match(lower(ScriptBlockText),\"\
+    socket\") OR match(lower(ScriptBlockText),\"download(file\n  | string)\") OR match(lower(ScriptBlockText),\"\
+    bitstransfer\") OR match(lower(ScriptBlockText),\"internetexplorer.application\"\
+    ) OR match(lower(ScriptBlockText),\"xmlhttp\"),5,0)\n  | eval get = if(match(lower(ScriptBlockText),\"\
+    get-\"), \"1\", 0)\n  | eval rundll32 = if(match(lower(ScriptBlockText),\"rundll32\"\
+    ), \"4\", 0)\n  | eval suspkeywrd=if(match(ScriptBlockText, \"(?i)(bitstransfer\n\
+    \  | mimik\n  | metasp\n  | AssemblyBuilderAccess\n  | Reflection\\.Assembly\n\
+    \  | shellcode\n  | injection\n  | cnvert\n  | shell\\.application\n  | start-process\n\
+    \  | Rc4ByteStream\n  | System\\.Security\\.Cryptography\n  | lsass\\.exe\n  |\
+    \ localadmin\n  | LastLoggedOn\n  | hijack\n  | BackupPrivilege\n  | ngrok\n \
+    \ | comsvcs\n  | backdoor\n  | brute.?force\n  | Port.?Scan\n  | Exfiltration\n\
+    \  | exploit\n  | DisableRealtimeMonitoring\n  | beacon)\"),1,0)\n  | eval syswow64\
+    \ = if(match(lower(ScriptBlockText),\"syswow64\"), \"3\", 0)\n  | eval httplocal\
+    \ = if(match(lower(ScriptBlockText),\"http://127.0.0.1\"), \"4\", 0)\n  | eval\
+    \ reflection = if(match(lower(ScriptBlockText),\"reflection\"), \"1\", 0)\n  |\
+    \ eval invokewmi=if(match(lower(ScriptBlockText), \"(?i)(wmiobject\n  | WMIMethod\n\
+    \  | RemoteWMI\n  | PowerShellWmi\n  | wmicommand)\"),5,0)\n  | eval downgrade=if(match(ScriptBlockText,\
+    \ \"(?i)([-]ve*r*s*i*o*n*\\s+2)\") OR match(lower(ScriptBlockText),\"powershell\
+    \ -version\"),3,0)\n  | eval compressed=if(match(ScriptBlockText, \"(?i)GZipStream\n\
+    \  | ::Decompress\n  | IO.Compression\n  | write-zip\n  | (expand\n  | compress)-Archive\"\
+    ),5,0)\n  | eval invokecmd = if(match(lower(ScriptBlockText),\"invoke-command\"\
+    ), \"4\", 0)\n  | addtotals fieldname=Score DoIt, enccom, suspcmdlet, suspkeywrd,\
+    \ compressed, downgrade, mimikatz, iex, empire, rundll32, webclient, syswow64,\
+    \ httplocal, reflection, invokewmi, invokecmd, base64, get\n  | stats values(Score)\n\
+    \    BY UserID, Computer, DoIt,\n       enccom, compressed, downgrade,\n     \
+    \  iex, mimikatz, rundll32,\n       empire, webclient, syswow64,\n       httplocal,\
+    \ reflection, invokewmi,\n       invokecmd, base64, get,\n       suspcmdlet, suspkeywrd\n\
+    \  | rename Computer as dest, UserID as user\n  | `powershell_4104_hunting_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d6f2b006-0041-11ec-8885-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_4104_hunting.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

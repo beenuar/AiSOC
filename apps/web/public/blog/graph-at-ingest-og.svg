@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630" role="img" aria-label="AiSOC blog: Why agentic SOC needs a graph at ingest">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0a0d14"/>
+      <stop offset="1" stop-color="#0d1320"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.7" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0L10 5L0 10z" fill="#60a5fa"/>
+    </marker>
+    <style>
+      .title { font: 700 60px/1.05 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: #ffffff; }
+      .sub { font: 500 26px/1.4 ui-sans-serif, system-ui, sans-serif; fill: #94a3b8; }
+      .pill { font: 600 16px ui-sans-serif, system-ui, sans-serif; fill: #93c5fd; letter-spacing: 0.08em; text-transform: uppercase; }
+      .author { font: 500 18px ui-sans-serif, system-ui, sans-serif; fill: #cbd5e1; }
+      .brand { font: 700 20px ui-sans-serif, system-ui, sans-serif; fill: #ffffff; letter-spacing: 0.04em; }
+      .nodeLabel { font: 11px ui-sans-serif, system-ui, sans-serif; fill: #e2e8f0; text-anchor: middle; }
+      .node { fill: #0a0d14; stroke: #60a5fa; stroke-width: 1.5; }
+      .nodeAlert { stroke: #f59e0b; }
+      .edge { stroke: #60a5fa; stroke-width: 1.4; fill: none; opacity: 0.85; }
+    </style>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect width="1200" height="630" fill="url(#glow)"/>
+
+  <g transform="translate(80,80)">
+    <text class="brand">AiSOC · ENGINEERING BLOG</text>
+    <line x1="0" y1="20" x2="80" y2="20" stroke="#3b82f6" stroke-width="2"/>
+  </g>
+
+  <g transform="translate(80,170)">
+    <text class="pill">Architecture · Graph · Ingest</text>
+  </g>
+
+  <g transform="translate(80,220)">
+    <text class="title" x="0" y="60">Why agentic SOC</text>
+    <text class="title" x="0" y="125">needs a graph</text>
+    <text class="title" x="0" y="190">at ingest.</text>
+  </g>
+
+  <g transform="translate(80,470)">
+    <text class="sub">17 node labels. 14 relationships. Schema-locked in CI.</text>
+  </g>
+
+  <g transform="translate(80,540)">
+    <text class="author">Prince Sinha · Senior Director, Innovations at Cyble</text>
+  </g>
+
+  <g transform="translate(770,160)">
+    <ellipse cx="170" cy="100" rx="60" ry="24" class="node nodeAlert"/>
+    <text class="nodeLabel" x="170" y="105">Alert</text>
+
+    <ellipse cx="60" cy="220" rx="55" ry="22" class="node"/>
+    <text class="nodeLabel" x="60" y="225">Identity</text>
+
+    <ellipse cx="170" cy="220" rx="55" ry="22" class="node"/>
+    <text class="nodeLabel" x="170" y="225">Host</text>
+
+    <ellipse cx="290" cy="220" rx="60" ry="22" class="node"/>
+    <text class="nodeLabel" x="290" y="225">Resource</text>
+
+    <ellipse cx="60" cy="340" rx="50" ry="20" class="node"/>
+    <text class="nodeLabel" x="60" y="345">User</text>
+
+    <ellipse cx="170" cy="340" rx="55" ry="20" class="node"/>
+    <text class="nodeLabel" x="170" y="345">Process</text>
+
+    <ellipse cx="290" cy="340" rx="50" ry="20" class="node"/>
+    <text class="nodeLabel" x="290" y="345">Domain</text>
+
+    <ellipse cx="170" cy="430" rx="60" ry="22" class="node nodeAlert"/>
+    <text class="nodeLabel" x="170" y="435">Incident</text>
+
+    <line x1="115" y1="222" x2="170" y2="124" class="edge" marker-end="url(#arr)"/>
+    <line x1="170" y1="244" x2="170" y2="408" class="edge" marker-end="url(#arr)"/>
+    <line x1="225" y1="222" x2="170" y2="124" class="edge" marker-end="url(#arr)"/>
+    <line x1="60" y1="242" x2="60" y2="320" class="edge" marker-end="url(#arr)"/>
+    <line x1="170" y1="242" x2="170" y2="320" class="edge" marker-end="url(#arr)"/>
+    <line x1="290" y1="242" x2="290" y2="320" class="edge" marker-end="url(#arr)"/>
+    <line x1="115" y1="220" x2="115" y2="220" class="edge"/>
+    <line x1="115" y1="340" x2="115" y2="220" class="edge"/>
+  </g>
+</svg>

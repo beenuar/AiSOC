@@ -1,0 +1,41 @@
+id: splunk-security-content-afed80b2-d34b-11eb-a952-acde48001122
+name: Powershell Enable SMB1Protocol Feature
+description: The following analytic detects the enabling of the SMB1 protocol via
+  `powershell.exe`. It leverages PowerShell script block logging (EventCode 4104)
+  to identify the execution of the `Enable-WindowsOptionalFeature` cmdlet with the
+  `SMB1Protocol` parameter. This activity is significant because enabling SMB1 can
+  facilitate lateral movement and file encryption by ransomware, such as RedDot. If
+  confirmed malicious, this action could allow an attacker to propagate through the
+  network, encrypt files, and potentially disrupt business operations.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1027.005
+  categories:
+  - endpoint
+references:
+- https://app.any.run/tasks/c0f98850-af65-4352-9746-fbebadee4f05/
+- https://www.splunk.com/en_us/blog/security/hunting-for-malicious-powershell-using-script-block-logging.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`powershell` EventCode=4104 ScriptBlockText = \"*Enable-WindowsOptionalFeature*\"\
+    \ ScriptBlockText = \"*SMB1Protocol*\"\n  | fillnull\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY dest signature signature_id\n  \
+    \     user_id vendor_product EventID\n       Guid Opcode Name\n       Path ProcessID\
+    \ ScriptBlockId\n       ScriptBlockText\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `powershell_enable_smb1protocol_feature_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: afed80b2-d34b-11eb-a952-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/powershell_enable_smb1protocol_feature.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

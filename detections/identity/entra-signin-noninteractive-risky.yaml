@@ -1,0 +1,24 @@
+id: det-identity-259
+name: Entra Risky Non-Interactive Sign-In
+description: A non-interactive sign-in is a token being used, not a person signing in, so no factor is
+  presented.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550.001
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-signin
+detection:
+  condition: |
+    event_type == "azure.entra.signin.risky"
+    AND isInteractive == false
+false_positives:
+- Staff member travelling, on a corporate VPN, or using a client the tenant still permits
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

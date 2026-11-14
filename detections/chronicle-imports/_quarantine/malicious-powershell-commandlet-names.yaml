@@ -1,0 +1,124 @@
+id: chronicle-detection-rules-malicious-powershell-commandlet-names
+name: malicious_powershell_commandlet_names
+description: malicious_powershell_commandlet_names
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule malicious_powershell_commandlet_names {\n meta:\n    author\
+    \ = \"Markus Neis\"\n    description = \"Detects the creation of known powershell\
+    \ scripts for exploitation  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/hJsJJ9FZB46O\"\n    version\
+    \ = \"0.01\"\n    created = \"2018/04/07\"\n    product = \"windows\"\n    service\
+    \ = \"sysmon\"\n    mitre = \"execution, t1086\"\n\n  events:\n($selection.metadata.product_event_type\
+    \ = \"11\" and (re.regex($selection.target.file.full_path, `.*\\\\Invoke-DllInjection\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-WmiCommand\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-GPPPassword\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-Keystrokes\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-VaultCredential\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-CredentialInjection\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-Mimikatz\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-NinjaCopy\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-TokenManipulation\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Out-Minidump\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\VolumeShadowCopyTools\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ReflectivePEInjection\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-TimedScreenshot\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-UserHunter\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Find-GPOLocation\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ACLScanner\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-DowngradeAccount\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-ServiceUnquoted\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-ServiceFilePermission\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-ServicePermission\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ServiceAbuse\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Install-ServiceBinary\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-RegAutoLogon\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-VulnAutoRun\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-VulnSchTask\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-UnattendedInstallFile\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-WebConfig\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-ApplicationHost\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-RegAlwaysInstallElevated\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-Unconstrained\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Add-RegBackdoor\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Add-ScrnSaveBackdoor\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Gupt-Backdoor\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ADSBackdoor\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Enabled-DuplicateToken\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PsUaCme\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Remove-Update\\.ps1`) or\
+    \ re.regex($selection.target.file.full_path, `.*\\\\Check-VM\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Get-LSASecret\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\
+    \\Get-PassHashes\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\\
+    Show-TargetScreen\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\\
+    Port-Scan\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PoshRatHttp\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PowerShellTCP\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PowerShellWMI\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Add-Exfiltration\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Add-Persistence\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Do-Exfiltration\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Start-CaptureServer\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ShellCode\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-ChromeDump\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-ClipboardContents\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-FoxDump\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-IndexedItem\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-Screenshot\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-Inveigh\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-NetRipper\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-EgressCheck\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PostExfil\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PSInject\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-RunAs\\.ps1`) or\
+    \ re.regex($selection.target.file.full_path, `.*\\\\MailRaider\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\New-HoneyHash\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\
+    \\Set-MacAttribute\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\
+    \\Invoke-DCSync\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\\
+    Invoke-PowerDump\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\\
+    Exploit-Jboss\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-ThunderStruck\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Invoke-VoiceTroll\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Set-Wallpaper\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-InveighRelay\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-PsExec\\.ps1`) or\
+    \ re.regex($selection.target.file.full_path, `.*\\\\Invoke-SSHCommand\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-SecurityPackages\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Install-SSP\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Invoke-BackdoorLNK\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\PowerBreach\\.ps1`) or\
+    \ re.regex($selection.target.file.full_path, `.*\\\\Get-SiteListPassword\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\Get-System\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-BypassUAC\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-Tater\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\
+    \\Invoke-WScriptBypassUAC\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\PowerUp\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\\
+    PowerView\\.ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Get-RickAstley\\\
+    .ps1`) or re.regex($selection.target.file.full_path, `.*\\\\Find-Fruit\\.ps1`)\
+    \ or re.regex($selection.target.file.full_path, `.*\\\\HTTP-Login\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Find-TrustedDocuments\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-Paranoia\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-WinEnum\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-ARPScan\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-PortScan\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-ReverseDNSLookup\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-SMBScanner\\.ps1`) or re.regex($selection.target.file.full_path,\
+    \ `.*\\\\Invoke-Mimikittenz\\.ps1`)))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: malicious_powershell_commandlet_names
+provenance:
+  source: chronicle/detection-rules
+  source_id: malicious_powershell_commandlet_names
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/sysmon/malicious_powershell_commandlet_names.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

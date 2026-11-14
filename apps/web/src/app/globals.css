@@ -1,0 +1,402 @@
+@import "tailwindcss";
+@config "../../tailwind.config.ts";
+@source "../../src";
+@source "../../../../packages/ui/src";
+
+/*
+ * ─────────────────────── Theme tokens (WS-F1) ───────────────────────
+ *
+ * The console ships dark-by-default; light mode is opt-in via the user
+ * preference toggle (mounted in `TopBar`) which writes either:
+ *   <html data-theme="dark">
+ *   <html data-theme="light">
+ *   <html data-theme="system">  ← resolved into "dark" or "light" by the
+ *                                  ThemeProvider before paint.
+ *
+ * The variables below cover the chrome surfaces a buyer encounters first
+ * (body, AppShell, TopBar, Sidebar, marketing landing, dashboard welcome,
+ * playbook gallery). The rest of the app is still dark-only by design —
+ * see `apps/docs/docs/operations/theming.md` for the migration playbook
+ * we use to roll surfaces over without a flag day.
+ *
+ * The tokens are referenced directly by `tailwind.config.ts` so that any
+ * Tailwind utility built on these palettes (e.g. `bg-surface-card`,
+ * `text-fg-secondary`, `border-surface-divider`) flips automatically
+ * when `data-theme` changes.
+ */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces — page bg up through hovered card */
+  --surface-base: #0a0d14;
+  --surface-raised: #11151f;
+  --surface-card: #141926;
+  --surface-hover: #1a2030;
+  --surface-subtle: #0d1119;
+
+  /* Landing-only gradient stops (T6.5). Mirrors
+     `docs/design/landing-page-design-tokens.md` §2.4. Hex stops match the
+     existing `brand.*` palette so a buyer-to-product transition keeps the
+     same hue family across the marketing site and the console. */
+  --landing-grad-hero: linear-gradient(to bottom right, #1d4ed8 0%, #0a0d14 80%);
+  --landing-grad-pillars: linear-gradient(to right, #3b82f6 0%, #8b5cf6 100%);
+  --landing-grad-cta: linear-gradient(to bottom right, #3b82f6 0%, #1d4ed8 100%);
+
+  /* Borders / dividers — slate-400 with low alpha so they tint the surface
+     instead of cutting hard lines. */
+  --surface-border: rgba(148, 163, 184, 0.12);
+  --surface-divider: rgba(148, 163, 184, 0.08);
+
+  /* Foregrounds — high → muted */
+  --fg-primary: #e2e8f0;     /* slate-200,  body text default */
+  --fg-secondary: #cbd5e1;   /* slate-300,  paragraph copy */
+  --fg-muted: #9ca3af;       /* gray-400,   captions, labels */
+  --fg-subtle: #6b7280;      /* gray-500,   timestamps, helper text */
+  --fg-inverse: #0f172a;     /* slate-900,  text on light buttons */
+
+  /* Compatibility: legacy --background / --foreground used by `body`. */
+  --background: var(--surface-base);
+  --foreground: var(--fg-primary);
+
+  /* Selection — slightly brand-tinted for both themes. */
+  --selection-bg: rgba(59, 130, 246, 0.35);
+  --selection-fg: #ffffff;
+
+  /* Scrollbar — semi-transparent so the same rule works in both themes. */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="light"] {
+  /* Surfaces — paper-white base, slightly tinted raised/card so cards have
+     definition without a hard shadow. */
+  --surface-base: #f8fafc;       /* slate-50,  page bg */
+  --surface-raised: #ffffff;     /* card containers */
+  --surface-card: #ffffff;       /* same as raised, kept distinct so we
+                                    can introduce a subtle tint later
+                                    without touching consumers */
+  --surface-hover: #eef2f7;      /* slate-100/200, hovered rows */
+  --surface-subtle: #f1f5f9;     /* slate-100, deeper tint */
+
+  --surface-border: rgba(15, 23, 42, 0.12);
+  --surface-divider: rgba(15, 23, 42, 0.06);
+
+  --fg-primary: #0f172a;         /* slate-900 */
+  --fg-secondary: #334155;       /* slate-700 */
+  --fg-muted: #64748b;           /* slate-500 */
+  --fg-subtle: #94a3b8;          /* slate-400 */
+  --fg-inverse: #f8fafc;
+
+  --background: var(--surface-base);
+  --foreground: var(--fg-primary);
+
+  --selection-bg: rgba(37, 99, 235, 0.18);
+  --selection-fg: #0f172a;
+
+  --scrollbar-thumb: rgba(15, 23, 42, 0.18);
+  --scrollbar-thumb-hover: rgba(15, 23, 42, 0.32);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* Tells form controls (date pickers, scroll bars on Safari, etc.) which
+     theme to render. The ThemeProvider keeps `data-theme` in sync, but
+     `color-scheme` lets the UA chrome match without the toggle running. */
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--selection-bg);
+  color: var(--selection-fg);
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* Focus */
+:focus-visible {
+  outline: 2px solid rgb(59, 130, 246);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Custom select/input dark theme */
+select {
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3E%3Cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3E%3C/svg%3E");
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  padding-right: 32px;
+}
+
+/* Animated pulse dot */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.pulse-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+/* Skeleton shimmer */
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Slow ping (used for live indicators) */
+@keyframes ping-slow {
+  0% { transform: scale(1); opacity: 0.7; }
+  75%, 100% { transform: scale(2); opacity: 0; }
+}
+
+.animate-ping-slow {
+  animation: ping-slow 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Code blocks */
+code {
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+  font-size: 0.875em;
+}
+
+/* Reduce motion respectfully */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─────────────────────── Landing page (T6.5) ────────────────────────
+ *
+ * Keyframes + utilities used by the marketing landing components under
+ * `apps/web/src/components/landing/` and the Aceternity/MagicUI primitives
+ * vendored at `apps/web/src/components/{aceternity,magicui}/`. Defined as
+ * raw CSS rather than via a Tailwind v4 plugin so we don't depend on
+ * `tailwindcss-animate` (which still targets the v3 config schema and
+ * doesn't compose cleanly with the `@import "tailwindcss"` + `@config`
+ * hybrid we run here). Every loop respects `prefers-reduced-motion` via
+ * the global rule above.
+ */
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-100% - var(--gap, 1rem)));
+  }
+}
+
+@keyframes marquee-vertical {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(calc(-100% - var(--gap, 1rem)));
+  }
+}
+
+@keyframes meteor {
+  0% {
+    transform: rotate(var(--angle, 215deg)) translateX(0);
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: rotate(var(--angle, 215deg)) translateX(-500px);
+    opacity: 0;
+  }
+}
+
+@keyframes border-beam {
+  100% {
+    offset-distance: 100%;
+  }
+}
+
+@keyframes shimmer-slide {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes aurora-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes graph-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.75;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes graph-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-marquee {
+  animation: marquee var(--duration, 40s) linear infinite;
+}
+
+.animate-marquee-vertical {
+  animation: marquee-vertical var(--duration, 40s) linear infinite;
+}
+
+.animate-meteor {
+  animation: meteor var(--duration, 5s) linear infinite;
+}
+
+.animate-graph-pulse {
+  animation: graph-pulse 4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+.animate-graph-flow {
+  stroke-dasharray: 4 8;
+  animation: graph-flow 2.4s linear infinite;
+}
+
+.animate-fade-in-up {
+  animation: fade-in-up 480ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-aurora-shift {
+  animation: aurora-shift var(--aurora-duration, 12s) ease-in-out infinite;
+}
+
+/* Pause infinite marquees on hover or focus so users can read the strip. */
+.marquee-pausable:hover [class*="animate-marquee"],
+.marquee-pausable:focus-within [class*="animate-marquee"] {
+  animation-play-state: paused;
+}
+
+/* ─────────────────────── VelvetEdge (T7.1) ──────────────────────────
+ *
+ * Jewel-tone retheme scoped to the marketing landing routes via the
+ * `.velvet-root` boundary. We do NOT redefine `--surface-base` /
+ * `--fg-primary` here — landing components are migrated to consume the
+ * new `velvet-*` Tailwind utilities (e.g. `bg-velvet-surface-base`,
+ * `text-velvet-content-primary`) so the console chrome keeps its
+ * existing palette unchanged.
+ *
+ * The block below (a) provides a small set of velvet-scoped CSS tokens
+ * the magicui primitives can reach for via `var()` and (b) implements
+ * the spec §Rules #8 reduced-motion fallback: any element marked with
+ * `.velvet-glow` drops its box-shadow when the user has reduced-motion
+ * enabled. Combine with Tailwind utilities like `motion-safe:shadow-glow-emerald-md`
+ * for the same effect at the utility layer.
+ */
+
+.velvet-root {
+  --velvet-surface-base: #0f0f14;
+  --velvet-surface-raised: #181820;
+  --velvet-surface-sunken: #0a0a0e;
+  --velvet-surface-overlay: #22222e;
+  --velvet-content-primary: #f0edf5;
+  --velvet-content-secondary: #c8c2d6;
+  --velvet-content-tertiary: #8e879e;
+  --velvet-emerald: #064e3b;
+  --velvet-emerald-light: #065f46;
+  --velvet-emerald-mint: #34d399;
+  --velvet-ruby: #9f1239;
+  --velvet-ruby-light: #be123c;
+  --velvet-ruby-soft: #fb7185;
+  --velvet-sapphire: #1e3a8a;
+  --velvet-sapphire-soft: #60a5fa;
+  --velvet-sapphire-softer: #93c5fd;
+  --velvet-border: rgba(176, 171, 186, 0.12);
+  --velvet-border-strong: rgba(176, 171, 186, 0.28);
+}
+
+/* Tinted text-selection on landing surfaces so the cursor caret picks up
+   the emerald accent rather than the console's blue. */
+.velvet-root ::selection {
+  background: rgba(52, 211, 153, 0.32);
+  color: #f0edf5;
+}
+
+/* Reduced-motion fallback for jewel-tone glows. The static border + base
+   color alone must remain readable per spec §Rules #8. */
+@media (prefers-reduced-motion: reduce) {
+  .velvet-root .shadow-glow-emerald-sm,
+  .velvet-root .shadow-glow-emerald-md,
+  .velvet-root .shadow-glow-emerald-lg,
+  .velvet-root .shadow-glow-ruby-sm,
+  .velvet-root .shadow-glow-ruby-md,
+  .velvet-root .shadow-glow-sapphire-sm,
+  .velvet-root .shadow-glow-sapphire-md,
+  .velvet-root .velvet-glow {
+    box-shadow: none !important;
+  }
+}

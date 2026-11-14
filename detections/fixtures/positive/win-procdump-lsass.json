@@ -1,0 +1,5 @@
+{
+  "event_id": 1,
+  "process_command_line": "prefix-lsass-suffix",
+  "process_name": "head-procdump.exe"
+}

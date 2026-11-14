@@ -1,0 +1,25 @@
+title: Large Outbound Data Transfer to External Host
+id: aisoc-id-nw-0006-large-egress
+status: stable
+description: |
+  Single internal host transfers > 500MB to an external destination in
+  a short window. Typical exfil pattern for ransomware double-extortion
+  and data theft.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: network
+  service: flow
+tags:
+  - attack.t1041
+  - attack.exfiltration
+  - aisoc.network
+detection:
+  selection:
+    event.category: 'network'
+    network.direction: 'outbound'
+  large:
+    network.bytes_out|gte: 524288000
+  external:
+    enrich.flow.dst_external: true
+  condition: selection and large and external

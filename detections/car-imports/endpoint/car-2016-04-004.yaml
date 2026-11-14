@@ -1,0 +1,37 @@
+id: mitre-car-car-2016-04-004
+name: Successful Local Account Login
+description: The successful use of [Pass The Hash](https://attack.mitre.org/techniques/T1550/002/)
+  for lateral movement between workstations would trigger event ID 4624, with an event
+  level of Information, from the security log. This behavior would be a LogonType
+  of 3 using NTLM authentication where it is not a domain logon and not the ANONYMOUS
+  LOGON account.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1550
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Login
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: 'EventCode == 4624 and [target_user_name] != "ANONYMOUS LOGON" and
+
+      [authentication_package_name] == "NTLM"
+
+      '
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2016-04-004
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2016-04-004.yaml
+notes:
+  car_status: needs_implementation

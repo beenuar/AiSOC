@@ -1,0 +1,56 @@
+id: splunk-security-content-22c03600-f84a-47fa-abaa-ffbe3e72c782
+name: Linux Magic SysRq Key Abuse
+description: 'Detects potential abuse of the Linux Magic SysRq (System Request) key
+  by adversaries with root or sufficient privileges to manipulate or destabilize a
+  system.
+
+  Writing to /proc/sysrq-trigger can crash the system, kill processes, or bypass standard
+  logging.
+
+  Monitoring SysRq abuse helps detect stealthy post-exploitation activity.
+
+  Correlate with related EXECVE or PROCTITLE events to identify the process or user
+  responsible for the access or modification.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1059.004
+  - T1529
+  - T1489
+  - T1499
+  categories:
+  - endpoint
+references:
+- https://www.kernel.org/doc/html/v4.10/_sources/admin-guide/sysrq.txt
+- https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/4/html/reference_guide/s3-proc-sys-kernel
+- https://www.splunk.com/en_us/blog/security/threat-update-awfulshred-script-wiper.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`\n(type=PATH OR type=CWD)\n| rex \"msg=audit\\([^)]*:(?<audit_id>\\\
+    d+)\\)\"\n\n| stats\n  values(type) as types\n  values(name) as names\n  values(nametype)\
+    \ as nametype\n  values(cwd) as cwd_list\n  values(_time) as event_times\n  by\
+    \ audit_id, host\n\n| eval current_working_directory = coalesce(mvindex(cwd_list,\
+    \ 0), \"N/A\")\n| eval candidate_paths = mvmap(names, if(match(names, \"^/\"),\
+    \ names, current_working_directory + \"/\" + names))\n| eval matched_paths = mvfilter(match(candidate_paths,\
+    \ \".*/proc/sysrq-trigger|.*/proc/sys/kernel/sysrq|.*/etc/sysctl.conf\"))\n| eval\
+    \ match_count = mvcount(matched_paths)\n| eval reconstructed_path = mvindex(matched_paths,\
+    \ 0)\n| eval e_time = mvindex(event_times, 0)\n| where match_count > 0\n| rename\
+    \ host as dest\n\n| stats count min(e_time) as firstTime max(e_time) as lastTime\n\
+    \  values(nametype) as nametype\n  by current_working_directory\n     reconstructed_path\n\
+    \     match_count\n     dest\n     audit_id\n\n| `security_content_ctime(firstTime)`\n\
+    | `security_content_ctime(lastTime)`\n| `linux_magic_sysrq_key_abuse_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 22c03600-f84a-47fa-abaa-ffbe3e72c782
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_magic_sysrq_key_abuse.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

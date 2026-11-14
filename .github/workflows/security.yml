@@ -1,0 +1,430 @@
+name: Security
+
+# Phase 2 supply-chain + truth gates. Complements the existing codeql.yml
+# (SAST), security-audit.yml (dependency CVEs), and scorecard.yml.
+#
+# Enforcement policy (honest ratchet):
+#   - HARD gates (fail the build):
+#       * the claim-to-gate matrix ratchet — a new ungated marketing claim
+#         must never merge;
+#       * gitleaks — the whole tree was triaged and every finding is either
+#         fixed or recorded in .gitleaksignore with a written reason, so a
+#         new finding is genuinely new;
+#       * Trivy — HIGH/CRITICAL with a fix available, currently zero. It
+#         was reporting zero before this too, but for the wrong reason:
+#         the pinned release had been deleted upstream, so the download
+#         404'd, the scan ran a binary that was not there, and
+#         continue-on-error turned the whole thing green.
+#   - RATCHETED gates (report every finding, fail on a new one): Semgrep,
+#     checkov, tfsec. Blocking on 215 untriaged findings would red every pull
+#     request on day one and the first response would be to turn the gate
+#     back off, so none of the three fails on its existing findings. What
+#     they now fail on is a *change* in the count, in either direction,
+#     against the ceilings in `.security/allowlist.yml` — enforced by
+#     `scripts/check_scanner_ratchet.py`, which is the first thing in this
+#     repository ever to open that file. The counts used to live in this
+#     comment, where nothing compared them to anything: a pull request adding
+#     twenty findings and one removing twenty produced the same green tick.
+#     They now live in the allow-list, where a run that disagrees with them
+#     fails and prints the number to write.
+#
+# A ratcheted scanner runs its scan under `continue-on-error`, because the
+# scan's own exit status is not the verdict — the count is. That is only safe
+# while something *reads* the outcome, and for Semgrep and checkov nothing
+# did, so either job could report success over a scan that never finished.
+# `continue-on-error` is defined as rewriting a failed step's conclusion to
+# `success`, so the Actions API cannot show this and no amount of run history
+# would have found it; `scripts/check_required_check_substance.py --static`
+# refuses the shape instead. Both now give the scan step an `id` and put a
+# blocking step that reads `steps.<id>.outcome == 'failure'` *ahead of* the
+# ratchet — ahead, because a scan that dies part-way still leaves a short
+# report and the ratchet's shrink-only arm would answer it with "lower the
+# ceiling to N", which would bake the broken scan in.
+#
+# Four of the six jobs here are required checks on `main`: the claim-matrix
+# ratchet, gitleaks, Trivy and checkov. `Semgrep (ratcheted)` is deliberately
+# not, and the reason is measured rather than cautious — it disagrees with
+# itself on an unchanged tree about one run in twenty. See
+# `.security/allowlist.yml` and `.github/required-checks.json`, both of which
+# record the decision so it is not quietly reversed.
+#
+# GitHub native push-protection remains the always-on hard secret gate.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  # ── HARD: every marketing claim maps to a gate (ratchet) ──────────────────
+  claim-gate-matrix:
+    name: Claim-to-gate matrix (ratchet)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Enforce no new NO GATE rows
+        run: python3 scripts/check_claim_gate_matrix.py
+
+      # The ratchet above tallies statuses and never reads the Source column,
+      # and `check_comment_paths.py` reads code comments, which a markdown
+      # table cell is not. Nine rows therefore cited documentation that does
+      # not exist — several of them near misses for real pages, which is the
+      # shape that survives review. The audit backbone pointing at pages a
+      # reader cannot open is worse than a missing row, because a row that
+      # cites a document reads as evidence.
+      - name: Source-citation self-test (header lookup, three bases, refusals)
+        run: python3 scripts/check_claim_matrix_sources.py --self-test
+
+      - name: Every path the matrix cites in its Source column exists
+        run: python3 scripts/check_claim_matrix_sources.py
+
+  # ── HARD: secret scan ─────────────────────────────────────────────────────
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # No `continue-on-error`, on this step or the next. It used to be on
+      # both, and the pairing was the defect rather than the fix: #614 had it
+      # on the scan but not the install, so a flaky download reported a hard
+      # failure with nothing scanned; the correction put it on the install
+      # too, which turned the same blip into a green check with nothing
+      # scanned. For a blocking gate neither is acceptable — an install that
+      # fails has to fail the job, loudly, because "clean" and "did not run"
+      # must never look the same.
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          VERSION=8.21.2
+          # --fail so an HTTP error is not silently written into the tarball and
+          # surfaced later as a confusing `tar` error; --retry for the blips.
+          curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            -o /tmp/gitleaks.tgz
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          sudo mv /tmp/gitleaks /usr/local/bin/gitleaks
+          installed="$(gitleaks version)"
+          echo "installed gitleaks $installed"
+          # Pinned: a silently different version scans with different rules,
+          # and the allow-list is fingerprinted against this one.
+          if [ "$installed" != "$VERSION" ]; then
+            echo "::error title=secret-scan::expected gitleaks $VERSION, got '$installed'"
+            exit 1
+          fi
+
+      # A clean result only means something if the scanner is reading this
+      # tree. With the allow-list moved aside the triaged findings must
+      # reappear; if they do not, gitleaks is scanning nothing and the run
+      # below would report clean for the wrong reason. This uses the repo's
+      # own known-positive corpus rather than a planted secret, so there is
+      # no synthetic credential in the tree and nothing to clean up.
+      - name: The scanner is actually scanning
+        run: |
+          set -euo pipefail
+          mv .gitleaksignore "${RUNNER_TEMP}/.gitleaksignore"
+          status=0
+          gitleaks dir . --redact --exit-code 1 --no-banner >/dev/null 2>&1 || status=$?
+          mv "${RUNNER_TEMP}/.gitleaksignore" .gitleaksignore
+          if [ "$status" -eq 0 ]; then
+            echo "::error title=secret-scan::gitleaks found nothing with the allow-list removed — it is not scanning this tree, so a clean scan proves nothing"
+            exit 1
+          fi
+          echo "confirmed: the scan reads this tree and the allow-list is load-bearing"
+
+      # Blocking. A finding here is either a real secret — rotate it and
+      # remove it from the source — or a false positive that belongs in
+      # .gitleaksignore with a written reason. Re-adding continue-on-error
+      # is not one of the two options.
+      - name: Scan working tree (respects .gitleaksignore)
+        run: gitleaks dir . --redact --exit-code 1 --no-banner
+
+  # ── RATCHETED: SAST beyond CodeQL ─────────────────────────────────────────
+  #
+  # 92 findings against this tree (35 ERROR, 51 WARNING, 3 MEDIUM, 3 INFO).
+  # Too many to block on before they are triaged, and `--error` fails on any
+  # of them — so the scan itself stays non-blocking and the *count* is what
+  # blocks, against the ceiling in `.security/allowlist.yml`.
+  #
+  # The version is pinned exactly. For a ratchet the scanner version is the
+  # behaviour: an unpinned `pip install semgrep` re-baselines the count on
+  # upstream's release schedule, which is indistinguishable from a change in
+  # this tree. The gate compares the version the report declares against the
+  # one the ceiling was measured with and fails if they differ, so a bump
+  # here is an explicit re-measure rather than a silent one.
+  #
+  # The rules are pinned the same way (issue #1099). A pinned binary against
+  # registry packs fetched at scan time was half a pin — two runs on one
+  # branch measured 103/39 then 104/40 while the commits in between changed
+  # zero scanned files. The five packs are vendored under .security/semgrep/
+  # by scripts/vendor_semgrep_packs.py; the step below proves the files match
+  # their manifest, and the ratchet proves their combined digest is the one
+  # the ceiling's `rules_sha256` was measured with. Refreshing the packs is a
+  # deliberate re-measure, exactly like bumping the binary.
+  semgrep:
+    name: Semgrep (ratcheted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install semgrep
+        run: pip install --quiet semgrep==1.86.0
+      # Fails on a vendored pack that disagrees with its manifest — a
+      # hand-edit, a truncated fetch, a pack on disk the manifest never
+      # recorded. Network-free on purpose: comparing against the live
+      # registry would fail whenever upstream moves, which is exactly when
+      # the pin is doing its job.
+      - name: The vendored rule packs match their manifest
+        run: python3 scripts/vendor_semgrep_packs.py --check
+      # `--error` is gone: it exits non-zero on any finding, which would make
+      # the exit status carry the same information as the count and force
+      # `continue-on-error` back onto the ratchet step below with it.
+      #
+      # `continue-on-error` here is deliberate and now *read*, by the step
+      # below. Without `--error`, semgrep exits 0 whether or not it finds
+      # anything, so a non-zero status means the scan itself failed — an
+      # unfetchable rule config, a crash — and not a finding.
+      - name: Scan
+        id: scan
+        continue-on-error: true
+        run: |
+          semgrep --json --output semgrep.json --disable-version-check \
+            --config .security/semgrep/security-audit.yaml \
+            --config .security/semgrep/owasp-top-ten.yaml \
+            --config .security/semgrep/python.yaml \
+            --config .security/semgrep/typescript.yaml \
+            --config .security/semgrep/react.yaml \
+            --exclude plans/ \
+            services/ apps/ packages/ scripts/
+      # Blocking, and this is the step that makes the one above safe.
+      # `continue-on-error` rewrites a failed step's *conclusion* to success,
+      # so without something reading its `outcome` the job reports green over
+      # a scan that died — the shape
+      # `scripts/check_required_check_substance.py` refuses by name, and the
+      # reason this check could not be required.
+      #
+      # Ahead of the ratchet on purpose. A scan that failed part-way can still
+      # leave a short `semgrep.json`, and the ratchet's shrink-only arm would
+      # read that short count and print "lower it to N" — advice that would
+      # bake a broken scan into the ceiling.
+      - name: The scan itself did not fail
+        if: steps.scan.outcome == 'failure'
+        run: |
+          echo "::error title=semgrep::semgrep exited non-zero. Without \`--error\` that is the scan failing, not a finding, so the count below would describe a partial run."
+          exit 1
+      # Blocking. No `continue-on-error`: a missing or truncated report means
+      # the scan did not finish, and the gate says so rather than passing.
+      - name: Ratchet the finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool semgrep --report semgrep.json
+
+  # ── HARD: filesystem vuln scan (complements dependency SCA) ───────────────
+  trivy-fs:
+    name: Trivy filesystem
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Still a pinned binary fetched in a `run:` step rather than the
+      # marketplace action: the action's version tags proved unreliable and
+      # this is the form that has stayed working.
+      #
+      # `set -e` and `--fail` matter now that this blocks. The previous
+      # `set -uo pipefail` with no `--fail` wrote the 404 body into the
+      # tarball, `tar` failed, and the scan then invoked a `trivy` that did
+      # not exist — which `continue-on-error` reported as success. That is
+      # not hypothetical: the pin was 0.55.2 and **Trivy had deleted that
+      # release**, so this job downloaded nothing and scanned nothing while
+      # reporting green. Upstream prunes old releases, so a pin here rots on
+      # their schedule rather than ours; when it 404s, move it to a tag that
+      # still exists and re-measure before trusting the result.
+      - name: Install Trivy
+        run: |
+          set -euo pipefail
+          VERSION=0.74.0
+          url="https://github.com/aquasecurity/trivy/releases/download/v${VERSION}/trivy_${VERSION}_Linux-64bit.tar.gz"
+          if ! curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors "$url" -o /tmp/trivy.tgz; then
+            echo "::error title=trivy::could not download $url — Trivy prunes old releases, so check whether v${VERSION} still exists and bump the pin"
+            exit 1
+          fi
+          tar -xzf /tmp/trivy.tgz -C /tmp trivy
+          /tmp/trivy --version
+
+      # Blocking, at zero findings as of this change. HIGH and CRITICAL only,
+      # and only where a fixed version exists — an unfixable advisory cannot
+      # be actioned by the person whose pull request it reds, and blocking on
+      # one would teach people to bypass the gate rather than fix anything.
+      # A newly published CVE against a pinned dependency will red pull
+      # requests until it is upgraded. That is the intended cost.
+      # `--ignorefile` is explicit because Trivy only auto-discovers the plain
+      # `.trivyignore` format; the YAML variant (which carries per-entry path
+      # scoping and `expired_at`, matching the expiry contract of
+      # scripts/security_audit_ignores.txt) is read only when named. Verified
+      # both ways locally: without the flag the suppressed findings still
+      # fail the scan, with it they are honoured and anything out of scope
+      # still reds.
+      - name: Scan filesystem for fixable HIGH/CRITICAL
+        run: |
+          set -euo pipefail
+          /tmp/trivy fs --severity HIGH,CRITICAL --ignore-unfixed --skip-dirs plans --ignorefile .trivyignore.yaml --exit-code 1 .
+
+  # ── RATCHETED: IaC misconfig scan ─────────────────────────────────────────
+  #
+  # checkov reports 91 failed checks against infra/terraform (164 passing);
+  # tfsec reports 32 findings there (7 CRITICAL, 5 HIGH, 2 MEDIUM, 18 LOW).
+  # Neither scan fails on those — promoting them outright would red every
+  # pull request over pre-existing infrastructure defaults that no single
+  # change introduced. What fails is a count that no longer matches the
+  # ceiling in `.security/allowlist.yml`, in either direction.
+  #
+  # tfsec runs as a pinned binary rather than through the marketplace action,
+  # for the two reasons the Trivy job above already records: the action's
+  # version tags proved unreliable, and the ratchet needs the JSON report on
+  # disk. `--soft-fail` keeps the scan's own exit status out of it so the
+  # count is the only thing that decides.
+  # One job each, not one job for both. They shared a job while neither
+  # blocked, and the moment the ratchet made the steps hard the first
+  # scanner to breach its ceiling ended the job before the second one ran —
+  # so a real count for tfsec was unobtainable whenever checkov was red.
+  # A gate that can stop another gate from measuring is a gate that reports
+  # on whichever half happened to run first.
+  iac-checkov:
+    name: IaC scan (checkov, ratcheted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      # Pinned for the same reason checkov itself is. The helm half of this
+      # scan runs whatever `helm` is on PATH, and trusting the runner image
+      # for it ended measurably: when `ubuntu-latest` rolled 24.04 -> 26.04
+      # (2026-11-09), the image's Helm moved 3.22.1 -> 4.3.1, checkov 3.2.334
+      # could not drive Helm 4, and it dropped the entire helm framework from
+      # the report while still exiting 1 — 272 findings quietly became 133,
+      # which only the ratchet's shrink-only arm noticed. Same version the
+      # chart's own render gate (helm.yml) and release.yml pin.
+      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+        with:
+          version: v3.18.5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      # Its own step, and blocking. The install used to sit inside the scan
+      # step under `continue-on-error`, so a failed `pip install` was
+      # absorbed and the only symptom was the ratchet below complaining
+      # about a report that was never written.
+      - name: Install checkov
+        run: pip install --quiet checkov==3.2.334
+      # `continue-on-error` here is deliberate and now *read*, by the step
+      # below. It replaces a trailing `|| true`, which discarded every exit
+      # code checkov has — the one that means "I found things" and the one
+      # that means "I could not run" alike.
+      - name: checkov (terraform + helm)
+        id: checkov
+        continue-on-error: true
+        run: |
+          # `--output-file-path .` writes ./results_json.json; checkov treats
+          # a directory argument that way rather than honouring a filename.
+          status=0
+          checkov -d infra/terraform -d infra/helm --quiet --compact \
+            -o json --output-file-path . || status=$?
+          # Measured against the pinned 3.2.334: 0 = no failed checks, 1 =
+          # failed checks, 2 = a usage error. 1 is the normal state here —
+          # there are 219 of them — and deciding on it is the ratchet's job,
+          # not this step's. Anything above 1 is checkov failing to run.
+          #
+          # `--soft-fail` would be the obvious way to write this and is the
+          # wrong one: measured, it collapses 1 to 0 but leaves 2 alone,
+          # which buys nothing, and it is silent about the case that matters
+          # most — a `-d` naming a directory that does not exist exits 0
+          # under every combination, logging an ERROR and scanning what is
+          # left. That one is caught downstream instead, by the ratchet's
+          # shrink-only arm, because a vanished directory shows up as a
+          # count below the ceiling.
+          if [ "$status" -gt 1 ]; then
+            echo "::error title=iac-checkov::checkov exited $status — that is the scan failing to run, not a finding"
+            exit "$status"
+          fi
+      # Blocking, and this is the step that makes the one above safe.
+      # `continue-on-error` rewrites a failed step's *conclusion* to success,
+      # so without something reading its `outcome` the job reports green over
+      # a scan that died — the shape
+      # `scripts/check_required_check_substance.py` refuses by name, and the
+      # reason this check could not be required.
+      #
+      # Ahead of the ratchet on purpose. A scan that failed part-way can
+      # still leave a short `results_json.json`, and the ratchet's
+      # shrink-only arm would read that short count and print "lower it to
+      # N" — advice that would bake a broken scan into the ceiling.
+      - name: The scan itself did not fail
+        if: steps.checkov.outcome == 'failure'
+        run: |
+          echo "::error title=iac-checkov::checkov did not complete, so the count below would describe a partial scan"
+          exit 1
+      # A framework can vanish from the report while checkov exits 1 as usual
+      # — that is how the Helm 4 incident above presented, and "a vanished
+      # directory shows up as a count below the ceiling" turned out to be the
+      # truth but not the whole of it: the shrink-only arm fired, and its
+      # remediation text said to lower the ceiling, which would have baked the
+      # broken scan in. Require the frameworks the two scanned directories
+      # must produce, so a lost half fails with its own name instead.
+      - name: Both halves of the scan are in the report
+        run: |
+          python3 - <<'EOF'
+          import json
+          blocks = json.load(open("results_json.json"))
+          blocks = blocks if isinstance(blocks, list) else [blocks]
+          present = {b.get("check_type") for b in blocks}
+          missing = {"helm", "terraform"} - present
+          if missing:
+              raise SystemExit(
+                  f"checkov's report carries no {sorted(missing)} results while infra/ names both — "
+                  "a framework was dropped (helm binary incompatibility, vanished directory), and a "
+                  "shrunken count must not reach the ratchet as though the findings were fixed."
+              )
+          print(f"frameworks in the report: {sorted(p for p in present if p)}")
+          EOF
+      - name: Ratchet the checkov finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
+
+  iac-tfsec:
+    name: IaC scan (tfsec, ratcheted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+      - name: Install tfsec
+        run: |
+          set -euo pipefail
+          VERSION=1.28.13
+          url="https://github.com/aquasecurity/tfsec/releases/download/v${VERSION}/tfsec-linux-amd64"
+          if ! curl -sSL --fail --retry 5 --retry-delay 5 --retry-all-errors "$url" -o /tmp/tfsec; then
+            echo "::error title=tfsec::could not download $url — check whether v${VERSION} still exists and bump the pin"
+            exit 1
+          fi
+          chmod +x /tmp/tfsec
+          # tfsec's JSON report carries no version field, so the ratchet's
+          # version-drift arm has nothing in the report to compare against.
+          # The binary's own answer is the robust source: the pinned URL says
+          # what was asked for, a cached or substituted binary would still
+          # satisfy it, and only this says what actually ran. Same shape as
+          # the gitleaks job above, which has checked its pin this way for
+          # exactly the same reason.
+          installed="$(/tmp/tfsec --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+          echo "installed tfsec ${installed:-unknown}"
+          if [ "$installed" != "$VERSION" ]; then
+            echo "::error title=iac-tfsec::expected tfsec $VERSION, got '${installed:-nothing}'"
+            exit 1
+          fi
+          echo "TFSEC_VERSION=$installed" >> "$GITHUB_ENV"
+      - name: tfsec (terraform)
+        run: /tmp/tfsec infra/terraform --format json --out tfsec.json --soft-fail
+      - name: Ratchet the tfsec finding count
+        run: python3 scripts/check_scanner_ratchet.py --tool tfsec --report tfsec.json --tool-version "$TFSEC_VERSION"

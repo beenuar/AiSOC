@@ -1,0 +1,43 @@
+id: splunk-security-content-be254a5c-63e7-11ec-89da-acde48001122
+name: Linux Sudoers Tmp File Creation
+description: The following analytic detects the creation of the "sudoers.tmp" file,
+  which occurs when editing the /etc/sudoers file using visudo or another editor on
+  a Linux platform. This detection leverages filesystem data to identify the presence
+  of "sudoers.tmp" files. Monitoring this activity is crucial as adversaries may exploit
+  it to gain elevated privileges on a compromised host. If confirmed malicious, this
+  activity could allow attackers to modify sudoers configurations, potentially granting
+  them unauthorized access to execute commands as other users, including root, thereby
+  compromising the system's security.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1548.003
+  categories:
+  - endpoint
+references:
+- https://forum.ubuntuusers.de/topic/sudo-visudo-gibt-etc-sudoers-tmp/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_path\
+    \ IN (\"*sudoers.tmp*\")\n  BY Filesystem.action Filesystem.dest Filesystem.file_access_time\n\
+    \     Filesystem.file_create_time Filesystem.file_hash Filesystem.file_modify_time\n\
+    \     Filesystem.file_name Filesystem.file_path Filesystem.file_acl\n     Filesystem.file_size\
+    \ Filesystem.process_guid Filesystem.process_id\n     Filesystem.user Filesystem.vendor_product\n\
+    | `drop_dm_object_name(Filesystem)`\n| `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `linux_sudoers_tmp_file_creation_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: be254a5c-63e7-11ec-89da-acde48001122
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_sudoers_tmp_file_creation.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,4 @@
+{
+  "cmdline": "defaults write loginwindow LoginHook",
+  "event_type": "osquery_query_row"
+}

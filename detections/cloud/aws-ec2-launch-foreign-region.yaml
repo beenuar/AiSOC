@@ -1,0 +1,25 @@
+id: det-cloud-005
+name: AWS EC2 Instance Launched in Unauthorized Region
+description: AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS EC2 Instance Launched
+  in Unauthorized Region'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1578.002
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: cloudtrail
+detection:
+  condition: |
+    event_name == "RunInstances"
+    AND aws_region NOT IN ["us-east-1", "us-west-2", "eu-west-1"]
+false_positives:
+- DR/failover testing (announced)
+- Approved expansion to new region (change ticket)
+playbook: tpl-cloud-anomaly
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

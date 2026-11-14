@@ -1,0 +1,40 @@
+id: splunk-security-content-294c4686-63dd-4fe6-93a2-ca807626704a
+name: Amazon EKS Kubernetes cluster scan detection
+description: The following analytic detects unauthenticated requests to an Amazon
+  EKS Kubernetes cluster, specifically identifying actions by the "system:anonymous"
+  user. It leverages AWS CloudWatch Logs data, focusing on user agents and authentication
+  details. This activity is significant as it may indicate unauthorized scanning or
+  probing of the Kubernetes cluster, which could be a precursor to an attack. If confirmed
+  malicious, this could lead to unauthorized access, data exfiltration, or disruption
+  of services within the Kubernetes environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1526
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`aws_cloudwatchlogs_eks` \"user.username\"=\"system:anonymous\" userAgent!=\"\
+    AWS Security Scanner\"\n  | rename sourceIPs{} as src_ip\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime values(responseStatus.reason) values(source)\
+    \ as cluster_name values(responseStatus.code) values(userAgent) as http_user_agent\
+    \ values(verb) values(requestURI)\n    BY src_ip user.username user.groups{}\n\
+    \  | `security_content_ctime(lastTime)`\n  | `security_content_ctime(firstTime)`\n\
+    \  | `amazon_eks_kubernetes_cluster_scan_detection_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 294c4686-63dd-4fe6-93a2-ca807626704a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/amazon_eks_kubernetes_cluster_scan_detection.yml
+notes:
+  splunk_status: experimental
+  splunk_data_source: []
+  quarantine_reason: 'upstream status: experimental'

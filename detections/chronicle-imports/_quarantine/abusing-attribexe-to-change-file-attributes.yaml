@@ -1,0 +1,38 @@
+id: chronicle-detection-rules-abusing-attribexe-to-change-file-attributes
+name: abusing_attribexe_to_change_file_attributes
+description: abusing_attribexe_to_change_file_attributes
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "rule abusing_attribexe_to_change_file_attributes {\n meta:\n \
+    \   author = \"Sreeman\"\n    description = \"Detects possible abuse of attrib.exe\
+    \ to hide files and folder or to mark a file as a system file  License: https://github.com/Neo23x0/sigma/blob/master/LICENSE.Detection.Rules.md.\"\
+    \n    reference = \"https://tdm.socprime.com/tdm/info/djaZYE9kUyp8\"\n    version\
+    \ = \"0.01\"\n    created = \"2020/03/01\"\n    product = \"Windows\"\n    mitre\
+    \ = \"t1158, defense_evasion, persistence\"\n\n  events:\n(re.regex($selection.target.process.command_line,\
+    \ `.*attrib\\.exe \\+h.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*attrib\\.exe \\+s.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*attrib\\.exe \\+r.*`) or re.regex($selection.target.process.command_line,\
+    \ `.*attrib\\.exe -h.*`) or re.regex($selection.target.process.command_line, `.*attrib\\\
+    .exe -s.*`) or re.regex($selection.target.process.command_line, `.*attrib\\.exe\
+    \ -r.*`))\n\n  condition:\n    $selection\n}"
+  chronicle_rule_name: abusing_attribexe_to_change_file_attributes
+provenance:
+  source: chronicle/detection-rules
+  source_id: abusing_attribexe_to_change_file_attributes
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/_deprecated/soc_prime_rules/threat_hunting/windows/abusing_attrib_exe_to_change_file_attributes.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

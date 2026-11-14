@@ -1,0 +1,23 @@
+id: det-identity-052
+name: Authentication Success For Recently Deleted User
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Authentication
+  Success For Recently Deleted User'.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: auth
+detection:
+  condition: |
+    event_type == "auth_success"
+    AND user_state == "deleted"
+false_positives: []
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

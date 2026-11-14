@@ -1,0 +1,4 @@
+{
+  "event_type": "delete_networkpolicy",
+  "namespace": "prod"
+}

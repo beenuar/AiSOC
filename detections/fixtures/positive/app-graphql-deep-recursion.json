@@ -1,0 +1,5 @@
+{
+  "event_type": "http_request",
+  "query_depth": 110.0,
+  "uri": "/graphql"
+}

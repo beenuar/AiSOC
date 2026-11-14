@@ -1,0 +1,124 @@
+id: oauth-abuse-response-v1
+name: OAuth Application Abuse Response
+description: >
+  Responds to OAuth application abuse including consent phishing, malicious
+  app grants, and unauthorized OAuth token usage. Revokes malicious app access,
+  audits all consented apps, and notifies affected users.
+version: "1.0.0"
+author: Beenu - beenu@cyble.com
+enabled: true
+tags:
+  - oauth
+  - identity
+  - saas
+  - consent-phishing
+  - app-abuse
+
+trigger:
+  on: alert
+  severity:
+    - medium
+    - high
+    - critical
+  tags:
+    - oauth-abuse
+
+steps:
+  - id: enrich-oauth
+    name: Enrich OAuth Application Event
+    type: enrich
+    params:
+      source: identity_provider
+      fields:
+        - username
+        - email
+        - app_id
+        - app_name
+        - app_publisher
+        - permissions_granted
+        - grant_time
+        - data_accessed
+        - tenant_id
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: investigate-app
+    name: Investigate OAuth App Reputation
+    type: investigate
+    params:
+      query: "oauth_app_reputation app_id={{ alert.app_id }} publisher={{ alert.app_publisher }}"
+      context_fields:
+        - alert.app_id
+        - alert.app_name
+        - alert.permissions_granted
+    timeout_seconds: 45
+    on_failure: continue
+
+  - id: check-permissions
+    name: Check Dangerous Permissions
+    type: condition
+    condition:
+      field: alert.permissions_granted
+      operator: contains
+      value: "Mail.ReadWrite"
+    next_true: revoke-app-tenant-wide
+    next_false: revoke-user-consent
+
+  - id: revoke-app-tenant-wide
+    name: Revoke OAuth App Tenant-Wide
+    type: http
+    params:
+      method: DELETE
+      url: "{{ env.IDP_API_URL }}/tenants/{{ alert.tenant_id }}/apps/{{ alert.app_id }}/consent"
+      body:
+        reason: "Malicious OAuth app — dangerous permissions — playbook {{ id }}"
+    timeout_seconds: 30
+    on_failure: abort
+    retry_max: 2
+
+  - id: revoke-user-consent
+    name: Revoke User OAuth Consent
+    type: http
+    params:
+      method: DELETE
+      url: "{{ env.IDP_API_URL }}/users/{{ alert.username }}/apps/{{ alert.app_id }}/consent"
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: notify-user
+    name: Notify Affected User
+    type: notify
+    params:
+      channel: email
+      to: "{{ alert.email }}"
+      subject: "Security Alert: Unauthorized app access revoked on your account"
+      message: |
+        An unauthorized application has been detected on your account.
+
+        App: {{ alert.app_name }} ({{ alert.app_publisher }})
+        Permissions: {{ alert.permissions_granted }}
+        Granted: {{ alert.grant_time }}
+
+        Access has been revoked. Review your connected apps at your account settings.
+        Contact security if you have questions: security@company.com
+    timeout_seconds: 20
+    on_failure: continue
+
+  - id: create-ticket
+    name: Create OAuth Abuse Ticket
+    type: create_ticket
+    params:
+      title: "OAUTH-ABUSE: {{ alert.app_name }} — {{ alert.username }}"
+      severity: P2
+      assignee_group: security-ops
+    timeout_seconds: 30
+    on_failure: continue
+
+  - id: close-case
+    name: Close OAuth Abuse Case
+    type: close_case
+    params:
+      status: remediated
+      resolution: "App consent revoked; user notified; app reputation added to blocklist."
+    timeout_seconds: 15
+    on_failure: continue

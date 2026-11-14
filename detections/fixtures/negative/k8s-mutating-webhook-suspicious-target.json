@@ -1,0 +1,5 @@
+{
+  "object_resource": "mutatingwebhookconfigurations",
+  "verb": "__benign__",
+  "webhook_url_external": true
+}

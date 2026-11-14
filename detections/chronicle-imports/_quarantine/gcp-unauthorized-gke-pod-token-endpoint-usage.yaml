@@ -1,0 +1,69 @@
+id: chronicle-detection-rules-gcp-unauthorized-gke-pod-token-endpoint-usage
+name: gcp_unauthorized_gke_pod_token_endpoint_usage
+description: gcp_unauthorized_gke_pod_token_endpoint_usage
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2025 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by law or agreed to in writing, software\n * distributed under the License is\
+    \ distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY\
+    \ KIND, either express or implied.\n * See the License for the specific language\
+    \ governing permissions and\n * limitations under the License.\n */\n\nrule gcp_unauthorized_gke_pod_token_endpoint_usage\
+    \ {\n\n  meta:\n    author = \"Drew Pilarski - Tempus AI\"\n    description =\
+    \ \"Alerts when an authorization token originating from GKE activity is subsequently\
+    \ used within a command line on an endpoint system, suggesting potential credential\
+    \ exfiltration and reuse.\"\n    rule_id = \"mr_c9a0cb63-0e35-45eb-8b43-ae48385985dc\"\
+    \n    rule_name = \"GCP_Uunauthorized_GKE_Pod_Token_Endpoint_Usage\"\n    tactic\
+    \ = \"TA0008\"\n    technique = \"T1550.001\"\n    type = \"Alert\"\n    platform\
+    \ = \"GCP\"\n    data_source = \"Cloud Audit Logs\"\n    severity = \"Medium\"\
+    \  // Adjust based on your risk assessment\n    priority = \"Medium\"  // Adjust\
+    \ based on your incident response process\n\n  events:\n    // This pulls the\
+    \ auth token from application in kubernetes events\n    $app_token.metadata.vendor_name\
+    \ = \"Google\"\n    $app_token.metadata.log_type = \"GCP_CLOUDAUDIT\"\n    $app_token.metadata.base_labels.log_types\
+    \ = \"KUBERNETES_NODE\"\n    $namespace = $app_token.metadata.base_labels.namespaces\n\
+    \    $traceIdValue = $app_token.about.labels[\"traceId\"]\n    $pod_name = $app_token.target.resource_ancestors.attribute.labels[\"\
+    pod_name\"]\n    $auth_token = strings.concat(\"Authorization: \", $app_token.about.labels[\"\
+    Authorization\"])\n\n    //This block enriches the auth token statement sinces\
+    \ its missing critical field\n    $k8_enrich.metadata.vendor_name = \"Google\"\
+    \n    $k8_enrich.metadata.log_type = \"GCP_CLOUDAUDIT\"\n    $k8_enrich.metadata.base_labels.log_types\
+    \ = \"KUBERNETES_NODE\"\n    $traceIdValue = $k8_enrich.about[0].labels[0].value\n\
+    \    $k8_enrich.target.ip != \"\"\n    $pod_ip_1 = $k8_enrich.target.ip[0]\n \
+    \   $email = $k8_enrich.target.user.email_addresses\n\n    $comp_token.metadata.event_type\
+    \ = \"PROCESS_LAUNCH\"\n    $comp_token.metadata.log_type = \"CS_EDR\"\n    $comp_token.target.process.command_line\
+    \ = /Bearer/\n    $auth_token = strings.concat(\"Authorization: \", re.capture($comp_token.target.process.command_line,\
+    \ /Bearer [^\\ |^\\\"]*/))\n    $computer_name = $comp_token.principal.asset.hostname\n\
+    \    $tar_process = $comp_token.target.process.command_line\n\n    $comp_enrich.metadata.event_type\
+    \ = \"USER_LOGIN\"\n    $comp_enrich.metadata.log_type = \"CS_EDR\"\n    $computer_name\
+    \ = $comp_enrich.principal.asset.hostname\n    $username = $comp_enrich.target.user.userid\n\
+    \n  match:\n    $traceIdValue, $auth_token, $computer_name over 24h\n\n  outcome:\n\
+    \    $token = array_distinct($auth_token)\n    $k8_account = array_distinct($email)\n\
+    \    $comp_user = array_distinct($username)\n    $hostname = array_distinct($computer_name)\n\
+    \    $tar_processline = array_distinct($tar_process)\n    $auth_t_namespace =\
+    \ array_distinct($namespace)\n    $pod = array_distinct($pod_name)\n    $pod_ip\
+    \ = array_distinct($pod_ip_1)\n    $traceId = array_distinct($traceIdValue)\n\
+    \    $action = array_distinct($app_token.metadata.product_event_type)\n    $account_name\
+    \ = array_distinct($comp_enrich.principal.user.email_addresses)\n\n  condition:\n\
+    \    $app_token and $k8_enrich and $comp_token and $comp_enrich\n}"
+  chronicle_rule_name: gcp_unauthorized_gke_pod_token_endpoint_usage
+provenance:
+  source: chronicle/detection-rules
+  source_id: gcp_unauthorized_gke_pod_token_endpoint_usage
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/gcp/gcp_unauthorized_gke_pod_token_endpoint_usage.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema

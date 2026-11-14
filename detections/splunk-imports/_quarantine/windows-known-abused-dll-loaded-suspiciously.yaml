@@ -1,0 +1,51 @@
+id: splunk-security-content-dd6d1f16-adc0-4e87-9c34-06189516b803
+name: Windows Known Abused DLL Loaded Suspiciously
+description: The following analytic detects when DLLs with known abuse history are
+  loaded from an unusual location. This activity may represent an attacker performing
+  a DLL search order or sideload hijacking technique. These techniques are used to
+  gain persistence as well as elevate privileges on the target system. This detection
+  relies on Sysmon EID7 and is compatible with all Officla Sysmon TA versions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1574.001
+  categories:
+  - endpoint
+references:
+- https://attack.mitre.org/techniques/T1574/002/
+- https://hijacklibs.net/api/
+- https://wietze.github.io/blog/hijacking-dlls-in-windows
+- https://github.com/olafhartong/sysmon-modular/pull/195/files
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '`sysmon` ImageLoaded EventCode=7 NOT ImageLoaded IN ("*\\Program Files*","*\\system32\\*",
+    "*\\syswow64\\*","*\\winsxs\\*","*\\wbem\\*") | stats count min(_time) as firstTime
+    max(_time) as lastTime by Image ImageLoaded dest process_exec process_guid process_hash
+    process_id process_path service_dll_signature_exists service_dll_signature_verified
+    signature signature_id user_id vendor_product loaded_file | rename Image as process
+    | eval process_name = case(isnotnull(process),replace(process,"(.*\\\)(?=.*(\.\w*)$|(\w+)$)","")),
+    loaded_file_path = case(isnotnull(loaded_file), replace(loaded_file, "(:[\w\.
+    ]+)", "")), loaded_file = case(isnotnull(loaded_file),replace(loaded_file,"(.*\\\)(?=.*(\.\w*)$|(\w+)$)","")),
+    user = case(NOT user IN ("-"), replace(user, "(.*)\\\(.+)$","\2")) | lookup hijacklibs_loaded
+    library AS loaded_file OUTPUT islibrary comment as desc | lookup hijacklibs_loaded
+    library AS loaded_file excludes as loaded_file_path OUTPUT islibrary as excluded
+    | search islibrary = TRUE AND excluded = false | stats count min(_time) as firstTime
+    max(_time) as lastTime by dest loaded_file loaded_file_path process process_exec
+    process_guid process_hash process_id process_name process_path service_dll_signature_exists
+    service_dll_signature_verified signature signature_id user_id vendor_product |
+    `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_known_abused_dll_loaded_suspiciously_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: dd6d1f16-adc0-4e87-9c34-06189516b803
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_known_abused_dll_loaded_suspiciously.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

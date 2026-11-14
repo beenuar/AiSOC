@@ -1,0 +1,5 @@
+{
+  "command_line": "bash -c 'echo hello'",
+  "host": "linux-01",
+  "image_basename": "bash"
+}

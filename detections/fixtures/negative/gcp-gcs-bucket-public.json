@@ -1,0 +1,5 @@
+{
+  "bucket": "customer-data",
+  "iam_member": "user:dev@corp.com",
+  "method_name": "storage.setIamPermissions"
+}

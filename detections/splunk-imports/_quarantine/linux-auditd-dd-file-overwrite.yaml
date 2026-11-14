@@ -1,0 +1,39 @@
+id: splunk-security-content-d1b74420-4cea-4752-a123-9b40dfcca49a
+name: Linux Auditd Dd File Overwrite
+description: The following analytic detects the use of the 'dd' command to overwrite
+  files on a Linux system. It leverages data from Linux Auditd telemetry, focusing
+  on process execution logs that include command-line details. This activity is significant
+  because adversaries often use the 'dd' command to destroy or irreversibly overwrite
+  files, disrupting system availability and services. If confirmed malicious, this
+  behavior could lead to data destruction, making recovery difficult and potentially
+  causing significant operational disruptions.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1485
+  categories:
+  - endpoint
+references:
+- https://gtfobins.github.io/gtfobins/dd/
+- https://github.com/redcanaryco/atomic-red-team/blob/master/atomics/T1485/T1485.md
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd` proctitle = \"*dd *\" AND proctitle = \"*of=*\" AND\
+    \ proctitle = \"*if=/dev/zero*\"\n  | rename host as dest\n  | stats count min(_time)\
+    \ as firstTime max(_time) as lastTime\n    BY proctitle dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `linux_auditd_dd_file_overwrite_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: d1b74420-4cea-4752-a123-9b40dfcca49a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_dd_file_overwrite.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

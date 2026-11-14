@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "description": "Labelled recall probes for depth 9.2 (parity 6.5). Each probe is an analyst's question and the one memory item that answers it. The corpus and the probes are hand-authored under this repository's own licence and are labelled is_synthetic: true, the same rule the verdict corpus follows.",
+  "is_synthetic": true,
+  "authored_by": "AiSOC contributors",
+  "design": [
+    "Every probe is phrased the way an analyst speaks mid-incident, and deliberately shares as little vocabulary as possible with the item that answers it. That is the whole measurement: full-text retrieval answers a question asked in the document's own words and answers nothing otherwise, so a probe set that reuses the document's words would score the baseline far too well and prove nothing.",
+    "lexical_overlap records the share of the probe's content words that appear as a word in the answering item. It is computed by the scorer, not authored, and it is reported with the result so a reader can see the probes really are low-overlap rather than take the claim on trust.",
+    "There are distractor items that are topically adjacent to a probe but do not answer it. Without them a retriever can score well by returning the only item about identity, and the measurement would be of corpus size rather than of retrieval."
+  ],
+  "corpus": [
+    {
+      "id": "m-vpn-stuffing",
+      "kind": "runbook",
+      "subject": "Credential stuffing against the remote-access gateway",
+      "title": "Credential stuffing against the remote-access gateway",
+      "content": "When the remote-access gateway reports a surge of authentication failures spread across many distinct accounts from a small number of source addresses, treat it as credential stuffing rather than as a lockout storm. Confirm by checking whether the failing accounts share nothing but the source. Block the source ranges at the gateway, force a password reset for any account that subsequently succeeded, and raise a case tagged T1110.004."
+    },
+    {
+      "id": "m-vpn-lockout",
+      "kind": "runbook",
+      "subject": "Account lockout storm after a password policy change",
+      "title": "Account lockout storm after a password policy change",
+      "content": "A sudden rise in authentication failures confined to a single account, repeating from one workstation, is almost always a stale credential in a scheduled task or a mapped drive after a password policy change. Do not block the source. Find the service holding the old secret and update it."
+    },
+    {
+      "id": "m-s3-public",
+      "kind": "runbook",
+      "subject": "Object storage bucket exposed to the internet",
+      "title": "Object storage bucket exposed to the internet",
+      "content": "A bucket policy granting read to every principal is an exposure whatever the contents. Snapshot the access log first, because removing the policy also removes the evidence of who used it. Then remove the grant, enable the account-level public access block, and check the object inventory for anything carrying regulated data."
+    },
+    {
+      "id": "m-s3-replication",
+      "kind": "runbook",
+      "subject": "Cross-region replication failing on an object store",
+      "title": "Cross-region replication failing on an object store",
+      "content": "Replication failures on an object store are an availability problem, not a security one, unless the destination account is outside the organisation. Check the replication role's trust policy before escalating."
+    },
+    {
+      "id": "m-token-theft",
+      "kind": "memory",
+      "subject": "Session token replay from an unusual geography",
+      "title": "Session token replay from an unusual geography",
+      "content": "This estate's workforce is entirely in one country, so a session presented from elsewhere with no corresponding interactive sign-in is token replay until proven otherwise. The correct first action is to revoke the session rather than to reset the password, because a reset does not invalidate a stolen cookie."
+    },
+    {
+      "id": "m-travel",
+      "kind": "memory",
+      "subject": "Approved overseas travel for the field sales team",
+      "title": "Approved overseas travel for the field sales team",
+      "content": "The field sales team travels continuously and signs in from many countries. Geographic improbability alone is not a finding for members of that team; look for a second signal before raising a case."
+    },
+    {
+      "id": "m-payment-subnet",
+      "kind": "memory",
+      "subject": "Business context for the 10.40.0.0/16 range",
+      "title": "Business context for the 10.40.0.0/16 range",
+      "content": "Everything in 10.40.0.0/16 is the card payment estate and is in scope for PCI DSS. Any containment action there needs the on-call payments lead on the call before it is taken, and any case touching it is reportable."
+    },
+    {
+      "id": "m-lab-subnet",
+      "kind": "memory",
+      "subject": "Business context for the 10.90.0.0/16 range",
+      "title": "Business context for the 10.90.0.0/16 range",
+      "content": "10.90.0.0/16 is the security team's own malware laboratory. Detonations there are expected and are not findings. Hosts in it are rebuilt nightly."
+    },
+    {
+      "id": "m-ransom-case",
+      "kind": "case",
+      "subject": "case:2026-0431",
+      "title": "File server encrypted overnight after a vendor appliance compromise",
+      "content": "Closed as a true positive. The intruder reached the file server through an unpatched management interface on a network appliance that the vendor exposes on a non-standard port. The lesson recorded at closure was that the asset inventory did not list the appliance at all, so no vulnerability scan had ever covered it."
+    },
+    {
+      "id": "m-phish-case",
+      "kind": "case",
+      "subject": "case:2026-0502",
+      "title": "Finance invoice lure delivered through a compromised supplier mailbox",
+      "content": "Closed as a true positive with no impact. The message came from a genuine supplier whose mailbox had been taken over, so sender reputation and authentication both passed. What caught it was the reply-to pointing at a domain registered eleven days earlier."
+    },
+    {
+      "id": "m-benign-scan-case",
+      "kind": "case",
+      "subject": "case:2026-0388",
+      "title": "Quarterly external assessment mistaken for reconnaissance",
+      "content": "Closed as benign. The source was the firm contracted for the quarterly external assessment, and the engagement window had been recorded in the change calendar but not in any system the detection pipeline reads. The action recorded at closure was to put the window into an allowlist ahead of the next engagement."
+    },
+    {
+      "id": "m-backup-runbook",
+      "kind": "runbook",
+      "subject": "Restoring from the offline backup copy",
+      "title": "Restoring from the offline backup copy",
+      "content": "The offline copy is written weekly and is not reachable from the production network by design. Restoring from it needs two people, takes about six hours for the file estate, and must be preceded by confirming the restore target is clean, because restoring onto a host the intruder still holds simply re-encrypts the data."
+    }
+  ],
+  "probes": [
+    {
+      "id": "p-stuffing",
+      "query": "lots of failed logins on the VPN from a handful of IPs, hitting loads of different usernames",
+      "expected": "m-vpn-stuffing"
+    },
+    {
+      "id": "p-lockout",
+      "query": "one user keeps getting locked out all day and it is always the same desktop",
+      "expected": "m-vpn-lockout"
+    },
+    {
+      "id": "p-bucket",
+      "query": "someone made a storage container readable by anyone on the internet, what do I do first",
+      "expected": "m-s3-public"
+    },
+    {
+      "id": "p-replay",
+      "query": "a cookie from this account is being used abroad but there was no login from there",
+      "expected": "m-token-theft"
+    },
+    {
+      "id": "p-travel",
+      "query": "is a sign-in from another country on its own enough to open a ticket for a salesperson",
+      "expected": "m-travel"
+    },
+    {
+      "id": "p-payments",
+      "query": "do I need anyone's sign-off before I isolate a machine on 10.40.12.7",
+      "expected": "m-payment-subnet"
+    },
+    {
+      "id": "p-lab",
+      "query": "a host at 10.90.3.4 keeps detonating samples, should I be worried",
+      "expected": "m-lab-subnet"
+    },
+    {
+      "id": "p-appliance",
+      "query": "have we ever been broken into through kit that was not in the asset register",
+      "expected": "m-ransom-case"
+    },
+    {
+      "id": "p-supplier",
+      "query": "an email passed every authentication check but still turned out to be a lure, how was it spotted",
+      "expected": "m-phish-case"
+    },
+    {
+      "id": "p-pentest",
+      "query": "we are seeing port sweeps from an external firm, was this ever something we booked",
+      "expected": "m-benign-scan-case"
+    },
+    {
+      "id": "p-restore",
+      "query": "how long does it take to get the data back from the copy that is kept disconnected",
+      "expected": "m-backup-runbook"
+    },
+    {
+      "id": "p-reencrypt",
+      "query": "what do I have to check before putting data back onto a machine that was hit",
+      "expected": "m-backup-runbook"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+id: splunk-security-content-6923cd64-17a0-453c-b945-81ac2d8c6db9
+name: Protocols passing authentication in cleartext
+description: The following analytic identifies the use of cleartext protocols that
+  risk leaking sensitive information. It detects network traffic on legacy protocols
+  such as Telnet (port 23), POP3 (port 110), IMAP (port 143), and non-anonymous FTP
+  (port 21). The detection leverages the Network_Traffic data model to identify TCP
+  traffic on these ports. Monitoring this activity is crucial as it can expose credentials
+  and other sensitive data to interception. If confirmed malicious, attackers could
+  capture authentication details, leading to unauthorized access and potential data
+  breaches.
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - network
+references:
+- https://www.rackaid.com/blog/secure-your-email-and-file-transfers/
+- https://www.infosecmatter.com/capture-passwords-using-wireshark/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Network_Traffic\n  WHERE NOT All_Traffic.action\
+    \ IN (\"blocked\", \"block\")\n    AND\n    All_Traffic.transport=\"tcp\"\n  \
+    \  AND\n    (All_Traffic.dest_port=\"23\"\n    OR\n    All_Traffic.dest_port=\"\
+    143\"\n    OR\n    All_Traffic.dest_port=\"110\"\n    OR\n    (All_Traffic.dest_port=\"\
+    21\"\n    AND\n    All_Traffic.user != \"anonymous\"))\n  BY All_Traffic.user\
+    \ All_Traffic.src_ip All_Traffic.dest\n     All_Traffic.dest_port All_Traffic.rule\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `drop_dm_object_name(\"All_Traffic\")`\n| `protocols_passing_authentication_in_cleartext_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 6923cd64-17a0-453c-b945-81ac2d8c6db9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/network/protocols_passing_authentication_in_cleartext.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

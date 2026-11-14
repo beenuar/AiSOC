@@ -1,0 +1,28 @@
+id: det-identity-002
+name: Impossible Travel Between Two Authentications
+description: Detects two successful authentication events for the same user from geographically distant
+  locations within a time window that would require travel speeds exceeding 800 km/h. Strong indicator
+  of compromised credentials being shared between attacker and legitimate user.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.start"
+    AND outcome == "SUCCESS"
+    AND travel_speed_kmh > 800
+    AND time_delta_minutes < 120
+false_positives:
+- VPN usage that changes apparent geolocation
+- Tor / proxy services
+playbook: tpl-account-compromise
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

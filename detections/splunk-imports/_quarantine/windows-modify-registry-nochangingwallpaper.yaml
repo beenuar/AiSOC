@@ -1,0 +1,42 @@
+id: splunk-security-content-a2276412-e254-4e9a-9082-4d92edb6a3e0
+name: Windows Modify Registry NoChangingWallPaper
+description: The following analytic detects modifications to the Windows registry
+  aimed at preventing wallpaper changes. It leverages data from the Endpoint.Registry
+  datamodel, specifically monitoring changes to the "NoChangingWallPaper" registry
+  value. This activity is significant as it is a known tactic used by Rhysida ransomware
+  to enforce a malicious wallpaper, thereby limiting user control over system settings.
+  If confirmed malicious, this registry change could indicate a ransomware infection,
+  leading to further system compromise and user disruption.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1112
+  categories:
+  - endpoint
+references:
+- https://www.cisa.gov/news-events/cybersecurity-advisories/aa23-319a
+logsource:
+  product: splunk
+detection:
+  splunk_spl: '| tstats `security_content_summariesonly` count min(_time) as firstTime
+    max(_time) as lastTime FROM datamodel=Endpoint.Registry WHERE (Registry.registry_path=
+    "*\\Windows\\CurrentVersion\\Policies\\ActiveDesktop\\NoChangingWallPaper" Registry.registry_value_data
+    = 1) by Registry.action Registry.dest Registry.process_guid Registry.process_id
+    Registry.registry_hive Registry.registry_path Registry.registry_key_name Registry.registry_value_data
+    Registry.registry_value_name Registry.registry_value_type Registry.status Registry.user
+    Registry.vendor_product | `drop_dm_object_name(Registry)` | where isnotnull(registry_value_data)
+    | `security_content_ctime(firstTime)` | `security_content_ctime(lastTime)` | `windows_modify_registry_nochangingwallpaper_filter`'
+provenance:
+  source: splunk/security_content
+  source_id: a2276412-e254-4e9a-9082-4d92edb6a3e0
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_modify_registry_nochangingwallpaper.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

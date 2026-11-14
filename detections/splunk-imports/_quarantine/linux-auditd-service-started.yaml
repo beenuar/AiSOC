@@ -1,0 +1,39 @@
+id: splunk-security-content-b5eed06d-5c97-4092-a3a1-fa4b7e77c71a
+name: Linux Auditd Service Started
+description: The following analytic detects the suspicious service started. This behavior
+  is critical for a SOC to monitor because it may indicate attempts to gain unauthorized
+  access or maintain control over a system. Such actions could be signs of malicious
+  activity. If confirmed, this could lead to serious consequences, including a compromised
+  system, unauthorized access to sensitive data, or even a wider breach affecting
+  the entire network. Detecting and responding to these signs early is essential to
+  prevent potential security incidents.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1569.002
+  categories:
+  - endpoint
+references:
+- https://www.splunk.com/en_us/blog/security/deep-dive-on-persistence-privilege-escalation-technique-and-detection-in-linux-platform.html
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`linux_auditd`  proctitle IN (\"*systemctl *\", \"*service *\") AND\
+    \ proctitle IN (\"* start*\", \"* enable*\")\n  | rename host as dest\n  | stats\
+    \ count min(_time) as firstTime max(_time) as lastTime\n    BY proctitle dest\n\
+    \  | `security_content_ctime(firstTime)`\n  | `security_content_ctime(lastTime)`\n\
+    \  | `linux_auditd_service_started_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: b5eed06d-5c97-4092-a3a1-fa4b7e77c71a
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_auditd_service_started.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

@@ -1,0 +1,16 @@
+# Trivy suppression list. Same contract as scripts/security_audit_ignores.txt:
+# every entry carries the path it is scoped to, the reason it is acceptable,
+# and an expiry (`expired_at`) so it is re-checked rather than inherited.
+#
+# Empty on purpose. The nine 2026-10 pillow advisories that lived here were
+# scoped to services/agents/poetry.lock, and that lock now carries pillow
+# 13.0.0 — the fix became possible by dropping the unused `fastembed` extra
+# from qdrant-client (fastembed caps pillow <13.0 through its latest release;
+# agents computes embeddings via the OpenAI client and never called the
+# fastembed-backed API). services/threatintel still locks pillow 12.3.0
+# because its fastembed use is real (TextEmbedding in app/storage/qdrant.py),
+# but Trivy's full-tree graph does not reach pillow there (it arrives only
+# through the qdrant-client[fastembed] extra), so no Trivy entry is needed —
+# the equivalent suppressions for the audit gate live in
+# scripts/security_audit_ignores.txt, which pip-audit does need.
+vulnerabilities: []

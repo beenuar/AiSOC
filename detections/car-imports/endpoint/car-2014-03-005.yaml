@@ -1,0 +1,49 @@
+id: mitre-car-car-2014-03-005
+name: Remotely Launched Executables via Services
+description: 'There are several ways to cause code to [execute](https://attack.mitre.org/tactics/TA0002)
+  on a remote host. One of the most common methods is via the Windows [Service Control
+  Manager](https://en.wikipedia.org/wiki/Service_Control_Manager) (SCM), which allows
+  authorized users to remotely create and modify services. Several tools, such as
+  [PsExec](https://attack.mitre.org/software/S0029), use this functionality.
+
+
+  When a client remotely communicates with the Service Control Manager, there are
+  two observable behaviors. First, the client connects to the [RPC Endpoint Mapper](../CAR-2014-05-001)
+  over 135/tcp. This handles authentication, and tells the client what port the endpoint—in
+  this case the SCM—is listening on. Then, the client connects directly to the listening
+  port on `services.exe`. If the request is to start an existing service with a known
+  command line, the the SCM process will run the corresponding command.
+
+
+  This compound behavior can be detected by looking for `services.exe` receiving a
+  network connection and immediately spawning a child process.'
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1543
+  - T1569
+  categories:
+  - endpoint
+references: []
+logsource:
+  category: Network Process,Hostflow
+detection:
+  implementations:
+  - name: ''
+    type: pseudocode
+    code: "process = search Process:Create\nflow = search Flow:Start\nservice = filter\
+      \ process where (parent_exe == \"services.exe\")\nremote_start = join (flow,\
+      \ service ) where (\n flow.hostname == service.hostname and\n flow.pid == service.pid\
+      \ and\n (flow.time < service.time < flow.time + 1 second)\n)\noutput remote_start\n"
+provenance:
+  source: mitre-attack/car
+  source_id: CAR-2014-03-005
+  source_commit: 1b922fe
+  license: Apache-2.0
+  license_url: https://github.com/mitre-attack/car/blob/master/LICENSE.txt
+  imported_at: '2026-05-04'
+  imported_by: car_importer
+  upstream_path: analytics/CAR-2014-03-005.yaml
+notes:
+  car_status: needs_implementation

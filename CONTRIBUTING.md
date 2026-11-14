@@ -1,0 +1,537 @@
+# Contributing to AiSOC
+
+Thank you for your interest in contributing to AiSOC! This document provides guidelines for contributing to the project.
+
+## Code of Conduct
+
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please be respectful and constructive in all interactions.
+
+## Governance
+
+AiSOC is community-governed under the MIT license. See [`GOVERNANCE.md`](GOVERNANCE.md) for roles, decision-making, and how to become a maintainer, and [`MAINTAINERS.md`](MAINTAINERS.md) for the current maintainers.
+
+## Developer Certificate of Origin (DCO)
+
+All contributions must be made under the project's MIT license and carry a
+**Developer Certificate of Origin** sign-off. The DCO ([developercertificate.org](https://developercertificate.org/))
+is a lightweight, per-commit attestation that you wrote the patch (or otherwise
+have the right to submit it under the project license).
+
+Sign off every commit by adding a `Signed-off-by` trailer — `git commit -s`
+does this automatically using your `user.name` / `user.email`:
+
+```bash
+git commit -s -m "feat: add the thing"
+# → adds: Signed-off-by: Your Name <you@example.com>
+```
+
+If you forgot on your last commit, `git commit --amend -s --no-edit` fixes it;
+for a whole branch, `git rebase --signoff main`.
+
+
+## Your first 30 minutes
+
+If you've never contributed to AiSOC before, here's the shortest path from
+"nice repo" to "merged PR":
+
+1. **Run the stack so you know what you're contributing to.** Either open the
+   repo in [GitHub Codespaces](https://codespaces.new/beenuar/AiSOC?quickstart=1)
+   (zero install) or run it locally:
+   ```bash
+   make up      # the CORE profile — the real pipeline
+   make smoke   # prove it: one real event in, a retrievable alert out
+   ```
+   `make up` generates the secrets in `.env`, creates an administrator and
+   prints its password once. Sign in at <http://localhost:3000>. `make doctor`
+   diagnoses a stack that will not come up.
+
+   Then `make demo` loads labelled synthetic data on top, including the LockBit
+   ransomware case at `/cases/INC-RT-001?tab=ledger` — click through the
+   Investigation Ledger so you have seen what the agent does. Every seeded row
+   carries `is_synthetic=true` and the console labels it.
+
+   Do **not** use `pnpm aisoc:demo` to judge whether AiSOC works. It brings up
+   `infra/compose/docker-compose.demo.yml`, which has no ingest service, no
+   fusion service and `AISOC_DISABLE_KAFKA=true` — a UI preview over rows
+   written straight into Postgres. The file says so in its own header. It is
+   useful for looking at the interface and nothing else.
+2. **Find a good first issue.** Browse the open
+   [`good first issue`](https://github.com/beenuar/AiSOC/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+   list and leave a comment on one saying you'd like to work on it. If
+   nothing fits, look at:
+   - [`detections/`](detections/) — new Sigma rules, with positive/negative
+     fixtures in [`detections/fixtures/`](detections/fixtures/).
+   - [`hunts/`](hunts/) — Hunt-as-Code YAML hypotheses.
+   - [`playbooks/`](playbooks/) — SOAR playbooks.
+   - [`apps/docs/docs/`](apps/docs/docs/) — docs improvements.
+3. **Set up your fork.**
+   ```bash
+   gh repo fork beenuar/AiSOC --clone
+   cd AiSOC
+   git remote add upstream https://github.com/beenuar/AiSOC.git
+   git checkout -b feature/<short-name>
+   ```
+4. **Make the change, run the relevant validators / tests, and open the
+   PR.** GitHub will auto-fill the default
+   [`pull_request_template.md`](.github/pull_request_template.md) — fill
+   it in. The Eval-harness section is required for substrate, playbook,
+   or detection changes; check the "Not applicable" box otherwise.
+
+If you get stuck, [open a Q&A discussion](https://github.com/beenuar/AiSOC/discussions/new?category=q-a)
+— don't suffer in silence.
+
+## Getting Started
+
+1. Fork the repository on GitHub
+2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/AiSOC.git`
+3. Add the upstream remote: `git remote add upstream https://github.com/beenuar/AiSOC.git`
+4. Create a feature branch: `git checkout -b feature/my-feature`
+
+## Development Setup
+
+### Prerequisites
+
+These are the versions CI installs. A mismatch usually shows up as a test
+that passes locally and fails in the pipeline, which is an expensive way to
+discover it.
+
+| Tool   | Version  | Why this one                                            |
+|--------|----------|---------------------------------------------------------|
+| Python | 3.11     | What CI runs and what every image ships. 3.12 is not tested |
+| Node   | 22       | `apps/web`, `services/realtime`, `services/mcp`          |
+| pnpm   | 8.15.1   | Pinned in `package.json`; a different major resolves differently |
+| Go     | 1.26     | Every `go.mod`, gated by `scripts/check_toolchain_versions.py` |
+| Docker | 24+      | Compose v2 for the local stack and the integration gates |
+
+`scripts/check_toolchain_versions.py` asserts every `go.mod` agrees with
+itself and with what CI installs. Six modules previously declared five
+different Go versions while CI installed a sixth, so one module could not be
+built by the toolchain the pipeline provided.
+
+### Running the stack
+
+```bash
+pnpm install --frozen-lockfile
+docker compose up -d                 # Postgres, Redis, Kafka, ClickHouse, Neo4j
+(cd services/api && uv sync && uv run python -m app.scripts.run_migrations)
+```
+
+The API migration runner is forward-only and is **not** Alembic — there is no
+`alembic.ini` under `services/api`. Set `AISOC_MIGRATIONS_STRICT=1` so a
+failed migration aborts; without it the runner logs the failure, continues,
+and exits 0 with a partially-applied schema.
+
+For the fastest possible loop with no Docker at all, `aisoc-sandbox demo`
+runs the four-stage agent funnel offline in under five seconds. See
+[`packages/aisoc-sandbox/README.md`](packages/aisoc-sandbox/README.md).
+
+## Making Changes
+
+### Code Style
+
+- **TypeScript/JavaScript**: ESLint + Prettier (config in root)
+- **Python**: `ruff` for linting and formatting, `mypy` for type checking
+  (config in [`ruff.toml`](ruff.toml) and per-service `pyproject.toml`)
+- **Go**: `gofmt` + `go vet`
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat(alerts): add bulk status update endpoint
+fix(enrichment): handle rate limit backoff
+docs(readme): update deployment instructions
+test(agents): add unit tests for investigation agent
+```
+
+### No tool attribution
+
+AiSOC does not attribute work to a development tool or AI assistant. That
+applies to code, comments, docs, commit messages, commit trailers, PR bodies,
+release notes and marketing copy alike — no "built with" or "generated with"
+footers, and no `Co-authored-by:` trailer naming a tool.
+
+Credit for human contributors is the opposite of this rule, not an exception to
+it: a `Co-authored-by:` line naming a real person is welcome and is never
+touched, and neither is `dependabot[bot]`.
+
+Some editors append such a trailer at commit time on their own. Install the
+repository's hooks once and the trailer is stripped before it reaches a commit:
+
+```bash
+sh scripts/setup_hooks.sh        # or: pnpm install, which runs it for you
+```
+
+This sets `core.hooksPath` to the tracked [`.githooks/`](.githooks) directory,
+so the hook arrives with the checkout instead of living in an untracked
+`.git/hooks/`. It rewrites the message and never blocks a commit.
+
+This matters beyond your own branch: the repository squash-merges, and GitHub
+composes a squash commit's body from the branch commits — so a trailer on any
+commit in your PR is copied onto `main` at merge time.
+
+CI enforces the same rule over commits, changed files and the PR body. To check
+before pushing:
+
+```bash
+python3 scripts/check_attribution.py --self-test
+python3 scripts/check_attribution.py --all
+python3 scripts/check_attribution.py --commits origin/main..HEAD
+```
+
+If it flags something legitimate — a contributor whose name collides with a
+vendor string, or prose naming a vendor neutrally rather than as an attribution
+— add a justified entry to
+[`.githooks/attribution-allowlist.txt`](.githooks/attribution-allowlist.txt) so
+a reviewer sees the exemption in the diff.
+
+### Naming competitors, and naming vendors we integrate with
+
+AiSOC does not name a competitor product — not in documentation, marketing copy,
+plan files, code comments or release notes. Where a competitor is the benchmark
+for a comparison, refer to it neutrally and keep the analytical content. "We lag
+the reference AI-SOC platform on recursive investigation depth" is useful; "we
+lag a competitor on some things" is not. In a comparison table that usually means
+the row or column labels become neutral capability descriptors while every cell
+survives intact.
+
+A vendor named as an **integration target is not a competitor reference**. This
+product ships 80+ connectors, and a connector module, plugin manifest, setup
+guide, normalizer profile or test naming its vendor is correct and necessary.
+Some names play both roles — `Torq` ships as a first-party SOAR connector and has
+also appeared in competitive framing — so judge each occurrence by its context
+rather than doing a global replace, which would break working connector code.
+
+```bash
+python3 scripts/check_competitor_names.py --self-test
+python3 scripts/check_competitor_names.py
+```
+
+The gate reads an explicit name list and a path allow-list from
+[`scripts/competitor_names.toml`](scripts/competitor_names.toml); it never infers
+intent from prose. If it flags an integration reference, add the path to
+`[[allow]]` with the names it excuses and a reason. Both lists are checked in
+both directions, so a stale exemption whose files no longer contain the name
+fails the build rather than outliving the code it excused.
+
+### Testing
+
+- Write tests for all new features
+- Maintain or improve test coverage
+- Run the full test suite before submitting a PR
+
+### Writing a CI gate
+
+A gate under `scripts/` is only worth the tree it opened. The useful question
+to ask of one is not "does it flag the right things" but **"what does it
+credit as clean, and could it credit something it never actually opened?"**
+Running every wired check inside an empty git repository once found five
+reporting OK over a repository containing nothing — including the detection
+validator behind the rule count on the front page.
+
+Four properties are enforced by `scripts/check_gate_contract.py`, which runs
+in `ci.yml :: python-test`:
+
+1. **Resolve the root from git.** Use `gate_toolkit.repo_root()`.
+   `Path(__file__).resolve().parent.parent` is whatever happens to sit two
+   levels above the script, so a copy run from elsewhere scans that other
+   tree and prints a confident OK about a checkout nobody asked about.
+2. **Print what was scanned, including a count.** *Found nothing* and
+   *scanned nothing* are different results that print the same word.
+3. **Fail closed on an empty or unreadable read.** Zero files walked is not
+   zero violations found; it usually means a broken glob, a renamed package
+   or a wrong root. Exit non-zero and say which.
+4. **Carry a `--self-test`.** For a gate with nothing bespoke to prove, one
+   statement below the imports is enough:
+
+   ```python
+   from gate_toolkit import repo_root, self_test_if_requested
+
+   self_test_if_requested(__file__)
+   ```
+
+   Where the gate enforces a specific rule, inject a violation of that rule
+   and assert it is caught — a gate nobody has seen fail is indistinguishable
+   from one that cannot.
+
+Run both gates on the gates before pushing:
+
+```bash
+python3 scripts/check_gate_coverage.py   # every check is reachable from a workflow
+python3 scripts/check_gate_contract.py   # no check reports OK over an empty tree
+```
+
+Exceptions to the empty-tree rule are recorded in
+`EMPTY_TREE_EXCEPTIONS` with the disposition they are excused for, and are
+checked in both directions — an entry naming a check that no longer exists
+fails, and so does one whose gate has started behaving differently.
+
+### Public eval harness
+
+Anything that touches the agent (`services/agents/`), the orchestrator
+graph, prompts, tools, RAG corpus, or detection content **must** be
+re-graded against the public eval harness. The harness lives under
+[`scripts/run_evals.py`](scripts/run_evals.py) and per-axis tests under
+[`services/agents/tests/`](services/agents/tests/).
+
+```bash
+# Run all four substrate eval suites against the bundled 200-incident
+# dataset and write a JSON report. The dataset size is fixed by
+# services/agents/tests/eval_data/synthetic_incidents.json — there is no
+# --count flag.
+python scripts/run_evals.py --out eval_report.json
+
+# Or run a single eval axis
+pytest services/agents/tests/test_mitre_accuracy.py
+pytest services/agents/tests/test_alert_reduction.py
+pytest services/agents/tests/test_investigation_completeness.py
+pytest services/agents/tests/test_response_quality.py
+```
+
+The harness writes `eval_report.json` and `eval_mitre_accuracy_report.json`,
+which the public [eval harness page](apps/docs/docs/benchmark.md) renders.
+The same harness runs in CI on every PR — see
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml). PRs that regress any
+axis below the published numbers must include a written justification and
+before/after delta in the PR body.
+
+> **Be honest about what changed.** The harness runs deterministic substrate
+> code (extractors, fusion, templates, judges) against synthetic incidents
+> — it does **not** call the live LLM agent. Three of the four metrics are
+> substrate self-consistency gates rather than agent accuracy scores. The
+> [eval harness page](apps/docs/docs/benchmark.md) explains exactly which is
+> which. If your PR changes which metric category a suite belongs to,
+> update that page in the same commit.
+
+## Submitting a Pull Request
+
+1. Update your branch: `git fetch upstream && git rebase upstream/main`
+2. Run tests:
+   - `pnpm --filter @aisoc/web test` (web smoke tests)
+   - `pytest services/<name>/tests/` for any Python service you touched
+   - `( cd services/<name> && go test ./... )` for any Go service you touched
+3. Push to your fork: `git push origin feature/my-feature`
+4. Open a PR on GitHub against `main` with a clear description of changes.
+   CI also runs on `develop` for integration branches; both targets are
+   accepted, but most contributors should target `main`.
+
+## Growing the strategy and action libraries
+
+Two libraries here are designed to grow — investigation strategies and
+response actions — and both are the same shape as things that have already
+gone wrong in this repository. The detection corpus reached ~6,000 rules of
+which 833 executed; the connector catalogue reached 84 connectors of which 35
+had no documentation. Both recovered by making the artifact derived and the
+count gated — and the detection gap then closed properly, to 2,966 today, once
+somebody asked *why* the other rules could not fire instead of treating the
+number as a backlog.
+
+The rule is one sentence: **a contribution that cannot fail a test is not a
+contribution.** What that means per library, and why each rule exists, is in
+[`docs/contributing/strategies-and-actions.md`](docs/contributing/strategies-and-actions.md).
+
+## Adding New Connectors
+
+Connectors are runtime data. There is no Dockerfile to build, no
+`docker-compose.yml` entry to add, and no separate microservice to ship —
+adding a connector means subclassing `BaseConnector`, declaring a `schema()`,
+adding a marketplace manifest, and writing tests. The
+[connector platform doc](apps/docs/docs/connectors/index.md) explains the
+end-to-end click-and-connect flow; this section covers the contributor
+mechanics.
+
+### 1. Subclass `BaseConnector`
+
+Add a new file under `services/connectors/app/connectors/<name>.py` and
+subclass `BaseConnector` from
+[`services/connectors/app/connectors/base.py`](services/connectors/app/connectors/base.py).
+Implement four things:
+
+```python
+from .base import BaseConnector, ConnectorSchema, Field, OAuthHints
+
+
+class MyConnector(BaseConnector):
+    connector_category = "saas"  # one of: edr, siem, cloud, iam, saas, vcs, network
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:
+        return ConnectorSchema(
+            name="my-connector",
+            label="My Connector",
+            description="What this connector pulls and from where.",
+            category=cls.connector_category,
+            fields=[
+                Field(name="api_url", type="text", label="API URL", required=True),
+                Field(name="api_token", type="secret", label="API token", required=True, secret=True),
+            ],
+            oauth=OAuthHints(supported_in_hosted=False),
+            default_poll_interval_seconds=300,
+        )
+
+    async def test_connection(self) -> dict: ...  # one cheap auth-checking call; return {"ok": bool, "message": str, ...}
+
+    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict]: ...  # raw vendor JSON, no normalization
+
+    # Five tiers, not four. A vendor ladder that publishes a distinct
+    # `critical` must map to `critical` and must never be collapsed into
+    # `high`: see the severity section of the connector platform doc.
+    def normalize(self, raw_event: dict) -> dict: ...  # severity in {"info","low","medium","high","critical"}
+```
+
+Field types are `text`, `secret`, `select` (with `options`), `textarea`,
+and `oauth`. Mark **anything sensitive** with `secret=True` — the
+frontend will render those fields as masked inputs and the API service
+will encrypt them via the [`CredentialVault`](apps/docs/docs/operations/credentials.md)
+before they hit Postgres.
+
+### 2. Register in the connector registry
+
+Add your class to the `_CONNECTOR_CLASSES` tuple and `__all__` in
+[`services/connectors/app/connectors/__init__.py`](services/connectors/app/connectors/__init__.py).
+The registry powers `/connectors/schemas` and the wizard's catalog grid —
+no other wiring required.
+
+Then regenerate the two things derived from that tuple, and commit the result:
+
+```bash
+python3 scripts/generate_connector_count.py   # the "N connectors" claims
+python3 scripts/generate_connector_types.py   # the console's ConnectorType union
+```
+
+Both have a `--check` mode wired into CI, so forgetting is a red build rather
+than a quiet drift. The union used to be hand-written and ten of its members
+named nothing the platform could ingest.
+
+### 3. Add a marketplace plugin manifest
+
+Drop a `plugins/<connector-id>/plugin.yaml` mirroring your `schema()`. See
+existing entries (`plugins/azure-entra/plugin.yaml`,
+`plugins/cloudflare/plugin.yaml`, etc.) for the exact shape. Run:
+
+```bash
+pnpm marketplace:sync   # builds marketplace/index.json + syncs to apps/web/public
+```
+
+### 4. Write tests
+
+`services/connectors/tests/test_<name>.py` with at minimum:
+
+- A schema-contract test (asserts `schema().name`, required fields, secret
+  markers, hosted-OAuth advertising).
+- `normalize()` unit tests covering every severity rule you implement —
+  use real attacker-shaped fixtures (BEC, role grants, defense evasion).
+- A `respx`-mocked `test_connection()` covering success + auth-failure
+  paths.
+- A `respx`-mocked `fetch_alerts()` roundtrip that asserts your
+  normalization produces a well-formed OCSF event.
+
+The bundled test suite already runs against 100+ tests across 9 connectors
+— look at `test_azure_connectors.py`, `test_gcp_connectors.py`, and
+`test_saas_connectors.py` for the shape.
+
+### 5. Docs
+
+Connector pages are **generated** by `scripts/generate_connector_docs.py` from
+your `schema()`, so run it rather than writing the page by hand. An existing
+hand-written page wins over the convention and is left alone, but it must
+still mention every required and secret field or the gate fails. If you are
+writing one by hand anyway, it needs prereqs, exact
+permissions/scopes, secret rotation walkthrough, severity heuristics
+table (mirrors what's in your `normalize()`), and a troubleshooting
+section. Add the new page to `apps/docs/sidebars.ts` under the
+`Connectors` category.
+
+### Reference connectors
+
+The 14 in-tree connectors are ordered roughly from simplest auth to most
+complex: `crowdstrike`, `okta`, `cloudflare` (API token), `splunk`,
+`aws_security_hub` (IAM keys), `azure_entra`, `azure_activity`,
+`azure_defender`, `m365_audit` (AAD app), `gcp_cloud_audit`, `gcp_scc`,
+`google_workspace` (service account JSON + JWT signing), `github`
+(fine-grained PAT), `microsoft_sentinel`. Pick the one whose auth model
+matches yours and copy from there.
+
+## Community Marketplace
+
+The AiSOC marketplace is content-as-code. Anything in
+[`detections/`](detections/), [`playbooks/`](playbooks/), and
+[`plugins/`](plugins/) is automatically picked up by
+[`scripts/build_marketplace.py`](scripts/build_marketplace.py) and surfaced in
+the in-app **Marketplace** view at `/marketplace`. There is no separate
+registry to push to — you ship a PR, the index regenerates, and your
+contribution shows up.
+
+### Where contributions go
+
+Each content type has a `community/` namespace reserved for outside
+contributors:
+
+- Detections → `detections/community/<your-rule>.yaml`
+- Playbooks → `playbooks/community/<pack-name>/<your-playbook>.playbook.json`
+- Plugins → `plugins/community/<your-plugin-id>/`
+
+These show up in the Marketplace with a **Community** badge (versus the
+**Verified** badge on AiSOC-authored content). Core content lives directly
+under `detections/<category>/`, `playbooks/packs/v1/<category>/`, and
+`plugins/<plugin-id>/`.
+
+### Submitting a contribution
+
+1. Pick the right namespace (rule, playbook, or plugin) and follow the schema
+   used by an existing item of the same type. Detection schema lives in
+   [`detections/README.md`](detections/README.md), playbook schema in
+   [`playbooks/README.md`](playbooks/README.md), plugin schema in
+   [`packages/plugin-sdk-py/README.md`](packages/plugin-sdk-py/README.md) and
+   [`packages/plugin-sdk-go/README.md`](packages/plugin-sdk-go/README.md).
+2. **Rebuild the marketplace index locally:**
+   ```bash
+   pnpm marketplace:build
+   pnpm marketplace:sync
+   ```
+3. Verify CI will be happy:
+   ```bash
+   pnpm marketplace:check       # asserts the index matches what's on disk
+   python3 scripts/validate_detections.py   # if you added detections
+   ```
+4. Open a PR. CI runs `marketplace:check`, detection validation, and any
+   plugin SDK tests. A maintainer will review for content quality, MITRE
+   ATT&CK accuracy, and false-positive notes.
+
+### Quality bar for community marketplace items
+
+- **Detections** must include MITRE ATT&CK technique IDs in `tags` (format
+  `mitre.attack.T1234[.567]`) and a fixture under `detections/fixtures/`.
+- **Playbooks** must declare a clear trigger, an explicit decision tree, and
+  any human-approval gates. No silent destructive actions.
+- **Plugins** must implement the relevant SDK interface in either Python or
+  Go (preferably both). They must declare `min_aisoc_version`, `license`, and
+  a `homepage` URL. Network calls go through the SDK's HTTP helpers, never
+  bare `requests` or `net/http` calls.
+- All items get `verified: false` and `source: "community"` in the index until
+  a maintainer promotes them.
+
+## Reporting Bugs
+
+Please use the GitHub issue tracker. Include:
+- AiSOC version
+- OS and environment
+- Steps to reproduce
+- Expected vs actual behavior
+- Relevant logs
+
+## Help spread the word
+
+Amplification is a contribution too. The in-repo [launch kit](marketing/launch/)
+has ready-to-use materials — a Show HN draft, a demo-video shot list, Product
+Hunt copy, six technical blog outlines (each ending in a reproducible command),
+and a category-level comparison dossier — plus a [press kit](docs/press/) with
+boilerplate and the logo kit. Everything is written to two rules: no
+superlatives, and synthetic-vs-measured is always labelled. If you write about
+AiSOC, verify each claim against the [benchmark page](apps/docs/docs/benchmark.md)
+first.
+
+## License
+
+By contributing, you agree that your contributions will be licensed under the MIT License.

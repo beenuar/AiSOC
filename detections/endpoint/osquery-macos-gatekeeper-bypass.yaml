@@ -1,0 +1,24 @@
+id: det-endpoint-283
+name: macOS Gatekeeper Bypass Attempt
+description: AiSOC v1 curated detection. Triggers on the endpoint signal described by 'macOS Gatekeeper
+  Bypass Attempt'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1553.001
+- tlp.white
+category: endpoint
+log_source:
+  product: osquery
+  service: processes
+detection:
+  condition: |
+    event_type == "osquery_query_row"
+    AND cmdline CONTAINS_ANY ["com.apple.quarantine", "spctl --master-disable"]
+false_positives:
+- Developer removing quarantine attr for internal build (allow-listed)
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

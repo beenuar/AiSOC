@@ -1,0 +1,257 @@
+# SCIM provisioning against the real application and a real Postgres.
+#
+# Why this exists
+# ---------------
+# The offline suite is 40 good tests whose harness cannot certify the
+# capability, for two reasons.
+#
+# It runs on `sqlite+aiosqlite:///:memory:` with `@compiles` shims that
+# translate JSONB, UUID, INET and ARRAY into something SQLite accepts. Those
+# four types are where Postgres and SQLite disagree most, and a shim that
+# makes a column *accept* a value is not evidence the real column stores or
+# queries it. This repository has shipped exactly that defect before — a
+# query naming two columns the table does not have, green across thirty
+# tests against a fake.
+#
+# And it builds its own `FastAPI()` with the router mounted alone, so the
+# production middleware, exception handlers and dependency graph are not
+# what the assertions run through.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request. The two static gates for
+# this capability, `check_scim_contract.py` and
+# `check_whitelabel_metering.py`, run here too — they were only in
+# `isolation.yml`, which is path-filtered.
+name: SCIM (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: scim-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  scim-live:
+    name: SCIM provisions, lists and isolates through the real app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY, which would let the
+      # tenant-isolation assertion pass for the wrong reason.
+      SCIM_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # `test`, not `development`. `development` is in
+      # `AUTH_BYPASS_ENVIRONMENTS`, so an uncredentialed request resolves
+      # to a demo **admin** — inside the one suite whose purpose is
+      # proving the tenant comes from the credential.
+      # `config.py` records that `"test"` was deliberately excluded from
+      # that set for exactly this reason.
+      ENVIRONMENT: test
+      # A skip here is a green report over nothing. The suite refuses to
+      # collect when this is set and the DSN is not.
+      ISOLATION_REQUIRE_LIVE: "1"
+      # Nothing to export to, and the retry backoff adds a minute of noise
+      # to every run.
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio 
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: SCIM provisions, patches, groups, deprovisions and isolates
+        working-directory: services/api
+        env:
+          ISOLATION_SCIM_DSN: ${{ env.SCIM_DSN }}
+          DATABASE_URL: ${{ env.SCIM_DSN }}
+        # `-p no:randomly` is not needed and `--runxfail` would hide a
+        # skip, so the guard against a vacuous pass is the module's own
+        # `ISOLATION_REQUIRE_LIVE` check plus the step below, which reads
+        # the counts out of the report rather than trusting the exit code.
+        run: python -m pytest ../../tests/isolation/test_scim_live.py -v --tb=short
+
+      # A suite that skipped every case exits 0.
+      #
+      # The module-level guard catches a missing DSN; this catches the
+      # other route to the same outcome — a fixture, a marker or a
+      # collection error leaving nothing to run while the job stays green.
+      - name: Every live case ran, none skipped
+        working-directory: services/api
+        env:
+          ISOLATION_SCIM_DSN: ${{ env.SCIM_DSN }}
+          DATABASE_URL: ${{ env.SCIM_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_scim_live.py -q \
+            --junitxml=/tmp/scim-live.xml >/dev/null
+          python - <<'PY'
+          import sys, xml.etree.ElementTree as ET
+          suite = ET.parse("/tmp/scim-live.xml").getroot().find("testsuite")
+          ran, skipped = int(suite.get("tests", 0)), int(suite.get("skipped", 0))
+          print(f"collected {ran}, skipped {skipped}")
+          if ran - skipped < 20:
+              sys.exit(f"FAIL: only {ran - skipped} live case(s) executed; this job is supposed to run the whole suite")
+          if skipped:
+              sys.exit(f"FAIL: {skipped} case(s) skipped in a job that exists to run live")
+          PY
+
+      # Moved here from `isolation.yml`, which is path-filtered. A static
+      # gate behind a filter does not satisfy the unconditional property,
+      # and these two are the contract checks for this capability.
+      - name: The SCIM contract and the white-label/metering surface
+        run: |
+          python3 scripts/check_scim_contract.py --self-test
+          python3 scripts/check_scim_contract.py
+          python3 scripts/check_whitelabel_metering.py --self-test
+          python3 scripts/check_whitelabel_metering.py
+
+      # The negative control.
+      #
+      # Removing the tenant predicate from the Users list must make the
+      # suite go red. Measured: one test fails,
+      # `test_another_tenants_token_cannot_read_these_users`, which is the
+      # one asserting a SCIM token sees only its own tenant.
+      #
+      # Without this, "the user I created is listed" would pass equally
+      # well against a surface that returns everything to everyone.
+      - name: The gate fails when SCIM stops scoping to the token's tenant
+        working-directory: services/api
+        env:
+          ISOLATION_SCIM_DSN: ${{ env.SCIM_DSN }}
+          DATABASE_URL: ${{ env.SCIM_DSN }}
+        run: |
+          cp app/api/v1/endpoints/scim.py /tmp/scim.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/scim.py")
+          s = p.read_text()
+          needle = "    stmt = select(User).where(User.tenant_id == principal.tenant_id)"
+          if needle not in s:
+              print("negative control could not find the tenant predicate to remove; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    stmt = select(User)", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_scim_live.py -q >/dev/null 2>&1; then
+            cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+            echo "FAIL: the suite passed with SCIM listing every tenant's users."
+            exit 1
+          fi
+          cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+          echo "OK: removing the tenant predicate makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_scim_live.py -q
+
+      # The negative control for the three operations added in fix-pass 4.5.
+      #
+      # The tenant-predicate control above covers the *read* path only, and
+      # would stay red for its own reason if PATCH, groups or deprovisioning
+      # silently stopped writing. This one makes `_apply_active` a no-op:
+      # the handler still answers 200 with a correct-looking resource and
+      # the row never changes, which is the exact shape a response-only
+      # assertion cannot see.
+      #
+      # Expected: the deactivation and deprovisioning cases fail.
+      - name: The gate fails when deactivation stops writing the row
+        working-directory: services/api
+        env:
+          ISOLATION_SCIM_DSN: ${{ env.SCIM_DSN }}
+          DATABASE_URL: ${{ env.SCIM_DSN }}
+        run: |
+          cp app/api/v1/endpoints/scim.py /tmp/scim.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/scim.py")
+          s = p.read_text()
+          needle = "    if active == user.is_active:\n        return {}\n"
+          if needle not in s:
+              print("negative control could not find the body of _apply_active; it has been "
+                    "reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    return {}  # injected no-op\n", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_scim_live.py -q >/dev/null 2>&1; then
+            cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+            echo "FAIL: the suite passed with deactivation writing nothing."
+            exit 1
+          fi
+          cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+          echo "OK: a no-op deactivation makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_scim_live.py -q
+
+      # And the same for group membership, whose writes are a different
+      # handler and a different table.
+      - name: The gate fails when group membership stops being written
+        working-directory: services/api
+        env:
+          ISOLATION_SCIM_DSN: ${{ env.SCIM_DSN }}
+          DATABASE_URL: ${{ env.SCIM_DSN }}
+        run: |
+          cp app/api/v1/endpoints/scim.py /tmp/scim.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/scim.py")
+          s = p.read_text()
+          needle = (
+              "async def _add_members(db: AsyncSession, tenant_id: uuid.UUID, "
+              "group: ScimGroup, raw_ids: list[str]) -> int:\n"
+          )
+          if needle not in s:
+              print("negative control could not find _add_members; it has been reshaped "
+                    "and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, needle + "    return 0  # injected no-op\n", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_scim_live.py -q >/dev/null 2>&1; then
+            cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+            echo "FAIL: the suite passed with group membership never being written."
+            exit 1
+          fi
+          cp /tmp/scim.bak app/api/v1/endpoints/scim.py
+          echo "OK: a no-op membership write makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_scim_live.py -q

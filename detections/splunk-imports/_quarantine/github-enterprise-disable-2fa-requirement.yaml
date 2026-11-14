@@ -1,0 +1,46 @@
+id: splunk-security-content-5a773226-ebd7-480c-a819-fccacfeddcd9
+name: GitHub Enterprise Disable 2FA Requirement
+description: The following analytic detects when two-factor authentication (2FA) requirements
+  are disabled in GitHub Enterprise. The detection monitors GitHub Enterprise audit
+  logs for 2FA requirement changes by tracking actor details, organization information,
+  and associated metadata. For a SOC, identifying disabled 2FA requirements is critical
+  as it could indicate attempts to weaken account security controls. Two-factor authentication
+  is a fundamental security control that helps prevent unauthorized access even if
+  passwords are compromised. Disabling 2FA requirements could allow attackers to more
+  easily compromise accounts through password-based attacks. The impact of disabled
+  2FA includes increased risk of account takeover, potential access to sensitive code
+  and intellectual property, and compromise of the software supply chain. This activity
+  could be part of a larger attack chain where an adversary first disables security
+  controls before attempting broader account compromises.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1562.001
+  - T1195
+  categories:
+  - cloud
+references:
+- https://www.googlecloudcommunity.com/gc/Community-Blog/Monitoring-for-Suspicious-GitHub-Activity-with-Google-Security/ba-p/763610
+- https://docs.github.com/en/enterprise-cloud@latest/admin/monitoring-activity-in-your-enterprise/reviewing-audit-logs-for-your-enterprise/streaming-the-audit-log-for-your-enterprise#setting-up-streaming-to-splunk
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`github_enterprise` action=org.disable_two_factor_requirement OR action=business.disable_two_factor_requirement\n\
+    \  | fillnull\n  | stats count min(_time) as firstTime max(_time) as lastTime\n\
+    \    BY actor, actor_id, actor_is_bot,\n       actor_location.country_code, business,\
+    \ business_id,\n       user_agent, action\n  | eval user=actor\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | `github_enterprise_disable_2fa_requirement_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 5a773226-ebd7-480c-a819-fccacfeddcd9
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/github_enterprise_disable_2fa_requirement.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

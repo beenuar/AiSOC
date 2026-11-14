@@ -1,0 +1,44 @@
+id: splunk-security-content-98f6ad4f-4325-4096-9d69-45dc8e638e82
+name: Okta Successful Single Factor Authentication
+description: The following analytic identifies successful single-factor authentication
+  events against the Okta Dashboard for accounts without Multi-Factor Authentication
+  (MFA) enabled. It detects this activity by analyzing Okta logs for successful authentication
+  events where "Okta Verify" is not used. This behavior is significant as it may indicate
+  a misconfiguration, policy violation, or potential account takeover. If confirmed
+  malicious, an attacker could gain unauthorized access to the account, potentially
+  leading to data breaches or further exploitation within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1078.004
+  - T1586.003
+  - T1621
+  categories:
+  - application
+references:
+- https://sec.okta.com/everythingisyes
+- https://attack.mitre.org/techniques/T1078/004/
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "`okta`  action=success src_user_type = User eventType = user.authentication.verify\
+    \ OR eventType = user.authentication.auth_via_mfa\n  | stats dc(eventType) values(eventType)\
+    \ as eventType values(target{}.displayName) as targets values(debugContext.debugData.url)\
+    \ min(_time) as firstTime max(_time) as lastTime values(authentication_method)\n\
+    \    BY src_ip user action\n       dest\n  | `security_content_ctime(firstTime)`\n\
+    \  | `security_content_ctime(lastTime)`\n  | search targets !=\"Okta Verify\"\n\
+    \  | `okta_successful_single_factor_authentication_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 98f6ad4f-4325-4096-9d69-45dc8e638e82
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/application/okta_successful_single_factor_authentication.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

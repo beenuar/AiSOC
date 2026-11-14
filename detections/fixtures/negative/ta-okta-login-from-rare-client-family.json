@@ -1,0 +1,7 @@
+{
+  "baseline_client_family_rarity": 0.05,
+  "event_type": "user.session.start",
+  "outcome": "SUCCESS",
+  "user": "priya.n@example.com",
+  "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/124.0"
+}

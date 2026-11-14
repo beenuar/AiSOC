@@ -1,0 +1,44 @@
+id: splunk-security-content-161bc0ca-4651-4c13-9c27-27770660cf67
+name: Risk Rule for Dev Sec Ops by Repository
+description: The following analytic identifies high-risk activities within repositories
+  by correlating repository data with risk scores. It leverages findings and intermediate
+  findings created by detections from the Dev Sec Ops analytic stories, summing risk
+  scores and capturing source and user information. The detection focuses on high-risk
+  scores above 100 and sources with more than three occurrences. This activity is
+  significant as it highlights repositories frequently targeted by threats, providing
+  insights into potential vulnerabilities. If confirmed malicious, attackers could
+  exploit these repositories, leading to data breaches or infrastructure compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1204.003
+  categories:
+  - cloud
+references: []
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` min(_time) as firstTime max(_time)\
+    \ as lastTime sum(All_Risk.calculated_risk_score) as sum_risk_score, values(All_Risk.annotations.mitre_attack.mitre_tactic)\
+    \ as annotations.mitre_attack.mitre_tactic, values(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as annotations.mitre_attack.mitre_technique_id, dc(All_Risk.annotations.mitre_attack.mitre_technique_id)\
+    \ as mitre_technique_id_count values(source) as source, dc(source) as source_count\
+    \ FROM datamodel=Risk.All_Risk\n  WHERE All_Risk.analyticstories=\"Dev Sec Ops\"\
+    \ All_Risk.risk_object_type = \"other\"\n  BY All_Risk.risk_object All_Risk.risk_object_type\
+    \ All_Risk.annotations.mitre_attack.mitre_tactic\n| `drop_dm_object_name(All_Risk)`\n\
+    | `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | where source_count > 3 and sum_risk_score > 100\n| `risk_rule_for_dev_sec_ops_by_repository_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 161bc0ca-4651-4c13-9c27-27770660cf67
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/cloud/risk_rule_for_dev_sec_ops_by_repository.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

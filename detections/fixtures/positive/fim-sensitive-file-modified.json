@@ -1,0 +1,14 @@
+{
+  "action": "UPDATED",
+  "target_path": "/etc/passwd",
+  "hostname": "linux-host-42",
+  "node_key": "abc123def456",
+  "tenant_id": "acme",
+  "process_name": "useradd",
+  "pid": 4421,
+  "ppid": 4420,
+  "username": "root",
+  "md5": "d41d8cd98f00b204e9800998ecf8427e",
+  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "event_time": "2026-05-10T14:22:11Z"
+}

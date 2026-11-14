@@ -1,0 +1,6 @@
+{
+  "operation": "Set-MailboxAuditBypassAssociation",
+  "parameters": {
+    "AuditBypassEnabled": "False"
+  }
+}

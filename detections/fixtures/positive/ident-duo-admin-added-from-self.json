@@ -1,0 +1,5 @@
+{
+  "actor": "principal-a",
+  "event_type": "admin_create",
+  "target": "principal-a"
+}

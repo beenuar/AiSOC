@@ -1,0 +1,48 @@
+id: splunk-security-content-2acf0e19-4149-451c-a3f3-39cd3c77e37d
+name: Windows System Binary Proxy Execution Compiled HTML File Decompile
+description: The following analytic detects the use of the decompile parameter with
+  the HTML Help application (HH.exe). This behavior is identified through Endpoint
+  Detection and Response (EDR) telemetry, focusing on command-line executions involving
+  the decompile parameter. This activity is significant because it is an uncommon
+  command and has been associated with APT41 campaigns, where it was used to unpack
+  HTML help files for further malicious actions. If confirmed malicious, this technique
+  could allow attackers to execute arbitrary commands, potentially leading to further
+  compromise and persistence within the environment.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1218.001
+  categories:
+  - endpoint
+references:
+- https://www.ptsecurity.com/ww-en/analytics/pt-esc-threat-intelligence/higaisa-or-winnti-apt-41-backdoors-old-and-new/
+- https://redcanary.com/blog/introducing-atomictestharnesses/
+- https://attack.mitre.org/techniques/T1218/001/
+- https://docs.microsoft.com/en-us/windows/win32/api/htmlhelp/nf-htmlhelp-htmlhelpa
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Processes\n  WHERE `process_hh`\
+    \ Processes.process=*-decompile*\n  BY Processes.action Processes.dest Processes.original_file_name\n\
+    \     Processes.parent_process Processes.parent_process_exec Processes.parent_process_guid\n\
+    \     Processes.parent_process_id Processes.parent_process_name Processes.parent_process_path\n\
+    \     Processes.process Processes.process_exec Processes.process_guid\n     Processes.process_hash\
+    \ Processes.process_id Processes.process_integrity_level\n     Processes.process_name\
+    \ Processes.process_path Processes.user\n     Processes.user_id Processes.vendor_product\n\
+    | `drop_dm_object_name(Processes)`\n| `security_content_ctime(firstTime)`\n| `security_content_ctime(lastTime)`\n\
+    | `windows_system_binary_proxy_execution_compiled_html_file_decompile_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 2acf0e19-4149-451c-a3f3-39cd3c77e37d
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/windows_system_binary_proxy_execution_compiled_html_file_decompile.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

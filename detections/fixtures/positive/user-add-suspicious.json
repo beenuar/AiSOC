@@ -1,0 +1,5 @@
+{
+  "command_line": "useradd -m -s /bin/bash backdoor",
+  "event_type": "USER_ADD",
+  "host": "linux-01"
+}

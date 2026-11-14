@@ -1,0 +1,6 @@
+{
+  "operation": "New-SendConnector",
+  "parameters": {
+    "AddressSpaces": "SMTP:*.corp.com:1"
+  }
+}

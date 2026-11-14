@@ -1,0 +1,29 @@
+title: Controlled Substance Dispense Anomaly from Automated Cabinet
+id: aisoc-vt-hlth-0005-controlled-substance-dispense
+status: experimental
+description: |
+  Pyxis/Omnicell-class automated dispensing cabinet released a
+  Schedule II/III medication outside the dispensing user's normal
+  pattern (off-shift, wrong unit, or above peer baseline). Detects
+  diversion fraud which is both a DEA reporting issue and a frequent
+  pathway to broader insider abuse.
+author: Cyble AiSOC
+level: high
+logsource:
+  product: pharmacy
+  service: dispensing_cabinet
+tags:
+  - attack.t1078
+  - attack.impact
+  - aisoc.vertical.healthcare
+  - aisoc.compliance.dea
+detection:
+  selection:
+    event.module: pharmacy.dispensing
+    event.action: 'controlled.dispensed'
+    medication.schedule|in:
+      - 'II'
+      - 'III'
+  anomaly:
+    user.peer_zscore|gte: 3.0
+  condition: selection and anomaly

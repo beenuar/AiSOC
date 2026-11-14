@@ -1,0 +1,46 @@
+id: splunk-security-content-7add8520-71d5-43aa-b262-ee082b1f0238
+name: Linux Medusa Rootkit
+description: This detection identifies file creation events associated with the installation
+  of the Medusa rootkit, a userland LD_PRELOAD-based rootkit known for deploying shared
+  objects, loader binaries, and configuration files into specific system directories.
+  These files typically facilitate process hiding, credential theft, and backdoor
+  access. Monitoring for such file creation patterns enables early detection of rootkit
+  deployment before full compromise.
+severity: medium
+enabled: false
+tags:
+  mitre:
+  - T1014
+  - T1589.001
+  categories:
+  - endpoint
+references:
+- https://cloud.google.com/blog/topics/threat-intelligence/uncovering-unc3886-espionage-operations
+logsource:
+  product: splunk
+detection:
+  splunk_spl: "| tstats `security_content_summariesonly` count min(_time) as firstTime\
+    \ max(_time) as lastTime FROM datamodel=Endpoint.Filesystem\n  WHERE Filesystem.file_path\
+    \ IN (\"*/lib/libseconf\", \"*.backup_ld.so\", \"*.boot.sh\", \"*.logpam\", \"\
+    *sshpass.txt\", \"*sshpass2.txt\", \"*/lib/libdsx.so\", \"*rkload\", \"*/lib/libseconf/local.txt\"\
+    , \"*/lib/locate/local.txt\", \"*/var/log/remote.txt\", \"*/lib/libseconf/.pts\"\
+    , \"*/lib/locate /.pts\", \"*/libseconf/.ports\")\n  BY Filesystem.action Filesystem.dest\
+    \ Filesystem.file_access_time\n     Filesystem.file_create_time Filesystem.file_hash\
+    \ Filesystem.file_modify_time\n     Filesystem.file_name Filesystem.file_path\
+    \ Filesystem.file_acl\n     Filesystem.file_size Filesystem.process_guid Filesystem.process_id\n\
+    \     Filesystem.user Filesystem.vendor_product\n| `drop_dm_object_name(Filesystem)`\n\
+    | `security_content_ctime(lastTime)`\n| `security_content_ctime(firstTime)`\n\
+    | `linux_medusa_rootkit_filter`"
+provenance:
+  source: splunk/security_content
+  source_id: 7add8520-71d5-43aa-b262-ee082b1f0238
+  source_commit: 4d4c7ee
+  license: Apache-2.0
+  license_url: https://github.com/splunk/security_content/blob/develop/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: splunk_importer
+  upstream_path: detections/endpoint/linux_medusa_rootkit.yml
+notes:
+  splunk_status: production
+  splunk_data_source: []
+  quarantine_reason: raw SPL — needs translation to AiSOC detection schema

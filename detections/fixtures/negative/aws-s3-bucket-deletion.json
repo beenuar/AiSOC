@@ -1,0 +1,5 @@
+{
+  "bucket": "prod-backups",
+  "event_name": "DeleteObject",
+  "user_arn": "arn:aws:iam::111:user/admin"
+}

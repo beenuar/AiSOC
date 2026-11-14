@@ -1,0 +1,63 @@
+id: chronicle-detection-rules-aws-iam-access-denied-discovery-events
+name: aws_iam_access_denied_discovery_events
+description: aws_iam_access_denied_discovery_events
+severity: medium
+enabled: false
+tags:
+  mitre: []
+  categories:
+  - endpoint
+references: []
+logsource:
+  product: chronicle
+detection:
+  chronicle_yaral: "/*\n * Copyright 2023 Google LLC\n *\n * Licensed under the Apache\
+    \ License, Version 2.0 (the \"License\");\n * you may not use this file except\
+    \ in compliance with the License.\n * You may obtain a copy of the License at\n\
+    \ *\n *     https://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required\
+    \ by applicable law or agreed to in writing, software\n * distributed under the\
+    \ License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS\
+    \ OF ANY KIND, either express or implied.\n * See the License for the specific\
+    \ language governing permissions and\n * limitations under the License.\n */\n\
+    \nrule aws_iam_access_denied_discovery_events {\n\n  meta:\n    author = \"Google\
+    \ Cloud Security\"\n    description = \"Detects excessive AccessDenied events\
+    \ within an hour timeframe from an IAM User\"\n    rule_id = \"mr_a175b0d9-4488-46cc-880a-2408cb301f41\"\
+    \n    rule_name = \"AWS IAM Access Denied Discovery Events\"\n    mitre_attack_tactic\
+    \ = \"Discovery\"\n    mitre_attack_technique = \"Cloud Infrastructure Discovery\"\
+    \n    mitre_attack_url = \"https://attack.mitre.org/techniques/T1580/\"\n    mitre_attack_version\
+    \ = \"v13.1\"\n    type = \"Alert\"\n    data_source = \"AWS CloudTrail\"\n  \
+    \  platform = \"AWS\"\n    severity = \"Low\"\n    priority = \"Low\"\n\n  events:\n\
+    \    $cloudtrail.metadata.vendor_name = \"AMAZON\"\n    $cloudtrail.metadata.product_name\
+    \ = \"AWS CloudTrail\"\n    $cloudtrail.security_result.rule_id = \"AccessDenied\"\
+    \n    $cloudtrail.security_result.action = \"BLOCK\"\n    $cloudtrail.principal.user.userid\
+    \ = $user_id\n    $cloudtrail.target.application = $target_application\n    $cloudtrail.metadata.product_event_type\
+    \ = $product_event_type\n\n  match:\n    $user_id over 1h\n\n  outcome:\n    $risk_score\
+    \ = max(35)\n    $mitre_attack_tactic = \"Discovery\"\n    $mitre_attack_technique\
+    \ = \"Cloud Infrastructure Discovery\"\n    $mitre_attack_technique_id = \"T1580\"\
+    \n    $event_count = count_distinct($cloudtrail.metadata.id)\n    $network_http_user_agent\
+    \ = array_distinct($cloudtrail.network.http.user_agent)\n    $principal_ip = array_distinct($cloudtrail.principal.ip)\n\
+    \    $principal_ip_country = array_distinct($cloudtrail.principal.ip_geo_artifact.location.country_or_region)\n\
+    \    $principal_ip_state = array_distinct($cloudtrail.principal.ip_geo_artifact.location.state)\n\
+    \    $principal_user_display_name = array_distinct($cloudtrail.principal.user.user_display_name)\n\
+    \    $recipient_aws_account_id = array_distinct($cloudtrail.additional.fields[\"\
+    recipientAccountId\"])\n    $aws_region = array_distinct($cloudtrail.principal.location.name)\n\
+    \    $target_resource_name = array_distinct($cloudtrail.target.resource.name)\n\
+    \    $target_resource_product_object_id = array_distinct($cloudtrail.target.resource.product_object_id)\n\
+    \    $security_result_description = array_distinct($cloudtrail.security_result.description)\n\
+    \    $target_applications = array_distinct($cloudtrail.target.application)\n \
+    \   $product_event_types = array_distinct($cloudtrail.metadata.product_event_type)\n\
+    \n  condition:\n    #cloudtrail > 5 and #target_application > 1 and #product_event_type\
+    \ > 1\n}"
+  chronicle_rule_name: aws_iam_access_denied_discovery_events
+provenance:
+  source: chronicle/detection-rules
+  source_id: aws_iam_access_denied_discovery_events
+  source_commit: 74dd490
+  license: Apache-2.0
+  license_url: https://github.com/chronicle/detection-rules/blob/main/LICENSE
+  imported_at: '2026-05-04'
+  imported_by: chronicle_importer
+  upstream_path: rules/community/aws/cloudtrail/aws_iam_access_denied_discovery_events.yaral
+notes:
+  chronicle_meta: {}
+  quarantine_reason: raw YARA-L — needs translation to AiSOC schema
