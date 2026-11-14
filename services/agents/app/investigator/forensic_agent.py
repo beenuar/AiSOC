@@ -118,6 +118,39 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         cost_usd = call_record.cost_usd if call_record is not None else None
         cost_source = call_record.cost_source if call_record is not None else "unpriced"
         resolved_model = call_record.resolved_model if call_record is not None else None
+        # Truncation gate (12-Nov live incident): a forensic reply cut at
+        # max_tokens still parses as JSON and used to flow into the report
+        # verbatim — a truncated run on fra-hq-soc-01 fabricated a
+        # kernel-rootkit narrative about our own SOC host. A reply that ran
+        # to the ceiling is an INCOMPLETE investigation, not a result; do
+        # not let it become confident fiction downstream.
+        finish_reason = (getattr(response, "response_metadata", None) or {}).get("finish_reason")
+        if finish_reason == "length":
+            logger.warning(
+                "forensic output truncated at max_tokens; suppressing narrative",
+                case_id=state.case_id,
+                completion_tokens=(getattr(response, "usage_metadata", None) or {}).get("output_tokens"),
+            )
+            state.log(
+                StepKind.ERROR,
+                "ForensicAgent",
+                "output truncated at max_tokens (finish_reason=length); narrative suppressed, run marked inconclusive",
+            )
+            return {
+                "timeline": [],
+                "artefacts": [],
+                "root_cause_hypothesis": (
+                    "INCONCLUSIVE - forensic output was truncated at the token "
+                    "ceiling; partial output is not admissible as findings."
+                ),
+                "blast_radius": "Unknown — truncated run, manual review required.",
+                "confidence": 0.1,
+                "summary": (
+                    "Automated forensic analysis incomplete: the model hit its "
+                    "completion token limit before producing a full report. "
+                    "Manual review required."
+                ),
+            }
         state.log_llm_response(
             agent="ForensicAgent",
             response=content if isinstance(content, str) else str(content),
@@ -129,9 +162,16 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
             cost_source=cost_source,
             resolved_model=resolved_model,
         )
-        json_match = re.search(r"\{[\s\S]*\}", content)
+        # Non-greedy-first candidate then strict parse: the greedy span used
+        # to glue rambling prose between two JSON objects into one matchable
+        # blob, laundering a runaway reply into structured findings.
+        content_str = content if isinstance(content, str) else ""
+        json_match = re.search(r"\{.*?\}\s*$", content_str.strip(), re.DOTALL)
         if json_match:
-            return json.loads(json_match.group())
+            try:
+                return json.loads(json_match.group())
+            except json.JSONDecodeError as exc:
+                logger.warning("forensic output JSON unparseable; deferring to manual", error=str(exc))
     except Exception as exc:  # noqa: BLE001
         logger.warning("forensic llm failed", error=str(exc))
         state.log(
