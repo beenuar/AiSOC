@@ -54,3 +54,15 @@ MEMORY_SUPPRESSION=0, LLM_THINKING=0. Agents recreated; env verified live.
 - Merge commit 707d65ffb; BB master protected -> branch sync/upstream-20261114
   opened as PR #3 (merge: no squash). api/fusion/agents rebuilt+redeployed,
   readyz 200, predicate + knob verified live in containers.
+
+## Upstream sync 2eb69d638 -> BB (14-Nov ~13:00 UTC)
+- Merged 25 upstream commits (all our work landed upstream: #1879 truncation
+  gate, #1880 search, #1889 thinking knob w/ composition fix, #1888 governed
+  FP reopen + NULL-safe predicate, #1887 prometheus bearer).
+- Conflicts resolved taking upstream (NULL-safe IS DISTINCT FROM predicate;
+  ruff format). Merge commit 3f7437587.
+- Migration 161 applied manually (column + registry row verified). Legacy
+  dispositions (10559) left NULL per upstream intent: unknown provenance is
+  NOT durable — old analyst FP marks behave reopenable until re-marked; new
+  verdicts stamp correctly. api/fusion/agents rebuilt, readyz 200, predicate
+  + thinking knob verified live. PR #2/#3 pending on BB (master protected).
