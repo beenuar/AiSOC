@@ -116,6 +116,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cyble enrichment is configured by the name the code actually reads**
+  (#1886). The enrichment service enables Cyble on `CYBLE_API_KEY` (and reads `CYBLE_BASE_URL`)
+  — `main.go` gates the provider on `cfg.CybleAPIKey != ""`, `config.go` loads it
+  from `CYBLE_API_KEY`, and `services/enrichment/README.md` documents exactly
+  those names. But `.env.example` shipped `CYBLE_VISION_API_KEY` /
+  `CYBLE_VISION_BASE_URL` (plus `CYBLE_VISION_TENANT_ID` / `CYBLE_VISION_FEEDS` /
+  `CYBLE_HUNT_API_KEY`, which no service reads), and the auth-failure message told
+  operators to "check CYBLE_VISION_API_KEY" — so a key provisioned by the template
+  never took effect and the error pointed at the wrong variable. The template now
+  ships `CYBLE_API_KEY` / `CYBLE_BASE_URL`, the unreferenced `CYBLE_VISION_*`
+  placeholders are dropped, and the error names `CYBLE_API_KEY`. Contributed by @43n51c.
+
 - **An analyst's `false_positive` verdict is durable suppression; the AI's
   is not** (#1884, the governed form #1875's review asked for). The
   reopen-on-recurrence control (migration 160) resurrected alerts an analyst
