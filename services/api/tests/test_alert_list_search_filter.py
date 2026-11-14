@@ -119,7 +119,7 @@ async def _list_ids(db, **overrides) -> set[str]:
         **overrides,
     }
     result = await list_alerts(current_user=_principal(), db=db, **kwargs)
-    return {str(alert.id) for alert in result.alerts}
+    return {str(alert.id) for alert in result.items}
 
 
 @pytest.mark.asyncio
