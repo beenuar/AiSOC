@@ -60,9 +60,14 @@ window, which opens there, and is raised then rather than twice.
 
 ESET filters on `occurTime`, the moment the detection happened on the
 endpoint. An endpoint that was offline uploads its detections when it
-reconnects, stamped with the time they happened, and a detection uploaded
-after its window was read is not requested again. That is a property of the
-vendor's filter, not of this reader, and the connector page says so.
+reconnects, stamped with the time they happened — inside windows already
+polled. A clock-derived window would never request those again (#1890), so
+the window opens at the persisted event-time cursor instead:
+``checkpointed_since_seconds`` widens the lookback to the newest
+``occurTime`` ingest has accepted, successful-but-empty polls hold the left
+edge in place, and ``apply_checkpoint`` drops what the overlap re-reads.
+The reconnecting laptop's backlog is swept on the poll after it uploads,
+bounded by ``max_checkpoint_lookback_seconds``.
 
 The host behind a detection
 ---------------------------
@@ -166,6 +171,14 @@ class ESETProtectConnector(BaseConnector):
     connector_id = "eset_protect"
     connector_name = "ESET PROTECT"
     connector_category = "edr"
+
+    #: Event-time watermark (#1890): ESET filters on ``occurTime``, and an
+    #: offline endpoint uploads its detections late with their original
+    #: stamps, so a clock-derived window silently skips the backlog. Both
+    #: values sit at the top level of every detection, so the base accessors
+    #: read them without overrides.
+    checkpoint_time_field = ("occurTime",)
+    checkpoint_id_field = ("uuid",)
 
     #: Seconds between re-sends of a 202. An attribute so a test can set it to zero.
     pending_wait_seconds = _PENDING_WAIT_SECONDS
@@ -290,7 +303,13 @@ class ESETProtectConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         window_end = datetime.now(UTC)
-        window_start = window_end - timedelta(seconds=max(1, int(since_seconds)))
+        # Open at the persisted occurTime cursor rather than the clock
+        # (#1890): an offline endpoint's late-uploaded backlog carries
+        # stamps inside windows already polled, and only a window that
+        # grows over the gap ever requests it. First poll, or no usable
+        # cursor, is since_seconds unchanged.
+        effective_since = self.checkpointed_since_seconds(since_seconds)
+        window_start = window_end - timedelta(seconds=max(1, int(effective_since)))
         # Second precision is what the vendor stamps, so the request covers
         # every second the window touches and the exact edges are applied
         # below. `endTime` is exclusive, hence the second added.
@@ -345,10 +364,18 @@ class ESETProtectConnector(BaseConnector):
                     continue
                 inside.append(detection)
 
-            devices = await self._devices(client, inside)
+            # Dedup against the cursor and stage its advance. The widened
+            # window deliberately re-reads everything at and after the
+            # cursor; this is what drops the rows the overlap re-read, and
+            # the advance is persisted only after ingest accepts the batch
+            # (scheduler ordering), so a failed hand-off re-reads rather
+            # than loses.
+            fresh = self.apply_checkpoint(inside)
+
+            devices = await self._devices(client, fresh)
 
         out: list[dict[str, Any]] = []
-        for detection in inside:
+        for detection in fresh:
             device = devices.get(_device_uuid(detection))
             out.append(self.normalize({**detection, "device": device} if device else detection))
         return out
