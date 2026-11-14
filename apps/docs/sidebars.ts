@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
         "connectors/duo-security",
         "connectors/elastic",
         "connectors/email-inbox",
+        "connectors/eset-protect",
         "connectors/exabeam",
         "connectors/extrahop",
         "connectors/falco",

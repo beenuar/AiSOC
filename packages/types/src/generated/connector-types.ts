@@ -4,10 +4,10 @@
 // Every `connector_type` the ingest normalizer resolves, derived from the
 // registry that decides what the platform can ingest:
 //
-//    95  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
+//    96  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
 //     7  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//   107  total
+//   108  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -53,6 +53,7 @@ export const CONNECTOR_TYPES = [
   "duo_security",          // registry
   "elastic",               // registry
   "email_inbox",           // registry
+  "eset_protect",          // registry
   "exabeam",               // registry
   "extrahop",              // registry
   "falco",                 // registry

@@ -32,6 +32,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   promotes whatever the severity. Setup and troubleshooting are on the new
   [Vectra AI Platform](apps/docs/docs/connectors/vectra-ai.md) page.
 
+- **ESET PROTECT connector.** `eset_protect` reads ESET PROTECT detections
+  (antivirus, HIPS, firewall, network intrusion, web access and ESET Inspect
+  rule hits) through the ESET Connect API, `GET /v1/detections`, signing in
+  as a dedicated API user with an OAuth2 password grant (part of #356). The
+  region is a fixed choice of ESET's five, so the password, which is vaulted,
+  is only ever sent to that region's `*.eset.systems` hosts; the bearer token
+  is cached until shortly before it expires and exchanged once more if ESET
+  refuses a cached one early. The read asks for the window through
+  `startTime` and `endTime` and follows `nextPageToken` until ESET returns
+  an empty one; a refused or unreachable opening request fails the poll, a
+  later page failing keeps the pages already read, and the 25-page bound is
+  logged when it binds. ESET's `202 Accepted` for a slow query is waited out
+  by re-sending the same request with its `response-id`, within ESET's own
+  120-second limit. A detection is raised once, in the window that contains
+  its `occurTime`. The distinct devices behind a poll's detections are looked
+  up through `devices:batchGet`, 50 a request and at most 500 a poll, for
+  the hostname, addresses and operating system; a failed, rate-limited or
+  still-pending lookup costs the host, never the detection. Network detections are
+  oriented by ESET's recorded direction, so an inbound peer is the source.
+  ESET's ladder stops at `SEVERITY_LEVEL_HIGH`, which stays `high`; nothing
+  is raised as `critical`, and an unspecified level carries no tier.
+  `ocsf_classes.go` files `eset_protect` at 2001 Security Finding. Setup,
+  regions and troubleshooting are on the new
+  [ESET PROTECT](apps/docs/docs/connectors/eset-protect.md) page.
+
 ### Security
 
 - **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`

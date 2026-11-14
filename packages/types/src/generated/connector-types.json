@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 95,
-    "total": 107
+    "registry": 96,
+    "total": 108
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -55,6 +55,7 @@
     "duo_security",
     "elastic",
     "email_inbox",
+    "eset_protect",
     "exabeam",
     "extrahop",
     "falco",
@@ -164,6 +165,7 @@
     "duo_security": "registry",
     "elastic": "registry",
     "email_inbox": "registry",
+    "eset_protect": "registry",
     "exabeam": "registry",
     "extrahop": "registry",
     "falco": "registry",

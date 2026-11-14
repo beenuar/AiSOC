@@ -1468,6 +1468,60 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "eset_protect",
+    "connector_name": "ESET PROTECT",
+    "description": "ESET PROTECT detections \u2014 antivirus, HIPS, firewall, network intrusion, web access and ESET Inspect rule hits \u2014 via the ESET Connect API, with the affected device resolved for its hostname, addresses and operating system. Read-only.",
+    "docs_url": "/docs/connectors/eset-protect",
+    "fields": [
+      {
+        "help_text": "The ESET data region your ESET PROTECT Hub or ESET Business Account lives in.",
+        "label": "Region",
+        "name": "region",
+        "options": [
+          {
+            "label": "Europe (eu)",
+            "value": "eu"
+          },
+          {
+            "label": "Germany (de)",
+            "value": "de"
+          },
+          {
+            "label": "United States (us)",
+            "value": "us"
+          },
+          {
+            "label": "Canada (ca)",
+            "value": "ca"
+          },
+          {
+            "label": "Japan (jpn)",
+            "value": "jpn"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "A dedicated user with the Integrations toggle on. It must have signed in once before the API accepts it.",
+        "label": "API user email",
+        "name": "username",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "API user password",
+        "name": "password",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "pivot_user"
     ],
