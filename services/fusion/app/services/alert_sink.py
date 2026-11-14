@@ -361,6 +361,11 @@ _MAX_OCCURRENCE_PAYLOAD_IDS = 200
 #:   by breaking dedup, which is the trade the reporter explicitly ruled out.
 #:   It also protects work in flight — an alert an analyst has moved to
 #:   `triaging` is not dragged back to `new` by a repeat.
+#: * **A `false_positive` disposition is a durable suppression.** The reopen
+#:   predicate excludes rows the analyst dispositioned as false_positive, so
+#:   recurring benign activity (operators reading their own mailboxes) does
+#:   not resurrect a closed alert. Recurrence of an alert closed *without*
+#:   that disposition still reopens, which is the GHSA control intact.
 #: * **`resolved_at` goes back to NULL.** It is a claim of fact rather than a
 #:   judgement, and the MTTR average subtracts it from `created_at` without
 #:   consulting `status`; leaving it set would count an open alert as
@@ -382,6 +387,12 @@ UPDATE alerts
  WHERE tenant_id = $1
    AND dedup_hash = $2::text
    AND status = ANY($3::text[])
+   -- An analyst disposition that said "this is not a threat" survives the
+   -- recurrence. Reopening an alert marked false_positive every time the
+   -- same benign activity fires (users reading their own mail, scheduled
+   -- scans) is noise that trains operators to distrust the queue; the
+   -- recurrence still records itself via reopen_count on the non-FP path.
+   AND COALESCE(disposition, '') <> 'false_positive'
 RETURNING id, reopen_count
 """
 
