@@ -234,7 +234,7 @@ async def submit_alert_override(
     await db.execute(
         update(Alert)
         .where(Alert.id == alert_uuid, Alert.tenant_id == user.tenant_id)
-        .values(disposition=payload.corrected_verdict, updated_at=now)
+        .values(disposition=payload.corrected_verdict, disposition_source="analyst", updated_at=now)
     )
     # A disposition is the analyst declaring the alert resolved, which is
     # the `resolved` half of every SLA figure. `alert_sla_events` had one
