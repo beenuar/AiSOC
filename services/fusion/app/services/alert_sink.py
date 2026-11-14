@@ -382,6 +382,20 @@ UPDATE alerts
  WHERE tenant_id = $1
    AND dedup_hash = $2::text
    AND status = ANY($3::text[])
+   -- A HUMAN analyst's false-positive verdict is durable suppression; an
+   -- AI-authored or unknown-provenance one is not. disposition_source names
+   -- the author (migration 161); without it, one uncorroborated AI FP
+   -- verdict would permanently suppress a fingerprint — the ungoverned
+   -- silence GHSA-qp9f-459j-w89c was published against.
+   -- NULL-safe on purpose: the ordinary closed alert has disposition NULL,
+   -- and `NOT (NULL = 'false_positive' AND ...)` is NULL, which WHERE
+   -- treats as false — the first form of this predicate silently stopped
+   -- EVERY reopen (caught by the live recurrence suite). IS DISTINCT FROM
+   -- is TRUE/FALSE even on NULL, so only the analyst-authored FP pair is
+   -- excluded and everything else — including never-dispositioned rows and
+   -- NULL-provenance FPs — stays reopenable.
+   AND (disposition IS DISTINCT FROM 'false_positive'
+        OR disposition_source IS DISTINCT FROM 'analyst')
 RETURNING id, reopen_count
 """
 

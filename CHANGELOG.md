@@ -116,6 +116,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An analyst's `false_positive` verdict is durable suppression; the AI's
+  is not** (#1884, the governed form #1875's review asked for). The
+  reopen-on-recurrence control (migration 160) resurrected alerts an analyst
+  had already dispositioned as false positives — recurring benign activity
+  reopened the same alert indefinitely, which trains operators to distrust
+  the queue. But `alerts.disposition` carried no authorship, and the AI
+  auto-triage writes its verdicts (including `false_positive`) into the same
+  column, so suppressing on the bare disposition would let one
+  uncorroborated AI verdict silence a fingerprint forever — the
+  GHSA-qp9f-459j-w89c condition through a side door. Migration 161 adds
+  `disposition_source` (`analyst` | `ai`, NULL for rows that predate it:
+  unknown provenance is deliberately not durable), the analyst override and
+  batch re-disposition stamp `analyst`, the AI chokepoint stamps `ai`, and
+  the reopen predicate excludes only `false_positive` + `analyst`. Pinned by
+  live-Postgres recurrence tests for all three authorship cases. Contributed
+  by @alexmateescu.
+
 - **Secured deployments keep their api/ingest/agents scrapes** (#1881).
   Those three `/metrics` endpoints refuse scrapes without
   `Authorization: Bearer $METRICS_TOKEN` once the token is set (#1823), and
