@@ -77,6 +77,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Prometheus actually scrapes the ingest service now.** The scrape job
+  targeted `ingest-worker:9090` — the `METRICS_PORT` the Go config parses
+  and nothing consumes — while `/metrics` registers on the main router at
+  `HTTP_PORT` 8080, so every ingest scrape had failed since the job was
+  written. Retargeted to 8080. Diagnosed in #1876 by @alexmateescu.
+
 - **A Wazuh source-side outage no longer deletes its window from the lake**
   (#1860). The connector's poll window was `[now - since, now]`: when the
   indexer ran behind the manager — a flood-stage watermark blocking filebeat

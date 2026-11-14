@@ -74,8 +74,12 @@ scrape_configs:
   # on a separate listener so a stalled request handler doesn't
   # block scrapes).
   - job_name: 'aisoc-ingest'
+    # /metrics registers on the main chi router, i.e. HTTP_PORT 8080.
+    # METRICS_PORT (9090) is parsed in internal/config and consumed by
+    # nothing, so this target had no listener and every ingest scrape
+    # failed since the job was written (#1876 diagnosed it).
     static_configs:
-      - targets: ['ingest-worker:9090']
+      - targets: ['ingest-worker:8080']
     metrics_path: /metrics
 
   # Fusion service — FastAPI on container port 8003. The /metrics
