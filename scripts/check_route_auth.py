@@ -118,6 +118,10 @@ PUBLIC_ROUTES: dict[str, str] = {
     # -- Prometheus scrape endpoints, gated by METRICS_TOKEN in the handler ---
     "services/api/app/main.py::metrics": "Prometheus scrape; refuses without METRICS_TOKEN outside a development environment",
     "services/fusion/app/api/router.py::metrics": "Prometheus scrape of worker counters; no tenant data, numeric series only",
+    "services/fusion/app/api/router.py::metrics_prometheus": (
+        "the same worker counters in exposition format (#1881) — the shape the bundled scrape job can parse; "
+        "tenant ids appear only as label values on backlog counts, the same figures the JSON route already exposes"
+    ),
     "services/fusion/app/api/router.py::scale_hint": (
         "lag-based autoscaling signal (depth 4.4): a cluster scaler scrapes it on the same footing as /metrics — "
         "a lag count and a replica suggestion, no tenant data. AiSOC publishes it and does not act on it (ADR-0012)"

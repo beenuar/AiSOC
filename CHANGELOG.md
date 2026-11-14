@@ -116,6 +116,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Prometheus can finally parse a fusion scrape** (#1881). The
+  `aisoc-fusion` job had scraped the JSON `/metrics` since it was written
+  and never recorded a sample, because JSON is not exposition format.
+  `GET /metrics/prometheus` renders the same figures — consumer counters,
+  consumer lag, the notification-journal backlog (with per-tenant labels),
+  and the lake writer's spool/backlog levels — read from the same sources
+  so the two endpoints cannot drift, and the scrape job points there. The
+  honest-absence rule survives the format change: a source that answers
+  `None` has **no sample that scrape**, never a zero, and each scrape
+  builds a fresh registry so an outage cannot linger as a stale value.
+  Pinned by tests that parse the output with Prometheus's own text parser.
+
 - **Cyble enrichment is configured by the name the code actually reads**
   (#1886). The enrichment service enables Cyble on `CYBLE_API_KEY` (and reads `CYBLE_BASE_URL`)
   — `main.go` gates the provider on `cfg.CybleAPIKey != ""`, `config.go` loads it

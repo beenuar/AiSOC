@@ -92,12 +92,15 @@ scrape_configs:
       - targets: ['ingest-worker:8080']
     metrics_path: /metrics
 
-  # Fusion service — FastAPI on container port 8003. The /metrics
-  # route is registered through `app.api.router`, not at top level.
+  # Fusion service — FastAPI on container port 8003, routes registered
+  # through `app.api.router`. The JSON `/metrics` predates this scraper and
+  # answers a shape it cannot parse, so this job had never recorded a
+  # sample (#1881); `/metrics/prometheus` renders the same figures — read
+  # from the same sources, so they cannot drift — in exposition format.
   - job_name: 'aisoc-fusion'
     static_configs:
       - targets: ['fusion:8003']
-    metrics_path: /metrics
+    metrics_path: /metrics/prometheus
 
   # Threat-intel service — FastAPI on container port 8005. Uses
   # `app.mount("/metrics", metrics_app)` so the prometheus-client
