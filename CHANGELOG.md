@@ -77,6 +77,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The alerts list `search` parameter actually filters now** (#1877).
+  `GET /api/v1/alerts` declared `search`, the console sent it, and the
+  result set ignored it — a filter that looks applied and is not. It now
+  ILIKE-matches over the columns an analyst pastes into the box (title,
+  description, rule name/id, category, and the alert id cast to text), the
+  same idiom the admin-users, audit and tenant-provision searches already
+  use. A `disposition` exact-match filter rides along so the operator queue
+  can span new+triaged escalated rows without a status filter. Contributed
+  by @alexmateescu; pinned by a live-Postgres test driving the real route.
+
 - **A truncated forensic reply becomes INCONCLUSIVE instead of findings**
   (#1873). A reply cut at `max_tokens` could still parse as JSON — the
   greedy extraction glued whatever survived into a matchable blob — and the
