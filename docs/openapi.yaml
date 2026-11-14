@@ -776,6 +776,20 @@ paths:
           - type: string
           - type: 'null'
           title: Status
+      - name: disposition
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Exact-match on the triage disposition (e.g. 'needs_review').
+            Composable with `status`; the operator queue uses status-less + disposition=needs_review
+            to span new+triaged escalated rows.
+          title: Disposition
+        description: Exact-match on the triage disposition (e.g. 'needs_review').
+          Composable with `status`; the operator queue uses status-less + disposition=needs_review
+          to span new+triaged escalated rows.
       - name: category
         in: query
         required: false
