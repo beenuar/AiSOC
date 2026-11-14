@@ -194,6 +194,17 @@ def make_chat_model(
     params: dict[str, Any] = {"model": model, "temperature": temperature}
     if max_tokens is not None:
         params["max_tokens"] = max_tokens
+    # Qwen3.6-35B-A3B is a thinking model: the gateway streams chain-of-thought
+    # into ``reasoning_content`` and it counts against max_tokens. Measured live:
+    # a forensic-shaped call burned 4093 of its 4096-token budget on reasoning
+    # and returned finish_reason=length with content="" — the truncation gate
+    # caught it, but every thinking-heavy investigation was silently losing its
+    # answer. ``enable_thinking: false`` (verified on this gateway) zeroes the
+    # reasoning budget so the whole ceiling buys answer tokens. The gateway runs
+    # drop_params: true, so providers without the knob ignore it; a caller can
+    # still opt back in via extra_body for deep-analysis roles.
+    thinking_off = os.environ.get("AISOC_LLM_THINKING", "").strip().lower() not in ("1", "true", "on")
+    params["extra_body"] = {"enable_thinking": not thinking_off, **(kwargs.pop("extra_body", None) or {})}
     if json_output:
         # Via ``model_kwargs`` rather than as a top-level argument. ChatOpenAI
         # does not declare ``response_format`` as a field, so passing it
