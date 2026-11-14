@@ -9,7 +9,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import String as SAString
+from sqlalchemy import and_, cast, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -801,6 +802,12 @@ async def list_alerts(
     ),
     severity: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    disposition: str | None = Query(
+        default=None,
+        description="Exact-match on the triage disposition (e.g. 'needs_review'). "
+        "Composable with `status`; the operator queue uses status-less + "
+        "disposition=needs_review to span new+triaged escalated rows.",
+    ),
     category: str | None = Query(default=None),
     assigned_to_me: bool = Query(default=False),
     search: str | None = Query(default=None),
@@ -871,10 +878,28 @@ async def list_alerts(
         filters.append(Alert.severity == severity)
     if status:
         filters.append(Alert.status == status)
+    if disposition:
+        filters.append(Alert.disposition == disposition)
     if category:
         filters.append(Alert.category == category)
     if assigned_to_me:
         filters.append(Alert.assigned_to_id == current_user.user_id)
+    if search:
+        # Free-text over the columns an analyst pastes into search: alert id,
+        # title, rule name/id, entity-ish fields. ILIKE so case never bites;
+        # `%` wrapped for substring matching. Cast id to text because the box
+        # accepts pasted UUIDs.
+        pattern = f"%{search.strip()}%"
+        filters.append(
+            or_(
+                Alert.title.ilike(pattern),
+                Alert.description.ilike(pattern),
+                Alert.rule_name.ilike(pattern),
+                Alert.rule_id.ilike(pattern),
+                Alert.category.ilike(pattern),
+                cast(Alert.id, SAString).ilike(pattern),
+            )
+        )
     if min_confidence is not None:
         filters.append(Alert.confidence >= min_confidence)
     if confidence_label is not None:
