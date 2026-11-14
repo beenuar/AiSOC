@@ -387,7 +387,15 @@ UPDATE alerts
    -- the author (migration 161); without it, one uncorroborated AI FP
    -- verdict would permanently suppress a fingerprint — the ungoverned
    -- silence GHSA-qp9f-459j-w89c was published against.
-   AND NOT (disposition = 'false_positive' AND disposition_source = 'analyst')
+   -- NULL-safe on purpose: the ordinary closed alert has disposition NULL,
+   -- and `NOT (NULL = 'false_positive' AND ...)` is NULL, which WHERE
+   -- treats as false — the first form of this predicate silently stopped
+   -- EVERY reopen (caught by the live recurrence suite). IS DISTINCT FROM
+   -- is TRUE/FALSE even on NULL, so only the analyst-authored FP pair is
+   -- excluded and everything else — including never-dispositioned rows and
+   -- NULL-provenance FPs — stays reopenable.
+   AND (disposition IS DISTINCT FROM 'false_positive'
+        OR disposition_source IS DISTINCT FROM 'analyst')
 RETURNING id, reopen_count
 """
 
