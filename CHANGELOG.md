@@ -77,6 +77,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The alerts list `search` parameter actually filters now** (#1877).
+  `GET /api/v1/alerts` declared `search`, the console sent it, and the
+  result set ignored it — a filter that looks applied and is not. It now
+  ILIKE-matches over the columns an analyst pastes into the box (title,
+  description, rule name/id, category, and the alert id cast to text), the
+  same idiom the admin-users, audit and tenant-provision searches already
+  use. A `disposition` exact-match filter rides along so the operator queue
+  can span new+triaged escalated rows without a status filter. Contributed
+  by @alexmateescu; pinned by a live-Postgres test driving the real route.
+
 - **Prometheus actually scrapes the ingest service now.** The scrape job
   targeted `ingest-worker:9090` — the `METRICS_PORT` the Go config parses
   and nothing consumes — while `/metrics` registers on the main router at
