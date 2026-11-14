@@ -30,3 +30,12 @@ beenuar reviewed all five PRs:
   retarget himself; bearer config resubmit deferred until his lands.
 Site prefs moved to local docker-compose.override.yml (gitignored):
 MEMORY_SUPPRESSION=0, LLM_THINKING=0. Agents recreated; env verified live.
+
+## Code home moved GitHub -> Bitbucket (14-Nov ~11:30 UTC)
+- Canonical repo now git@bitbucket.org:lsg-group-bitbucket/AiSOC.git (origin).
+- Full history pushed: all fork branches + 55 tags, SHAs verified vs GitHub.
+- bbcloud key installed on fra-hq-soc-01 (~/.ssh/bbcloud, ssh.config entry).
+- github remote kept (alexmateescu fork) ONLY until #1883/#1884 settle;
+  upstream PRs continue from those branches. After fork deletion, future
+  upstream contributions push branches to github remote recreated or via patch.
+- GitHub fork deletion: pending #1883/#1884 merge/close (Alexandru).
