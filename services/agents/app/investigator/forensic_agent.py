@@ -140,8 +140,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
                 "timeline": [],
                 "artefacts": [],
                 "root_cause_hypothesis": (
-                    "INCONCLUSIVE - forensic output was truncated at the token "
-                    "ceiling; partial output is not admissible as findings."
+                    "INCONCLUSIVE - forensic output was truncated at the token ceiling; partial output is not admissible as findings."
                 ),
                 "blast_radius": "Unknown — truncated run, manual review required.",
                 "confidence": 0.1,

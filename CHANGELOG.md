@@ -77,6 +77,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A truncated forensic reply becomes INCONCLUSIVE instead of findings**
+  (#1873). A reply cut at `max_tokens` could still parse as JSON — the
+  greedy extraction glued whatever survived into a matchable blob — and the
+  fragment flowed into the report verbatim; the reporting deployment watched
+  a truncated run fabricate a kernel-rootkit narrative about its own SOC
+  host. The agent now gates on `finish_reason=length`: the narrative is
+  suppressed, the run returns an explicit INCONCLUSIVE skeleton
+  ("partial output is not admissible as findings") at floor confidence, and
+  the suppression lands in the audit log. JSON extraction is anchored at the
+  reply's end, so prose rambling after the object defers to manual instead
+  of being laundered into structured findings. Contributed by
+  @alexmateescu; pinned by tests that fail on the old agent.
+
 - **Prometheus actually scrapes the ingest service now.** The scrape job
   targeted `ingest-worker:9090` — the `METRICS_PORT` the Go config parses
   and nothing consumes — while `/metrics` registers on the main router at
