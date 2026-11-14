@@ -239,7 +239,11 @@ def make_chat_model(
         # new one. It is added only for a non-OpenAI endpoint because OpenAI
         # itself rejects `max_tokens` outright for its newer models, and the
         # bundled gateway drops what a provider does not support anyway.
-        params["extra_body"] = {"max_tokens": max_tokens, **(kwargs.pop("extra_body", None) or {})}
+        # Spread any extra_body already on params (the thinking knob above
+        # writes `enable_thinking` there) rather than replacing it — a plain
+        # assignment here silently dropped the knob on exactly the
+        # non-OpenAI endpoints it exists for. Caller kwargs still win last.
+        params["extra_body"] = {**params.get("extra_body", {}), "max_tokens": max_tokens, **(kwargs.pop("extra_body", None) or {})}
     api_key = (override or {}).get("api_key") or resolve_api_key(model)
     if api_key:
         params["api_key"] = api_key
