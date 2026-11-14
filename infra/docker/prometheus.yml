@@ -65,6 +65,9 @@ alerting:
 scrape_configs:
   # FastAPI core API — uvicorn worker on container port 8000.
   - job_name: 'aisoc-api'
+    # api /metrics is bearer-gated by METRICS_TOKEN (same gate as agents).
+    authorization:
+      credentials_file: /etc/prometheus/secrets/metrics_token
     static_configs:
       - targets: ['api:8000']
     metrics_path: /metrics
@@ -74,17 +77,16 @@ scrape_configs:
   # on a separate listener so a stalled request handler doesn't
   # block scrapes).
   - job_name: 'aisoc-ingest'
+    # ingest /metrics lives on 8080 (9090 has no listener) and is bearer-
+    # gated by METRICS_TOKEN.
+    authorization:
+      credentials_file: /etc/prometheus/secrets/metrics_token
     static_configs:
-      - targets: ['ingest-worker:9090']
+      - targets: ['ingest-worker:8080']
     metrics_path: /metrics
 
   # Fusion service — FastAPI on container port 8003. The /metrics
   # route is registered through `app.api.router`, not at top level.
-  - job_name: 'aisoc-fusion'
-    static_configs:
-      - targets: ['fusion:8003']
-    metrics_path: /metrics
-
   # Threat-intel service — FastAPI on container port 8005. Uses
   # `app.mount("/metrics", metrics_app)` so the prometheus-client
   # ASGI handler runs in its own sub-app (cheaper than a route).
@@ -124,5 +126,8 @@ scrape_configs:
   # llm stays flat means the LLM path is failing open to the fallback, which
   # looks fine from outside because alerts still get verdicts.
   - job_name: aisoc-agents
+    # agents /metrics is bearer-gated by METRICS_TOKEN (upstream #1823).
+    authorization:
+      credentials_file: /etc/prometheus/secrets/metrics_token
     static_configs:
       - targets: ["agents:8084"]
