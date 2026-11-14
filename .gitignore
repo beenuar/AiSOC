@@ -187,3 +187,4 @@ plugins/*/go/*-test
 # only exists on a host that has actually been upgraded, which is never a
 # contributor's checkout.
 /backups/
+docker-compose.override.yml
