@@ -116,6 +116,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Cyble enrichment can be enabled on the Docker stack** (#1898). The
+  enrichment service builds the Cyble Vision client unconditionally and gates
+  the provider on `CYBLE_API_KEY` / `CYBLE_BASE_URL` (`config.go`, logged by
+  `main.go`), but `docker-compose.yml` forwarded only the six free-tier
+  provider keys (VirusTotal, AbuseIPDB, GreyNoise, Shodan, URLScan, IPInfo),
+  so a credential an operator set in `.env` never reached the container and
+  boot logged `cyble=false` with nothing to say why. The enrichment service
+  now forwards both Cyble variables, complementing the `CYBLE_*` naming fix in
+  #1886. Pinned by a gate derived from `config.go` that fails when a Cyble
+  credential the config reads is not forwarded by the enrichment service in
+  compose.
+
 - **An offline endpoint's late-uploaded ESET detections are swept, not
   skipped** (#1890). ESET filters `/v1/detections` on `occurTime` — when the
   detection happened on the device — so a laptop that spent the night
