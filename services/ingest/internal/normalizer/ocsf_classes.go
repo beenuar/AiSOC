@@ -246,6 +246,12 @@ var connectorOCSFClass = map[string]connectorClass{
 	// antivirus or HIPS hit, a blocked network intrusion, an ESET Inspect
 	// rule match — not a telemetry event, so it is a finding.
 	"eset_protect": {classUID: classSecurityFinding},
+	// withsecure_elements reads the Elements /incidents/v1/incidents list:
+	// every record is a Broad Context Detection, Elements EDR's correlation
+	// of detections into one suspected attack, and the BCDs WithSecure closed
+	// itself as merged or suppressed are dropped in the connector, so what
+	// reaches ingest is a finding.
+	"withsecure_elements": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},

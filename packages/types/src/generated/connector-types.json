@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 7,
-    "registry": 96,
-    "total": 108
+    "registry": 97,
+    "total": 109
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -123,6 +123,7 @@
     "vectra_ai",
     "wazuh",
     "windows_event",
+    "withsecure_elements",
     "wiz",
     "zeek_suricata",
     "zscaler"
@@ -233,6 +234,7 @@
     "vectra_ai": "registry",
     "wazuh": "registry",
     "windows_event": "registry",
+    "withsecure_elements": "registry",
     "wiz": "registry",
     "zeek_suricata": "registry",
     "zscaler": "registry"

@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-14T12:08:17Z",
+  "generated": "2026-11-15T11:43:04Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7587,
+    "total": 7588,
     "playbooks": 89,
     "playbook_packs": 64,
     "detections": 7408,
-    "plugins": 90,
-    "verified": 1465,
+    "plugins": 91,
+    "verified": 1466,
     "community": 2,
     "by_tier": {
       "beta": 7,
       "community": 2,
       "imported": 6113,
-      "stable": 1465
+      "stable": 1466
     },
     "detections_by_tier": {
       "community": 2,
       "imported": 6113,
       "stable": 1293
     },
-    "executable": 3145,
+    "executable": 3146,
     "quarantined": 4442,
     "executable_detections": 2966,
     "reference_only_detections": 4442,
-    "not_a_detection": 179
+    "not_a_detection": 180
   },
   "mitre_coverage": {
     "unique_techniques": 395,
@@ -256328,6 +256328,33 @@
       "tier": "stable",
       "path": "plugins/windows-event/plugin.yaml",
       "sha256": "cb5bebf4a904eea77be25d30e1b918a954ee1953c0937ef935a97c6e6b3d5738"
+    },
+    {
+      "id": "withsecure_elements",
+      "type": "plugin",
+      "name": "WithSecure Elements Connector",
+      "description": "WithSecure Elements EDR Broad Context Detections via the Elements API. Each BCD is raised once, when it is created, with the host, user, process, command line, hash and MITRE ATT&CK techniques of its detections. The host is fixed, so the client credential is only ever sent to WithSecure, and only the read-only scope is requested. Severity keeps WithSecure's five tiers, critical included. Read-only; nothing here changes a device or a BCD.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "edr",
+        "xdr",
+        "endpoint",
+        "withsecure",
+        "withsecure-elements",
+        "broad-context-detections"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/withsecure_elements.py",
+      "min_aisoc_version": "23.5.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/withsecure-elements/plugin.yaml",
+      "sha256": "0e91bb60bacef70a030d90273d251cb7c89ebb0607c0c9996cfa707b01f22413"
     },
     {
       "id": "wiz",

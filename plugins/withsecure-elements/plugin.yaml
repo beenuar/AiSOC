@@ -1,0 +1,37 @@
+id: withsecure_elements
+name: WithSecure Elements Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  WithSecure Elements EDR Broad Context Detections via the Elements API.
+  Each BCD is raised once, when it is created, with the host, user,
+  process, command line, hash and MITRE ATT&CK techniques of its
+  detections. The host is fixed, so the client credential is only ever
+  sent to WithSecure, and only the read-only scope is requested.
+  Severity keeps WithSecure's five tiers, critical included. Read-only;
+  nothing here changes a device or a BCD.
+author: AiSOC Core Team
+tags: [edr, xdr, endpoint, withsecure, withsecure-elements, broad-context-detections]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/withsecure_elements.py
+license: MIT
+# The first release that contains this connector. The next release's PR
+# confirms or corrects this value, the same way it does for eset_protect.
+min_aisoc_version: "23.5.0"
+config_schema:
+  type: object
+  required: [client_id, client_secret]
+  properties:
+    client_id:
+      type: string
+      description: From an API client created in Elements Security Center under Management > Organization Settings > API clients.
+    client_secret:
+      type: string
+      description: The API client's secret.
+      secret: true
+    organization_id:
+      type: string
+      description: >-
+        The UUID of the organization to read. Leave empty to read the API
+        client's own organization; a partner account sets the customer
+        organization here.

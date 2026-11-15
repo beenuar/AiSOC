@@ -71,6 +71,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   regions and troubleshooting are on the new
   [ESET PROTECT](apps/docs/docs/connectors/eset-protect.md) page.
 
+- **WithSecure Elements connector.** `withsecure_elements` reads Elements
+  EDR Broad Context Detections (BCDs) through the Elements API,
+  `GET /incidents/v1/incidents`, with an API client's ID and secret
+  exchanged for a read-only `connect.api.read` token (part of #356). The
+  host is fixed at `api.connect.withsecure.com`, so the secret, which is
+  vaulted, is only ever sent to WithSecure; the token is cached until shortly
+  before it expires and exchanged once more if WithSecure refuses a cached
+  one early. An optional organization ID lets a partner account read a
+  customer organization. The read asks for the window through
+  `createdTimestampStart` and `createdTimestampEnd`, oldest first, and
+  follows `nextAnchor` until WithSecure leaves it out; a refused or
+  unreachable opening request fails the poll, a later page failing keeps the
+  pages already read, and the 25-page bound is logged when it binds. A BCD
+  is updated whenever a detection joins it, so the window is on its creation
+  and each BCD is raised once; the window opens at the persisted
+  `createdTimestamp` cursor, so a poll cut short or a run of failed polls is
+  caught up. BCDs WithSecure closed itself as `merged`, `autoFalsePositive`
+  or `autoAcceptedBehavior` are not raised. Each BCD's detections are read,
+  most severe BCD first, and the devices they name looked up, for the
+  process, command line, hash, user, host, addresses and MITRE ATT&CK ids,
+  within bounds that keep a poll under WithSecure's 300-a-minute EDR rate
+  limit; a failed lookup costs the context, never the BCD, and a 429 or a
+  credential refused part-way through stops the lookups. WithSecure's five
+  severity levels each keep their own tier, `critical` included, and a BCD
+  without one falls back to its `riskLevel`, whose `severe` maps to
+  `critical`.
+  `ocsf_classes.go` files `withsecure_elements` at 2001 Security Finding.
+  Setup and troubleshooting are on the new
+  [WithSecure Elements](apps/docs/docs/connectors/withsecure-elements.md)
+  page.
+
 ### Security
 
 - **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`

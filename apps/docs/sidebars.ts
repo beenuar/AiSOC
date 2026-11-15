@@ -186,6 +186,7 @@ const sidebars: SidebarsConfig = {
         "connectors/vectra-ai",
         "connectors/wazuh",
         "connectors/windows_event",
+        "connectors/withsecure-elements",
         "connectors/wiz",
         "connectors/zeek_suricata",
         "connectors/zscaler",
