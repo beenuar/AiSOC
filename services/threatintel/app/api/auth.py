@@ -20,6 +20,7 @@ Resolves the ``[#TODO-attribution-rbac]`` caveat in
 from __future__ import annotations
 
 import hmac
+import os
 
 import structlog
 from fastapi import Header, HTTPException, status
@@ -60,8 +61,21 @@ async def require_actor_auth(authorization: str | None = Header(default=None)) -
                     "beyond the private network."
                 ),
             )
-            _warned_unconfigured = True
-        return
+            _warned_unconfigured = True  # codeql[py/unused-global-variable] — read via `global` guard at line 53
+        # [SEC-15] Fail closed. An unset token used to warn and allow every
+        # caller, leaving the actor-attribution profiles exposed to anyone
+        # who could reach the port, with a log line as the only trace.
+        # The open pre-token behaviour survives only behind an explicit opt-in.
+        if os.getenv("AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED", "").strip().lower() in {"1", "true", "yes"}:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "actor attribution requires AISOC_THREATINTEL_SERVICE_TOKEN; "
+                "set it, or opt into the open mode with "
+                "AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1"
+            ),
+        )
 
     presented = ""
     if authorization and authorization.lower().startswith(_BEARER_PREFIX):
