@@ -116,13 +116,16 @@ The whole vendor record is kept under `raw_event`.
 stamped after the read began is left to the next poll, whose window starts
 where this one ended.
 
-:::caution A device that was offline
+:::info A device that was offline is swept, not skipped
 ESET filters detections by when they happened, not by when ESET received
-them. A device that was offline uploads its detections when it reconnects,
-stamped with the time they happened. If that time falls in a window this
-connector has already read, the detection isn't requested again. Keep the
-poll interval short, and check the ESET PROTECT console for devices that have
-been out of contact.
+them, so a device that was offline uploads its detections when it
+reconnects, stamped with times inside windows already read. The connector
+keeps an event-time cursor at the newest `occurTime` ingest has accepted
+and opens each poll's request there rather than at the clock — so the
+backlog is requested on the poll after it uploads, and the overlap is
+de-duplicated against the cursor. Growth is bounded at seven days; a
+device out of contact longer than that is worth checking in the
+ESET PROTECT console.
 :::
 
 ## The host behind a detection

@@ -116,6 +116,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An offline endpoint's late-uploaded ESET detections are swept, not
+  skipped** (#1890). ESET filters `/v1/detections` on `occurTime` — when the
+  detection happened on the device — so a laptop that spent the night
+  offline uploads last night's detections stamped inside windows already
+  polled, and the clock-derived window never requested them again (the
+  connector shipped documenting this honestly as a vendor property). It is
+  now the same event-time watermark Wazuh uses: the window opens at the
+  persisted cursor (`checkpointed_since_seconds`), successful-but-empty
+  polls hold the left edge, `apply_checkpoint` drops what the overlap
+  re-reads, and the cursor advances on the newest `occurTime` ingest
+  accepted — bounded by the seven-day lookback cap. Pinned by five tests
+  driving the real connector and real checkpoint machinery.
+
 - **Prometheus can finally parse a fusion scrape** (#1881). The
   `aisoc-fusion` job had scraped the JSON `/metrics` since it was written
   and never recorded a sample, because JSON is not exposition format.

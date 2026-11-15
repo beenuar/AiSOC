@@ -154,6 +154,12 @@ class TestAdoptionIsCountedNotAssumed:
         # vocabulary; the connector overrides the row accessors because the
         # indexer nests `@timestamp` under `_source`.
         "wazuh": (("@timestamp",), ("_id",)),
+        # Issue #1890, same mechanism as Wazuh one row up: ESET filters on
+        # occurTime, an offline endpoint uploads its backlog late with the
+        # original stamps, and only a window opened at the cursor ever
+        # requests it. Both fields sit top-level on every detection, so the
+        # base accessors read them without overrides.
+        "eset_protect": (("occurTime",), ("uuid",)),
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),
