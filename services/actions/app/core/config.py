@@ -110,8 +110,15 @@ class ActionsSettings(BaseSettings):
     )
     # Wave 4 (W4.2) — when true, every action MUST carry an authenticated
     # principal (system-initiated principal-less calls are rejected).
+    # [NC-3] Default flipped to True. While it was False, a principal-less
+    # request ran with no identity attached and separation-of-duties
+    # recorded itself "unevaluated" on exactly those requests — the control
+    # reported itself satisfied on the traffic it could not evaluate. Legacy
+    # system-initiated callers must present a principal, or set
+    # AISOC_ACTIONS_REQUIRE_PRINCIPAL=false deliberately as the documented
+    # opt-out.
     AISOC_ACTIONS_REQUIRE_PRINCIPAL: bool = Field(
-        default=False,
+        default=True,
         description="Require a structured ActionPrincipal on every action request.",
     )
     # T3.6 — the *approval* path, which is separate from the request path
