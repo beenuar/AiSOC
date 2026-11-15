@@ -20,6 +20,21 @@ from fastapi.testclient import TestClient
 _TENANT = uuid4()
 
 
+def test_nc3_principal_required_by_default():
+    """[NC-3] The shipped default must require a principal, and a
+    principal-less request must be denied by it."""
+    from app.core.config import get_settings
+
+    assert get_settings().AISOC_ACTIONS_REQUIRE_PRINCIPAL is True
+    with pytest.raises(ActionAuthzError):
+        authorize_action(_request("isolate_host", principal=None))
+
+
+def test_nc3_opt_out_allows_principal_less():
+    """The documented opt-out keeps legacy system-initiated calls working."""
+    authorize_action(_request("isolate_host", principal=None), require_principal=False)
+
+
 def _principal(perms, *, tenant=None, uid="u1"):
     return ActionPrincipal(user_id=uid, tenant_id=tenant, permissions=perms)
 
