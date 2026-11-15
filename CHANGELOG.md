@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Certificate authentication for Microsoft Entra ID and Microsoft 365 audit.**
+  Both connectors accept an Entra app certificate instead of a client secret:
+  new optional `certificate_pem` (secret, PEM private key, optionally with the
+  certificate), `certificate_thumbprint` and `private_key_password` (secret)
+  fields; `client_secret` is now optional. The token request sends an RS256
+  `client_assertion` (`x5t`, plus `x5t#S256` when the PEM carries the
+  certificate) built with `cryptography`, in a shared
+  `app/connectors/ms_cert_auth.py`. Exactly one of secret or certificate must
+  be configured (the certificate wins if both are); existing secret-based
+  instances are unchanged and the token scope of each connector is untouched.
+
 - **`AISOC_LLM_THINKING` knob for thinking-tier models** (#1883). A
   thinking-tier model streams chain-of-thought into `reasoning_content` and
   it counts against `max_tokens` — measured live on the bundled gateway, a
