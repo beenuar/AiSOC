@@ -490,9 +490,31 @@
         "type": "string"
       },
       {
+        "help_text": "Leave empty when using a certificate (recommended). Exactly one of secret or certificate is required.",
         "label": "Client Secret",
         "name": "client_secret",
-        "required": true,
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "Recommended over a client secret. Paste a PEM containing the PRIVATE KEY (and optionally the CERTIFICATE) for the certificate whose public .cer you uploaded under Entra portal > App registrations > your app > Certificates & secrets.",
+        "label": "Certificate PEM (private key)",
+        "name": "certificate_pem",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "SHA-1 thumbprint shown next to the certificate under App registrations > Certificates & secrets. Optional when the PEM above also contains the certificate.",
+        "label": "Certificate Thumbprint",
+        "name": "certificate_thumbprint",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Only if the private key in the PEM is encrypted.",
+        "label": "Private Key Password",
+        "name": "private_key_password",
+        "required": false,
         "type": "secret"
       }
     ],
@@ -2296,9 +2318,31 @@
         "type": "string"
       },
       {
+        "help_text": "Leave empty when using a certificate (recommended). Exactly one of secret or certificate is required.",
         "label": "Client Secret",
         "name": "client_secret",
-        "required": true,
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "Recommended over a client secret. Paste a PEM containing the PRIVATE KEY (and optionally the CERTIFICATE) for the certificate whose public .cer you uploaded under Entra portal > App registrations > your app > Certificates & secrets.",
+        "label": "Certificate PEM (private key)",
+        "name": "certificate_pem",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "help_text": "SHA-1 thumbprint shown next to the certificate under App registrations > Certificates & secrets. Optional when the PEM above also contains the certificate.",
+        "label": "Certificate Thumbprint",
+        "name": "certificate_thumbprint",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Only if the private key in the PEM is encrypted.",
+        "label": "Private Key Password",
+        "name": "private_key_password",
+        "required": false,
         "type": "secret"
       }
     ],

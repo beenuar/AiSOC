@@ -62,6 +62,21 @@ Set-AdminAuditLogConfig -UnifiedAuditLogIngestionEnabled $true
 3. **Test connection** → starts a subscription on `Audit.General` and immediately stops it; this is the cheapest verification call.
 4. **Save**.
 
+## Certificate authentication (recommended)
+
+Instead of a client secret you can authenticate the app with a certificate. The private key never leaves AiSOC: it signs a short-lived assertion, and only that assertion is sent to Microsoft.
+
+1. Create a self-signed certificate and key:
+
+   ```bash
+   openssl req -x509 -newkey rsa:2048 -sha256 -days 730 -nodes -subj "/CN=AiSOC M365 Audit Connector" -keyout aisoc.key -out aisoc.crt
+   ```
+
+2. In the Entra portal open **App registrations → your app → Certificates & secrets → Certificates → Upload certificate** and upload `aisoc.crt` (a `.cer`/`.crt`/`.pem` public certificate). Copy the **Thumbprint** shown next to it.
+3. In AiSOC paste `cat aisoc.key aisoc.crt` into **Certificate PEM (private key)** (the PEM must contain the `PRIVATE KEY` block; including the `CERTIFICATE` block too lets AiSOC derive the thumbprint itself). If you omit the certificate block, fill **Certificate Thumbprint**. Leave **Client Secret** empty. If the key is encrypted, set **Private Key Password**.
+
+Exactly one of secret or certificate must be configured; if both are set, the certificate is used. The key must be RSA. Existing secret-based instances keep working unchanged.
+
 ## Polling details
 
 - Default interval: **300 seconds**.
@@ -105,10 +120,13 @@ The Management API does not provide severity, so AiSOC infers from `Operation`:
 |-------|-------|------|----------|---------|-------|
 | `tenant_id` | Tenant ID | string | yes | — | — |
 | `client_id` | Application (Client) ID | string | yes | — | — |
-| `client_secret` | Client Secret | secret | yes | — | **encrypted at rest** |
+| `client_secret` | Client Secret | secret | no | — | **encrypted at rest** · Leave empty when using a certificate (recommended). Exactly one of secret or certificate is required. |
+| `certificate_pem` | Certificate PEM (private key) | secret | no | — | **encrypted at rest** · Recommended over a client secret. Paste a PEM containing the PRIVATE KEY (and optionally the CERTIFICATE) for the certificate whose public .cer you uploaded under Entra portal > App registrations > your app > Certificates & secrets. |
+| `certificate_thumbprint` | Certificate Thumbprint | string | no | — | SHA-1 thumbprint shown next to the certificate under App registrations > Certificates & secrets. Optional when the PEM above also contains the certificate. |
+| `private_key_password` | Private Key Password | secret | no | — | **encrypted at rest** · Only if the private key in the PEM is encrypted. |
 
 :::note Credential handling
-`client_secret` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).
+`client_secret`, `certificate_pem`, `private_key_password` are encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).
 :::
 
 <!-- END GENERATED FIELD REFERENCE -->

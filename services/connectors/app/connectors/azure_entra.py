@@ -26,6 +26,7 @@ import httpx
 import structlog
 
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
+from app.connectors.ms_cert_auth import build_credential, cert_schema_fields, token_form
 from app.connectors.posture import POSTURE_SNAPSHOT_ID
 from app.connectors.posture import azure as azure_posture
 
@@ -208,7 +209,14 @@ class AzureEntraConnector(BaseConnector):
             fields=[
                 Field("tenant_id", "string", "Tenant ID", placeholder="00000000-0000-0000-0000-000000000000"),
                 Field("client_id", "string", "Application (Client) ID"),
-                Field("client_secret", "secret", "Client Secret"),
+                Field(
+                    "client_secret",
+                    "secret",
+                    "Client Secret",
+                    required=False,
+                    help_text="Leave empty when using a certificate (recommended). Exactly one of secret or certificate is required.",
+                ),
+                *cert_schema_fields(Field),
             ],
             oauth=OAuthHints(
                 supported_in_hosted=True,
@@ -226,21 +234,30 @@ class AzureEntraConnector(BaseConnector):
         # Entra ID surfaces both directory audits and risky sign-ins.
         return (Capability.PULL_AUDIT, Capability.PULL_ALERTS)
 
-    def __init__(self, tenant_id: str, client_id: str, client_secret: str):
+    def __init__(
+        self,
+        tenant_id: str,
+        client_id: str,
+        client_secret: str = "",
+        certificate_pem: str = "",
+        certificate_thumbprint: str = "",
+        private_key_password: str = "",
+    ):
         self._tenant_id = tenant_id
         self._client_id = client_id
         self._client_secret = client_secret
+        self._cert = build_credential(client_secret, certificate_pem, certificate_thumbprint, private_key_password)
         self._access_token: str | None = None
 
     # --------------------------- auth ---------------------------
 
     async def _authenticate(self) -> str:
+        token_url = _TOKEN_URL.format(tenant_id=self._tenant_id)
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.post(
-                _TOKEN_URL.format(tenant_id=self._tenant_id),
+                token_url,
                 data={
-                    "client_id": self._client_id,
-                    "client_secret": self._client_secret,
+                    **token_form(self._cert, self._client_id, self._client_secret, token_url),
                     "scope": "https://graph.microsoft.com/.default",
                     "grant_type": "client_credentials",
                 },
