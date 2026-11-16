@@ -3996,6 +3996,39 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "edr",
+    "connector_id": "withsecure_elements",
+    "connector_name": "WithSecure Elements",
+    "description": "WithSecure Elements EDR Broad Context Detections via the Elements API, each raised once with the host, user, process and MITRE ATT&CK techniques of its detections. Read-only.",
+    "docs_url": "/docs/connectors/withsecure-elements",
+    "fields": [
+      {
+        "help_text": "From an API client created in Elements Security Center under Management > Organization Settings > API clients.",
+        "label": "Client ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Client secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "The UUID of the organization to read. Leave empty to read the API client's own organization; a partner account sets the customer organization here.",
+        "label": "Organization ID",
+        "name": "organization_id",
+        "placeholder": "ec8a0100-d313-4896-b3cb-02188e060bf3",
+        "required": false,
+        "type": "string"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "pull_vulnerabilities"
     ],

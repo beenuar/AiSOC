@@ -110,6 +110,7 @@ from app.connectors.vault import VaultConnector
 from app.connectors.vectra_ai import VectraAIConnector
 from app.connectors.wazuh import WazuhConnector
 from app.connectors.windows_event import WindowsEventConnector
+from app.connectors.withsecure_elements import WithSecureElementsConnector
 from app.connectors.wiz import WizConnector
 from app.connectors.zeek_suricata import ZeekSuricataConnector
 from app.connectors.zscaler import ZscalerConnector
@@ -214,6 +215,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     VectraAIConnector,
     WazuhConnector,
     WindowsEventConnector,
+    WithSecureElementsConnector,
     WizConnector,
     ZeekSuricataConnector,
     ZscalerConnector,
@@ -337,6 +339,7 @@ __all__ = [
     "VaultConnector",
     "VectraAIConnector",
     "WazuhConnector",
+    "WithSecureElementsConnector",
     "WizConnector",
     "ZscalerConnector",
     "get_connector_class",

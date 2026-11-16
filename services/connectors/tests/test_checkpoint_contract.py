@@ -160,6 +160,11 @@ class TestAdoptionIsCountedNotAssumed:
         # requests it. Both fields sit top-level on every detection, so the
         # base accessors read them without overrides.
         "eset_protect": (("occurTime",), ("uuid",)),
+        # Same mechanism again. WithSecure's BCD list is read oldest first
+        # by createdTimestamp, so the cursor rests on the newest BCD raised
+        # and the next window opens there: a poll the page bound cut short,
+        # or a run of failed polls, is caught up rather than slid past.
+        "withsecure_elements": (("createdTimestamp",), ("incidentId",)),
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),
