@@ -9,13 +9,10 @@ These tests pin the two halves of the contract:
      writes both columns (the statement that used to 500).
 """
 
-import ast
 import pathlib
 
-import pytest
-from sqlalchemy import update
-
 from app.models.alert import Alert
+from sqlalchemy import update
 
 MIGRATION = pathlib.Path(__file__).resolve().parents[1] / "migrations" / "161_disposition_source.sql"
 
