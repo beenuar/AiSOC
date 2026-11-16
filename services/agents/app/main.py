@@ -50,13 +50,20 @@ logger = structlog.get_logger()
 
 
 def _log_triage_worker_exit(task: asyncio.Task) -> None:
-    """Report the auto-triage worker's exit instead of losing it in the task."""
+    """Report the auto-triage worker's exit instead of losing it in the task.
+
+    ``start()`` supervises its own bootstrap since #1930 — a transient Kafka
+    failure is retried with capped backoff — so this callback firing is rarer
+    and more significant than it was: it now means a clean stop, a failure
+    supervision classified as permanent (the operator action is already on
+    the worker's own log line), or supervision itself raising.
+    """
     if task.cancelled():
         logger.info("auto_triage_worker.cancelled")
         return
     exc = task.exception()
     if exc is None:
-        logger.error("auto_triage_worker.exited", detail="consume loop returned; fused alerts are no longer triaged")
+        logger.info("auto_triage_worker.exited", detail="supervision returned; see the worker's final log line for why")
         return
     logger.error("auto_triage_worker.died", error=str(exc), error_type=type(exc).__name__, exc_info=exc)
 

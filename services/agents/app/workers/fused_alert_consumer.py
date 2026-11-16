@@ -42,6 +42,33 @@ from typing import Any
 
 import structlog
 
+try:
+    # Declared dependency of this service (pyproject pins aiokafka); the
+    # guard keeps the module importable in stripped environments, where the
+    # worker then reports the missing client once instead of the module
+    # failing to import. Module-level on purpose: the supervision tests
+    # monkeypatch these names the way the fusion worker's do.
+    from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+    from aiokafka.errors import (
+        AuthenticationFailedError,
+        ClusterAuthorizationFailedError,
+        GroupAuthorizationFailedError,
+        IllegalSaslStateError,
+        TopicAuthorizationFailedError,
+        UnsupportedSaslMechanismError,
+        UnsupportedVersionError,
+    )
+except ImportError:  # pragma: no cover — exercised only without the dep installed
+    AIOKafkaConsumer = None  # type: ignore[assignment,misc]
+    AIOKafkaProducer = None  # type: ignore[assignment,misc]
+    AuthenticationFailedError = None  # type: ignore[assignment,misc]
+    ClusterAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    GroupAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    IllegalSaslStateError = None  # type: ignore[assignment,misc]
+    TopicAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    UnsupportedSaslMechanismError = None  # type: ignore[assignment,misc]
+    UnsupportedVersionError = None  # type: ignore[assignment,misc]
+
 from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
@@ -103,6 +130,71 @@ WORKFLOW_VERSION = "auto-triage-v1"
 # Bounded retries before dead-lettering a poison alert (issue #571).
 _MAX_ATTEMPTS = int(os.getenv("AISOC_AGENT_MAX_ATTEMPTS", "3"))
 _RETRY_BACKOFF_S = float(os.getenv("AISOC_AGENT_RETRY_BACKOFF_S", "0.5"))
+
+#: Backoff bounds for the supervised worker (#1930). Module constants rather
+#: than defaults baked into the signature so a test can drive the real entry
+#: point — ``start()`` — at test speed. Mirrors
+#: ``services/fusion/app/workers/consumer.py``, where this supervision
+#: pattern shipped first and these tuning notes live.
+SUPERVISOR_INITIAL_BACKOFF_SECONDS = 1.0
+SUPERVISOR_MAX_BACKOFF_SECONDS = 60.0
+
+#: How long one uninterrupted Kafka failure may keep being called transient
+#: before the log escalates to an error naming the operator action. The same
+#: two minutes fusion and ``services/ingest``'s streamhealth use: longer than
+#: a broker restart or a leader election, far shorter than the "forever" a
+#: bare retry loop implies.
+SUPERVISOR_STUCK_AFTER_SECONDS = 120.0
+
+
+def permanent_failure_action(exc: BaseException) -> str | None:
+    """What an operator must change, or ``None`` when a retry may still work.
+
+    The permanent arm of the same three-class split fusion and the Go
+    consumer's streamhealth apply (#1930): transient faults are retried with
+    backoff, permanent ones stop the loop with the operator action on the
+    final log line, and poison messages never reach here because the consume
+    loop dead-letters them. Returning ``None`` for an unrecognised error is
+    what makes the supervisor default to retrying — an unclassified fault
+    retried is a service that recovers from something nobody anticipated,
+    while an unclassified fault treated as permanent is a service that stays
+    down over a blip.
+    """
+    table: tuple[tuple[type[BaseException] | None, str], ...] = (
+        (
+            AuthenticationFailedError,
+            "fix the Kafka credentials this service presents (AISOC_KAFKA_SASL_USERNAME / _PASSWORD)",
+        ),
+        (
+            UnsupportedSaslMechanismError,
+            "set AISOC_KAFKA_SASL_MECHANISM to a mechanism this broker offers",
+        ),
+        (
+            IllegalSaslStateError,
+            "check the SASL mechanism and security protocol agree with the broker's listener",
+        ),
+        (
+            TopicAuthorizationFailedError,
+            "grant this principal Read on the fused-alert topic and Write on its DLQ",
+        ),
+        (
+            GroupAuthorizationFailedError,
+            "grant this principal Read on the triage consumer group",
+        ),
+        (
+            ClusterAuthorizationFailedError,
+            "grant this principal the cluster permissions the broker requires, or point it at a cluster it may use",
+        ),
+        (
+            UnsupportedVersionError,
+            "the broker is older than this client requires; upgrade the broker or pin an older aiokafka",
+        ),
+    )
+    for error_type, action in table:
+        if error_type is not None and isinstance(exc, error_type):
+            return action
+    return None
+
 
 _METRICS = {
     "triaged": 0,
@@ -425,6 +517,15 @@ class FusedAlertTriageWorker:
         self._producer: Any | None = None  # lazily created for the DLQ
         self._running = False
         self._attached = False
+        #: Counts successful attaches so the supervisor can tell "this
+        #: failure, uninterrupted" from a new fault after a healthy stretch —
+        #: the stuck-escalation clock resets when an attempt got as far as
+        #: consuming (#1930).
+        self._attach_count = 0
+        #: Signalled by stop() so supervision's backoff sleeps wake
+        #: immediately instead of making shutdown wait out an exponential
+        #: backoff (#1930).
+        self._stop_event = asyncio.Event()
         # Phase B4 — environment-specific noise reduction applied post-fusion →
         # pre-triage. None = disabled (no rules file / flag off).
         self._business_context = business_context
@@ -439,8 +540,106 @@ class FusedAlertTriageWorker:
         self._lanes = EntityLanes(entity_concurrency)
 
     async def start(self) -> None:
-        from aiokafka import AIOKafkaConsumer  # noqa: PLC0415 — optional dep, only at runtime
+        """Run the worker under supervision until :meth:`stop` is called.
 
+        Reporting a death and healing from it are different properties, and
+        this worker only had the first (#1930): ``app/main.py`` attaches a
+        done-callback and registers :attr:`attached` as a readiness probe, so
+        a consume loop torn out by a broker fault logged
+        ``auto_triage_worker.died`` — once — and nothing ever started it
+        again. A broker that was down for eighteen seconds at boot cost six
+        days of untriaged alerts on the reporting deployment, because
+        aiokafka's own reconnect only applies *after* a successful
+        bootstrap, and the single ``consumer.start()`` was the bootstrap.
+
+        Supervision closes that: a transient Kafka failure is retried with
+        capped exponential backoff, readiness recovers on its own when
+        consumption resumes, and a failure no retry can clear stops the loop
+        with the operator action on the final log line. The consume path
+        itself is unchanged. Same design as
+        ``services/fusion/app/workers/consumer.py``.
+        """
+        backoff = SUPERVISOR_INITIAL_BACKOFF_SECONDS
+        failing_since: float | None = None
+        self._stop_event.clear()
+        while not self._stop_event.is_set():
+            attached_before = self._attach_count
+            try:
+                await self._attempt_start()
+                return  # consume loop ended on a clean stop request
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — classified below, not swallowed
+                if self._stop_event.is_set():
+                    return
+                _METRICS["errors"] += 1
+
+                action = permanent_failure_action(exc)
+                if action is not None:
+                    logger.error(
+                        "auto_triage_worker.failed_permanently",
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                        operator_action=action,
+                        detail=(
+                            "supervision stopped because no retry can clear this; "
+                            "/readyz stays 503 until the cause is fixed and the service restarted"
+                        ),
+                        exc_info=True,
+                    )
+                    return
+
+                # A streak is "this failure, uninterrupted". An attempt that
+                # got as far as consuming means the broker was reachable, so
+                # a later fault starts its own clock.
+                now = time.monotonic()
+                if self._attach_count > attached_before:
+                    failing_since = None
+                if failing_since is None:
+                    failing_since = now
+                failing_for = now - failing_since
+
+                if failing_for >= SUPERVISOR_STUCK_AFTER_SECONDS:
+                    logger.error(
+                        "auto_triage_worker.not_resolving",
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                        failing_for_seconds=round(failing_for, 1),
+                        backoff_seconds=backoff,
+                        operator_action=(
+                            "check that KAFKA_BOOTSTRAP_SERVERS names a broker this "
+                            "container can resolve and reach, and that the topic exists"
+                        ),
+                        detail="still retrying, but this has outlived any transient explanation",
+                        exc_info=True,
+                    )
+                else:
+                    logger.warning(
+                        "auto_triage_worker.crashed_retrying",
+                        error=str(exc),
+                        error_type=type(exc).__name__,
+                        failing_for_seconds=round(failing_for, 1),
+                        backoff_seconds=backoff,
+                    )
+
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
+                    return  # stop() was requested during the backoff
+                except TimeoutError:
+                    pass
+                backoff = min(backoff * 2, SUPERVISOR_MAX_BACKOFF_SECONDS)
+
+    async def _attempt_start(self) -> None:
+        """One bootstrap/consume/teardown cycle. Raises if it cannot start.
+
+        The ``finally`` covers the bootstrap as well as the consume loop: a
+        raise out of ``consumer.start()`` is the commonest retry there is —
+        it is what "the broker is not up yet" looks like — and the next
+        attempt reassigns ``self._consumer``, so anything this attempt built
+        and did not close would be unreachable and never closed.
+        """
+        if AIOKafkaConsumer is None:
+            raise RuntimeError("aiokafka is not installed; the triage worker cannot consume")
         self._consumer = AIOKafkaConsumer(
             self._topic,
             bootstrap_servers=self._bootstrap,
@@ -452,17 +651,18 @@ class FusedAlertTriageWorker:
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
             **kafka_client_kwargs(),
         )
-        await self._consumer.start()
-        self._running = True
-        self._attached = True
-        logger.info(
-            "auto_triage_worker.started",
-            topic=self._topic,
-            group=self._group_id,
-            entity_concurrency=self._lanes.limit,
-        )
         last_commit = time.monotonic()
         try:
+            await self._consumer.start()
+            self._running = True
+            self._attached = True
+            self._attach_count += 1
+            logger.info(
+                "auto_triage_worker.started",
+                topic=self._topic,
+                group=self._group_id,
+                entity_concurrency=self._lanes.limit,
+            )
             async for msg in self._consumer:
                 if not self._running:
                     break
@@ -536,9 +736,12 @@ class FusedAlertTriageWorker:
                     logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
         finally:
             # Cleared before the teardown await, which can itself raise on a
-            # broker that has gone away.
+            # broker that has gone away — and suppressed, because a teardown
+            # raise inside this finally would replace the exception the
+            # supervisor needs to classify (#1930).
             self._attached = False
-            await self._consumer.stop()
+            with contextlib.suppress(Exception):
+                await self._consumer.stop()
 
     async def _process_with_retry(self, message: Any) -> bool:
         """Triage one alert with bounded retries; dead-letter on exhaustion.
@@ -584,8 +787,8 @@ class FusedAlertTriageWorker:
         if self._producer is not None:
             return self._producer
         try:
-            from aiokafka import AIOKafkaProducer  # noqa: PLC0415 — optional dep, runtime only
-
+            if AIOKafkaProducer is None:
+                raise RuntimeError("aiokafka is not installed; the DLQ producer cannot start")
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self._bootstrap,
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
@@ -668,10 +871,14 @@ class FusedAlertTriageWorker:
         return True
 
     async def stop(self) -> None:
+        # First, so supervision's backoff sleep wakes immediately and a retry
+        # loop in flight returns instead of rebuilding a client (#1930).
+        self._stop_event.set()
         self._running = False
         self._attached = False
         if self._consumer is not None:
-            await self._consumer.stop()
+            with contextlib.suppress(Exception):
+                await self._consumer.stop()
             self._consumer = None
         if self._producer is not None:
             with contextlib.suppress(Exception):

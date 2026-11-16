@@ -899,6 +899,22 @@ services:
       CLICKHOUSE_DATABASE: "${CLICKHOUSE_DATABASE:-aisoc}"
       CLICKHOUSE_USER: "${CLICKHOUSE_USER:-aisoc}"
       CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-aisoc_dev_secret}"
+    # /readyz goes 503 while the triage subscription is detached (and
+    # recovers on its own once supervision re-attaches, #1930) — this was
+    # the one Kafka-consuming Python service with no healthcheck, so a
+    # dead subscription was invisible to `docker compose ps` and `make
+    # _wait`. Compose does not restart an unhealthy container (the
+    # in-process supervision is what recovers); the healthcheck is the
+    # honest status surface, and on Kubernetes the chart's readiness
+    # probe reads the same endpoint.
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - "python -c \"import urllib.request,sys; r=urllib.request.urlopen('http://127.0.0.1:8084/readyz',timeout=2); sys.exit(0 if r.status==200 else 1)\" || exit 1"
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 90s
     networks:
       - aisoc
     restart: unless-stopped
