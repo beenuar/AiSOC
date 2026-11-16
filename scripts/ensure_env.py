@@ -157,14 +157,6 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
     # development-class environment the check only warns. So flipping the
     # default without adding these would have turned "anonymous admin" into
     # "the API will not start", which is a worse first run and not a fix.
-    # [NC-7/SEC-15] The threat-intel actor gate reads this. It was never
-    # generated, so the service always ran with the token unset — which now
-    # fails closed (SEC-15); the generated token is what lets authenticated
-    # peers through without the opt-in flag.
-    "AISOC_THREATINTEL_SERVICE_TOKEN": (
-        lambda: secrets.token_urlsafe(32),
-        "Shared bearer for the threat-intel actor attribution API.",
-    ),
     "METRICS_TOKEN": (
         lambda: secrets.token_urlsafe(32),
         "Bearer for /metrics. Prometheus sends it; without it the endpoint is unauthenticated.",

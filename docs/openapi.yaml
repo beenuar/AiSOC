@@ -26780,6 +26780,11 @@ components:
           additionalProperties: true
           type: object
           title: Tags
+        resolution:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution
         sla_due_at:
           anyOf:
           - type: string
@@ -43417,6 +43422,11 @@ components:
             format: date-time
           - type: 'null'
           title: Sla Due At
+        resolution:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Resolution
       type: object
       title: UpdateCaseRequest
     UpdateConnectorRequest:

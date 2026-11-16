@@ -45,7 +45,7 @@ from urllib.parse import quote
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse, PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import select, text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
@@ -233,6 +233,12 @@ class UpdateCaseRequest(BaseModel):
     compliance_frameworks: list[str] | None = None
     tags: dict[str, str] | None = None
     sla_due_at: datetime | None = None
+    #: Final summary / root cause / remediation. The column has existed since
+    #: migration 046 (083 on the consolidated table) and the console has
+    #: always rendered a Resolution panel, but nothing could write it: this
+    #: model had no field, so whatever the analyst typed was lost on reload
+    #: (#1932). An empty string is a valid value (clearing the resolution).
+    resolution: str | None = None
 
 
 class AddAlertsRequest(BaseModel):
@@ -258,7 +264,14 @@ class UpdateObservablesRequest(BaseModel):
 
 
 class AddCommentRequest(BaseModel):
-    body: str = Field(..., min_length=1)
+    # `comment` is accepted as an alias because the console's
+    # ``casesApi.addComment`` sent ``{"comment": ...}`` for several releases
+    # while this model only read ``body`` — every post 422'd, and the
+    # workspace's optimistic insert made the failure invisible (#1932).
+    # Accepting both names fixes deployed consoles against a new API, while
+    # the console itself now sends ``body``; new callers should prefer
+    # ``body``, which is also what the response and the row column are named.
+    body: str = Field(..., min_length=1, validation_alias=AliasChoices("body", "comment"))
     # `is_system` is no longer accepted from callers (GHSA-9mc5-hqgh-j6wf).
     # It was, and `case_summary` renders such a row as an unattributed
     # "System note" while the post-mortem drops it from the analyst record,
@@ -298,6 +311,9 @@ class CaseResponse(BaseModel):
     updated_at: datetime
     created_by: str | None
     tags: dict[str, Any]
+    #: See ``UpdateCaseRequest.resolution``. ``None`` means never written,
+    #: which is the honest value for rows that predate the write path.
+    resolution: str | None = None
     sla_due_at: datetime | None
     # Workstream 8 — populated only by ``POST /cases`` (create-time
     # fan-out) and ``PATCH /cases/{id}`` when ``status`` is changed.
@@ -453,6 +469,10 @@ def _row_to_case(row: Any) -> CaseResponse:
         created_by=row.created_by,
         tags=_coerce_tags(row.tags),
         sla_due_at=row.sla_due_at,
+        # `getattr` with a default for the same reason as `reopened_at`
+        # above: some callers hand this mapper rows selected with an
+        # explicit column list that predates the column.
+        resolution=getattr(row, "resolution", None),
     )
 
 
@@ -827,6 +847,9 @@ async def update_case(
     if body.tags is not None:
         sets.append("tags = CAST(:tags AS JSONB)")
         params["tags"] = _json.dumps(body.tags)
+    if body.resolution is not None:
+        sets.append("resolution = :resolution")
+        params["resolution"] = body.resolution
 
     if body.status:
         sets.append("status = :status")

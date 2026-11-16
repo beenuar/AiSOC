@@ -627,6 +627,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   const addComment = async () => {
     const trimmed = newComment.trim();
     if (!caseRecord || !trimmed) return;
+    const previousTimeline = caseRecord.timeline ?? [];
     const optimistic: CaseTimelineEvent = {
       id: `tl-tmp-${Date.now()}`,
       type: "comment",
@@ -636,21 +637,34 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       actor: "you",
     };
     void mutate(
-      { ...caseRecord, timeline: [...(caseRecord.timeline ?? []), optimistic] },
+      { ...caseRecord, timeline: [...previousTimeline, optimistic] },
       { revalidate: false }
     );
     setNewComment("");
     try {
       await casesApi.addComment(caseRecord.id, trimmed);
       toast.success("Comment added");
-    } catch {
-      toast("Saved locally (writes disabled in demo)");
+    } catch (e: unknown) {
+      if (canUseDemoData()) {
+        // The hosted demo has no write path; the local entry is the product.
+        toast("Saved locally (writes disabled in demo)");
+        return;
+      }
+      // The optimistic entry has to come back off. This branch used to show
+      // the demo copy on every deployment, so a 422 read as "saved" and the
+      // note silently vanished on the next reload (#1932). Restore the
+      // composer so the analyst's text is not lost either.
+      void mutate({ ...caseRecord, timeline: previousTimeline }, { revalidate: false });
+      setNewComment(trimmed);
+      const message = e instanceof Error ? e.message : "the case service rejected the write";
+      toast.error(`Comment not saved — ${message}`);
     }
   };
 
   const addTask = async () => {
     const trimmed = newTask.trim();
     if (!caseRecord || !trimmed) return;
+    const previousTasks = caseRecord.tasks ?? [];
     const optimistic: CaseTask = {
       id: `task-tmp-${Date.now()}`,
       title: trimmed,
@@ -658,15 +672,52 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
       createdAt: new Date().toISOString(),
     };
     void mutate(
-      { ...caseRecord, tasks: [...(caseRecord.tasks ?? []), optimistic] },
+      { ...caseRecord, tasks: [...previousTasks, optimistic] },
       { revalidate: false }
     );
     setNewTask("");
     try {
       await casesApi.addTask(caseRecord.id, optimistic);
       toast.success("Task added");
-    } catch {
-      toast("Saved locally (writes disabled in demo)");
+    } catch (e: unknown) {
+      if (canUseDemoData()) {
+        toast("Saved locally (writes disabled in demo)");
+        return;
+      }
+      // Same rollback contract as addComment: a failed write must not keep
+      // rendering as a saved task on a real deployment (#1932).
+      void mutate({ ...caseRecord, tasks: previousTasks }, { revalidate: false });
+      setNewTask(trimmed);
+      const message = e instanceof Error ? e.message : "the case service rejected the write";
+      toast.error(`Task not saved — ${message}`);
+    }
+  };
+
+  // Resolution is server-persisted (PATCH /cases/{id} `resolution`). A null
+  // draft means "not edited since load/save", so the textarea shows the
+  // stored value and the Save button only lights up on a real change — the
+  // panel used to be a bare `defaultValue` textarea with no save path at
+  // all, so whatever the analyst typed was lost on reload (#1932).
+  const [resolutionDraft, setResolutionDraft] = useState<string | null>(null);
+  const [resolutionSaving, setResolutionSaving] = useState(false);
+
+  const saveResolution = async () => {
+    if (!caseRecord || resolutionDraft === null || resolutionSaving) return;
+    setResolutionSaving(true);
+    try {
+      await casesApi.update(caseRecord.id, { resolution: resolutionDraft });
+      void mutate({ ...caseRecord, resolution: resolutionDraft }, { revalidate: false });
+      setResolutionDraft(null);
+      toast.success("Resolution saved");
+    } catch (e: unknown) {
+      if (canUseDemoData()) {
+        toast("Saved locally (writes disabled in demo)");
+      } else {
+        const message = e instanceof Error ? e.message : "the case service rejected the write";
+        toast.error(`Resolution not saved — ${message}`);
+      }
+    } finally {
+      setResolutionSaving(false);
     }
   };
 
@@ -1138,12 +1189,24 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               </Panel>
 
               <Panel title="Resolution">
-                <textarea
-                  defaultValue={caseRecord.resolution ?? ""}
-                  rows={5}
-                  placeholder="Final summary, root cause, remediation…"
-                  className="w-full resize-none rounded-md border border-slate-700/70 bg-slate-900/40 px-2 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:border-emerald-500/40 focus:outline-none"
-                />
+                <div className="space-y-2">
+                  <textarea
+                    value={resolutionDraft ?? caseRecord.resolution ?? ""}
+                    onChange={(e) => setResolutionDraft(e.target.value)}
+                    rows={5}
+                    placeholder="Final summary, root cause, remediation…"
+                    className="w-full resize-none rounded-md border border-slate-700/70 bg-slate-900/40 px-2 py-1.5 text-xs text-slate-100 placeholder-slate-600 focus:border-emerald-500/40 focus:outline-none"
+                  />
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={() => void saveResolution()}
+                      disabled={resolutionDraft === null || resolutionSaving}
+                      className="rounded-md bg-emerald-500 px-2.5 py-1.5 text-xs font-semibold text-emerald-950 transition-colors hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                    >
+                      {resolutionSaving ? "Saving…" : "Save resolution"}
+                    </button>
+                  </div>
+                </div>
               </Panel>
             </aside>
           </div>
