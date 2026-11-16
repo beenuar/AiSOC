@@ -28,6 +28,7 @@ keys are explicitly enumerated as allowed by ``LLMInputContract``.
 from __future__ import annotations
 
 import asyncio
+import itertools
 import os
 import re
 import time
@@ -219,6 +220,146 @@ class UEBABaseline(BaseModel):
     baseline: dict[str, float] = Field(default_factory=dict)
     deviation_score: float = 0.0
     notes: str = ""
+
+
+#: Where the UEBA service actually listens (docker-compose publishes
+#: ``8007:8004``; the container port is what service-to-service DNS reaches).
+#: The previous default named ``:8086``, a port nothing has ever listened on,
+#: so every lookup failed with a connection error on every deployment (#1929).
+_DEFAULT_UEBA_URL = "http://ueba:8004"
+
+#: Bundle entity vocabulary → UEBA entity vocabulary. UEBA's Kafka consumer
+#: stores hosts as ``device`` and has no ``email`` kind at all, so ``host``
+#: is translated and ``email`` is not queried — a query that can never match
+#: is worse than none, because it reads as "no baseline" rather than "not a
+#: baselined kind". See ``ENTITY_TYPES`` in services/ueba/app/api/routes.py.
+_UEBA_ENTITY_TYPES: dict[str, str] = {"user": "user", "host": "device", "ip": "ip"}
+
+#: Once-per-process latch for the UEBA failure log. The failure mode this
+#: guards is a *permanently* broken source (wrong URL, missing token): at
+#: ``debug`` it was invisible for six days on a real deployment (#1929), and
+#: at ``warning`` per entity it would print for every entity of every triage.
+#: One warning names the problem; the per-entity detail stays at debug.
+#: A counter rather than a rebound global: consuming it needs no ``global``
+#: statement, which is also what keeps the route-state and unused-global
+#: scanners quiet about module mutation.
+_UEBA_FAILURES_SEEN = itertools.count()
+
+
+def _ueba_headers(tenant_id: str) -> dict[str, str]:
+    """Service credential + tenant assertion for a UEBA call.
+
+    Client-side mirror of UEBA's ``resolve_token()`` (per-service override
+    first, then the platform token) — the same pattern as
+    ``tools/enrichment.service_headers``. The caller must present *UEBA's*
+    inbound token: sending this service's own ``AISOC_AGENTS_SERVICE_TOKEN``
+    is a 401, which is exactly the mistake #1929 documents.
+    """
+    headers: dict[str, str] = {}
+    token = (os.getenv("AISOC_UEBA_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    if tenant_id.strip():
+        headers["X-AiSOC-Tenant-ID"] = tenant_id.strip()
+    return headers
+
+
+def _log_ueba_failure(entity_key: str, exc: Exception) -> None:
+    """First failure in the process warns; the rest stay at debug."""
+    if next(_UEBA_FAILURES_SEEN) == 0:
+        logger.warning(
+            "context.ueba.failed",
+            entity=entity_key,
+            error=str(exc),
+            detail=(
+                "peer baselines will be absent from triage context until this is fixed; "
+                "further failures log at debug. Check AISOC_UEBA_URL and the service token."
+            ),
+        )
+        return
+    logger.debug("context.ueba.failed", entity=entity_key, error=str(exc))
+
+
+def _baseline_from_wire(
+    entity: EntityRef,
+    row: dict[str, Any],
+    *,
+    deviation_score: float,
+    notes: str,
+) -> UEBABaseline:
+    """Map UEBA's ``BaselineOut`` wire shape onto the bundle's model.
+
+    The previous reader used field names ``BaselineOut`` has never had
+    (``baseline_features``, ``window_days``, ``deviation_score``), so even a
+    matching row produced an empty baseline (#1929). What the wire actually
+    carries: ``feature_stats`` as ``{feature: {mean, std, count}}`` and the
+    ``window_start``/``window_end`` pair.
+    """
+    stats = row.get("feature_stats")
+    baseline: dict[str, float] = {}
+    if isinstance(stats, dict):
+        for feature, st in stats.items():
+            if isinstance(st, dict) and isinstance(st.get("mean"), int | float):
+                baseline[str(feature)] = float(st["mean"])
+
+    try:
+        start = datetime.fromisoformat(str(row.get("window_start")))
+        end = datetime.fromisoformat(str(row.get("window_end")))
+        window_days = max(1, round((end - start).total_seconds() / 86400))
+    except (TypeError, ValueError):
+        # Window absent or unparseable: fall back to the model's documented
+        # default rather than inventing a span from half a pair.
+        window_days = 30
+
+    peer_group = row.get("peer_group_id")
+    return UEBABaseline(
+        entity=entity,
+        peer_group_id=str(peer_group) if peer_group else None,
+        activity_window_days=window_days,
+        baseline=baseline,
+        deviation_score=deviation_score,
+        notes=notes,
+    )
+
+
+async def _latest_anomaly_score(
+    client: httpx.AsyncClient,
+    ueba_url: str,
+    headers: dict[str, str],
+    *,
+    tenant_id: str,
+    entity_type: str,
+    entity_id: str,
+) -> tuple[float, str]:
+    """Newest UEBA anomaly score for the entity, with an honest provenance note.
+
+    A baseline row describes the entity's norm; it carries no deviation.
+    ``/anomalies`` is where UEBA publishes how far the entity has strayed, so
+    the bundle's ``deviation_score`` is read from there (its 24h default
+    window). No anomaly is a real answer — the entity is behaving — and a
+    failed lookup is labelled as not computed rather than scored 0.
+    """
+    try:
+        resp = await client.get(
+            f"{ueba_url}/api/v1/ueba/anomalies",
+            params={
+                "tenant_id": tenant_id,
+                "entity_type": entity_type,
+                "entity_id": entity_id,
+                "limit": 1,
+            },
+            headers=headers,
+        )
+        resp.raise_for_status()
+        rows = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else []
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("context.ueba.anomaly_lookup_failed", entity=f"{entity_type}:{entity_id}", error=str(exc))
+        return 0.0, "deviation not computed: anomaly lookup failed"
+    if isinstance(rows, list) and rows and isinstance(rows[0], dict):
+        score = rows[0].get("anomaly_score")
+        if isinstance(score, int | float):
+            return float(score), "deviation_score is the newest UEBA anomaly score (24h window)"
+    return 0.0, "no UEBA anomalies in the window"
 
 
 class ThreatIntelMatch(BaseModel):
@@ -700,46 +841,69 @@ class ContextBundleBuilder:
         tenant_id: str,
         entities: list[EntityRef],
     ) -> dict[str, UEBABaseline]:
-        """Pull per-entity UEBA baselines from the UEBA service."""
-        ueba_url = os.getenv("AISOC_UEBA_URL", "http://ueba:8086")
-        principals = [e for e in entities if e.type in ("user", "email", "host", "ip")]
+        """Pull per-entity UEBA baselines from the UEBA service.
+
+        Four independent defects meant this never returned a row on any
+        deployment (#1929): the default URL named a port UEBA does not
+        listen on, the request carried no service credential against a
+        router that fails closed, the bundle's entity vocabulary was passed
+        through although UEBA stores hosts as ``device`` and never stores
+        ``email``, and the response was read through field names UEBA's
+        ``BaselineOut`` does not have. Each is addressed where it belongs:
+        URL and headers below, the type map and wire mapping in the module
+        helpers, and the over-fetch by passing ``entity_id`` so the server
+        filters (an older UEBA ignores the parameter, so the client-side
+        match stays as compatibility).
+        """
+        ueba_url = os.getenv("AISOC_UEBA_URL", _DEFAULT_UEBA_URL).rstrip("/")
+        principals = [e for e in entities if e.type in _UEBA_ENTITY_TYPES]
         if not principals:
             self._record_source("ueba")
             return {}
 
+        headers = _ueba_headers(tenant_id)
         out: dict[str, UEBABaseline] = {}
 
         async with httpx.AsyncClient(timeout=self.per_source_timeout) as client:
 
             async def _one(entity: EntityRef) -> tuple[str, UEBABaseline] | None:
-                # The UEBA list endpoint takes tenant + entity_type, then we
-                # filter client-side. We accept that this is over-fetching
-                # for now; the bundle is still bounded by ``history_limit``.
+                ueba_type = _UEBA_ENTITY_TYPES[entity.type]
                 try:
                     resp = await client.get(
                         f"{ueba_url}/api/v1/ueba/baselines",
-                        params={"tenant_id": tenant_id, "entity_type": entity.type, "limit": 50},
+                        params={
+                            "tenant_id": tenant_id,
+                            "entity_type": ueba_type,
+                            "entity_id": entity.value,
+                            "limit": 1,
+                        },
+                        headers=headers,
                     )
                     resp.raise_for_status()
                     rows = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else []
                 except Exception as exc:  # noqa: BLE001
-                    logger.debug("context.ueba.failed", entity=entity.key, error=str(exc))
+                    _log_ueba_failure(entity.key, exc)
                     return None
                 if not isinstance(rows, list):
                     return None
                 for row in rows:
                     if not isinstance(row, dict):
                         continue
+                    # Redundant against a current UEBA (the server already
+                    # filtered on entity_id) and load-bearing against an
+                    # older one that ignores the parameter and returns its
+                    # newest row of that type.
                     if row.get("entity_id") != entity.value:
                         continue
-                    return entity.key, UEBABaseline(
-                        entity=entity,
-                        peer_group_id=row.get("peer_group_id"),
-                        activity_window_days=int(row.get("window_days", 30)),
-                        baseline=row.get("baseline_features", {}) or {},
-                        deviation_score=float(row.get("deviation_score", 0.0) or 0.0),
-                        notes=str(row.get("notes", "")),
+                    deviation, note = await _latest_anomaly_score(
+                        client,
+                        ueba_url,
+                        headers,
+                        tenant_id=tenant_id,
+                        entity_type=ueba_type,
+                        entity_id=entity.value,
                     )
+                    return entity.key, _baseline_from_wire(entity, row, deviation_score=deviation, notes=note)
                 return None
 
             results = await asyncio.gather(*[_one(e) for e in principals], return_exceptions=True)

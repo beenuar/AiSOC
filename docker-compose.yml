@@ -798,6 +798,13 @@ services:
       # gate, which fails closed; without it every attribution call 503s.
       AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
       REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
+      # Where the context bundle reads per-entity behavioural baselines.
+      # UEBA listens on 8004 inside the network (published as 8007); the
+      # code default used to name :8086 and every lookup failed silently
+      # (#1929). UEBA is a `full`-profile service: on a core-profile
+      # deployment this hostname does not resolve and the bundle logs one
+      # warning, which is the honest state rather than a defect.
+      AISOC_UEBA_URL: ${AISOC_UEBA_URL:-http://ueba:8004}
       AISOC_INVESTIGATION_MAX_SECONDS: ${AISOC_INVESTIGATION_MAX_SECONDS:-120}
       # The agents :15002/metrics gate compares against this token exactly as
       # the api service's does; without it in this environment every scrape
