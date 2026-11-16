@@ -1165,7 +1165,14 @@ function ApiKeysPanel() {
     try {
       const created = await apiKeysApi.create({
         name: draftName.trim(),
-        scopes: ['cases:read', 'detection:read'],
+        // Read-only pair from the server's VALID_SCOPES. This used to send
+        // `detection:read`, a scope that has never existed (the real one is
+        // `rules:read`), so every Generate click 422'd and no key could be
+        // created from the UI at all (#1934). The API refuses unknown scopes
+        // rather than narrowing them, which is the right failure direction —
+        // the drift gate is test_api_key_ui_scope_drift.py, which pins this
+        // literal against VALID_SCOPES so the two lists cannot part again.
+        scopes: ['cases:read', 'alerts:read'],
       });
       // The raw secret is returned exactly once by the backend, so this is the
       // only moment it can be shown.

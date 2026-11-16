@@ -385,6 +385,33 @@ function handleUnauthorized(path: string): void {
   }
 }
 
+/**
+ * The human-readable half of a FastAPI error body, or null.
+ *
+ * FastAPI publishes either `{"detail": "<reason>"}` or, for validation
+ * errors, `{"detail": [{"msg": ...}, ...]}`. Capped so a toast stays a
+ * toast; the uncut body is on {@link ApiError.body} for anyone who needs it.
+ */
+export function apiErrorDetail(raw: string): string | null {
+  if (!raw) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    const detail = (parsed as { detail?: unknown })?.detail;
+    if (typeof detail === "string" && detail.trim()) {
+      return detail.trim().slice(0, 300);
+    }
+    if (Array.isArray(detail)) {
+      const msgs = detail
+        .map((entry) => (typeof (entry as { msg?: unknown })?.msg === "string" ? (entry as { msg: string }).msg : null))
+        .filter((m): m is string => Boolean(m));
+      if (msgs.length) return msgs.join("; ").slice(0, 300);
+    }
+  } catch {
+    /* not JSON — the status line is all we can honestly add */
+  }
+  return null;
+}
+
 async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
   let response: Response;
   try {
@@ -396,8 +423,13 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "");
+    // Surface the server's own `detail` in the message. Every surface that
+    // toasts `err.message` used to show only the status line, so a 422 whose
+    // body named the exact problem ("Invalid scope(s): …") read as an opaque
+    // failure (#1934). The raw body still rides on `ApiError.body`.
+    const detail = apiErrorDetail(errorText);
     throw new ApiError(
-      `API ${response.status} ${response.statusText} — ${path}`,
+      `API ${response.status} ${response.statusText} — ${path}` + (detail ? `: ${detail}` : ""),
       response.status,
       errorText
     );

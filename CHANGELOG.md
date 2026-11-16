@@ -262,6 +262,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builds a fresh registry so an outage cannot linger as a stale value.
   Pinned by tests that parse the output with Prometheus's own text parser.
 
+- **Settings → API keys: Generate works again, and 4xx toasts name the
+  reason** (#1934). The console hardcoded every new key's scopes to
+  `['cases:read', 'detection:read']`, and `detection:read` has never been a
+  valid scope (the real one is `rules:read`), so `_validate_scopes` refused
+  every request and no API key could be created from the UI at all. The
+  default is now the read-only pair `['cases:read', 'alerts:read']`, pinned
+  by a drift gate (`test_api_key_ui_scope_drift.py`) that parses the
+  console's literal scope arrays and asserts each is a subset of the
+  server's `VALID_SCOPES`, so the two lists cannot part again. The failure
+  was also unreadable: `ApiError.message` carried only the status line, so
+  the 422's body ("Invalid scope(s): …") never reached the toast — the
+  shared `request()` transport now appends the server's FastAPI `detail`
+  (string or validation array, capped) to the message, which improves every
+  console surface that toasts `err.message`. A scope picker in the key
+  dialog remains open as a follow-up; this restores the broken path and
+  fences the drift class.
+
 - **Cyble enrichment is configured by the name the code actually reads**
   (#1886). The enrichment service enables Cyble on `CYBLE_API_KEY` (and reads `CYBLE_BASE_URL`)
   — `main.go` gates the provider on `cfg.CybleAPIKey != ""`, `config.go` loads it
