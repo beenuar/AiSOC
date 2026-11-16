@@ -204,6 +204,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — they fail on the undeclared model. Reported with the root cause and
   the fix by @alexmateescu.
 
+- **UEBA baselines actually reach the agents context bundle** (#1929).
+  `ContextBundleBuilder._fetch_baselines` could not return a row on any
+  deployment, for four independent reasons: its default URL named `:8086`
+  (UEBA listens on 8004), the request carried no service credential or
+  tenant assertion against a router that fails closed, the bundle passed its
+  own entity vocabulary through although UEBA stores hosts as `device` and
+  has no `email` kind, and the response was read through field names
+  `BaselineOut` has never had — so even a matching row produced an empty
+  baseline. The default is now `http://ueba:8004` (set explicitly for
+  `agents` in compose), calls present the UEBA service token (per-service
+  override, then `AISOC_SERVICE_TOKEN`) plus `X-AiSOC-Tenant-ID`, entity
+  types are mapped (`host`→`device`; `email` is not queried), and the wire
+  mapping reads `feature_stats`/`window_start`/`window_end` as published.
+  `deviation_score` now comes from the entity's newest `/anomalies` row with
+  an honest "not computed" note when the lookup fails, instead of a silent
+  0.0. UEBA's `GET /baselines` gained a server-side `entity_id` filter (the
+  bundle used to fetch the newest page and filter client-side, so entities
+  outside that page were unreachable) and `BaselineOut` now exposes
+  `peer_group_id`. A permanently broken UEBA source now logs one `warning`
+  per process instead of per-entity `debug` lines nobody sees.
+
 - **Cyble enrichment can be enabled on the Docker stack** (#1898). The
   enrichment service builds the Cyble Vision client unconditionally and gates
   the provider on `CYBLE_API_KEY` / `CYBLE_BASE_URL` (`config.go`, logged by

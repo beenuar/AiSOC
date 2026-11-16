@@ -86,6 +86,12 @@ OPERATOR_SUPPLIED: dict[str, str] = {
     # can. Unset means the shared AISOC_SERVICE_TOKEN, which first run
     # generates.
     "AISOC_ENRICHMENT_SERVICE_TOKEN": "per-service override for AISOC_SERVICE_TOKEN",
+    # Same resolution as enrichment's, one service over (#1929): UEBA's own
+    # resolve_token() prefers this and falls back to the shared token, and
+    # the agents context bundle mirrors that preference on the client side
+    # so a deployment that isolates UEBA's credential can. Unset means the
+    # shared AISOC_SERVICE_TOKEN, which first run generates.
+    "AISOC_UEBA_SERVICE_TOKEN": "per-service override for AISOC_SERVICE_TOKEN",
     "AISOC_INTERNAL_TOKEN": "bearer for the opt-in chatops fan-out; unset means no ChatOps notification",
 }
 

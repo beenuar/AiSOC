@@ -107,6 +107,9 @@ class BaselineOut(BaseModel):
     entity_type: str
     entity_id: str
     feature_stats: dict
+    #: Peer-group membership. The column has been on ``EntityBaseline`` all
+    #: along; the agents context bundle reads it for triage context (#1929).
+    peer_group_id: str | None = None
     window_start: datetime
     window_end: datetime
 
@@ -187,12 +190,20 @@ async def list_baselines(
     principal: ScopedPrincipal,
     tenant_id: uuid.UUID | None = Query(None),
     entity_type: str | None = Query(None),
+    # Server-side point lookup. Without it a caller interested in one entity
+    # had to fetch the newest ``limit`` rows and filter client-side, so any
+    # entity outside the most recently updated rows was unreachable — the
+    # agents context bundle hit exactly that truncation once a deployment
+    # accumulated more baselines than one page (#1929).
+    entity_id: str | None = Query(None),
     limit: int = Query(50, ge=1, le=200),
 ) -> list[BaselineOut]:
     scoped = scoped_tenant_or_403(principal, tenant_id)
     q = select(EntityBaseline).where(EntityBaseline.tenant_id == scoped).order_by(desc(EntityBaseline.updated_at)).limit(limit)
     if entity_type:
         q = q.where(EntityBaseline.entity_type == entity_type)
+    if entity_id:
+        q = q.where(EntityBaseline.entity_id == entity_id)
     result = await db.execute(q)
     return [BaselineOut.model_validate(row) for row in result.scalars().all()]
 
