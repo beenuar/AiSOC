@@ -22,6 +22,7 @@ Resolves the ``[#TODO-attribution-rbac]`` caveat in
 
 from __future__ import annotations
 
+import functools
 import hmac
 import os
 
@@ -34,12 +35,26 @@ logger = structlog.get_logger(__name__)
 
 _BEARER_PREFIX = "bearer "
 
-# Warn at most once per process so an exposed-but-unauthenticated deployment
-# is visible in logs without flooding them on every request. A mutable dict
-# rather than a module global rebound with `global`: CodeQL reads the latter
-# as an unused write (the same alert the OTel `_ENABLED` flag carried before
-# it became `_STATE`), and the dict says what it is.
-_state = {"warned_unconfigured": False}
+
+@functools.lru_cache(maxsize=1)
+def _warn_unconfigured_once() -> None:
+    """Warn once per process that the gate is refusing for want of a token.
+
+    ``lru_cache`` is the once-mechanism rather than a module flag: CodeQL
+    reads a ``global`` rebind as an unused write, and the route-state gate
+    (rightly) refuses route modules that keep mutable module-level
+    containers — a cached no-arg call keeps the once-only behaviour with
+    neither.
+    """
+    logger.warning(
+        "actor_auth.unconfigured",
+        detail=(
+            "AISOC_THREATINTEL_SERVICE_TOKEN is unset; /api/v1/actors/* "
+            "refuses callers (503). Set it — ensure_env generates one — "
+            "or opt into the open mode with "
+            "AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1."
+        ),
+    )
 
 
 def _expected_token() -> str:
@@ -58,17 +73,7 @@ async def require_actor_auth(authorization: str | None = Header(default=None)) -
     """
     expected = _expected_token()
     if not expected:
-        if not _state["warned_unconfigured"]:
-            logger.warning(
-                "actor_auth.unconfigured",
-                detail=(
-                    "AISOC_THREATINTEL_SERVICE_TOKEN is unset; /api/v1/actors/* "
-                    "refuses callers (503). Set it — ensure_env generates one — "
-                    "or opt into the open mode with "
-                    "AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1."
-                ),
-            )
-            _state["warned_unconfigured"] = True
+        _warn_unconfigured_once()
         # [SEC-15] Fail closed. An unset token used to warn and allow every
         # caller, leaving the actor-attribution profiles exposed to anyone
         # who could reach the port, with a log line as the only trace.
