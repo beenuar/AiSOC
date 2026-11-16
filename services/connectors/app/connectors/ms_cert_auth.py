@@ -68,6 +68,12 @@ class CertificateCredential:
                 cert = x509.load_pem_x509_certificate(data[data.index(_CERT_BEGIN) :])
             except Exception as exc:
                 raise ValueError(f"certificate_pem contains an unreadable CERTIFICATE block: {exc}") from exc
+            # Vendor-mandated: the JWT `x5t` header IS the certificate's SHA-1
+            # thumbprint — Microsoft identifies the uploaded certificate by it
+            # and rejects an assertion without it. Nothing security-bearing is
+            # hashed here; the signature itself is RS256. The SHA-256 variant
+            # rides along as `x5t#S256` when the cert is present.
+            # nosemgrep: security.semgrep.python.cryptography.security.insecure-hash-algorithms.insecure-hash-algorithm-sha1
             sha1 = cert.fingerprint(hashes.SHA1())  # noqa: S303 - Entra identifies certs by SHA-1 (x5t)
             self._x5t_s256 = b64url(cert.fingerprint(hashes.SHA256()))
         else:
