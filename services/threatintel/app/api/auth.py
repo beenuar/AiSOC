@@ -1,11 +1,14 @@
-"""Optional shared-secret auth for the threat-actor attribution HTTP surface.
+"""Shared-secret auth for the threat-actor attribution HTTP surface.
 
-The ``threatintel`` service runs inside the cluster's private network, so by
-default the ``/api/v1/actors/*`` endpoints accept internal calls without
-authentication (their historical behaviour). When an operator exposes the
-service beyond that perimeter — or runs it in an MSSP / multi-tenant
-deployment — they set ``AISOC_THREATINTEL_SERVICE_TOKEN``; the endpoints then
-require ``Authorization: Bearer <token>``, compared in constant time.
+The ``/api/v1/actors/*`` endpoints require ``AISOC_THREATINTEL_SERVICE_TOKEN``
+(``Authorization: Bearer <token>``, compared in constant time). An unset
+token refuses every caller with 503 rather than failing open — the service
+historically allowed unauthenticated internal calls, which left actor
+profiles readable by anyone who could reach the port the moment a deployment
+exposed it (SEC-15). ``ensure_env`` generates the token and compose forwards
+it to this service and to the calling agents, so the default stack is closed
+with no operator step; the pre-token open behaviour survives only behind an
+explicit ``AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1``.
 
 This mirrors two existing conventions in the codebase:
 
@@ -32,8 +35,11 @@ logger = structlog.get_logger(__name__)
 _BEARER_PREFIX = "bearer "
 
 # Warn at most once per process so an exposed-but-unauthenticated deployment
-# is visible in logs without flooding them on every request.
-_warned_unconfigured = False
+# is visible in logs without flooding them on every request. A mutable dict
+# rather than a module global rebound with `global`: CodeQL reads the latter
+# as an unused write (the same alert the OTel `_ENABLED` flag carried before
+# it became `_STATE`), and the dict says what it is.
+_state = {"warned_unconfigured": False}
 
 
 def _expected_token() -> str:
@@ -43,25 +49,26 @@ def _expected_token() -> str:
 async def require_actor_auth(authorization: str | None = Header(default=None)) -> None:
     """FastAPI dependency gating the ``/api/v1/actors/*`` endpoints.
 
-    * Token unset → allow (internal-only default), warning once so operators
-      who have exposed the service notice it is unauthenticated.
+    * Token unset → **503** (SEC-15: fail closed; the pre-token open
+      behaviour survives only behind an explicit
+      ``AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1``), warning once so an
+      operator sees why every caller is refused.
     * Token set → require a matching ``Authorization: Bearer <token>``,
       constant-time compared; missing or wrong → ``401``.
     """
     expected = _expected_token()
     if not expected:
-        global _warned_unconfigured
-        if not _warned_unconfigured:
+        if not _state["warned_unconfigured"]:
             logger.warning(
                 "actor_auth.unconfigured",
                 detail=(
                     "AISOC_THREATINTEL_SERVICE_TOKEN is unset; /api/v1/actors/* "
-                    "is unauthenticated. Set it (and configure the investigation "
-                    "agent with the same value) before exposing the service "
-                    "beyond the private network."
+                    "refuses callers (503). Set it — ensure_env generates one — "
+                    "or opt into the open mode with "
+                    "AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1."
                 ),
             )
-            _warned_unconfigured = True  # codeql[py/unused-global-variable] — read via `global` guard at line 53
+            _state["warned_unconfigured"] = True
         # [SEC-15] Fail closed. An unset token used to warn and allow every
         # caller, leaving the actor-attribution profiles exposed to anyone
         # who could reach the port, with a log line as the only trace.
