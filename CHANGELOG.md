@@ -115,31 +115,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **The threat-actor attribution API fails closed, and the default stack
-  carries the key** (#1901, SEC-15/NC-7). `/api/v1/actors/*` was fail-open
-  by design: an unset `AISOC_THREATINTEL_SERVICE_TOKEN` warned once and
-  allowed every caller, so a deployment that exposed the service beyond the
-  private network served actor profiles to anyone who could reach the port,
-  with a log line as the only trace. The gate now answers 503 when the
-  token is unset (the pre-token open behaviour survives only behind an
-  explicit `AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1`), `ensure_env.py`
-  generates the token, and — the half the carry adds — compose forwards it
-  to the enforcing `threatintel` container *and* the calling `agents`
-  container, because a generated value that never reaches either end is a
-  503 for every attribution call on the default stack (the
-  generated-but-unforwarded class from #1898, pinned by the same shape of
-  gate: readers derived from the tree, forwarding asserted per service).
-  Contributed by @alexmateescu.
-
-- **Tenant provisioning refuses demo identities outside development**
-  (#1901, SEC-2). The demo dataset creates a known-password administrator
-  (`demo@example.com` / `aisoc-demo`) inside the live tenant, and the
-  seeder's own production guard covered only the standalone script —
-  `provision_from_waitlist` bypassed it, so a production waitlist
-  provisioning that asked for demo seeding got the known-password admin. A
-  non-development `ENVIRONMENT` now never seeds demo identity, whatever the
-  caller asked for, logged with the refusal. Contributed by @alexmateescu.
-
 - **BREAKING: action requests require a principal by default** (#1900,
   NC-3). `AISOC_ACTIONS_REQUIRE_PRINCIPAL` shipped `default=False`, so a
   principal-less `ActionRequest` passed `authorize_action` with no identity
@@ -197,6 +172,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range moves, three lines of churn.
 
 ### Fixed
+
+- **Case comments save again, and the Resolution panel actually persists**
+  (#1932). `casesApi.addComment` sent `{"comment": ...}` while the API's
+  `AddCommentRequest` read only `body`, so every post from the console
+  422'd — invisibly, because the workspace had already inserted the comment
+  optimistically and the catch showed "Saved locally (writes disabled in
+  demo)" on every deployment, demo or not. The model now accepts both key
+  names (`body` canonical, `comment` aliased for deployed consoles), the
+  console sends `body`, and a failed comment/task write on a non-demo
+  deployment now rolls the optimistic entry back, restores the composer text
+  and shows a real error instead of claiming a save. The Resolution textarea
+  was `defaultValue`-only with no save path anywhere — no client call, no
+  `UpdateCaseRequest` field, nothing in the response — although the
+  `aisoc_cases.resolution` column has existed since migration 046 and the
+  console typed it; `PATCH /api/v1/cases/{id}` now accepts `resolution`
+  (empty string clears it), case responses carry it, and the panel gained a
+  Save button wired to it.
 
 - **Analyst overrides no longer 500: the Alert model declares
   `disposition_source`** (#1894, #1895). The #1888 carry shipped migration

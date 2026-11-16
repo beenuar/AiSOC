@@ -2840,10 +2840,17 @@ export const casesApi = {
   },
 
   addComment: (id: string, comment: string) =>
-    request<{ id: string; comment: string; createdAt: string }>(`/api/v1/cases/${id}/comments`, {
-      method: "POST",
-      body: JSON.stringify({ comment }),
-    }),
+    // The API's AddCommentRequest field is `body` — sending `comment` 422'd
+    // on every post while the workspace's optimistic insert made it look
+    // saved (#1932). The server now also aliases `comment`, but the canonical
+    // name is `body`, which works against both old and new API versions.
+    request<{ id: string; case_id: string; author: string; body: string; is_system: boolean; created_at: string }>(
+      `/api/v1/cases/${id}/comments`,
+      {
+        method: "POST",
+        body: JSON.stringify({ body: comment }),
+      }
+    ),
 
   linkAlerts: async (id: string, alertIds: string[]) => {
     // Backend AddAlertsRequest expects snake_case `alert_ids`; sending
