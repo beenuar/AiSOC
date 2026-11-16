@@ -130,6 +130,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opt-out. Contributed by @alexmateescu, with tests for both the default
   refusal and the opt-out.
 
+- **Analyst-authored rule patterns can no longer pin a worker (ReDoS)**
+  (#1943). The rule engine compiles analyst- and LLM-authored pattern bodies
+  on `/detection/test`, `/rules/{id}/execute` and `run_hunt`, on the stdlib
+  backtracking engine with no bound — one catastrophic pattern
+  (`(a|a)*$`-family) against a 48-character payload runs effectively
+  forever. The regex rule runner now compiles on the `regex` engine and
+  bounds every search with `AISOC_REGEX_TIMEOUT_SECONDS` (default 2.0s),
+  failing closed with "rule timed out" so the analyst fixes the pattern
+  instead of a worker silently burning. Review found a second, worse site
+  the same class reaches: the KQL wildcard branch compiled the analyst's
+  value **raw**, making it a regex injection as well as unbounded — a KQL
+  value is a glob, so it is now escaped with only `*` translated, the same
+  construction the module's own wildcard-rule branch already used. Both
+  pre-fix sites were measured still backtracking after 4s on inputs the
+  fixed code answers in milliseconds. Contributed by @alexmateescu.
+
 - **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`
   and `>=2.1.6` (Dependabot #236–#242; both ride in transitively through
   `@modelcontextprotocol/sdk`). Within-major moves of existing floors in the
