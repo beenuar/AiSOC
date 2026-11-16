@@ -418,7 +418,11 @@ async def entity_risk_detail(
     record = await eng.get(scoped, entity_type, entity_value)
     if record is None:
         raise HTTPException(status_code=404, detail="entity_not_found")
-    return record.to_dict()
+    # The threshold rides along so a consumer of the *detail* route can
+    # answer "is this promoted?" without a second call — the queue envelope
+    # already carries it, and the API gateway's console adapter needs it on
+    # both routes (#1931).
+    return {**record.to_dict(), "threshold": eng.threshold}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

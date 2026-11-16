@@ -250,6 +250,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   accepted — bounded by the seven-day lookback cap. Pinned by five tests
   driving the real connector and real checkpoint machinery.
 
+- **Alerts → Entities (Risk-Based Alerting) works on a stock Compose
+  install** (#1931). Two independent faults made the console's default
+  alerts view unusable: the API's `/api/v1/fusion/*` gateway only proxies
+  when `FUSION_SERVICE_URL` is set and compose never set it, so every
+  entity-risk read answered 503; and once wired, fusion's wire shape crashed
+  the page (`severity_histogram` of `undefined`), because fusion publishes
+  `severities`/`contributors`/`tracked_entities` while the console reads
+  `severity_histogram`/`contributions`/`total`. Compose now wires
+  `FUSION_SERVICE_URL: http://fusion:8003` on `api`, and the gateway adapts
+  fusion's shape to the console contract: all five severity tiers
+  zero-filled, `src_ip`→`ip`, `detection`→`title`, `points`→`raw_points`,
+  `promoted` derived from `promoted_at`/threshold, `first_seen` from the
+  oldest surviving contribution, and stats mapped
+  (`tracked_entities`→`total`, `promoted_entities`→`promoted`,
+  `score_bands`→`bands`; no invented `alert_count` — the console computes it
+  from queue rows when absent). Fusion's malformed contribution timestamps
+  (`…+00:00Z`, an offset *and* a Z, emitted whenever a vendor event time
+  arrived timezone-aware) are fixed at the source and repaired in the
+  adapter for mixed-version deployments, and fusion's entity-risk detail
+  response now carries the engine `threshold` so the detail route can answer
+  "promoted?" without a second call.
+
 - **Prometheus can finally parse a fusion scrape** (#1881). The
   `aisoc-fusion` job had scraped the JSON `/metrics` since it was written
   and never recorded a sample, because JSON is not exposition format.

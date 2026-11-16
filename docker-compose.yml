@@ -411,6 +411,13 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-clickhouse_dev_secret}
       OPENSEARCH_URL: http://opensearch:9200
       QDRANT_URL: http://qdrant:6333
+      # Where the /api/v1/fusion/* gateway proxies entity-risk (RBA) reads.
+      # Fusion is a core service listening on 8003, but nothing set this, so
+      # the gateway's "forward if configured" branch never fired and the
+      # console's Alerts → Entities view answered 503 on every stock Compose
+      # install (#1931). The gateway adapts fusion's wire shape to the
+      # console contract; see services/api/app/api/v1/endpoints/fusion.py.
+      FUSION_SERVICE_URL: ${FUSION_SERVICE_URL:-http://fusion:8003}
       # The API owns the vault write path; the connectors service reads with
       # the same key. Passing it to one and not the other means a credential
       # saved in the console can never be decrypted at poll time.
