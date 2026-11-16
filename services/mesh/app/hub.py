@@ -28,6 +28,11 @@ from app.crypto import verify
 
 DEFAULT_K = 5
 
+#: Fixed domain string an instance signs to prove an opt-out withdrawal.
+#: A distinct message from every artifact's ``signing_bytes()``, so an
+#: opt-out signature cannot be replayed as a publish and vice versa.
+OPT_OUT_DOMAIN = b"aisoc-mesh:opt-out:v1"
+
 _SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
@@ -70,7 +75,31 @@ class MeshHub:
 
     # -- opt-out ---------------------------------------------------------------
 
+    def opt_out_signed(self, instance_pubkey: str, signature_b64: str) -> bool:
+        """Withdraw an instance's participation, proven by its own key.
+
+        Opt-out is a permanent publish denylist: every future artifact from
+        the named pubkey is rejected, so an unauthenticated opt-out was a
+        silent, permanent denial-of-service against any contributor — and it
+        removes the instance from every k-anonymity cohort at once, quietly
+        invalidating the privacy guarantee other instances were promised. An
+        anonymous caller must not be able to do that: the withdrawal is
+        signed with the instance's own Ed25519 key over ``OPT_OUT_DOMAIN``,
+        and verification against the claimed pubkey fails for anyone who
+        does not hold the private key. A bearer token would be the wrong
+        shape here — foreign instances in a federation do not share this
+        hub's platform secret, and proof-of-key works for exactly the party
+        entitled to withdraw.
+        """
+        if not verify(instance_pubkey, OPT_OUT_DOMAIN, signature_b64):
+            return False
+        with self._lock:
+            self._optout.add(instance_pubkey)
+        return True
+
     def opt_out(self, instance_pubkey: str) -> None:
+        """Unauthenticated denylist add. Internal/test use only — the HTTP
+        route requires the signed form (:meth:`opt_out_signed`)."""
         with self._lock:
             self._optout.add(instance_pubkey)
 
