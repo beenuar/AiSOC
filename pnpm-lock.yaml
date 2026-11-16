@@ -133,8 +133,8 @@ importers:
         specifier: ^4.4.0
         version: 4.4.0
       framer-motion:
-        specifier: ^14.9.1
-        version: 14.11.1(react-dom@19.3.1)(react@19.3.1)
+        specifier: ^14.13.0
+        version: 14.13.0(react-dom@19.3.1)(react@19.3.1)
       gray-matter:
         specifier: ^4.0.3
         version: 4.0.3
@@ -2798,7 +2798,7 @@ packages:
       '@docusaurus/utils': 3.10.2(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       babel-plugin-dynamic-import-node: 2.3.3
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -2835,7 +2835,7 @@ packages:
       '@docusaurus/utils': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       babel-plugin-dynamic-import-node: 2.3.3
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -2872,7 +2872,7 @@ packages:
       '@docusaurus/utils': 3.10.2(postcss@8.5.33)(react-dom@19.3.1)(react@19.3.1)
       babel-plugin-dynamic-import-node: 2.3.3
       fs-extra: 11.3.4
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -2921,7 +2921,7 @@ packages:
       postcss-loader: 7.3.4(postcss@8.5.32)(typescript@6.0.3)(webpack@5.108.4)
       postcss-preset-env: 10.6.1(postcss@8.5.32)
       terser-webpack-plugin: 5.5.0(webpack@5.108.4)
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       webpack: 5.108.4(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)
       webpackbar: 7.0.0(webpack@5.108.4)
@@ -3118,7 +3118,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       chalk: 4.1.2
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /@docusaurus/mdx-loader@3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1):
@@ -3148,7 +3148,7 @@ packages:
       remark-frontmatter: 5.0.0
       remark-gfm: 4.0.1
       stringify-object: 3.3.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unified: 11.0.5
       unist-util-visit: 5.1.0
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
@@ -3198,7 +3198,7 @@ packages:
       remark-frontmatter: 5.0.0
       remark-gfm: 4.0.1
       stringify-object: 3.3.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unified: 11.0.5
       unist-util-visit: 5.1.0
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
@@ -3310,7 +3310,7 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
       srcset: 4.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unist-util-visit: 5.1.0
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
@@ -3364,7 +3364,7 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
       srcset: 4.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       unist-util-visit: 5.1.0
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.33)
@@ -3416,7 +3416,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
@@ -3467,7 +3467,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       schema-dts: 1.1.5
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.33)
     transitivePeerDependencies:
@@ -3509,7 +3509,7 @@ packages:
       fs-extra: 11.3.4
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3550,7 +3550,7 @@ packages:
       fs-extra: 11.3.4
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       webpack: 5.108.4(postcss@8.5.33)
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3584,7 +3584,7 @@ packages:
       '@docusaurus/types': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       '@docusaurus/utils': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3625,7 +3625,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       react-json-view-lite: 2.5.0(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3662,7 +3662,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3699,7 +3699,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3736,7 +3736,7 @@ packages:
       '@docusaurus/utils-validation': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3778,7 +3778,7 @@ packages:
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
       sitemap: 7.1.3
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@docusaurus/faster'
       - '@mdx-js/react'
@@ -3818,7 +3818,7 @@ packages:
       '@svgr/webpack': 8.1.0(typescript@6.0.3)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       webpack: 5.108.4(postcss@8.5.32)
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3936,7 +3936,7 @@ packages:
       react-dom: 19.3.1(react@19.3.1)
       react-router-dom: 5.3.4(react@19.3.1)
       rtlcss: 4.3.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@docusaurus/faster'
@@ -3982,7 +3982,7 @@ packages:
       prism-react-renderer: 2.4.1(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -4022,7 +4022,7 @@ packages:
       prism-react-renderer: 2.4.1(react@19.3.1)
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@minify-html/node'
@@ -4065,7 +4065,7 @@ packages:
       lodash: 4.18.1
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
       utility-types: 3.11.0
     transitivePeerDependencies:
       - '@algolia/client-search'
@@ -4211,7 +4211,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       '@docusaurus/types': 3.10.2(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -4236,7 +4236,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       '@docusaurus/types': 3.10.2(postcss@8.5.32)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -4261,7 +4261,7 @@ packages:
     engines: {node: '>=20.0'}
     dependencies:
       '@docusaurus/types': 3.10.2(postcss@8.5.33)(react-dom@19.3.1)(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -4292,7 +4292,7 @@ packages:
       joi: 17.13.9
       js-yaml: 4.3.2
       lodash: 4.18.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -4323,7 +4323,7 @@ packages:
       joi: 17.13.9
       js-yaml: 4.3.2
       lodash: 4.18.1
-      tslib: 2.8.1
+      tslib: 2.9.1
     transitivePeerDependencies:
       - '@minify-html/node'
       - '@swc/core'
@@ -4364,7 +4364,7 @@ packages:
       p-queue: 6.6.2
       prompts: 2.4.2
       resolve-pathname: 3.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       utility-types: 3.11.0
       webpack: 5.108.4(clean-css@5.3.3)(cssnano@6.1.2)(html-minifier-terser@7.2.0)(postcss@8.5.32)
@@ -4408,7 +4408,7 @@ packages:
       p-queue: 6.6.2
       prompts: 2.4.2
       resolve-pathname: 3.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.32)
@@ -4452,7 +4452,7 @@ packages:
       p-queue: 6.6.2
       prompts: 2.4.2
       resolve-pathname: 3.0.0
-      tslib: 2.8.1
+      tslib: 2.9.1
       url-loader: 4.1.1(file-loader@6.2.0)(webpack@5.108.4)
       utility-types: 3.11.0
       webpack: 5.108.4(postcss@8.5.33)
@@ -6152,7 +6152,7 @@ packages:
     dependencies:
       '@emnapi/core': 2.0.0-beta.2
       '@emnapi/runtime': 2.0.0-beta.2
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     dev: true
     optional: true
 
@@ -6166,7 +6166,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.10.0
       '@emnapi/runtime': 1.10.0
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     dev: true
     optional: true
 
@@ -6180,7 +6180,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.11.0
       '@emnapi/runtime': 1.11.0
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     dev: true
     optional: true
 
@@ -6194,7 +6194,7 @@ packages:
     dependencies:
       '@emnapi/core': 1.9.2
       '@emnapi/runtime': 1.9.2
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     dev: true
     optional: true
 
@@ -8675,8 +8675,8 @@ packages:
     dev: true
     optional: true
 
-  /@tybys/wasm-util@0.10.4:
-    resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
+  /@tybys/wasm-util@0.10.5:
+    resolution: {integrity: sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA==}
     requiresBuild: true
     dependencies:
       tslib: 2.9.1
@@ -13145,8 +13145,8 @@ packages:
   /fraction.js@5.3.4:
     resolution: {integrity: sha512-1X1NTtiJphryn/uLQz3whtY6jK3fTqoE3ohKs0tT+Ujr1W59oopxmoEh7Lu5p6vBaPbgoM0bzveAW4Qi5RyWDQ==}
 
-  /framer-motion@14.11.1(react-dom@19.3.1)(react@19.3.1):
-    resolution: {integrity: sha512-kXs+RHzja034QumwdXJubF0az86ueiWtANLB7FbhM+WKNGrgmYHysRRWG+we2KEpWv1+8W4eoMtsKaUldf54nA==}
+  /framer-motion@14.13.0(react-dom@19.3.1)(react@19.3.1):
+    resolution: {integrity: sha512-62FgGVeqEI3pgI5jG/d6yagg/hX9z7Vw3ytE0gGAsDXWBBruUCr74b5LQJXMSF1E62Zp7HKO88nDu/hhUdRSCQ==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0
       react-dom: ^18.0.0 || ^19.0.0
@@ -13159,11 +13159,11 @@ packages:
       remix:
         optional: true
     dependencies:
-      motion-dom: 14.11.1
+      motion-dom: 14.13.0
       motion-utils: 14.7.0
       react: 19.3.1
       react-dom: 19.3.1(react@19.3.1)
-      tslib: 2.8.1
+      tslib: 2.9.1
     dev: false
 
   /fresh@0.5.2:
@@ -16585,8 +16585,8 @@ packages:
       marked: 14.0.0
     dev: false
 
-  /motion-dom@14.11.1:
-    resolution: {integrity: sha512-H/12gSe24nuV19IR7jHLObI+5Tm34UA/S5JaUye802l19VoVsT1USE+Suv+G/XO1U+YmXI9Nnbs4Krd4FthSSg==}
+  /motion-dom@14.13.0:
+    resolution: {integrity: sha512-nWrB6Psw7mFTBNL9r5hw9nm/a5+21WZ1LymOml/V2b43LdiIDO1oi+oBMSR3bcyuzEQKJoaa+t5qnsCWYhcNvA==}
     dependencies:
       motion-utils: 14.7.0
     dev: false

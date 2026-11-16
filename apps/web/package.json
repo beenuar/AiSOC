@@ -33,7 +33,7 @@
     "cytoscape": "^3.34.4",
     "cytoscape-fcose": "^2.2.0",
     "date-fns": "^4.4.0",
-    "framer-motion": "^14.9.1",
+    "framer-motion": "^14.13.0",
     "gray-matter": "^4.0.3",
     "lucide-react": "^1.59.0",
     "next": "16.4.6",
