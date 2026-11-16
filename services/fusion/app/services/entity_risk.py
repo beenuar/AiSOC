@@ -38,7 +38,7 @@ import json
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 import redis.asyncio as aioredis
@@ -58,6 +58,20 @@ _TOPN_KEY = "aisoc:fusion:rba:topn:"
 _PROMOTED_KEY = "aisoc:fusion:rba:promoted:"
 
 ENTITY_TYPES: tuple[str, ...] = ("user", "host", "src_ip", "domain")
+
+
+def _utc_iso(dt: datetime) -> str:
+    """ISO-8601 UTC with a single terminal ``Z``, naive or aware input.
+
+    The engine mixes both: ``last_seen``/``promoted_at`` come from naive
+    ``datetime.utcnow()``, while a contributor's ``occurred_at`` is the
+    alert's vendor-parsed event time, which arrives timezone-aware. Bare
+    ``isoformat() + "Z"`` on an aware value emitted ``…+00:00Z`` — an offset
+    *and* a Z, which is not ISO-8601 and crashed strict consumers (#1931).
+    """
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 @dataclass(frozen=True)
@@ -95,10 +109,10 @@ class EntityRiskRecord:
             "entity_value": self.entity_value,
             "score": round(self.score, 2),
             "alert_count": self.alert_count,
-            "last_seen": self.last_seen.isoformat() + "Z",
+            "last_seen": _utc_iso(self.last_seen),
             "contributing_alerts": self.contributing_alerts,
             "severities": self.severities,
-            "promoted_at": (self.promoted_at.isoformat() + "Z") if self.promoted_at else None,
+            "promoted_at": _utc_iso(self.promoted_at) if self.promoted_at else None,
             "contributors": self.contributors or [],
         }
 
@@ -277,7 +291,7 @@ class EntityRiskEngine:
                 "severity": sig.severity,
                 "detection": sig.detection,
                 "points": sig.points,
-                "at": sig.occurred_at.isoformat() + "Z",
+                "at": _utc_iso(sig.occurred_at),
             }
         )
         if len(contributors) > 25:

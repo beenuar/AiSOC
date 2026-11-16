@@ -174,6 +174,129 @@ async def ml_status() -> dict[str, Any]:
 # The threshold here mirrors services/fusion/app/services/entity_risk.py
 # default; the UI displays it as "promotion threshold".
 
+# ── Console-shape adapters (#1931) ──
+#
+# Fusion's wire shapes and the console's `EntityRiskRecord` /
+# `EntityRiskStats` types (apps/web/src/lib/api.ts) had never met: fusion
+# publishes `severities`/`contributors`/`tracked_entities`, the console reads
+# `severity_histogram`/`contributions`/`total`, and the first deployment that
+# wired this proxy up crashed the Alerts route on
+# `severity_histogram.critical` of undefined. The gateway owns the
+# translation because it already owns the credential and tenant assertion —
+# fusion's own wire shape stays as other consumers know it.
+
+#: The five-tier ladder, exactly (see AlertSeverity in the console types).
+_SEVERITY_KEYS = ("critical", "high", "medium", "low", "info")
+
+#: Queue header chips. Fusion computes all four; zero-fill is only a guard
+#: against a sparse upstream, not a fabricated count.
+_BAND_KEYS = ("critical", "high", "medium", "low")
+
+#: Fusion's engine default (settings.rba_promotion_threshold). Used only when
+#: an older fusion's detail response carries no threshold of its own.
+_DEFAULT_RBA_THRESHOLD = 80.0
+
+
+def _clean_iso(ts: Any) -> str | None:
+    """Repair fusion's historical ``…+00:00Z`` stamps (offset *and* Z).
+
+    Fixed at the source in services/fusion (same change set), but the
+    gateway must also accept an unpatched upstream: a mixed-version
+    deployment is the norm mid-upgrade.
+    """
+    if not isinstance(ts, str) or not ts:
+        return None
+    if ts.endswith("Z") and "+" in ts:
+        head, _, _ = ts.rpartition("+")
+        return head + "Z"
+    return ts
+
+
+def _adapt_record(record: dict[str, Any], threshold: float | None) -> dict[str, Any]:
+    """Map one fusion entity-risk record onto the console's contract."""
+    score = float(record.get("score", 0.0) or 0.0)
+    if threshold is None:
+        raw_threshold = record.get("threshold")
+        threshold = float(raw_threshold) if isinstance(raw_threshold, int | float) else _DEFAULT_RBA_THRESHOLD
+
+    raw_severities = record.get("severities")
+    severities: dict[str, Any] = raw_severities if isinstance(raw_severities, dict) else {}
+    histogram = {key: int(severities.get(key, 0) or 0) for key in _SEVERITY_KEYS}
+
+    contributions: list[dict[str, Any]] = []
+    for raw in record.get("contributors") or []:
+        if not isinstance(raw, dict):
+            continue
+        contributions.append(
+            {
+                "alert_id": str(raw.get("alert_id", "")),
+                "severity": raw.get("severity"),
+                "raw_points": float(raw.get("points", 0.0) or 0.0),
+                "observed_at": _clean_iso(raw.get("at")),
+                "title": raw.get("detection") or None,
+                # Fusion does not record the contributing alert's source;
+                # the console types this nullable for exactly that reason.
+                "source": None,
+            }
+        )
+
+    last_seen = _clean_iso(record.get("last_seen"))
+    observed = sorted(c["observed_at"] for c in contributions if c["observed_at"])
+    promoted_at = _clean_iso(record.get("promoted_at"))
+
+    entity_type = record.get("entity_type")
+    if entity_type == "src_ip":
+        entity_type = "ip"
+
+    return {
+        "tenant_id": record.get("tenant_id"),
+        "entity_type": entity_type,
+        "entity_value": record.get("entity_value"),
+        "score": score,
+        "display_score": round(score),
+        "threshold": threshold,
+        "promoted": bool(promoted_at) or score >= threshold,
+        # Fusion's record has no incident linkage; null is the honest value
+        # and the console types it optional.
+        "promoted_incident_id": None,
+        "last_seen": last_seen,
+        # Oldest surviving contribution. Fusion keeps the newest 25, so this
+        # is "first seen among retained evidence", and falls back to
+        # last_seen when no contributor list survived — never an invented
+        # earlier time.
+        "first_seen": observed[0] if observed else last_seen,
+        "contributions": contributions,
+        "severity_histogram": histogram,
+        "alert_count": int(record.get("alert_count", 0) or 0),
+    }
+
+
+def _adapt_queue(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_threshold = payload.get("threshold")
+    threshold = float(raw_threshold) if isinstance(raw_threshold, int | float) else _DEFAULT_RBA_THRESHOLD
+    entities = [_adapt_record(r, threshold) for r in payload.get("entities") or [] if isinstance(r, dict)]
+    return {
+        "tenant_id": payload.get("tenant_id"),
+        "threshold": threshold,
+        "entities": entities,
+    }
+
+
+def _adapt_stats(payload: dict[str, Any]) -> dict[str, Any]:
+    raw_bands = payload.get("score_bands")
+    bands: dict[str, Any] = raw_bands if isinstance(raw_bands, dict) else {}
+    adapted: dict[str, Any] = {
+        "tenant_id": payload.get("tenant_id"),
+        "threshold": payload.get("threshold"),
+        "total": int(payload.get("tracked_entities", 0) or 0),
+        "promoted": int(payload.get("promoted_entities", 0) or 0),
+        "bands": {key: int(bands.get(key, 0) or 0) for key in _BAND_KEYS},
+    }
+    # Deliberately no `alert_count`: fusion's stats do not publish one, and
+    # the console computes it from the queue rows when the key is absent —
+    # publishing 0 here would render a confident wrong number instead.
+    return adapted
+
 
 # These three routes used to take `tenant_id` as a required query parameter
 # with no auth dependency at all, so any caller could read any tenant's
@@ -201,7 +324,7 @@ async def entity_risk_queue(
         headers=_upstream_headers(scoped),
     )
     if upstream is not None:
-        return upstream
+        return _adapt_queue(upstream)
     raise HTTPException(status_code=503, detail="Fusion risk data is unavailable; no risk assessment was made.")
 
 
@@ -214,7 +337,7 @@ async def entity_risk_stats(user: AuthUser, tenant_id: UUID | None = None) -> di
         headers=_upstream_headers(scoped),
     )
     if upstream is not None:
-        return upstream
+        return _adapt_stats(upstream)
     raise HTTPException(status_code=503, detail="Fusion risk statistics are unavailable; counts are unknown.")
 
 
@@ -241,5 +364,7 @@ async def entity_risk_detail(
         headers=_upstream_headers(scoped),
     )
     if upstream is not None:
-        return upstream
+        # threshold=None: a current fusion sends it on the detail record; an
+        # older one falls back to the engine default inside the adapter.
+        return _adapt_record(upstream, threshold=None)
     raise HTTPException(status_code=503, detail="Fusion risk data is unavailable; the entity could not be checked.")
