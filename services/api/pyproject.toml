@@ -33,6 +33,15 @@ sqlalchemy = { version = "^2.0.30", extras = ["asyncio"] }
 asyncpg = ">=0.29.0,<0.33"
 alembic = "^1.13.1"
 redis = { version = ">=5.0.4,<9.0.0", extras = ["hiredis"] }
+# SEC-4: a bounded-timeout regex engine for the detection-rule runner.
+# Python's stdlib `re` is a backtracker: one catastrophic pattern in a rule
+# body (`(a+)+$` style) pins a CPU for the lifetime of the process, and
+# `/detection/test`, `/rules/{id}/execute` and `run_hunt` all compile
+# analyst- or LLM-authored bodies. `regex` is a drop-in superset whose
+# `.search(timeout=)` bounds exactly that, and the runner fails closed on
+# the TimeoutError. In the main group, not dev: this runs inside every
+# request that tests a rule.
+regex = ">=2024.5.15"
 httpx = ">=0.27,<0.29"
 # PyJWT is the only JWT implementation in this service: first-party access and
 # refresh tokens, realtime tickets, and the OIDC / SAML assertion paths. It
@@ -119,7 +128,7 @@ weasyprint = ">=62,<71"          # WS-G2: server-side PDF generation from print-
 # understood a handful of common cadences. Pinned with a wide range
 # because croniter is API-stable and we only use the
 # `get_next` / `is_valid` surface.
-croniter = ">=2.0,<8.0"
+croniter = ">=2.0,<7.0"
 # Gap-closure Phase 8.1 — the retro-hunt consumer subscribes to the
 # `NEW_IOC` events `services/threatintel` emits. Same range `services/agents`
 # already declares, so the two services that consume AiSOC's own topics
