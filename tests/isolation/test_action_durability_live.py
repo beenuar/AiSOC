@@ -566,17 +566,20 @@ class TestTheThreeIdentitiesStayDistinct:
         assert "separation of duties" in refused.text
         assert _contain_calls() == 0
 
-    async def test_separation_of_duties_is_not_waived_by_an_absent_requester(self, replicas, vendor_base_url) -> None:
-        """An action nobody is recorded as requesting is not a free approval.
+    async def test_a_principal_less_submit_is_refused_at_the_door(self, replicas, vendor_base_url) -> None:
+        """The blind-control case cannot enter any more (#1900, NC-3).
 
-        ``if separation_of_duties and requester and ...`` passed silently when
-        the submit carried no principal at all, so the control reported itself
-        satisfied on exactly the requests it could not evaluate.
+        This test used to pin the old world's honest record: a submit with no
+        principal passed the gate and ``separation_of_duties`` recorded
+        itself ``unevaluated`` — the audit trail admitting the control ran
+        blind. With ``AISOC_ACTIONS_REQUIRE_PRINCIPAL`` defaulting true, that
+        blind spot is refused before anything can run blind, which is
+        strictly stronger; the opt-out world (where ``unevaluated`` is still
+        the honest record) is pinned by ``services/actions/tests/test_authz.py``.
         """
         a, _b = replicas
         tenant = str(uuid.uuid4())
         action_id = str(uuid.uuid4())
-        analyst = _principal(tenant, user_id="dana")
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             submitted = await client.post(
@@ -592,17 +595,13 @@ class TestTheThreeIdentitiesStayDistinct:
                 },
                 headers={"Authorization": f"Bearer {SERVICE_TOKEN}"},
             )
-        assert submitted.status_code == 200, submitted.text
-
-        approved = await _approve(a, action_id, analyst)
-        assert approved.status_code == 200, approved.text
+        assert submitted.status_code == 403, (
+            f"a submit carrying no principal must be refused by default, got {submitted.status_code}: {submitted.text}"
+        )
+        assert "principal" in submitted.text, submitted.text
 
         stored = await _read_record(_DSN, action_id)
-        assert stored is not None
-        assert stored.get("separation_of_duties") == "unevaluated", (
-            "an approval whose requester is unknown recorded nothing about it, so the audit "
-            f"trail cannot distinguish an evaluated control from a skipped one: {stored.get('separation_of_duties')!r}"
-        )
+        assert stored is None, "a refused submit must not leave a record behind"
 
     async def test_an_approver_from_another_tenant_is_refused(self, replicas, vendor_base_url) -> None:
         """``aisoc_action_records`` is reachable by id, and the id was the only control."""

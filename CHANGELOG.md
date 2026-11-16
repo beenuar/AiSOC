@@ -115,6 +115,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **BREAKING: action requests require a principal by default** (#1900,
+  NC-3). `AISOC_ACTIONS_REQUIRE_PRINCIPAL` shipped `default=False`, so a
+  principal-less `ActionRequest` passed `authorize_action` with no identity
+  attached and separation of duties recorded itself `unevaluated` on
+  exactly those requests — a control reporting itself satisfied on the
+  traffic it could not evaluate, while the sibling approver knob already
+  defaulted to require (an approval with no identity cannot satisfy
+  separation of duties at all). The product's own dispatch path has stamped
+  the invoking principal since the approvals fix, and its call site
+  carries a comment anticipating this flip. External principal-less
+  callers must now attach one, or set
+  `AISOC_ACTIONS_REQUIRE_PRINCIPAL=false` deliberately as the documented
+  opt-out. Contributed by @alexmateescu, with tests for both the default
+  refusal and the opt-out.
+
 - **`hono` and `@hono/node-server` override floors raised** to `>=4.13.16`
   and `>=2.1.6` (Dependabot #236–#242; both ride in transitively through
   `@modelcontextprotocol/sdk`). Within-major moves of existing floors in the

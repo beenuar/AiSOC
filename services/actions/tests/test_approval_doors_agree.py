@@ -40,6 +40,7 @@ from uuid import uuid4
 import pytest
 from app.api.live_actions_router import router as live_router
 from app.api.router import router as legacy_router
+from app.core.config import get_settings
 from app.live_actions import registry
 from app.live_actions.capability_contracts import CAPABILITY_CONTRACTS
 from app.live_actions.models import LiveActionRequest, LiveActionResult, LiveActionStatus
@@ -112,6 +113,13 @@ def client(monkeypatch: pytest.MonkeyPatch, touches: _VendorTouches) -> TestClie
     # exists (GHSA-g4h7-p63q-r8r4). The auth boundary has its own tests.
     monkeypatch.setenv("AISOC_ACTIONS_SERVICE_TOKEN", "test-actions-service-token")
     monkeypatch.setenv("AISOC_DEV_MODE", "true")
+    # These tests measure one thing: that the two doors reach the same
+    # verdict per verb and tier. Identity is orthogonal to that question, so
+    # they run in the documented opt-out (#1900 flipped the default to
+    # require a principal; the default-world refusal has its own pins in
+    # test_authz.py and the live isolation suite).
+    monkeypatch.setenv("AISOC_ACTIONS_REQUIRE_PRINCIPAL", "false")
+    get_settings.cache_clear()
 
     class _LegacyRecorder:
         async def execute(self, request: ActionRequest) -> ActionResult:
@@ -150,7 +158,10 @@ def client(monkeypatch: pytest.MonkeyPatch, touches: _VendorTouches) -> TestClie
     app = FastAPI()
     app.include_router(legacy_router)
     app.include_router(live_router)
-    return TestClient(app, headers={"Authorization": "Bearer test-actions-service-token"})
+    yield TestClient(app, headers={"Authorization": "Bearer test-actions-service-token"})
+    # monkeypatch restores the env on teardown, but the settings cache would
+    # keep serving this suite's opt-out to whichever module runs next.
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)
