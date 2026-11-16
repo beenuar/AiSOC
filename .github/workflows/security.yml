@@ -308,7 +308,7 @@ jobs:
       # the report while still exiting 1 — 272 findings quietly became 133,
       # which only the ratchet's shrink-only arm noticed. Same version the
       # chart's own render gate (helm.yml) and release.yml pin.
-      - uses: azure/setup-helm@b9e51907a09c216f16ebe8536097933489208112 # v4.3.0
+      - uses: azure/setup-helm@2f5e7bc67f1f9972ab16657bb795f36d8f04de0e # v5.1.0
         with:
           version: v3.18.5
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
