@@ -8,9 +8,22 @@ from __future__ import annotations
 
 import json
 import logging
-import re
+import os
 import time
 import uuid
+
+# SEC-4: bounded-timeout regex. Python's stdlib `re` is a backtracking engine:
+# one catastrophic pattern in a rule body - the `(a+)+$` family - pins a CPU
+# for the lifetime of the process, and this module compiles analyst- or
+# LLM-authored bodies on `/detection/test`, `/rules/{id}/execute` and
+# `run_hunt`. `regex` is a drop-in superset whose `.search(timeout=)` bounds
+# exactly that; the runner fails closed on its TimeoutError. `re` stays bound
+# to it so every existing call site in this module gains the timeout without a
+# rewrite (the literal-extraction heuristics are fixed strings, never
+# analyst-authored, and are unaffected).
+import regex
+
+re = regex  # noqa: PLW0603 - deliberate module-level alias, see note above
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -537,18 +550,35 @@ def execute_rule(
     )
 
 
+#: Wall-clock budget for one regex execution across a batch of events. A rule
+#: body that outruns this is treated as unrunnable rather than being allowed
+#: to pin a worker: the analyst sees "rule timed out" and fixes the pattern.
+#: Tunable via env for slow bulk rules; 2s is generous for a single event and
+#: tight enough that a flood of pathological patterns cannot saturate.
+REGEX_TIMEOUT_SECONDS = float(os.environ.get("AISOC_REGEX_TIMEOUT_SECONDS", "2.0"))
+
+
 def _run_regex(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
-    """Regex-based rule runner."""
+    """Regex-based rule runner with a bounded-timeout search (SEC-4)."""
     try:
         pattern = re.compile(rule_body, re.IGNORECASE | re.MULTILINE)
-        matched = []
-        for event in events:
-            payload = json.dumps(event)
-            if pattern.search(payload):
-                matched.append(event)
-        return matched, None
     except re.error as exc:
         return [], str(exc)
+
+    matched = []
+    try:
+        for event in events:
+            payload = json.dumps(event)
+            if pattern.search(payload, timeout=REGEX_TIMEOUT_SECONDS):
+                matched.append(event)
+        return matched, None
+    except TimeoutError:
+        logger.warning(
+            "rule_engine.regex timeout after %ss - catastrophic backtracking? pattern=%.80r",
+            REGEX_TIMEOUT_SECONDS,
+            rule_body,
+        )
+        return [], f"rule timed out after {REGEX_TIMEOUT_SECONDS}s (catastrophic backtracking?)"
 
 
 def _severity_score(severity: str) -> float:
