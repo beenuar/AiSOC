@@ -40,6 +40,9 @@ class Alert(Base):
 
     # Analyst verdict / disposition (set via feedback endpoint)
     disposition: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    # Who authored the current disposition: analyst | ai | NULL (unknown/never).
+    # Migration 161; reopen suppression excludes only analyst-authored FP (GHSA control).
+    disposition_source: Mapped[str | None] = mapped_column(String(50), nullable=True)
     # Timestamp when an analyst first viewed / started triaging the alert (for MTTD)
     first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

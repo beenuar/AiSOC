@@ -158,6 +158,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Analyst overrides no longer 500: the Alert model declares
+  `disposition_source`** (#1894, #1895). The #1888 carry shipped migration
+  161 and stamped the column from both ORM writers, but
+  `services/api/app/models/alert.py` never declared it — SQLAlchemy
+  compiles `.values()` against the mapped columns and raised
+  `CompileError: Unconsumed column names: disposition_source` before the
+  statement ever reached Postgres, so every `POST /feedback/alert-override`
+  died since that merge. The live recurrence suite missed it because it
+  drives the reopen predicate over raw SQL, not the endpoint path. Pinned
+  by tests that parse migration 161 and assert the model maps every column
+  it adds, and that the exact UPDATE the feedback endpoint issues compiles
+  — they fail on the undeclared model. Reported with the root cause and
+  the fix by @alexmateescu.
+
 - **Cyble enrichment can be enabled on the Docker stack** (#1898). The
   enrichment service builds the Cyble Vision client unconditionally and gates
   the provider on `CYBLE_API_KEY` / `CYBLE_BASE_URL` (`config.go`, logged by
