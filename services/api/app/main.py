@@ -38,8 +38,8 @@ from app.services.schema_skew import readyz_probe
 from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.approval_expiry import run_forever as run_approval_expiry
-from app.workers.case_auto_close import run_forever as run_case_auto_close
 from app.workers.autonomy_drift import run_forever as run_autonomy_drift
+from app.workers.case_auto_close import run_forever as run_case_auto_close
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery

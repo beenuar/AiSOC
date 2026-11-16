@@ -32,6 +32,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,11 +47,20 @@ logger = logging.getLogger(__name__)
 #: Stamped on the custody detail so the case chain shows a system closure.
 AUTO_CLOSE_REASON = "auto_closed_after_resolved_window"
 
+#: The tenant registry is the enumeration driver: the sweep visits each
+#: tenant under its own id, so the due SELECT below carries a real tenant
+#: predicate rather than an exemption in the tenant-predicate gate — the
+#: same enumerate-then-per-tenant shape as fusion's session sweep. A side
+#: benefit: ``limit`` bounds each tenant separately, so one tenant's
+#: backlog cannot consume the whole batch and starve the others.
+_SELECT_TENANTS = text("SELECT id FROM tenants ORDER BY id")
+
 _SELECT_DUE = text(
     """
     SELECT id, tenant_id, case_number, resolved_at
       FROM aisoc_cases
-     WHERE status = 'resolved'
+     WHERE tenant_id = :tenant_id
+       AND status = 'resolved'
        AND resolved_at IS NOT NULL
        AND resolved_at <= :cutoff
      ORDER BY resolved_at ASC
@@ -103,7 +113,20 @@ async def sweep_auto_close(
     await assert_cross_tenant_session(db, "case auto-close sweep")
 
     result = AutoCloseSweepResult()
-    rows = (await db.execute(_SELECT_DUE, {"cutoff": cutoff(now, days), "limit": limit})).mappings().all()
+    tenant_ids = (await db.execute(_SELECT_TENANTS)).scalars().all()
+    rows: list[Any] = []
+    for tenant_id in tenant_ids:
+        due = (
+            (
+                await db.execute(
+                    _SELECT_DUE,
+                    {"tenant_id": tenant_id, "cutoff": cutoff(now, days), "limit": limit},
+                )
+            )
+            .mappings()
+            .all()
+        )
+        rows.extend(due)
 
     for row in rows:
         case_id = row["id"]
@@ -121,9 +144,7 @@ async def sweep_auto_close(
             # Custody entry so the case's own chain shows the system closed it.
             try:
                 current = await db.scalar(
-                    text("SELECT evidence_chain FROM aisoc_cases WHERE id = :id AND tenant_id = :t").bindparams(
-                        id=case_id, t=tenant_id
-                    )
+                    text("SELECT evidence_chain FROM aisoc_cases WHERE id = :id AND tenant_id = :t").bindparams(id=case_id, t=tenant_id)
                 )
                 chain = evidence_custody.append_entry(
                     list(current or []),
@@ -147,7 +168,9 @@ async def sweep_auto_close(
             result.by_tenant[str(tenant_id)] = result.by_tenant.get(str(tenant_id), 0) + 1
             logger.warning(
                 "case_auto_close.closed case_number=%s age_days=%s window_days=%d",
-                str(row["case_number"] or "")[:32], age_days, days,
+                str(row["case_number"] or "")[:32],
+                age_days,
+                days,
             )
         except Exception:  # noqa: BLE001 - fail-soft per case; the sweep continues
             await db.rollback()
@@ -181,7 +204,9 @@ async def run_forever() -> None:
             if result.closed or result.failed:
                 logger.warning(
                     "case_auto_close.sweep closed=%d failed=%d tenants=%d",
-                    result.closed, result.failed, len(result.by_tenant),
+                    result.closed,
+                    result.failed,
+                    len(result.by_tenant),
                 )
         except asyncio.CancelledError:
             raise
