@@ -28,6 +28,11 @@ from app.crypto import verify
 
 DEFAULT_K = 5
 
+#: Fixed domain string an instance signs to prove an opt-out withdrawal.
+#: A distinct message from every artifact's ``signing_bytes()``, so an
+#: opt-out signature cannot be replayed as a publish and vice versa.
+OPT_OUT_DOMAIN = b"aisoc-mesh:opt-out:v1"
+
 _SEVERITY_RANK = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
 
 
@@ -69,6 +74,22 @@ class MeshHub:
         self._lock = threading.Lock()
 
     # -- opt-out ---------------------------------------------------------------
+
+    def opt_out_signed(self, instance_pubkey: str, signature_b64: str) -> bool:
+        """Withdraw an instance's participation, proven by its own key.
+
+        Opt-out removes an instance from every k-anonymity cohort at once,
+        so it can silently invalidate the privacy guarantee other instances
+        were promised when they contributed. An anonymous caller must not be
+        able to do that: the withdrawal is signed with the instance's
+        Ed25519 key over a fixed domain string, and verification against the
+        claimed pubkey fails for anyone who does not hold the private key.
+        """
+        if not verify(instance_pubkey, OPT_OUT_DOMAIN, signature_b64):
+            return False
+        with self._lock:
+            self._optout.add(instance_pubkey)
+        return True
 
     def opt_out(self, instance_pubkey: str) -> None:
         with self._lock:

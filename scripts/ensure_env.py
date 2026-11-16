@@ -165,6 +165,16 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Shared bearer for the threat-intel actor attribution API.",
     ),
+    # [SEC-9] The mesh hub's write paths (`/v1/sightings`, `/v1/signatures`,
+    # `/v1/opt-out`) now require the shared service bearer. Reads stay open by
+    # design (k-anonymity + PSI), but an anonymous caller must not be able to
+    # flood consensus or withdraw another instance from every cohort. The hub
+    # verifies `AISOC_MESH_SERVICE_TOKEN` ahead of the shared token, on both
+    # the presenting and verifying side, so setting it narrows one hop.
+    "AISOC_MESH_SERVICE_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Shared bearer for the federated threat-intel mesh hub write paths.",
+    ),
     "METRICS_TOKEN": (
         lambda: secrets.token_urlsafe(32),
         "Bearer for /metrics. Prometheus sends it; without it the endpoint is unauthenticated.",

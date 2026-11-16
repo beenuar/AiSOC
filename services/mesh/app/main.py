@@ -10,12 +10,19 @@ from __future__ import annotations
 
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from app._health import install_health_routes
 from app.artifacts import IocSighting, VerdictSignature
 from app.hub import DEFAULT_K, MeshHub
+# Vendored from the platform's shared service-to-service bearer auth
+# (byte-identical to honeytokens/agents/etc., SERVICE_NAME=MESH). The hub is
+# public for READS by design - k-anonymity and PSI mean a query learns nothing
+# about who contributed - but the WRITE paths (publish, withdraw) are gated so
+# an anonymous caller cannot flood consensus or revoke someone else's
+# participation. See services/mesh/app/security/service_auth.py.
+from app.security.service_auth import require_service_auth
 
 app = FastAPI(title="AiSOC Mesh Hub", version="0.1.0")
 _hub = MeshHub(k=int(os.environ.get("AISOC_MESH_K", DEFAULT_K)))
@@ -45,9 +52,14 @@ class SigPublish(BaseModel):
 
 class OptOut(BaseModel):
     instance_pubkey: str = Field(..., min_length=8)
+    #: Ed25519 signature over the fixed domain string ``aisoc-mesh:opt-out:v1``
+    #: (see ``app.hub.OPT_OUT_DOMAIN``), made with the instance's own key.
+    #: Proves the withdrawal comes from the instance being withdrawn - an
+    #: anonymous caller cannot dissolve other instances' k-anonymity cohorts.
+    signature: str = Field(..., min_length=8)
 
 
-@app.post("/v1/sightings")
+@app.post("/v1/sightings", dependencies=[Depends(require_service_auth)])
 def publish_sighting(body: IocPublish) -> dict:
     try:
         sighting = IocSighting(**body.sighting)
@@ -59,6 +71,9 @@ def publish_sighting(body: IocPublish) -> dict:
     return {"accepted": True}
 
 
+# Reads are deliberately NOT gated: k-anonymity + PSI mean a query returns
+# only aggregated consensus once >= k verified instances contributed, so an
+# anonymous reader learns nothing that was not already promised to be public.
 @app.get("/v1/sightings/{ioc_hash}")
 def get_sighting(ioc_hash: str) -> dict:
     result = _hub.query_ioc(ioc_hash)
@@ -68,7 +83,7 @@ def get_sighting(ioc_hash: str) -> dict:
     return result
 
 
-@app.post("/v1/signatures")
+@app.post("/v1/signatures", dependencies=[Depends(require_service_auth)])
 def publish_signature(body: SigPublish) -> dict:
     try:
         sig = VerdictSignature(**body.verdict_signature)
@@ -88,9 +103,10 @@ def get_signature(signature_key: str) -> dict:
     return result
 
 
-@app.post("/v1/opt-out")
+@app.post("/v1/opt-out", dependencies=[Depends(require_service_auth)])
 def opt_out(body: OptOut) -> dict:
-    _hub.opt_out(body.instance_pubkey)
+    if not _hub.opt_out_signed(body.instance_pubkey, body.signature):
+        raise HTTPException(status_code=403, detail="invalid opt-out signature")
     return {"opted_out": True}
 
 
