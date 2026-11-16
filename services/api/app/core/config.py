@@ -507,6 +507,16 @@ class Settings(BaseSettings):
     )
     APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
 
+    # Resolved->closed auto-close sweep. A human moves a case to `resolved`;
+    # the system closes it after it has stayed resolved for this many days.
+    CASE_AUTO_CLOSE_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("CASE_AUTO_CLOSE_ENABLED", "AISOC_CASE_AUTO_CLOSE_ENABLED"),
+    )
+    CASE_AUTO_CLOSE_AFTER_DAYS: int = 7
+    CASE_AUTO_CLOSE_INTERVAL_SECONDS: int = 3600
+    CASE_AUTO_CLOSE_BATCH_LIMIT: int = 500
+
     # Shadow-reconciliation sweep (gap-closure Phase 2.1, D15). Polls each
     # measuring tenant's own SIEM for the closures their analysts made there,
     # so a tenant whose queue lives in Splunk ES still accumulates the track
