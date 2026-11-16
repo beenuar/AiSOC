@@ -50,6 +50,7 @@ roll back if any downstream step (e.g. webhook fan-out) fails.
 from __future__ import annotations
 
 import logging
+import os
 import re
 import secrets
 import uuid
@@ -62,7 +63,7 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import console_base_url
+from app.core.config import console_base_url, is_dev_env
 from app.models.tenant import Tenant, User
 from app.models.waitlist import (
     WAITLIST_STATUS_ONBOARDED,
@@ -416,6 +417,20 @@ async def provision_from_waitlist(
     )
     db.add(admin_user)
     await db.flush()
+
+    # [SEC-2] The demo dataset creates a known-password administrator
+    # (demo@example.com / aisoc-demo) inside the *live* tenant. The seeder's
+    # own _refuse_in_production() guard only covers the standalone script;
+    # this path bypassed it. A non-development environment never seeds demo
+    # identity, even when the caller asked for it.
+    if seed_demo and not is_dev_env(os.environ.get("ENVIRONMENT") or os.environ.get("ENV")):
+        logger.warning(
+            "tenant_provision demo seed refused: ENVIRONMENT=%r is not a "
+            "development environment (SEC-2); tenant %s gets no demo identities",
+            os.environ.get("ENVIRONMENT") or os.environ.get("ENV") or "unset",
+            tenant.slug,
+        )
+        seed_demo = False
 
     demo_seeded = False
     if seed_demo:

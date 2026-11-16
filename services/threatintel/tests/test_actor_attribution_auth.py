@@ -31,9 +31,18 @@ def token(monkeypatch: pytest.MonkeyPatch):
     return "s3cret-token"
 
 
-def test_unconfigured_allows_unauthenticated(monkeypatch: pytest.MonkeyPatch):
-    """With no token set, the endpoints keep their internal-only open behaviour."""
+def test_unconfigured_fails_closed(monkeypatch: pytest.MonkeyPatch):
+    """SEC-15: with no token set the gate refuses instead of failing open."""
     monkeypatch.setattr(settings, "AISOC_THREATINTEL_SERVICE_TOKEN", "")
+    monkeypatch.delenv("AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED", raising=False)
+    resp = _client().get("/api/v1/actors/profiles")
+    assert resp.status_code == 503
+
+
+def test_unconfigured_opt_in_open(monkeypatch: pytest.MonkeyPatch):
+    """The pre-token open behaviour survives only behind an explicit opt-in."""
+    monkeypatch.setattr(settings, "AISOC_THREATINTEL_SERVICE_TOKEN", "")
+    monkeypatch.setenv("AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED", "1")
     resp = _client().get("/api/v1/actors/profiles")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)

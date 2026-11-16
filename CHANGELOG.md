@@ -115,6 +115,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The threat-actor attribution API fails closed, and the default stack
+  carries the key** (#1901, SEC-15/NC-7). `/api/v1/actors/*` was fail-open
+  by design: an unset `AISOC_THREATINTEL_SERVICE_TOKEN` warned once and
+  allowed every caller, so a deployment that exposed the service beyond the
+  private network served actor profiles to anyone who could reach the port,
+  with a log line as the only trace. The gate now answers 503 when the
+  token is unset (the pre-token open behaviour survives only behind an
+  explicit `AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1`), `ensure_env.py`
+  generates the token, and — the half the carry adds — compose forwards it
+  to the enforcing `threatintel` container *and* the calling `agents`
+  container, because a generated value that never reaches either end is a
+  503 for every attribution call on the default stack (the
+  generated-but-unforwarded class from #1898, pinned by the same shape of
+  gate: readers derived from the tree, forwarding asserted per service).
+  Contributed by @alexmateescu.
+
+- **Tenant provisioning refuses demo identities outside development**
+  (#1901, SEC-2). The demo dataset creates a known-password administrator
+  (`demo@example.com` / `aisoc-demo`) inside the live tenant, and the
+  seeder's own production guard covered only the standalone script —
+  `provision_from_waitlist` bypassed it, so a production waitlist
+  provisioning that asked for demo seeding got the known-password admin. A
+  non-development `ENVIRONMENT` now never seeds demo identity, whatever the
+  caller asked for, logged with the refusal. Contributed by @alexmateescu.
+
 - **BREAKING: action requests require a principal by default** (#1900,
   NC-3). `AISOC_ACTIONS_REQUIRE_PRINCIPAL` shipped `default=False`, so a
   principal-less `ActionRequest` passed `authorize_action` with no identity

@@ -794,6 +794,9 @@ services:
       # Opt-in: 0/off/false spends the token ceiling on answer tokens instead
       # of hidden reasoning (thinking-tier models). Unset = provider default.
       AISOC_LLM_THINKING: ${AISOC_LLM_THINKING:-}
+      # [SEC-15] investigation_agent presents this to the threatintel actor
+      # gate, which fails closed; without it every attribution call 503s.
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
       REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
       AISOC_INVESTIGATION_MAX_SECONDS: ${AISOC_INVESTIGATION_MAX_SECONDS:-120}
       # The agents :15002/metrics gate compares against this token exactly as
@@ -1396,6 +1399,11 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/7
+      # [SEC-15] The /api/v1/actors/* gate fails closed without this token.
+      # ensure_env generates it, but a generated value that never reaches the
+      # enforcing container is a 503 for every caller — the same
+      # generated-but-unforwarded class as the Cyble key (#1898).
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
       # This service reads OPENSEARCH_HOST/PORT. It was given OPENSEARCH_URL,
       # which its Settings has no field for and `extra="ignore"` discards, so
       # the connection worked only because the defaults happened to match the
