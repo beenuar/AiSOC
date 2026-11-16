@@ -21,7 +21,7 @@
 | aws_vpc_flow | cloud | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | azure_activity | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |
 | azure_defender | edr | 3 | 1 | 5 | ✅ | ✅ | ✅ |
-| azure_entra | iam | 3 | 1 | 2 | ✅ | ✅ | ✅ |
+| azure_entra | iam | 6 | 3 | 2 | ✅ | ✅ | ✅ |
 | azure_event_hubs | cloud | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | bamboohr | hr | 3 | 1 | 1 | ✅ | ✅ | — |
 | box | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
@@ -62,7 +62,7 @@
 | kubernetes_audit | cloud | 5 | 1 | 2 | ✅ | ✅ | ✅ |
 | lacework | cloud | 4 | 1 | 5 | ✅ | ✅ | ✅ |
 | llm_usage | saas | 4 | 1 | 2 | ✅ | ✅ | ✅ |
-| m365_audit | saas | 3 | 1 | 1 | ✅ | ✅ | ✅ |
+| m365_audit | saas | 6 | 3 | 1 | ✅ | ✅ | ✅ |
 | microsoft_intune | mdm | 3 | 1 | 1 | ✅ | ✅ | — |
 | microsoft_sentinel | siem | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | mimecast | saas | 3 | 1 | 4 | ✅ | ✅ | ✅ |
