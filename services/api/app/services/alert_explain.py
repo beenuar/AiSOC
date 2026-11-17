@@ -771,7 +771,7 @@ async def _call_llm_for_summary(
         # JSON dump of the alert, so this is the API's most direct path for
         # raw event data to reach a third party.
         payload = await safe_chat_completions_request(
-            api_key=llm_config.api_key,
+            api_key=llm_config.api_key or "aisoc-no-auth",
             model=llm_config.model,
             messages=messages,
             url=url,
@@ -975,7 +975,7 @@ async def generate_alert_explanation(
     llm_reason = llm_config.reason
     summary = fallback_summary
 
-    if llm_config.allowed and llm_config.api_key:
+    if llm_config.allowed:
         call = await _call_llm_for_summary(
             alert=alert,
             rule_lineage=rule_lineage,

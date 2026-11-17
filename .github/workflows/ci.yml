@@ -2689,3 +2689,67 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Validate compose file
         run: docker compose config --quiet
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Gateway native authentication through real HTTP (no network egress)
+        run: |
+          python3 -m pip install --quiet pytest pyyaml
+          docker compose pull litellm
+          AISOC_TEST_LITELLM=1 python3 -m pytest tests/test_litellm_startup.py tests/test_litellm_auth_http.py tests/test_litellm_reload.py -q
+
+      - name: Gateway regression negative controls
+        run: |
+          fixture_backup=$(mktemp -d)
+          cp infra/litellm/config.yaml "$fixture_backup/config.yaml"
+          cp infra/litellm/start.py "$fixture_backup/start.py"
+          cp Makefile "$fixture_backup/Makefile"
+          trap 'cp "$fixture_backup/config.yaml" infra/litellm/config.yaml; cp "$fixture_backup/start.py" infra/litellm/start.py; cp "$fixture_backup/Makefile" Makefile; rm -rf "$fixture_backup"' EXIT
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          path = Path("infra/litellm/config.yaml")
+          config = yaml.safe_load(path.read_text())
+          for alias in config["model_list"]:
+              alias["litellm_params"]["api_key"] = "os.environ/OPENAI_API_KEY"
+          path.write_text(yaml.safe_dump(config))
+          PY
+          if AISOC_TEST_LITELLM=1 python3 -m pytest tests/test_litellm_auth_http.py::GatewayHTTPTests::test_bedrock_bearer_with_empty_openai_key -q > "$fixture_backup/auth.log" 2>&1; then
+            cat "$fixture_backup/auth.log"
+            echo "FAIL: explicit empty generic key did not reproduce the credential failure"
+            exit 1
+          fi
+          cat "$fixture_backup/auth.log"
+          grep -E 'NoCredentialsError|Unable to locate credentials' "$fixture_backup/auth.log"
+          cp "$fixture_backup/config.yaml" infra/litellm/config.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("infra/litellm/start.py")
+          text = path.read_text()
+          before = 'os.environ[name] = ""'
+          assert text.count(before) == 1
+          path.write_text(text.replace(before, "del os.environ[name]"))
+          PY
+          if AISOC_TEST_LITELLM=1 python3 -m pytest tests/test_litellm_auth_http.py::GatewayHTTPTests::test_openai_compatible_endpoint_with_empty_key -q > "$fixture_backup/keyless.log" 2>&1; then
+            cat "$fixture_backup/keyless.log"
+            echo "FAIL: unsetting an empty provider key did not break keyless compatibility"
+            exit 1
+          fi
+          cat "$fixture_backup/keyless.log"
+          grep -F 'The api_key client option must be set' "$fixture_backup/keyless.log"
+          cp "$fixture_backup/start.py" infra/litellm/start.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("Makefile")
+          text = path.read_text()
+          before = "--no-deps --force-recreate litellm"
+          assert text.count(before) == 1
+          path.write_text(text.replace(before, "--no-deps litellm"))
+          PY
+          if AISOC_TEST_LITELLM=1 python3 -m pytest tests/test_litellm_reload.py -q > "$fixture_backup/reload.log" 2>&1; then
+            cat "$fixture_backup/reload.log"
+            echo "FAIL: removing recreation did not reproduce stale startup configuration"
+            exit 1
+          fi
+          cat "$fixture_backup/reload.log"
+          grep -F 'llm-reload kept the old startup model' "$fixture_backup/reload.log"

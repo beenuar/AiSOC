@@ -584,7 +584,7 @@ async def _llm_summary(
     BYOK / air-gap layering decisions in one place and means this
     function has zero awareness of where the credentials came from.
     """
-    if not llm_config.allowed or not llm_config.api_key:
+    if not llm_config.allowed:
         return fallback
 
     try:
@@ -630,7 +630,7 @@ async def _llm_summary(
         # invisible to it. `safe_chat_completions_request` exists for exactly
         # this shape and is already used by copilot.py and the NL translator.
         body = await safe_chat_completions_request(
-            api_key=llm_config.api_key,
+            api_key=llm_config.api_key or "aisoc-no-auth",
             model=model,
             messages=messages,
             url=url,

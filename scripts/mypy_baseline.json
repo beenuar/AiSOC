@@ -355,9 +355,6 @@
     "app/scripts/seed_demo.py": {
       "no-redef": 1
     },
-    "app/services/alert_explain.py": {
-      "arg-type": 1
-    },
     "app/services/event_warehouse/registry.py": {
       "list-item": 2
     },

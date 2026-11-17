@@ -30,6 +30,7 @@ import os
 import re
 from collections.abc import Iterator
 from typing import Any
+from urllib.parse import urlsplit
 
 from langchain_openai import ChatOpenAI
 
@@ -191,7 +192,12 @@ def make_chat_model(
     """
     override = _llm_override.get()
     model = (override or {}).get("model") or resolve_model_alias(role)
-    params: dict[str, Any] = {"model": model, "temperature": temperature}
+    base_url = (override or {}).get("base_url") or resolve_base_url(model)
+    direct_anthropic = base_url is not None and (urlsplit(base_url).hostname or "").lower().rstrip(".") == "api.anthropic.com"
+    # The direct compatibility API rejects json_object, and newer Claude
+    # models reject non-default temperature. Gateway routes retain their
+    # provider translation/drop_params behavior.
+    params: dict[str, Any] = {"model": model, "temperature": None if direct_anthropic else temperature}
     if max_tokens is not None:
         params["max_tokens"] = max_tokens
     # Thinking-tier models (e.g. Qwen3.6-35B-A3B) stream chain-of-thought into
@@ -210,7 +216,7 @@ def make_chat_model(
     thinking = os.environ.get("AISOC_LLM_THINKING", "").strip().lower()
     if thinking in ("0", "off", "false"):
         params.setdefault("extra_body", {}).setdefault("enable_thinking", False)
-    if json_output:
+    if json_output and not direct_anthropic:
         # Via ``model_kwargs`` rather than as a top-level argument. ChatOpenAI
         # does not declare ``response_format`` as a field, so passing it
         # directly still works but warns "response_format is not default
@@ -220,11 +226,11 @@ def make_chat_model(
             **kwargs.pop("model_kwargs", {}),
             "response_format": {"type": "json_object"},
         }
-    base_url = (override or {}).get("base_url") or resolve_base_url(model)
     assert_routable(model, base_url)
     if base_url:
         params["base_url"] = base_url
-    if max_tokens is not None and _needs_legacy_max_tokens(base_url):
+    # Direct Anthropic supports max_completion_tokens without a legacy duplicate.
+    if max_tokens is not None and not direct_anthropic and _needs_legacy_max_tokens(base_url):
         # langchain-openai 1.x renders the typed `max_tokens` field onto the
         # wire as `max_completion_tokens`, OpenAI's newer name for it. Ollama
         # reads only `max_tokens` and ignores the new name silently, so a

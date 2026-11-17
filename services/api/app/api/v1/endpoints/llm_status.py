@@ -26,11 +26,11 @@ Two views: env-only vs tenant-resolved
 --------------------------------------
 
 * :func:`llm_status` returns the *environment-only* baseline — what the
-  pod would do if no tenant context were involved. This is what the
-  unauthenticated ``GET /api/v1/llm/status`` endpoint serves and what
-  legacy callers like ``cost_dashboard`` consume.
+  pod would do if no tenant context were involved. Legacy callers like
+  ``cost_dashboard`` consume this baseline.
 * :func:`tenant_llm_status` layers per-tenant BYOK overrides from
-  ``tenant_llm_credentials`` on top of the env baseline. Used by callers
+  ``tenant_llm_credentials`` on top of the env baseline. The authenticated
+  ``GET /api/v1/llm/status`` endpoint uses this path, as do callers
   that already have an authenticated tenant context. The ``source``
   field on the returned snapshot says where each value came from
   (``"environment"`` / ``"tenant"`` / ``"mixed"``) so the UI can surface
@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from fastapi import APIRouter
 from sqlalchemy import select
@@ -64,10 +64,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import AuthUser
 from app.core.airgap import is_host_allowed_for_airgap
 from app.core.config import settings
+from app.db.rls import TenantDBSession
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
 from app.services import llm_health
 from app.services.llm_runtime import probe as probe_runtime
+from app.services.llm_tenant_routing import allows_unauthenticated, tenant_route
 from app.services.model_aliases import gateway_url, is_gateway_alias, resolve_api_key
 
 router = APIRouter(prefix="/llm", tags=["llm"])
@@ -146,8 +148,8 @@ def _env_baseline() -> tuple[str, str, bool]:
     a tuple rather than a dict so callers can immediately layer
     overrides on top by name.
     """
-    base_url = os.getenv("LLM_BASE_URL") or os.getenv("OPENAI_BASE_URL") or ""
-    model = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or os.getenv("AISOC_LLM_MODEL") or ""
+    base_url = os.getenv("OPENAI_BASE_URL", "").strip() or os.getenv("LLM_BASE_URL", "").strip()
+    model = os.getenv("OPENAI_MODEL", "").strip() or os.getenv("LLM_MODEL", "").strip() or os.getenv("AISOC_LLM_MODEL", "").strip()
     if not base_url and gateway_url() and is_gateway_alias(model or "aisoc-summary"):
         # The indicator has to describe the route the explain path will
         # actually take, and that path now adopts the compose-provided gateway
@@ -160,12 +162,22 @@ def _env_baseline() -> tuple[str, str, bool]:
     return base_url, model, key_set
 
 
+def _redact_base_url(base_url: str) -> str:
+    """Keep routing context without exposing URL-carried credentials."""
+    try:
+        parsed = urlsplit(base_url)
+        return parsed._replace(netloc=parsed.netloc.rsplit("@", 1)[-1], query="", fragment="").geturl()
+    except ValueError:
+        return ""
+
+
 def _compute_status(
     *,
     base_url: str,
     model: str,
     key_set: bool,
     source: str,
+    allows_no_auth: bool = False,
 ) -> dict[str, object]:
     """Compute the redacted status snapshot for a resolved config triple.
 
@@ -198,12 +210,10 @@ def _compute_status(
         # No outbound call would happen anyway — fallback path is
         # always air-gap compliant.
         airgap_compliant = True
-    elif not host:
-        # base_url unset but key is set → would default to api.openai.com
-        # which is never compliant under air-gap.
-        airgap_compliant = False
     else:
-        airgap_compliant = is_host_allowed_for_airgap(host, settings.AISOC_AIRGAP_ALLOWLIST)
+        # An unset URL with a key uses the OpenAI default. It obeys the same
+        # explicit allowlist as a tenant-supplied provider URL.
+        airgap_compliant = is_host_allowed_for_airgap(host or "api.openai.com", settings.AISOC_AIRGAP_ALLOWLIST)
 
     is_local = _is_loopback_or_private_host(host)
 
@@ -211,7 +221,7 @@ def _compute_status(
     # would actually take right now. Mirrors ``_llm_allowed`` in
     # ``services/agents/app/api/explain.py`` semantics so the indicator
     # cannot drift from runtime behaviour.
-    if not key_set:
+    if not key_set and not allows_no_auth:
         effective_path = "fallback"
     elif airgap_enabled and not airgap_compliant:
         effective_path = "fallback"
@@ -235,7 +245,8 @@ def _compute_status(
     elif effective_path == "fallback":
         # key_set is False but base_url may be set — uncommon but possible.
         policy_note = (
-            "OPENAI_API_KEY (or LLM_API_KEY) is unset, so LLM calls are disabled and Explain falls back to deterministic summaries."
+            "No usable credential is configured for this endpoint. Re-enter the tenant key or use a matching deployment route; "
+            "Explain currently falls back to deterministic summaries."
         )
     elif is_local:
         policy_note = f"LLM calls are routed to a local provider ({provider}). No external network egress is required for the Explain path."
@@ -245,7 +256,7 @@ def _compute_status(
     return {
         "provider": provider,
         "model": model,
-        "base_url": base_url,
+        "base_url": _redact_base_url(base_url),
         "host": host,
         "key_set": key_set,
         "airgap_enabled": airgap_enabled,
@@ -285,10 +296,9 @@ def llm_status() -> dict[str, object]:
         }
 
     Notes:
-        * ``base_url`` is returned verbatim (no path-stripping) because
-          operators sometimes encode the model behind the path on
-          single-tenant LiteLLM gateways and stripping it confuses
-          troubleshooting.
+        * ``base_url`` retains the endpoint path, but removes userinfo,
+          query and fragment components that can carry credentials.
+          Runtime routing continues to use the full configured URL.
         * ``key_set`` is the *only* signal we expose for the API key.
           We never return the key itself, even partially redacted.
         * For tenant-resolved snapshots that layer
@@ -313,11 +323,13 @@ async def tenant_llm_status(
     Layers values from ``tenant_llm_credentials`` on top of the env
     baseline. Resolution rules per field:
 
-    * ``base_url``  → tenant value if set, else env baseline.
-    * ``model``     → tenant value if set, else env baseline.
-    * ``key_set``   → ``True`` when the tenant row carries a vault token
-      *or* the env baseline has one. The vault token is decrypted only
-      to validate it, never returned.
+    * ``base_url`` / ``model`` → tenant values, then the selected hosted
+      provider's defaults, then the environment baseline.
+    * ``key_set`` → a decryptable tenant key, or an environment key for
+      this same endpoint. A deployment credential never follows a tenant
+      override to a different destination. Plaintext is never returned.
+      Local/custom endpoints with no stored key may run without authentication;
+      they remain ``key_set=False`` while their effective path is live.
 
     The returned ``source`` field reports the layering result:
 
@@ -349,21 +361,16 @@ async def tenant_llm_status(
     tenant_contributed = False
     env_contributed = False
 
-    if cred.base_url:
-        base_url = cred.base_url
-        tenant_contributed = True
-    else:
-        base_url = env_base_url
-        if env_base_url:
-            env_contributed = True
-
-    if cred.model:
-        model = cred.model
-        tenant_contributed = True
-    else:
-        model = env_model
-        if env_model:
-            env_contributed = True
+    base_url, model, tenant_base, tenant_model, inherit_env_key = tenant_route(
+        provider=cred.provider,
+        base_url=cred.base_url,
+        model=cred.model,
+        env_base=env_base_url,
+        env_model=env_model,
+    )
+    tenant_contributed = tenant_base or tenant_model
+    env_contributed = (not tenant_base and bool(env_base_url)) or (not tenant_model and bool(env_model))
+    env_key_set = env_key_set and inherit_env_key
 
     tenant_key_set = False
     if cred.api_key_vault:
@@ -397,28 +404,19 @@ async def tenant_llm_status(
         model=model,
         key_set=key_set,
         source=source,
+        allows_no_auth=allows_unauthenticated(cred.provider, cred.base_url, bool(cred.api_key_vault)),
     )
 
 
 @router.get("/status", summary="Current LLM provider configuration")
-async def get_llm_status(user: AuthUser) -> dict[str, object]:
-    """Return the env-only LLM provider snapshot for this pod.
+async def get_llm_status(user: AuthUser, db: TenantDBSession) -> dict[str, object]:
+    """Return the authenticated tenant's effective route, without secrets.
 
-    **Authenticated** -- the signature binds ``AuthUser`` and has for as long
-    as this route has existed. The docstring used to say "intentionally
-    unauthenticated", which was prose disagreeing with the code beneath it.
-
-    **Env-only**: the response carries no secrets (only ``key_set: bool``).
-
-    Tenant-aware callers (the web UI's "Deployment & AI" Settings
-    panel, the agents service's explain path) layer per-tenant BYOK
-    overrides on top of this baseline by either:
-
-    * calling :func:`tenant_llm_status` with their own DB session, or
-    * pairing this response with ``GET /api/v1/llm/credentials`` to
-      perform the merge client-side.
+    Settings consumes this response directly. Returning the environment-only
+    baseline hid an enabled BYOK override behind the deployment's gateway.
+    The database dependency also applies the authenticated tenant's RLS scope.
     """
-    return llm_status()
+    return await tenant_llm_status(db, user.tenant_id)
 
 
 @router.get("/runtime", summary="Where the local model is actually running")

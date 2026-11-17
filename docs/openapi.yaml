@@ -20550,16 +20550,14 @@ paths:
       tags:
       - llm
       summary: Current LLM provider configuration
-      description: "Return the env-only LLM provider snapshot for this pod.\n\n**Authenticated**\
-        \ -- the signature binds ``AuthUser`` and has for as long\nas this route has\
-        \ existed. The docstring used to say \"intentionally\nunauthenticated\", which\
-        \ was prose disagreeing with the code beneath it.\n\n**Env-only**: the response\
-        \ carries no secrets (only ``key_set: bool``).\n\nTenant-aware callers (the\
-        \ web UI's \"Deployment & AI\" Settings\npanel, the agents service's explain\
-        \ path) layer per-tenant BYOK\noverrides on top of this baseline by either:\n\
-        \n* calling :func:`tenant_llm_status` with their own DB session, or\n* pairing\
-        \ this response with ``GET /api/v1/llm/credentials`` to\n  perform the merge\
-        \ client-side."
+      description: 'Return the authenticated tenant''s effective route, without secrets.
+
+
+        Settings consumes this response directly. Returning the environment-only
+
+        baseline hid an enabled BYOK override behind the deployment''s gateway.
+
+        The database dependency also applies the authenticated tenant''s RLS scope.'
       operationId: get_llm_status_api_v1_llm_status_get
       responses:
         '200':

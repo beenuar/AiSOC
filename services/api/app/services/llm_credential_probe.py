@@ -43,6 +43,8 @@ import structlog
 from app._vendor.ssrf_guard import SSRFError, validate_outbound_url
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.llm_safety import safe_chat_completions_request
+from app.services.llm_tenant_routing import PROVIDER_DEFAULTS
+from app.services.model_aliases import completions_url_for_base
 
 logger = structlog.get_logger(__name__)
 
@@ -57,17 +59,13 @@ PROBE_TIMEOUT_SECONDS = 15.0
 #: not give a base URL. Only the hosted ones have a default; the local and
 #: custom providers are required to supply one (migration 038's CHECK and
 #: `_enforce_provider_invariants` both say so).
-_DEFAULT_BASE: dict[str, str] = {
-    "openai": "https://api.openai.com/v1",
-    "anthropic": "https://api.anthropic.com/v1",
-}
+_DEFAULT_BASE: dict[str, str] = {provider: defaults[0] for provider, defaults in PROVIDER_DEFAULTS.items()}
 
 #: A model has to be named to complete anything. These are the cheapest
 #: generally-available model per provider, used only when the tenant left the
 #: field blank -- the probe says which one it used so the result is readable.
 _FALLBACK_MODEL: dict[str, str] = {
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-3-5-haiku-20241022",
+    **{provider: defaults[1] for provider, defaults in PROVIDER_DEFAULTS.items()},
     "azure-openai": "gpt-4o-mini",
     "local-ollama": "llama3.2:3b-instruct-q4_K_M",
     "local-vllm": "default",
@@ -174,14 +172,9 @@ async def probe_credential(
             model=resolved_model,
         )
 
-    # Anthropic authenticates with `x-api-key` rather than a bearer token and
-    # wants its API version pinned. The helper always sets `Authorization`,
-    # which Anthropic ignores.
-    extra_headers: dict[str, str] = {}
-    if provider == "anthropic":
-        extra_headers = {"x-api-key": api_key or "", "anthropic-version": "2023-06-01"}
-
-    url = f"{resolved_base}/messages" if provider == "anthropic" else f"{resolved_base}/chat/completions"
+    # Exercise the same OpenAI-compatible transport used by explain and the
+    # agent factory. A native /messages probe can succeed while runtime fails.
+    url = completions_url_for_base(resolved_base)
 
     started = time.monotonic()
     try:
@@ -198,12 +191,11 @@ async def probe_credential(
         # evaluation, and a longer generation bills the tenant for output
         # nobody reads.
         await safe_chat_completions_request(
-            api_key=api_key or "",
+            api_key=api_key or "aisoc-no-auth",
             model=resolved_model,
             messages=[{"role": "user", "content": "ping"}],
             url=url,
             timeout=PROBE_TIMEOUT_SECONDS,
-            extra_headers=extra_headers or None,
             max_tokens=1,
         )
     except httpx.HTTPStatusError as exc:

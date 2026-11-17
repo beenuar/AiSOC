@@ -931,9 +931,8 @@ services:
   # alias (aisoc-triage, aisoc-investigation, …); the mapping alias → real model
   # lives entirely in infra/litellm/config.yaml, so operators swap local/hosted
   # models without touching AiSOC. Per-task latency/tokens/cost/errors are
-  # exported on /metrics (scraped as job `aisoc-litellm`). Lightweight and inert
-  # unless a service is pointed at it via OPENAI_BASE_URL — see the note on the
-  # `agents` service above.
+  # exported on /metrics (scraped as job `aisoc-litellm`). The api and agents
+  # services use LLM_GATEWAY_URL to route task aliases here by default.
   ollama:
     # CORE — the model behind the gateway.
     #
@@ -1103,9 +1102,11 @@ services:
     # `llmGateway.image.tag` in lockstep when bumping.
     image: ghcr.io/berriai/litellm:v1.102.1
     container_name: aisoc-litellm
+    entrypoint: ["python", "/etc/litellm/start.py"]
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     volumes:
       - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
+      - ./infra/litellm/start.py:/etc/litellm/start.py:ro
     #
     # Deliberately no `depends_on`. This used to read
     #
@@ -1144,12 +1145,28 @@ services:
       AISOC_LLM_MODEL_DEEP: ${AISOC_LLM_MODEL_DEEP:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
       # `-` and not `:-`, deliberately: an operator moving to a hosted provider
       # sets AISOC_LLM_API_BASE= (empty) in .env, and `:-` would helpfully undo
-      # that by substituting the Ollama address back in.
+      # that by substituting the Ollama address back in. start.py unsets a
+      # blank value so LiteLLM receives None and uses the provider default.
       AISOC_LLM_API_BASE: ${AISOC_LLM_API_BASE-http://ollama:11434}
-      # Upstream provider keys the aliases resolve against (os.environ/... in the
-      # config). Empty is fine — the local model answers instead.
+      # Provider-native credentials. The startup wrapper removes blank AWS
+      # values so the SDK can use its default chain (including an EC2 role).
+      # These are gateway-only; a tenant's BYOK remains separate.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      AWS_BEARER_TOKEN_BEDROCK: ${AWS_BEARER_TOKEN_BEDROCK:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+      AWS_PROFILE: ${AWS_PROFILE:-}
+      AWS_PROFILE_NAME: ${AWS_PROFILE_NAME:-}
+      AWS_REGION: ${AWS_REGION:-}
+      AWS_REGION_NAME: ${AWS_REGION_NAME:-}
+      AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-}
+      AWS_CONFIG_FILE: ${AWS_CONFIG_FILE:-}
+      AWS_SHARED_CREDENTIALS_FILE: ${AWS_SHARED_CREDENTIALS_FILE:-}
+      # Leave IMDS enabled for EC2 instance-role authentication. Bearer/profile
+      # users may explicitly disable it without disabling other credentials.
+      AWS_EC2_METADATA_DISABLED: ${AWS_EC2_METADATA_DISABLED:-false}
       # How long the gateway waits on one generation before giving up, in
       # seconds. 60 was a bare literal inside the mounted config, so a
       # deployment whose model needs longer — CPU-only inference on a larger

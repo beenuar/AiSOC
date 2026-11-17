@@ -32,8 +32,10 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -435,6 +437,94 @@ def test_upgrade_is_declared_phony_and_advertised() -> None:
     phony = re.search(r"^\.PHONY:((?:[^\n]*\\\n)*[^\n]*)", text, re.MULTILINE)
     assert phony and "upgrade" in phony.group(1), "`upgrade` is not in .PHONY"
     assert "make upgrade" in text, "`make upgrade` is never named in the help output"
+
+
+def _run_gateway_make(
+    tmp_path: Path, target: str, profile: str = "", *, fail_reload: bool = False
+) -> tuple[subprocess.CompletedProcess[str], list[list[str]]]:
+    """Execute the real make recipes, recording Compose calls without a daemon.
+
+    Database and readiness steps are replaced with recorders. This checks
+    orchestration and failure propagation, not Docker's mount behaviour or a
+    live provider connection.
+    """
+    recorder = tmp_path / "record.py"
+    recorder.write_text(
+        "import json, os, sys\n"
+        "with open('calls.jsonl', 'a') as output:\n"
+        "    output.write(json.dumps(sys.argv[1:]) + '\\n')\n"
+        "if '--force-recreate' in sys.argv and os.environ.get('FAIL_RELOAD') == '1':\n"
+        "    sys.exit(17)\n",
+        encoding="utf-8",
+    )
+    scripts = tmp_path / "scripts"
+    scripts.mkdir()
+    (scripts / "preflight_upgrade.py").write_text(recorder.read_text(encoding="utf-8"), encoding="utf-8")
+    command = f"{shlex.quote(sys.executable)} {shlex.quote(str(recorder))}"
+    overrides = "\n".join(f"{step}:\n\t@{command} {step}\n" for step in ("_upgrade_backup", "_refresh", "_migrate", "_ports", "_wait"))
+    (tmp_path / "Makefile").write_text(MAKEFILE.read_text(encoding="utf-8") + "\n" + overrides, encoding="utf-8")
+    result = subprocess.run(
+        [
+            "make",
+            "--no-print-directory",
+            target,
+            f"COMPOSE={command} compose -f docker-compose.yml -f provider.yml",
+            f"PYTHON={sys.executable}",
+            f"PROFILE={profile}",
+        ],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "FAIL_RELOAD": "1" if fail_reload else "0"},
+    )
+    log = tmp_path / "calls.jsonl"
+    calls = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()] if log.exists() else []
+    return result, calls
+
+
+@pytest.mark.parametrize("profile", ["", "full"])
+def test_upgrade_reloads_gateway_before_waiting(tmp_path: Path, profile: str) -> None:
+    """Mounted config bytes can change while Compose's service hash stays equal."""
+    result, calls = _run_gateway_make(tmp_path, "upgrade", profile)
+    assert result.returncode == 0, result.stdout + result.stderr
+    prefix = ["compose", "-f", "docker-compose.yml", "-f", "provider.yml"]
+    if profile:
+        prefix += ["--profile", profile]
+    compose_calls = [call for call in calls if call and call[0] == "compose"]
+    assert compose_calls == [
+        prefix + ["up", "-d"],
+        prefix + ["up", "-d", "--no-deps", "--force-recreate", "litellm"],
+    ]
+    assert calls.index(["_migrate"]) < calls.index(compose_calls[0])
+    assert calls.index(compose_calls[1]) < calls.index(["_wait"])
+
+
+def test_gateway_reload_targets_only_litellm(tmp_path: Path) -> None:
+    result, calls = _run_gateway_make(tmp_path, "llm-reload")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert calls == [
+        [
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "-f",
+            "provider.yml",
+            "up",
+            "-d",
+            "--no-deps",
+            "--force-recreate",
+            "litellm",
+        ]
+    ]
+
+
+@pytest.mark.parametrize("target", ["upgrade", "llm-reload"])
+def test_gateway_reload_failure_is_not_reported_as_success(tmp_path: Path, target: str) -> None:
+    result, calls = _run_gateway_make(tmp_path, target, fail_reload=True)
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert any("--force-recreate" in call for call in calls)
+    assert ["_wait"] not in calls
+    assert "Upgrade complete" not in result.stdout
 
 
 # ── 3. strict mode, everywhere migrations are applied ────────────────────────
