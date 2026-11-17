@@ -105,7 +105,7 @@ class GatewayReloadTests(unittest.TestCase):
                         if current["sha256"] == expected_hash:
                             return current
                     time.sleep(0.25)
-                self.fail("Gateway state did not become readable with the expected mounted bytes: " + last_output)
+                raise AssertionError("Gateway state did not become readable with the expected mounted bytes: " + last_output)
 
             try:
                 original_hash = write_config("openai/gpt-4o-mini")
