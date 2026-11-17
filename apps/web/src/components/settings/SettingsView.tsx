@@ -2379,13 +2379,21 @@ function BYOKCard({
         </Field>
         <Field
           label="Model"
-          hint="Provider-specific identifier (e.g. 'gpt-4o-mini', 'llama3.1:8b'). Leave blank for provider default."
+          hint={
+            provider === 'openai' || provider === 'anthropic'
+              ? 'Provider-specific identifier. Leave blank for the selected provider default.'
+              : 'Enter the model served by this endpoint, its deployment name, or a gateway alias.'
+          }
         >
           <input
             type="text"
             value={model}
             onChange={e => setModel(e.target.value)}
-            placeholder="provider default"
+            placeholder={
+              provider === 'openai' || provider === 'anthropic'
+                ? 'provider default'
+                : 'model, deployment, or gateway alias'
+            }
             disabled={submitting}
             className={inputClass()}
           />

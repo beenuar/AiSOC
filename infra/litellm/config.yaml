@@ -12,11 +12,11 @@
 # with the role pins in services/agents/app/llm/model_pins.py — the agents test
 # `test_litellm_config.py` asserts they match.
 #
-# Every alias resolves its credential from the process env (os.environ/...), so
-# no secret is ever written to this file. Point AiSOC at the gateway by setting
-# (see .env.example):
-#     OPENAI_BASE_URL=http://litellm:4000/v1
-#     OPENAI_API_KEY=$LITELLM_MASTER_KEY
+# Aliases deliberately omit api_key: LiteLLM selects provider-native credentials
+# (OPENAI_API_KEY, ANTHROPIC_API_KEY, Bedrock bearer or the AWS SDK chain).
+# A generic explicit OpenAI key would override Bedrock bearer resolution.
+# The gateway's own LITELLM_MASTER_KEY authenticates AiSOC clients and must
+# never be substituted for an upstream provider credential.
 #
 # ── WHICH MODEL ANSWERS, AND HOW TO CHANGE IT ─────────────────────────────────
 #
@@ -37,7 +37,7 @@
 #     AISOC_LLM_MODEL_DEEP=openai/gpt-4o
 #     AISOC_LLM_API_BASE=
 #
-# then `make up` again. No code change, no profile change, no edit to this file.
+# then `make llm-reload`. No code change, no profile change, no edit to this file.
 # Air-gapped deployments keep the defaults and never set a key.
 #
 # When no live model is reachable at all AiSOC still degrades to its
@@ -50,49 +50,42 @@ model_list:
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Recon / enrichment reasoning. ─────────────────────────────────────────────
   - model_name: aisoc-recon
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Deep investigation: the multi-step reasoning path — worth a stronger model.
   - model_name: aisoc-investigation
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_DEEP
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Contextual copilot: interactive analyst Q&A. ──────────────────────────────
   - model_name: aisoc-copilot
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Summaries: alert/incident condensation. ───────────────────────────────────
   - model_name: aisoc-summary
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Reports: analyst-facing write-ups — quality over cost. ────────────────────
   - model_name: aisoc-report
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_DEEP
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Natural-language generation: NL→query / NL→detection translation. ─────────
   - model_name: aisoc-nl
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # Gap-closure Phase 8.3. The hunting agent turns a natural-language
   # hypothesis into a structured plan over a closed field vocabulary. It emits
@@ -103,7 +96,6 @@ model_list:
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # Parity 2.5. The detection-tuning loop rewrites a Sigma rule from an
   # analyst note and the fields of a misfiring alert. It hardcoded
@@ -115,7 +107,6 @@ model_list:
     litellm_params:
       model: os.environ/AISOC_LLM_MODEL_FAST
       api_base: os.environ/AISOC_LLM_API_BASE
-      api_key: os.environ/OPENAI_API_KEY
 
   # ── Other backends ────────────────────────────────────────────────────────────
   # The two variables above take any LiteLLM model string, so most swaps need no

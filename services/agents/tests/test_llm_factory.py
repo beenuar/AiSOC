@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+
+import httpx
 import pytest
 from app.llm.factory import (
     UnroutableModelError,
@@ -222,6 +225,52 @@ def test_byok_model_override_only_when_the_tenant_set_one(monkeypatch):
         llm = make_chat_model("triage")
     assert llm.model_name == "tenant-model"
     assert str(llm.openai_api_base).rstrip("/") == "http://tenant:1/v1"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("base", ["https://api.anthropic.com/v1", "https://API.ANTHROPIC.COM/v1/"])
+async def test_direct_anthropic_uses_compatible_request_parameters(monkeypatch, base):
+    monkeypatch.setenv("OPENAI_API_KEY", "deployment-provider-key")
+    seen = []
+
+    def respond(request):
+        seen.append(request)
+        body = json.loads(request.content)
+        # Model the documented compatibility contract at the HTTP boundary.
+        if "response_format" in body or "temperature" in body:
+            return httpx.Response(400, json={"error": {"message": "unsupported parameter"}})
+        return httpx.Response(
+            200,
+            json={
+                "id": "chatcmpl-transport-test",
+                "object": "chat.completion",
+                "created": 1,
+                "model": body["model"],
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": '{"verdict":"escalate"}'}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
+        with llm_override(api_key="tenant-anthropic-key", base_url=base, model="claude-haiku-4-5-20251001"):
+            model = make_chat_model("triage", json_output=True, temperature=0.0, max_tokens=256, http_async_client=client, max_retries=0)
+            response = await model.ainvoke("Return a JSON verdict.")
+
+    assert json.loads(response.content) == {"verdict": "escalate"}
+    assert len(seen) == 1
+    assert seen[0].url.path == "/v1/chat/completions"
+    assert seen[0].headers["authorization"] == "Bearer tenant-anthropic-key"
+    payload = json.loads(seen[0].content)
+    assert payload["max_completion_tokens"] == 256
+    assert "max_tokens" not in payload
+    assert "deployment-provider-key" not in str(seen[0].headers)
+
+
+def test_anthropic_parameter_handling_does_not_apply_to_other_hosts():
+    with llm_override(api_key="tenant-key", base_url="https://api.anthropic.com.example/v1", model="tenant-model"):
+        model = make_chat_model("triage", json_output=True, temperature=0.0)
+    assert model.temperature == 0.0
+    assert model.model_kwargs["response_format"] == {"type": "json_object"}
 
 
 # ── preflight_llm ────────────────────────────────────────────────────────────

@@ -71,6 +71,8 @@ from app.security.credential_vault import CredentialVaultError, get_vault
 from app.services.audit import emit_audit
 from app.services.llm_credential_probe import ProbeResult, probe_credential
 from app.services.llm_model_discovery import Discovery, discover_chat_models
+from app.services.llm_resolver import _env_baseline
+from app.services.llm_tenant_routing import tenant_route
 
 logger = logging.getLogger(__name__)
 
@@ -525,10 +527,21 @@ async def test_llm_credential(
                 provider=existing.provider,
             )
 
-    result: ProbeResult = await probe_credential(
+    env_base, env_model, env_key = _env_baseline()
+    base_url, model, _, _, inherit_env_key = tenant_route(
         provider=existing.provider,
         base_url=existing.base_url,
         model=existing.model,
+        env_base=env_base,
+        env_model=env_model,
+    )
+    if api_key is None and inherit_env_key:
+        api_key = env_key
+
+    result: ProbeResult = await probe_credential(
+        provider=existing.provider,
+        base_url=base_url,
+        model=model,
         api_key=api_key,
     )
     return LlmCredentialTestResult(

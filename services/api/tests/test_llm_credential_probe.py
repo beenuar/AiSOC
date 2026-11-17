@@ -26,7 +26,103 @@ that allowed private and stopped there would read as working.
 
 from __future__ import annotations
 
+import json
+import threading
+from collections.abc import Iterator
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
+
 import pytest
+
+
+@pytest.fixture
+def completion_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[str, list[dict[str, Any]]]]:
+    """Exercise httpx and the guarded request helper against a real HTTP socket."""
+    from app.core import airgap as airgap_mod
+
+    requests: list[dict[str, Any]] = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self) -> None:
+            body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append({"path": self.path, "headers": dict(self.headers), "body": body})
+            payload = json.dumps(
+                {
+                    "id": "probe-fixture",
+                    "object": "chat.completion",
+                    "model": body["model"],
+                    "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                }
+            ).encode()
+            self.send_response(200 if self.path == "/v1/chat/completions" else 404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def log_message(self, format: str, *args: object) -> None:
+            """Do not log the test request or its authorization header."""
+
+    # The production guard explicitly supports exact-host allowlisting for
+    # tunneled endpoints. Scope that option to this fixture; the SSRF guard
+    # still runs and the metadata/loopback rejection tests below stay intact.
+    monkeypatch.setenv("AISOC_SSRF_ALLOW_HOSTS", "127.0.0.1")
+    monkeypatch.delenv("AISOC_SSRF_EXTRA_BLOCKED_HOSTS", raising=False)
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setattr(airgap_mod.settings, "AISOC_AIRGAPPED", False)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}", requests
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+class TestProbeUsesRuntimeChatCompletionsTransport:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("base_path", ["", "/v1"])
+    @pytest.mark.parametrize(
+        ("provider", "api_key", "expected_model", "expected_bearer"),
+        [
+            ("openai", "tenant-openai-test", "gpt-4o-mini", "tenant-openai-test"),
+            ("anthropic", "tenant-anthropic-test", "claude-haiku-4-5-20251001", "tenant-anthropic-test"),
+            ("local-ollama", None, "llama3.2:3b-instruct-q4_K_M", "aisoc-no-auth"),
+        ],
+    )
+    async def test_probe_reaches_chat_completions_without_native_provider_headers(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        completion_server: tuple[str, list[dict[str, Any]]],
+        base_path: str,
+        provider: str,
+        api_key: str | None,
+        expected_model: str,
+        expected_bearer: str,
+    ) -> None:
+        from app.services.llm_credential_probe import probe_credential
+
+        monkeypatch.setenv("OPENAI_API_KEY", "environment-provider-test")
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "environment-gateway-test")
+        base, requests = completion_server
+
+        result = await probe_credential(provider=provider, base_url=base + base_path, model=None, api_key=api_key)
+
+        assert result.outcome == "ok", result.detail
+        assert result.model == expected_model
+        assert len(requests) == 1
+        request = requests[0]
+        assert request["path"] == "/v1/chat/completions"
+        headers = {name.lower(): value for name, value in request["headers"].items()}
+        assert headers["authorization"] == f"Bearer {expected_bearer}"
+        assert "x-api-key" not in headers
+        assert "anthropic-version" not in headers
+        assert request["body"] == {"model": expected_model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 1}
+        assert "environment-provider-test" not in str(request)
+        assert "environment-gateway-test" not in str(request)
 
 
 class TestTheGuardAllowsLocalProvidersAndStillBlocksMetadata:
