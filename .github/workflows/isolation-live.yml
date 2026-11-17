@@ -110,7 +110,7 @@ jobs:
         # so this job resolves what the image ships.
         run: >-
           pip install --quiet
-          pytest pytest-asyncio structlog "sqlglot>=30,<31"
+          pytest pytest-asyncio structlog "sqlglot>=30,<31" "regex>=2024.5.15"
           neo4j "redis>=5,<6" clickhouse-driver "kafka-python>=2,<3"
           "pydantic>=2.7,<2.14" "pydantic-settings>=2.2.1,<3"
 

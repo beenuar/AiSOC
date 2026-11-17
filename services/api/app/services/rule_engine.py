@@ -8,12 +8,29 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+# SEC-4: bounded-timeout regex engine for analyst-authored patterns. Python's
+# stdlib `re` is a backtracking engine: one catastrophic pattern in a rule
+# body — the `(a+)+$` family — pins a CPU for the lifetime of the process,
+# and this module compiles analyst- or LLM-authored bodies on
+# `/detection/test`, `/rules/{id}/execute` and `run_hunt`. The `regex`
+# package is a superset whose `.search(timeout=)` bounds exactly that; the
+# runner fails closed on its TimeoutError.
+#
+# Imported alongside stdlib `re`, not aliased over it: a module-wide alias
+# swaps the engine under every fixed internal pattern too (and buys them no
+# timeout — the bound only exists where `timeout=` is passed), so the
+# bounded engine is used explicitly at the sites that execute
+# analyst-authored patterns, and the fixed-string heuristics keep the
+# stdlib engine they were written against.
+import regex as bounded_regex
 
 from app.services.lucene_eval import LuceneQueryError, lucene_matches
 
@@ -402,7 +419,13 @@ def _kql_match(query: str, flat_event: dict[str, Any]) -> bool:
         value = m.group(2).lower()
         ev_val = str(flat_event.get(field_name, "")).lower()
         if "*" in value:
-            pattern = value.replace("*", ".*")
+            # SEC-4 (carry review): the value is analyst-authored and was
+            # dropped into the engine raw, so `field:(a+)+$x*` was both a
+            # regex injection and an unbounded backtrack. A KQL value is a
+            # glob, not a regex: escape everything, then let only the
+            # analyst's `*` match — the same construction the wildcard
+            # branch above this module already uses for rule patterns.
+            pattern = re.escape(value).replace(r"\*", ".*")
             return bool(re.search(pattern, ev_val))
         return value in ev_val
     # Free-text search
@@ -537,18 +560,35 @@ def execute_rule(
     )
 
 
+#: Wall-clock budget for one regex execution across a batch of events. A rule
+#: body that outruns this is treated as unrunnable rather than being allowed
+#: to pin a worker: the analyst sees "rule timed out" and fixes the pattern.
+#: Tunable via env for slow bulk rules; 2s is generous for a single event and
+#: tight enough that a flood of pathological patterns cannot saturate.
+REGEX_TIMEOUT_SECONDS = float(os.environ.get("AISOC_REGEX_TIMEOUT_SECONDS", "2.0"))
+
+
 def _run_regex(rule_body: str, events: list[dict[str, Any]]) -> tuple[list[dict], str | None]:
-    """Regex-based rule runner."""
+    """Regex-based rule runner with a bounded-timeout search (SEC-4)."""
     try:
-        pattern = re.compile(rule_body, re.IGNORECASE | re.MULTILINE)
-        matched = []
+        pattern = bounded_regex.compile(rule_body, bounded_regex.IGNORECASE | bounded_regex.MULTILINE)
+    except bounded_regex.error as exc:
+        return [], str(exc)
+
+    matched = []
+    try:
         for event in events:
             payload = json.dumps(event)
-            if pattern.search(payload):
+            if pattern.search(payload, timeout=REGEX_TIMEOUT_SECONDS):
                 matched.append(event)
         return matched, None
-    except re.error as exc:
-        return [], str(exc)
+    except TimeoutError:
+        logger.warning(
+            "rule_engine.regex timeout after %ss - catastrophic backtracking? pattern=%.80r",
+            REGEX_TIMEOUT_SECONDS,
+            rule_body,
+        )
+        return [], f"rule timed out after {REGEX_TIMEOUT_SECONDS}s (catastrophic backtracking?)"
 
 
 def _severity_score(severity: str) -> float:
