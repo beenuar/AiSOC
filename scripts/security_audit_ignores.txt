@@ -153,3 +153,6 @@ pnpm|CVE-2026-97058|sprintf-js: GHSA-hp3w-g68c-fv3c affects <=1.1.3 with first_p
 # same thing. braces has the same duplication (GHSA-vfj7-8cjw-p6xm and
 # CVE-2026-93687) and both are deliberately retained, because that one really
 # does still resolve inside its vulnerable range.
+
+# ── 2026-11-17 ────────────────────────────────────────────────────────────────
+pnpm|GHSA-fc5q-39xc-vjpf|picomatch ReDoS via repeated extglobs; no patched version exists (range <= 4.0.7, first_patched null). Every consumer in this lockfile is build/test/lint tooling (vite, vitest, jest, tsup, eslint, rollup-pluginutils, sucrase, chokidar/readdirp watchers) whose glob patterns are repo-authored config, never attacker input, and none ships in a runtime image. Re-check for an upstream patch at expiry.|2027-02-14
