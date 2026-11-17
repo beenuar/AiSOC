@@ -45,6 +45,12 @@ class SigPublish(BaseModel):
 
 class OptOut(BaseModel):
     instance_pubkey: str = Field(..., min_length=8)
+    #: Ed25519 signature over the fixed domain string ``aisoc-mesh:opt-out:v1``
+    #: (see ``app.hub.OPT_OUT_DOMAIN``), made with the instance's own key.
+    #: Proves the withdrawal comes from the instance being withdrawn — an
+    #: anonymous caller cannot dissolve another instance's participation or
+    #: permanently denylist its publishes by merely naming its public key.
+    signature: str = Field(..., min_length=8)
 
 
 @app.post("/v1/sightings")
@@ -90,7 +96,12 @@ def get_signature(signature_key: str) -> dict:
 
 @app.post("/v1/opt-out")
 def opt_out(body: OptOut) -> dict:
-    _hub.opt_out(body.instance_pubkey)
+    # Publishes prove key possession via each artifact's signature; a
+    # withdrawal must meet the same bar (#1944). Reads and signed writes
+    # stay token-free by design — this is a federation surface, and foreign
+    # instances do not hold this hub's secrets.
+    if not _hub.opt_out_signed(body.instance_pubkey, body.signature):
+        raise HTTPException(status_code=403, detail="invalid opt-out signature")
     return {"opted_out": True}
 
 

@@ -159,6 +159,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   discipline from the minimatch incident, not a blanket pin.
 
 
+- **Mesh opt-out requires proof of key possession** (#1944, carried in
+  part). `POST /v1/opt-out` took any caller-named public key unverified, and
+  opt-out is a permanent publish denylist — so an anonymous caller could
+  permanently silence any contributing instance (and dissolve its
+  participation in every k-anonymity cohort) by merely reading its public
+  key off the mesh. A withdrawal now carries an Ed25519 signature over the
+  fixed domain string `aisoc-mesh:opt-out:v1`, verified against the claimed
+  key; domain separation is test-pinned in both directions (an artifact
+  signature is not a withdrawal, a withdrawal is not a publish). The
+  contribution's other half — a platform bearer on the publish routes — was
+  deliberately **not** carried: publishes are already Ed25519-verified per
+  artifact, the hub is a federation surface, and foreign instances do not
+  hold this hub's platform secret, so a bearer would break federation
+  rather than secure it (sybil resistance remains an open gap that needs a
+  federation-compatible answer such as instance registration). Contributed
+  by @alexmateescu.
+
 - **`opentelemetry-api` re-locked to 1.45.2 across all thirteen Python
   services** (CVE-2026-126360, high). The CVE published against 1.45.1 the
   same day it started failing every pull request's security audit — the
