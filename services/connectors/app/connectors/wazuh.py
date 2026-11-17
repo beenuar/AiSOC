@@ -681,7 +681,10 @@ class WazuhConnector(BaseConnector):
             "title": rule_desc,
             "description": (source.get("full_log") or rule_desc)[:1000],
             "alert_id": alert_id,
-            "external_id": rule_id,
+            # Ingest derives the replay-stable source event UUID from this
+            # field. A rule id would collapse distinct hits into one payload
+            # id and make fusion's occurrence guard discard real repeats.
+            "external_id": alert_id,
             "rule_level": rule_level,
             "rule_id": rule_id,
             "rule_groups": rule.get("groups") or [],

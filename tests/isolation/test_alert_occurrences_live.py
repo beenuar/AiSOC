@@ -23,6 +23,7 @@ does not exist, and the sink issues no statement that mentions it.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import uuid
@@ -259,6 +260,155 @@ async def test_a_redelivered_message_does_not_inflate_the_count(pool, make_tenan
         f"{after_redeliveries['occurrence_count']}, so the number measures "
         "Kafka delivery rather than the vendor"
     )
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_first_sighting_uses_the_vendor_time_for_the_alert_window(pool, make_tenant) -> None:
+    tenant = await make_tenant("first-window")
+    sink = await _sink(pool)
+    first_seen = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    first = _fused(tenant, source_event_ids=["original"], event_time=first_seen)
+    await sink.persist(first)
+
+    async with pool.acquire() as conn:
+        alert = await conn.fetchrow(
+            "SELECT first_seen, last_seen, event_time FROM alerts WHERE tenant_id = $1 AND id = $2",
+            tenant,
+            first.id,
+        )
+    assert alert["first_seen"] == alert["last_seen"] == alert["event_time"] == first_seen
+
+
+@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.parametrize("decision", ["duplicate", "new_incident", "correlated"])
+async def test_every_dedup_path_updates_the_alert_window_without_rewriting_the_original(pool, make_tenant, decision) -> None:
+    """A cold Redis verdict must reach the same durable rollup as a warm one."""
+    from app.models.alert import FusionDecision
+    from app.services.alert_sink import PersistOutcome
+
+    tenant = await make_tenant("repeat-window")
+    sink = await _sink(pool)
+    first_seen = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    first = _fused(tenant, source_event_ids=["original"], event_time=first_seen)
+    await sink.persist(first)
+    async with pool.acquire() as conn:
+        created_at = await conn.fetchval("SELECT created_at FROM alerts WHERE tenant_id = $1 AND id = $2", tenant, first.id)
+
+    for number, when in enumerate((first_seen + timedelta(minutes=1), first_seen + timedelta(days=1)), start=2):
+        repeat = _fused(tenant, source_event_ids=[f"repeat-{number}"], event_time=when, decision=FusionDecision(decision))
+        result = await sink.persist(repeat)
+        assert result.outcome is PersistOutcome.DUPLICATE
+        assert result.alert_id == str(first.id)
+        occurrence = await _read(pool, tenant)
+        assert occurrence["occurrence_count"] == number
+        async with pool.acquire() as conn:
+            alert = await conn.fetchrow(
+                "SELECT first_seen, last_seen, event_time, created_at FROM alerts WHERE tenant_id = $1 AND id = $2",
+                tenant,
+                first.id,
+            )
+        assert alert["last_seen"] == occurrence["last_seen"] == when
+        assert alert["first_seen"] == occurrence["first_seen"] == first_seen
+        assert alert["event_time"] == first_seen
+        assert alert["created_at"] == created_at
+
+    # A delayed event widens first_seen and cannot rewind last_seen.
+    older = first_seen - timedelta(hours=1)
+    await sink.persist(_fused(tenant, source_event_ids=["delayed"], event_time=older, decision=FusionDecision(decision)))
+    async with pool.acquire() as conn:
+        alert = await conn.fetchrow("SELECT first_seen, last_seen FROM alerts WHERE tenant_id = $1 AND id = $2", tenant, first.id)
+    assert alert["first_seen"] == older
+    assert alert["last_seen"] == first_seen + timedelta(days=1)
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_redelivery_of_the_original_never_creates_an_occurrence(pool, make_tenant) -> None:
+    tenant = await make_tenant("original-replay")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    first = _fused(tenant, source_event_ids=["original"], event_time=base)
+    await sink.persist(first)
+    await sink.persist(first)
+    assert await _read(pool, tenant) is None, "replaying the first message is not a second vendor occurrence"
+
+    repeat = _fused(tenant, source_event_ids=["repeat"], event_time=base + timedelta(days=1))
+    await sink.persist(repeat)
+    await sink.persist(first)
+    await sink.persist(repeat)
+    occurrence = await _read(pool, tenant)
+    assert occurrence["occurrence_count"] == 2
+    assert occurrence["last_seen"] == base + timedelta(days=1)
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_an_identified_repeat_of_an_idless_original_is_counted_once(pool, make_tenant) -> None:
+    tenant = await make_tenant("first-known-id")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    await sink.persist(_fused(tenant, source_event_ids=[], event_time=base))
+    repeat = _fused(tenant, source_event_ids=["first-known-id"], event_time=base + timedelta(days=1))
+    await sink.persist(repeat)
+    await sink.persist(repeat)
+    occurrence = await _read(pool, tenant)
+    assert occurrence["occurrence_count"] == 2
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_a_failed_rollup_cannot_make_a_repeat_look_like_the_original(pool, make_tenant, monkeypatch) -> None:
+    """A retry can recover the first identified repeat after a real SQL failure."""
+    from app.services import alert_sink
+
+    tenant = await make_tenant("retry-first-known-id")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    first = _fused(tenant, source_event_ids=[], event_time=base)
+    await sink.persist(first)
+    repeat = _fused(tenant, source_event_ids=["first-known-id"], event_time=base + timedelta(days=1))
+
+    # Execute the real sink and driver against Postgres, with only the
+    # occurrence table unavailable to this statement. No successful rollup
+    # may be inferred from a provenance append that happened after it failed.
+    with monkeypatch.context() as unavailable:
+        unavailable.setattr(
+            alert_sink,
+            "_OCCURRENCE_SQL",
+            alert_sink._OCCURRENCE_SQL.replace("INSERT INTO alert_occurrences AS ao", "INSERT INTO missing_occurrence_table AS ao"),
+        )
+        result = await sink.persist(repeat)
+    assert result.outcome is alert_sink.PersistOutcome.DUPLICATE
+    assert await _read(pool, tenant) is None
+    async with pool.acquire() as conn:
+        ids = await conn.fetchval("SELECT source_event_ids FROM alerts WHERE tenant_id = $1 AND id = $2", tenant, first.id)
+    assert (json.loads(ids) if isinstance(ids, str) else ids) == [], (
+        "appending the repeat as the first source id would permanently misidentify it as the original"
+    )
+
+    await sink.persist(repeat)
+    await sink.persist(repeat)
+    occurrence = await _read(pool, tenant)
+    assert occurrence["occurrence_count"] == 2
+    assert occurrence["first_seen"] == base
+    assert occurrence["last_seen"] == base + timedelta(days=1)
+
+
+@pytest.mark.asyncio(loop_scope="module")
+async def test_concurrent_repeats_keep_the_alert_and_rollup_windows_in_sync(pool, make_tenant) -> None:
+    from app.services.alert_sink import PersistOutcome
+
+    tenant = await make_tenant("concurrent-window")
+    sink = await _sink(pool)
+    base = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    first = _fused(tenant, source_event_ids=["original"], event_time=base)
+    await sink.persist(first)
+    repeats = [_fused(tenant, source_event_ids=[f"repeat-{n}"], event_time=base + timedelta(hours=n)) for n in range(12, 0, -1)]
+    results = await asyncio.gather(*(sink.persist(repeat) for repeat in repeats))
+    assert all(result.outcome is PersistOutcome.DUPLICATE for result in results)
+    occurrence = await _read(pool, tenant)
+    assert occurrence["occurrence_count"] == 13
+    async with pool.acquire() as conn:
+        alert = await conn.fetchrow("SELECT first_seen, last_seen FROM alerts WHERE tenant_id = $1 AND id = $2", tenant, first.id)
+    assert alert["first_seen"] == occurrence["first_seen"] == base
+    assert alert["last_seen"] == occurrence["last_seen"] == base + timedelta(hours=12)
 
 
 @pytest.mark.asyncio(loop_scope="module")

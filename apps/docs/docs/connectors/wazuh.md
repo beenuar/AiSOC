@@ -101,6 +101,28 @@ must not be used in production.
   truncated; for very noisy environments the right answer is usually a higher
   threshold rather than a larger page size.
 
+## Repeated alerts
+
+Each Wazuh alert document has its own event identity: `external_id` uses the
+indexer document `_id`, while `rule_id` keeps the detection rule number.
+Fusion can fold several documents with the same alert fingerprint into one
+AiSOC alert. Each new document increments its occurrence count, including a
+repeat received after the Redis deduplication and correlation windows expire.
+Replaying the same document keeps the count unchanged while its event ID is
+still retained in the bounded occurrence window.
+
+`first_seen` and `last_seen` describe the event-time range of those occurrences.
+The alert's original `event_time` and `created_at` stay unchanged. Changing the
+Redis windows controls caching and incident grouping; it does not repair event
+identity or recover previously missed occurrences.
+
+Older connector versions used the rule number as `external_id`, so distinct
+documents from one rule could share an event ID and leave the count stuck at
+two. Updating the connector and fusion service lets future documents update
+the existing alert. Historical counts cannot be reconstructed from that
+collapsed rollup alone; they require reconciliation with the original source
+documents. This fix does not backfill them automatically.
+
 ## Severity mapping
 
 Wazuh emits a 0-15 numeric `rule.level`. AiSOC collapses that ladder onto its
