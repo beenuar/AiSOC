@@ -35,7 +35,7 @@ from app.regions.service import (
     pin_home_region,
     resolve_for_tenant,
 )
-from app.security.tenant import TenantContext, require_tenant
+from app.security.tenant import TenantContext, ensure_row_visible, require_tenant
 
 
 router = APIRouter(prefix="/regions", tags=["regions"])
@@ -60,7 +60,15 @@ def get_mesh() -> dict[str, Any]:
 
 
 @router.get("/tenants/{tenant_id}/home")
-def get_tenant_home(tenant_id: str) -> dict[str, Any]:
+def get_tenant_home(
+    tenant_id: str,
+    ctx: TenantContext = Depends(require_tenant),
+) -> dict[str, Any]:
+    # GHSA-grv9-vcqp-f37v: this read and /events below were the only two
+    # tenant-scoped routes in the app without the dependency their sibling
+    # PUT carries — an unauthenticated caller could read any tenant's home
+    # region and migration audit trail (operator identity, free-text notes).
+    ensure_row_visible(ctx, tenant_id)
     pinned = home_region_for(tenant_id)
     if pinned is None:
         return {
@@ -122,7 +130,12 @@ def put_tenant_home(
 
 
 @router.get("/tenants/{tenant_id}/events")
-def get_tenant_region_events(tenant_id: str) -> dict[str, Any]:
+def get_tenant_region_events(
+    tenant_id: str,
+    ctx: TenantContext = Depends(require_tenant),
+) -> dict[str, Any]:
+    # GHSA-grv9-vcqp-f37v — see get_tenant_home above.
+    ensure_row_visible(ctx, tenant_id)
     events = list_region_events(tenant_id)
     return {
         "tenant_id": tenant_id,
