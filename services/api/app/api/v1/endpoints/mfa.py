@@ -83,11 +83,34 @@ from app.db.rls import set_rls_context
 from app.security.credential_vault import CredentialVaultError, get_vault
 from app.services import mfa as totp
 from app.services.audit import emit_audit
-from app.services.login_throttle import client_ip
+from app.services.login_throttle import client_ip, get_login_throttle
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/mfa", tags=["auth", "mfa"])
+
+# SEC-8: the second factor was the one door without a lock on it.
+#
+# `POST /auth/login` consults the shared `LoginThrottle`, and passing it
+# only *issues* a challenge — the session is minted here, by `/verify` and
+# `/webauthn/verify`. Those two routes consulted nothing: an attacker who
+# phished or otherwise obtained a valid `mfa_token` could brute force the
+# 6-digit TOTP (a million codes per window, unthrottled) or hammer the
+# WebAuthn verifier, and every wrong answer came back as a free 401.
+#
+# This is the same limiter class, deliberately *not* the shared instance:
+# `LoginThrottle` keys on email, and an MFA challenge names its user by
+# id inside the signed token. Scoping the keys ("mfa-account:<id>") keeps
+# the two stages' counters from colliding — a wrong password would otherwise
+# spend part of the budget for a wrong code, and the two doors have
+# different risk. The thresholds are the same env vars, so one knob tunes
+# both stages; the counter is Redis-backed in production, like login's.
+_MFA_THROTTLE_SCOPE = "mfa"
+
+
+def _mfa_throttle_key(user_id: object) -> str:
+    return f"{_MFA_THROTTLE_SCOPE}-account:{user_id}"
+
 
 CHALLENGE_TOKEN_TYPE = "mfa_challenge"
 #: Long enough to open an authenticator app and read a code, short enough
@@ -555,6 +578,19 @@ async def verify(body: VerifyRequest, db: DBSession, request: Request) -> Sessio
     """Complete a sign-in that `POST /auth/login` answered with 202."""
     payload = read_challenge(body.mfa_token, expect_purpose="verify")
     user_id = uuid.UUID(str(payload["sub"]))
+
+    # SEC-8: check the throttle *before* any crypto, so a flood of wrong
+    # codes costs a counter read and not a HMAC derivation per attempt.
+    throttle = get_login_throttle()
+    source = client_ip(request)
+    decision = await throttle.check(email=_mfa_throttle_key(user_id), source_ip=source)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=decision.detail,
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+
     row = await enrolment_row(db, user_id)
     if row is None or not row["confirmed_at"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="No second factor is enrolled for this account.")
@@ -585,6 +621,7 @@ async def verify(body: VerifyRequest, db: DBSession, request: Request) -> Sessio
         )
         await db.commit()
         if claimed.rowcount == 1:
+            await throttle.record_success(email=_mfa_throttle_key(user_id), source_ip=source)
             return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
         # Lost the race: another request spent this step. Answered as a bad
         # code rather than a conflict, because to the caller that is what it
@@ -594,8 +631,21 @@ async def verify(body: VerifyRequest, db: DBSession, request: Request) -> Sessio
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is not valid.")
 
     if await _consume_recovery_code(db, user_id=user_id, tenant_id=row["tenant_id"], code=body.code, request=request):
+        await throttle.record_success(email=_mfa_throttle_key(user_id), source_ip=source)
         return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
 
+    # SEC-8: a wrong code is now a *counted* wrong code. The lockout
+    # threshold matches the password stage's, so a stolen challenge token
+    # buys an attacker `lockout_threshold` guesses and then a refusal, not
+    # an unbounded sweep of the 6-digit space.
+    locked = await throttle.record_failure(email=_mfa_throttle_key(user_id), source_ip=source)
+    if locked.locked_out:
+        logger.warning(
+            "mfa.verify lockout: %s locked after %d failures (ip=%s)",
+            _sanitize(user_id),
+            locked.failures,
+            _sanitize(source, 64),
+        )
     logger.warning("mfa.verify_failed user=%s source=%s", _sanitize(user_id), _sanitize(client_ip(request), 64))
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is not valid.")
 
@@ -651,6 +701,18 @@ async def webauthn_verify(body: WebAuthnVerifyRequest, db: DBSession, request: R
     user_id = uuid.UUID(str(payload["sub"]))
     tenant_id = uuid.UUID(str(payload["tenant_id"]))
 
+    # SEC-8: same gate as the TOTP path. A brute-forced or leaked challenge
+    # token should not get unlimited attempts at the WebAuthn verifier.
+    throttle = get_login_throttle()
+    source = client_ip(request)
+    decision = await throttle.check(email=_mfa_throttle_key(user_id), source_ip=source)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=decision.detail,
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+
     device = await verify_second_factor_assertion(
         db,
         user_id=user_id,
@@ -659,8 +721,10 @@ async def webauthn_verify(body: WebAuthnVerifyRequest, db: DBSession, request: R
         credential=body.credential,
     )
     if device is None:
+        await throttle.record_failure(email=_mfa_throttle_key(user_id), source_ip=source)
         logger.warning("mfa.webauthn_failed user=%s source=%s", _sanitize(user_id), _sanitize(client_ip(request), 64))
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That security key could not be verified.")
+    await throttle.record_success(email=_mfa_throttle_key(user_id), source_ip=source)
 
     await set_rls_context(db, tenant_id)
     await emit_audit(

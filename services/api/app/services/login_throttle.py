@@ -45,6 +45,7 @@ shared counting and is documented as such rather than described as equivalent.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import time
@@ -164,9 +165,14 @@ def _principal_key(scope: str, value: str) -> str:
     """A Redis key that does not contain the address or the source itself.
 
     An email in a key is an email in `KEYS *`, in a memory dump and in any
-    backup of that Redis. The counter needs identity, not the identifier.
+    backup of that Redis. The counter needs identity, not the identifier —
+    and a *keyed* hash, because emails are enumerable: an unsalted digest in
+    a leaked dump falls to an offline dictionary. HMAC under the process
+    secret keeps the key stable for the throttle while making the dump
+    worthless without the server secret (py/weak-sensitive-data-hashing).
     """
-    digest = hashlib.sha256(value.strip().lower().encode("utf-8")).hexdigest()[:32]
+    secret = (os.environ.get("SECRET_KEY") or os.environ.get("JWT_SECRET") or "aisoc-login-throttle").encode("utf-8")
+    digest = hmac.new(secret, value.strip().lower().encode("utf-8"), hashlib.sha256).hexdigest()[:32]
     return f"aisoc:login:{scope}:{digest}"
 
 

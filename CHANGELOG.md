@@ -138,6 +138,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **MFA verify is throttled; a phished `mfa_token` can no longer sweep the
+  TOTP space** (#1942). `POST /auth/login` consults the shared
+  `LoginThrottle`, but passing login only *issues* the challenge — the
+  session is minted by `/auth/mfa/verify` and `/auth/mfa/webauthn/verify`,
+  and those routes consulted no throttle at all: a leaked challenge token
+  bought an unthrottled brute force of the 6-digit code space, every wrong
+  answer a free 401. Both verify routes now check the same throttle class
+  before any cryptography, scoped `mfa-account:<user-id>` so the password
+  stage's counter and the code stage's cannot collide, count failures toward
+  the shared lockout thresholds, reset on success, and answer 429 with
+  `Retry-After` once locked. The throttle's principal digest is keyed (HMAC
+  under the process secret): emails are enumerable, so the previous unsalted
+  hash fell to an offline dictionary against a leaked Redis dump
+  (CodeQL py/weak-sensitive-data-hashing on this change's own diff).
+  Behavioural lockout tests drive the real in-process throttle to refusal on
+  both routes. Contributed by @alexmateescu.
+
 - **BREAKING: action requests require a principal by default** (#1900,
   NC-3). `AISOC_ACTIONS_REQUIRE_PRINCIPAL` shipped `default=False`, so a
   principal-less `ActionRequest` passed `authorize_action` with no identity
