@@ -134,7 +134,8 @@ INSERT INTO alerts (
     rule_id, rule_name, external_id,
     affected_hosts, affected_users, affected_ips,
     session_id, session_key_kind, originating_human,
-    src_ip_class, src_ip_class_dataset_version
+    src_ip_class, src_ip_class_dataset_version,
+    first_seen, last_seen
 )
 SELECT
     $1, $2, $3, $4, $5, 'new',
@@ -145,7 +146,8 @@ SELECT
     $22, $23, $24,
     $25::jsonb, $26::jsonb, $27::jsonb,
     $28, $29, $30,
-    $31, $32
+    $31, $32,
+    COALESCE($17, NOW()), COALESCE($17, NOW())
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
 )
@@ -230,10 +232,17 @@ _MAX_SOURCE_EVENT_IDS = 200
 #:   false the moment anything is evicted, so a partial list is never
 #:   presented as the whole set.
 #:
+#: The original event's representative id is already in `source_event_ids`.
+#: Replaying it must not create the first repeat, or increment a later rollup.
+#: Run this statement before appending provenance so an original without an
+#: id can still acquire its first identified repeat. The CTE keeps the alert's
+#: visible time window and the occurrence rollup in the same atomic write.
+#:
 #: Looked up by `dedup_hash` rather than by an alert id because fusion holds
 #: the fingerprint at this point and the surviving row's id only after a
 #: second read.
 _OCCURRENCE_SQL = """
+WITH occurrence AS (
 INSERT INTO alert_occurrences AS ao (
     tenant_id, alert_id, occurrence_count, first_seen, last_seen,
     payload_ids, payload_ids_complete
@@ -249,6 +258,7 @@ SELECT
   FROM alerts a
  WHERE a.tenant_id = $1
    AND a.dedup_hash = $2::text
+   AND ($3::text IS NULL OR a.source_event_ids ->> 0 IS DISTINCT FROM $3::text)
 ON CONFLICT (tenant_id, alert_id) DO UPDATE
    SET occurrence_count = ao.occurrence_count + 1,
        first_seen = LEAST(ao.first_seen, EXCLUDED.first_seen),
@@ -263,6 +273,15 @@ ON CONFLICT (tenant_id, alert_id) DO UPDATE
            AND NOT ($3::text IS NOT NULL AND jsonb_array_length(ao.payload_ids) >= $5),
        updated_at = NOW()
  WHERE $3::text IS NULL OR NOT (ao.payload_ids @> jsonb_build_array($3::text))
+RETURNING tenant_id, alert_id, first_seen, last_seen
+)
+UPDATE alerts a
+   SET first_seen = occurrence.first_seen,
+       last_seen = occurrence.last_seen
+  FROM occurrence
+ WHERE a.tenant_id = $1
+   AND a.tenant_id = occurrence.tenant_id
+   AND a.id = occurrence.alert_id
 """
 
 #: Collapse findings from different vendors that share a root cause (3.3).
@@ -1104,19 +1123,6 @@ class AlertSink:
         reopened = await self._reopen_if_closed(conn, alert)
         ids = [i for i in (alert.source_event_ids or []) if i]
         fingerprint = alert.fingerprint()
-        if ids:
-            try:
-                for source_event_id in ids:
-                    await conn.execute(
-                        _DEDUP_SOURCE_EVENT_SQL,
-                        alert.tenant_id,
-                        fingerprint,
-                        str(source_event_id),
-                        _MAX_SOURCE_EVENT_IDS,
-                    )
-            except Exception as exc:  # noqa: BLE001 — provenance is not worth the alert
-                logger.warning("alert_sink.dedup_provenance_failed", error=str(exc))
-
         # The representative id for this folded *event*, not one per raw event
         # behind it: one delivery is one occurrence however many source ids it
         # carries. Keying the redelivery guard on the first id is enough
@@ -1132,7 +1138,40 @@ class AlertSink:
                 _MAX_OCCURRENCE_PAYLOAD_IDS,
             )
         except Exception as exc:  # noqa: BLE001 — the count is not worth the alert
-            logger.warning("alert_sink.occurrence_record_failed", error=str(exc))
+            logger.warning(
+                "alert_sink.occurrence_record_failed",
+                error=str(exc),
+                tenant_id=str(alert.tenant_id),
+                fingerprint=fingerprint,
+                payload_id=payload_id,
+                exc_info=True,
+            )
+            # Keep the original provenance intact when the rollup fails.
+            # Appending the first known id to an id-less alert here would
+            # make a retry mistake that repeat for the original event.
+            return reopened
+
+        # The rollup must inspect the original provenance before this append:
+        # otherwise the first known id on an id-less alert looks like a replay
+        # of the original, and its first identified repeat is silently lost.
+        if ids:
+            try:
+                for source_event_id in ids:
+                    await conn.execute(
+                        _DEDUP_SOURCE_EVENT_SQL,
+                        alert.tenant_id,
+                        fingerprint,
+                        str(source_event_id),
+                        _MAX_SOURCE_EVENT_IDS,
+                    )
+            except Exception as exc:  # noqa: BLE001 — provenance is not worth the alert
+                logger.warning(
+                    "alert_sink.dedup_provenance_failed",
+                    error=str(exc),
+                    tenant_id=str(alert.tenant_id),
+                    fingerprint=fingerprint,
+                    exc_info=True,
+                )
 
         return reopened
 

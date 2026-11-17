@@ -111,6 +111,15 @@ names = ["Torq", "Tines", "Wazuh"]
 reason = "Connector modules, the connector registry, event fixtures and connector tests. These vendors ship as first-party integrations."
 
 [[allow]]
+paths = [
+  ".github/workflows/integration.yml",
+  "services/ingest/internal/normalizer/wazuh_event_identity_test.go",
+  "tests/e2e/wazuh_recurrence/**",
+]
+names = ["Wazuh"]
+reason = "First-party connector recurrence regression: source-event identity through the Go normalizer, authenticated ingest, Kafka and fusion, plus the CI steps that run it. These name the integration being tested."
+
+[[allow]]
 # The published spec is generated from the code above, so a connector field
 # that legitimately names a first-party integration reappears here on every
 # regeneration. `wazuh_locator` on the alert envelope is the deep link back to

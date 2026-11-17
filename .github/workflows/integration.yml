@@ -26,8 +26,8 @@ name: Integration
 #                      data survives (destructive-migration detection) and
 #                      every HEAD migration applied. People upgrade; test it.
 #
-# The spine job builds `fusion` and `ingest-worker` from PR source (they own
-# the bridges under test) and pulls the other service images from GHCR
+# The spine job builds `connectors`, `fusion` and `ingest-worker` from PR
+# source (they own the bridges under test) and pulls the other images from GHCR
 # `:main` — those surfaces are gated by compose-smoke.yml with its own
 # rebuild-on-change detection.
 
@@ -110,7 +110,7 @@ jobs:
           # outage while ingest, fusion and realtime all answered 503. One
           # assignment — see the note on migration_paths below for what two
           # cost.
-          spine_paths='services/ingest/ services/fusion/ services/realtime/ services/agents/app/_health.py services/agents/app/main.py services/agents/app/workers/fused_alert_consumer.py services/agents/tests/integration/ docker-compose.yml scripts/integration/ .github/workflows/integration.yml'
+          spine_paths='services/ingest/ services/fusion/ services/connectors/app/connectors/wazuh.py services/connectors/tests/test_wazuh_connector.py services/connectors/tests/test_wazuh_event_identity.py services/realtime/ services/agents/app/_health.py services/agents/app/main.py services/agents/app/workers/fused_alert_consumer.py services/agents/tests/integration/ tests/e2e/wazuh_recurrence/ docker-compose.yml scripts/integration/ .github/workflows/integration.yml'
           # One assignment, deliberately. Three parallel lanes each appended
           # their live-test paths as a fresh `migration_paths=` line, and in
           # shell the last assignment wins silently — so two lanes' filter
@@ -222,8 +222,8 @@ jobs:
       #
       # It uses the service-token shape rather than a minted per-tenant
       # token because this job deliberately runs the published API image
-      # (only fusion and ingest are built from source), so the mint command
-      # may not exist in it. That is not a workaround: the two shapes are
+      # (connectors, fusion and ingest are built from source), so the mint
+      # command may not exist in it. That is not a workaround: the two shapes are
       # both real, the golden pipeline covers the minted-token path against
       # an API built from source, and this covers the delegated path that
       # services/connectors uses — including the tenant check, since the
@@ -279,11 +279,12 @@ jobs:
       - name: Pre-pull published images
         run: docker compose pull --ignore-pull-failures --quiet || true
 
-      # The two spine-bridge owners are always built from PR source so the
-      # code under test is the code that runs. Build AFTER the pull so the
-      # locally-built tags are not clobbered by the registry.
-      - name: Build fusion + ingest from source
-        run: docker compose build fusion ingest-worker
+      # All three normalization/persistence owners come from PR source. The
+      # Wazuh recurrence test must run the changed Python connector too:
+      # hand-writing its output would miss an event-identity collision before
+      # the Go normalizer. Build after the pull so registry tags cannot replace it.
+      - name: Build connectors + fusion + ingest from source
+        run: docker compose build connectors fusion ingest-worker
 
       # This job verifies the FULL architecture — it asserts below that the
       # ClickHouse event lake is populated — so it must boot the `full`
@@ -338,9 +339,9 @@ jobs:
       # development-class environment. It no longer does, so they need one.
       #
       # Obtained by signing in rather than by `mint_api_token`, because this
-      # job deliberately pulls the API image from GHCR `:main` (it builds only
-      # fusion and ingest-worker from PR source) and a command added in this
-      # pull request is not in that image. Logging in works against any API
+      # job deliberately pulls the API image from GHCR `:main` (it builds
+      # connectors, fusion and ingest-worker from PR source) and a command
+      # added in this pull request is not in that image. Logging in works against any API
       # image, which is the property that matters for a job whose images are
       # deliberately mixed.
       - name: Sign in for the credential the spine test needs
@@ -367,6 +368,18 @@ jobs:
 
       - name: Run spine test
         run: python3 scripts/integration/spine_test.py
+
+      - name: Wazuh recurrence through connector, HTTP, Kafka, fusion and Postgres
+        run: |
+          set -euo pipefail
+          docker compose run --rm --no-deps -T --entrypoint python \
+            -e PYTHONPATH=/app -v "$PWD:/repo:ro" connectors \
+            /repo/tests/e2e/wazuh_recurrence/run_recurrence.py --emit-fixtures \
+            > /tmp/wazuh-recurrence.json
+          docker compose run --rm --no-deps -T --entrypoint python \
+            -v "$PWD:/repo:ro" -v /tmp/wazuh-recurrence.json:/wazuh-recurrence.json:ro fusion \
+            /repo/tests/e2e/wazuh_recurrence/run_recurrence.py \
+            --fixtures /wazuh-recurrence.json --ingest-url http://ingest-worker:8080
 
       # ── Phase A1: the ClickHouse event lake is actually populated ────────
       # The spine test ingested events; assert they landed in the
