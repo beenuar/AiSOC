@@ -237,6 +237,10 @@ def _adapt_record(record: dict[str, Any], threshold: float | None) -> dict[str, 
                 # Fusion does not record the contributing alert's source;
                 # the console types this nullable for exactly that reason.
                 "source": None,
+                # Where this contribution was seen (#1950); absent on the
+                # fusion side when the alert carried no hostname, and null
+                # here rather than invented.
+                "host": raw.get("host") or None,
             }
         )
 
@@ -268,6 +272,19 @@ def _adapt_record(record: dict[str, Any], threshold: float | None) -> dict[str, 
         "contributions": contributions,
         "severity_histogram": histogram,
         "alert_count": int(record.get("alert_count", 0) or 0),
+        # Hosts this entity was seen on, count-ranked (#1950). Fusion sends
+        # them pre-sorted and bounded; an empty list means no contributing
+        # alert named a host (or the entity is itself a host), not zero
+        # sightings invented as a value.
+        "hosts": [
+            {
+                "name": str(h.get("name", "")),
+                "alert_count": int(h.get("alert_count", 0) or 0),
+                "last_seen": _clean_iso(h.get("last_seen")),
+            }
+            for h in (record.get("hosts") or [])
+            if isinstance(h, dict) and h.get("name")
+        ],
     }
 
 

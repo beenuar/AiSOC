@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The entity queue says where an entity was seen** (#1950). A `user`, `ip`
+  or `domain` row showed only value, score and count — but `root` with 40
+  points could be a brute force on one internet-facing box or one failed
+  login on each of ten servers, and `NT AUTHORITY\SYSTEM` is on every
+  Windows machine, so triage from the list meant opening every entity.
+  Fusion now rolls up each contributing alert's hostname per entity —
+  bounded at twelve hosts with least-contributing eviction, aged out with
+  the same decay window, never recorded for `host` entities (a host's host
+  is itself) — and the wire carries `hosts: [{name, alert_count,
+  last_seen}]` count-ranked, plus the host on each contribution. The
+  console shows the top three on the row with an honest `+N`, the full
+  ranked list and per-contribution hosts in the detail drawer, and renders
+  no host line at all when no contributing alert named one. Designed by
+  @relains in #1950, who also enumerated why the display-hack alternative
+  (overloading `entity_value` at the gateway) was the wrong layer.
+
 - **Opt-in auto-close for cases that stay `resolved` past a cooling-off
   window** (#1945). `resolved` is deliberately not terminal — it stamps
   `resolved_at` but not `closed_at`, and every closure metric reads
