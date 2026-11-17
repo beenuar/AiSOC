@@ -59,6 +59,13 @@ _PROMOTED_KEY = "aisoc:fusion:rba:promoted:"
 
 ENTITY_TYPES: tuple[str, ...] = ("user", "host", "src_ip", "domain")
 
+#: Hosts remembered per non-host entity (#1950). `root` with 40 points could
+#: be a brute force on one internet-facing box or one failed login on each of
+#: ten servers — without *where*, the queue row cannot be triaged from the
+#: list. Bounded so one chatty entity cannot grow a key without limit: when
+#: full, the least-contributing host is evicted (ties: oldest last_seen).
+_MAX_HOSTS_PER_ENTITY = 12
+
 
 def _utc_iso(dt: datetime) -> str:
     """ISO-8601 UTC with a single terminal ``Z``, naive or aware input.
@@ -85,6 +92,9 @@ class EntitySignal:
     severity: str
     detection: str
     occurred_at: datetime
+    #: The host the contributing alert named, so a user/ip/domain entity can
+    #: say where it was seen (#1950). None when the alert carried no hostname.
+    host: str | None = None
 
 
 @dataclass
@@ -101,6 +111,21 @@ class EntityRiskRecord:
     severities: dict[str, int]
     promoted_at: datetime | None
     contributors: list[dict] | None = None
+    #: Where this entity was seen: host name → {"count": int, "last_seen": iso}
+    #: (#1950). Empty for `host` entities — a host's host is itself.
+    hosts: dict[str, dict] | None = None
+
+    def hosts_list(self) -> list[dict]:
+        """Hosts as the wire shape: count desc, then recency desc, then name."""
+        items = [
+            {"name": name, "alert_count": int(info.get("count", 0)), "last_seen": info.get("last_seen")}
+            for name, info in (self.hosts or {}).items()
+        ]
+        # Three stable passes compose into (count desc, last_seen desc, name asc).
+        items.sort(key=lambda h: h["name"])
+        items.sort(key=lambda h: h["last_seen"] or "", reverse=True)
+        items.sort(key=lambda h: h["alert_count"], reverse=True)
+        return items
 
     def to_dict(self) -> dict:
         return {
@@ -114,6 +139,7 @@ class EntityRiskRecord:
             "severities": self.severities,
             "promoted_at": _utc_iso(self.promoted_at) if self.promoted_at else None,
             "contributors": self.contributors or [],
+            "hosts": self.hosts_list(),
         }
 
 
@@ -253,6 +279,10 @@ class EntityRiskEngine:
                     severity=alert.severity.value,
                     detection=detection,
                     occurred_at=occurred,
+                    # Where this contribution was seen (#1950). A host entity
+                    # carries none: its host is itself, and recording it would
+                    # render `web-01 — seen on web-01` on every row.
+                    host=str(alert.hostname) if alert.hostname and entity_type != "host" else None,
                 )
             )
         return signals
@@ -273,6 +303,7 @@ class EntityRiskEngine:
                 severities={},
                 promoted_at=None,
                 contributors=[],
+                hosts={},
             )
 
         record.score = self._decay(record.score, record.last_seen, now) + sig.points
@@ -285,18 +316,31 @@ class EntityRiskEngine:
                 record.contributing_alerts = record.contributing_alerts[-50:]
         record.severities[sig.severity] = record.severities.get(sig.severity, 0) + 1
         contributors = record.contributors or []
-        contributors.append(
-            {
-                "alert_id": sig.alert_id,
-                "severity": sig.severity,
-                "detection": sig.detection,
-                "points": sig.points,
-                "at": _utc_iso(sig.occurred_at),
-            }
-        )
+        contributor: dict = {
+            "alert_id": sig.alert_id,
+            "severity": sig.severity,
+            "detection": sig.detection,
+            "points": sig.points,
+            "at": _utc_iso(sig.occurred_at),
+        }
+        if sig.host:
+            contributor["host"] = sig.host
+        contributors.append(contributor)
         if len(contributors) > 25:
             contributors = contributors[-25:]
         record.contributors = contributors
+
+        if sig.host and sig.host != sig.entity_value:
+            hosts = record.hosts or {}
+            entry = hosts.get(sig.host) or {"count": 0, "last_seen": None}
+            entry["count"] = int(entry.get("count", 0)) + 1
+            entry["last_seen"] = _utc_iso(now)
+            hosts[sig.host] = entry
+            if len(hosts) > _MAX_HOSTS_PER_ENTITY:
+                # Evict the least-contributing host (ties: oldest sighting).
+                evict = min(hosts.items(), key=lambda kv: (int(kv[1].get("count", 0)), kv[1].get("last_seen") or ""))
+                hosts.pop(evict[0], None)
+            record.hosts = hosts
 
         await self._save(record)
         return record
@@ -342,6 +386,7 @@ class EntityRiskEngine:
             "severities": json.dumps(record.severities),
             "promoted_at": record.promoted_at.isoformat() if record.promoted_at else "",
             "contributors": json.dumps(record.contributors or []),
+            "hosts": json.dumps(record.hosts or {}),
         }
         await self._redis.hset(key, mapping=payload)
         await self._redis.expire(key, self._window)
@@ -380,4 +425,5 @@ class EntityRiskEngine:
             severities=json.loads(decoded.get("severities", "{}")),
             promoted_at=promoted_at,
             contributors=json.loads(decoded.get("contributors", "[]")),
+            hosts=json.loads(decoded.get("hosts", "{}")),
         )

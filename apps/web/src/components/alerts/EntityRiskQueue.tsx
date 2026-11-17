@@ -52,8 +52,12 @@ const MOCK_ENTITIES: EntityRiskRecord[] = [
     score: 92.4, display_score: 92, threshold: 80, promoted: true, promoted_incident_id: null, alert_count: 8,
     severity_histogram: { critical: 2, high: 3, medium: 2, low: 1, info: 0 },
     first_seen: '2026-05-06T06:15:00Z', last_seen: '2026-05-06T12:42:00Z',
+    hosts: [
+      { name: 'FIN-LAPTOP-07', alert_count: 5, last_seen: '2026-05-06T12:42:00Z' },
+      { name: 'VPN-GW-01', alert_count: 3, last_seen: '2026-05-06T11:30:00Z' },
+    ],
     contributions: [
-      { alert_id: 'ALT-4021', title: 'Impossible Travel Detected', severity: 'critical' as AlertSeverity, source: 'Okta', raw_points: 28, observed_at: '2026-05-06T12:42:00Z' },
+      { alert_id: 'ALT-4021', title: 'Impossible Travel Detected', severity: 'critical' as AlertSeverity, source: 'Okta', raw_points: 28, observed_at: '2026-05-06T12:42:00Z', host: 'FIN-LAPTOP-07' },
       { alert_id: 'ALT-4018', title: 'Suspicious MFA Reset', severity: 'high' as AlertSeverity, source: 'Azure AD', raw_points: 18, observed_at: '2026-05-06T11:30:00Z' },
       { alert_id: 'ALT-4015', title: 'Bulk File Download from SharePoint', severity: 'high' as AlertSeverity, source: 'Microsoft 365', raw_points: 15, observed_at: '2026-05-06T10:15:00Z' },
     ],
@@ -334,6 +338,27 @@ function EntityRow({
             </span>
           )}
         </div>
+        {(record.hosts?.length ?? 0) > 0 && (
+          <div className="flex items-center gap-1.5 mt-1 min-w-0" data-testid="entity-hosts">
+            <span className="text-[10px] uppercase tracking-wider text-gray-600 shrink-0">
+              Seen on
+            </span>
+            {(record.hosts ?? []).slice(0, 3).map((host) => (
+              <span
+                key={host.name}
+                className="truncate rounded bg-gray-800/80 px-1.5 py-0.5 font-mono text-[11px] text-gray-300"
+                title={`${host.alert_count} alert${host.alert_count === 1 ? '' : 's'} on ${host.name}`}
+              >
+                {host.name}
+              </span>
+            ))}
+            {(record.hosts?.length ?? 0) > 3 && (
+              <span className="shrink-0 text-[11px] text-gray-500">
+                +{(record.hosts?.length ?? 0) - 3}
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex items-center gap-3 mt-1">
           <span className="text-xs text-gray-500">
             {record.alert_count} alert{record.alert_count === 1 ? '' : 's'}
@@ -460,6 +485,33 @@ function EntityDetailDrawer({
             </div>
           )}
 
+          {(record.hosts?.length ?? 0) > 0 && (
+            <div>
+              <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-2">
+                Seen on
+              </h3>
+              <ul className="space-y-1" data-testid="entity-hosts-detail">
+                {(record.hosts ?? []).map((host) => (
+                  <li
+                    key={host.name}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-gray-800/60 bg-gray-900/40 px-3 py-1.5 text-sm"
+                  >
+                    <span className="truncate font-mono text-gray-200">{host.name}</span>
+                    <span className="shrink-0 text-[11px] text-gray-500">
+                      {host.alert_count} alert{host.alert_count === 1 ? '' : 's'}
+                      {host.last_seen && (
+                        <span suppressHydrationWarning>
+                          {' · '}
+                          {formatDistanceToNow(new Date(host.last_seen), { addSuffix: true })}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div>
             <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-2">
               Contributing alerts
@@ -493,6 +545,12 @@ function EntityDetailDrawer({
                       <div className="flex items-center gap-2 mt-0.5 text-[11px] text-gray-500">
                         {c.source && <span>{c.source}</span>}
                         {c.source && <span className="text-gray-700">·</span>}
+                        {c.host && (
+                          <>
+                            <span className="truncate font-mono text-gray-400">{c.host}</span>
+                            <span className="text-gray-700">·</span>
+                          </>
+                        )}
                         <span suppressHydrationWarning>
                           {formatDistanceToNow(new Date(c.observed_at), {
                             addSuffix: true,

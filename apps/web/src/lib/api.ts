@@ -2397,6 +2397,17 @@ export interface EntityRiskContribution {
   observed_at: string;
   title?: string | null;
   source?: string | null;
+  /** Host the contributing alert named (#1950); null when it carried none. */
+  host?: string | null;
+}
+
+/** One host a user/ip/domain entity was seen on (#1950). */
+export interface EntityRiskHost {
+  name: string;
+  /** Contributing alerts that named this host, within the decay window. */
+  alert_count: number;
+  /** ISO-8601 timestamp of the most recent sighting, or null. */
+  last_seen: string | null;
 }
 
 /** A rolled-up entity with its current decayed risk score. */
@@ -2424,6 +2435,12 @@ export interface EntityRiskRecord {
   severity_histogram: Record<AlertSeverity, number>;
   /** Convenience: total alert count in the decay window. */
   alert_count: number;
+  /**
+   * Hosts this entity was seen on, count-ranked (#1950). Empty when no
+   * contributing alert named a host, or when the entity is itself a host;
+   * optional only for responses cached before the field shipped.
+   */
+  hosts?: EntityRiskHost[];
 }
 
 export interface EntityRiskQueueResponse {
