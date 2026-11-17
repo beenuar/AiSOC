@@ -39,6 +39,7 @@ from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.approval_expiry import run_forever as run_approval_expiry
 from app.workers.autonomy_drift import run_forever as run_autonomy_drift
+from app.workers.case_auto_close import run_forever as run_case_auto_close
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
@@ -77,6 +78,8 @@ _PHISHING_INTAKE_LOCK_TTL_SECONDS = 300
 # held for half an hour after a crashed replica would leave approvals
 # un-expired for far longer than the work takes.
 _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
+
+_CASE_AUTO_CLOSE_LOCK_TTL_SECONDS = 1800
 # Comfortably past one pass. The scheduler's own poll is 300s and a pass
 # is bounded by the number of templates, so a lock that outlived the
 # interval would mean a replica holding it across two ticks.
@@ -551,6 +554,26 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
         )
 
+    case_auto_close_task: asyncio.Task | None = None
+    if settings.CASE_AUTO_CLOSE_ENABLED:
+        try:
+            case_auto_close_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="case_auto_close",
+                    ttl_seconds=_CASE_AUTO_CLOSE_LOCK_TTL_SECONDS,
+                    worker=run_case_auto_close,
+                ),
+                name="case_auto_close_worker",
+            )
+            logger.info("case_auto_close worker started")
+        except Exception as exc:
+            logger.warning("case_auto_close worker failed to start", error=str(exc))
+    else:
+        logger.info(
+            "case_auto_close worker disabled; cases set to 'resolved' will never reach 'closed'. "
+            "Set CASE_AUTO_CLOSE_ENABLED=true to sweep them"
+        )
+
     # Fix pass 3.7. `reconcile_grants` shipped with one caller, the handler
     # behind `GET /autonomy-policy/grants`, so a grant whose agreement had
     # collapsed stayed `granted` -- and kept auto-executing -- until somebody
@@ -705,6 +728,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("approval_expiry worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("approval_expiry worker shutdown error", error=type(exc).__name__)
+
+    if case_auto_close_task is not None and not case_auto_close_task.done():
+        case_auto_close_task.cancel()
+        try:
+            await case_auto_close_task
+        except asyncio.CancelledError:
+            logger.debug("case_auto_close worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("case_auto_close worker shutdown error", error=type(exc).__name__)
 
     if autonomy_drift_task is not None and not autonomy_drift_task.done():
         autonomy_drift_task.cancel()

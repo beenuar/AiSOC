@@ -507,6 +507,24 @@ class Settings(BaseSettings):
     )
     APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
 
+    # Resolved->closed auto-close sweep. A human moves a case to `resolved`;
+    # the system closes it after it has stayed resolved for this many days.
+    #
+    # Default OFF — deliberately on the retention-purge side of the split
+    # above, not approval-expiry's. Expiry marks an already-abandoned request
+    # abandoned; this sweep moves cases into the terminal state that every
+    # closure metric, MTTR window and case-summary surface reads, so turning
+    # it on changes what a deployment's dashboards report. An upgrade must
+    # not do that silently: the operator turns the janitor on, and the same
+    # knob is its stop control.
+    CASE_AUTO_CLOSE_ENABLED: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("CASE_AUTO_CLOSE_ENABLED", "AISOC_CASE_AUTO_CLOSE_ENABLED"),
+    )
+    CASE_AUTO_CLOSE_AFTER_DAYS: int = 7
+    CASE_AUTO_CLOSE_INTERVAL_SECONDS: int = 3600
+    CASE_AUTO_CLOSE_BATCH_LIMIT: int = 500
+
     # Shadow-reconciliation sweep (gap-closure Phase 2.1, D15). Polls each
     # measuring tenant's own SIEM for the closures their analysts made there,
     # so a tenant whose queue lives in Splunk ES still accumulates the track

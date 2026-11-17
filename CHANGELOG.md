@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Opt-in auto-close for cases that stay `resolved` past a cooling-off
+  window** (#1945). `resolved` is deliberately not terminal — it stamps
+  `resolved_at` but not `closed_at`, and every closure metric reads
+  `closed` — so a resolved case nobody revisited sat open forever. With
+  `CASE_AUTO_CLOSE_ENABLED=true`, an hourly sweep closes cases that have
+  stayed resolved for `CASE_AUTO_CLOSE_AFTER_DAYS` (default 7). The
+  human/system split keeps the window safe: only a human sets `resolved`
+  (the clock starts on a deliberate act), a reopen clears `resolved_at` and
+  the claim UPDATE requires `status = 'resolved'`, so a case that came back
+  to life — or that a human closed or reopened mid-sweep — is untouched.
+  Each close is its own transaction, stamps the custody chain as a system
+  action, and fails soft per case. **Ships off by default**: closing cases
+  changes what closure metrics and MTTR dashboards report, so the operator
+  turns the janitor on. Partial index on `resolved_at WHERE
+  status='resolved'` keeps the hourly scan off the table. Contributed by
+  @alexmateescu.
+
 - **Related cases with inspectable evidence.** The case Overview now shows
   other cases in the same tenant that share linked alerts or exact typed
   observables, including closed cases. Results are ranked by distinct shared
