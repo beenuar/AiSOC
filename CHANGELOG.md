@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Related cases with inspectable evidence.** The case Overview now shows
+  other cases in the same tenant that share linked alerts or exact typed
+  observables, including closed cases. Results are ranked by distinct shared
+  evidence and include explicit result/evidence truncation, loading, empty,
+  error and retry states. Shared and linked alert IDs open their detail pages.
+
 - **Certificate authentication for Microsoft Entra ID and Microsoft 365 audit.**
   Both connectors accept an Entra app certificate instead of a client secret:
   new optional `certificate_pem` (secret, PEM private key, optionally with the

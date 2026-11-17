@@ -59,6 +59,14 @@ vi.mock('swr', () => ({
         mutate: vi.fn(async () => undefined),
       };
     }
+    if (Array.isArray(key) && key[0] === 'case:related') {
+      return {
+        data: { related: [], limit: 20, has_more: false },
+        error: undefined,
+        isLoading: false,
+        mutate: vi.fn(async () => undefined),
+      };
+    }
     // Default: case workspace fetch.
     return {
       data: swrState.caseData,
@@ -153,6 +161,12 @@ describe('CaseWorkspace', () => {
   afterEach(() => {
     vi.clearAllMocks();
     __setDemoModeForTests(null);
+  });
+
+  it('shows related cases in the case overview', () => {
+    renderWorkspace();
+    expect(screen.getByRole('region', { name: 'Related cases' })).toBeInTheDocument();
+    expect(screen.getByText('No related cases found')).toBeInTheDocument();
   });
 
   it('renders the case header with title, severity, and MITRE chips', () => {

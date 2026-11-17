@@ -68,6 +68,7 @@ const casesApi = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({
   __esModule: true,
   casesApi,
+  getActiveTenantId: () => 'test-tenant',
   graphApi: { getCaseAttackPath: vi.fn() },
   realtimeApi: { ticket: vi.fn().mockRejectedValue(new Error('no ticket')) },
 }));

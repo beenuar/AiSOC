@@ -43,6 +43,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { InvestigationLedger } from "./InvestigationLedger";
 import { WarRoomPanel } from "./WarRoomPanel";
+import { RelatedCasesPanel } from "./RelatedCasesPanel";
 import { ContextualActions } from "@/components/copilot/ContextualActions";
 import { canUseDemoData } from "@/lib/demoFallback";
 import { useUrlTab } from "@/hooks/useUrlTab";
@@ -1059,6 +1060,8 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               it is an action on the case, not a facet of it. */}
           <WarRoomPanel caseId={caseId} />
 
+          {!useFallback && <RelatedCasesPanel caseId={caseId} />}
+
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
             {/* Left: Linked alerts + IOCs */}
             {/* Two <aside> landmarks sit side by side here. Unnamed they
@@ -1076,7 +1079,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                     {(caseRecord.alertIds ?? []).map((id) => (
                       <li key={id}>
                         <Link
-                          href={`/alerts?focus=${encodeURIComponent(id)}`}
+                          href={`/alerts/${encodeURIComponent(id)}`}
                           className="flex items-center justify-between rounded-md border border-slate-800/80 bg-slate-900/40 px-2.5 py-1.5 text-xs text-slate-300 transition-colors hover:border-slate-700 hover:bg-slate-800/40"
                         >
                           <span className="font-mono">{id}</span>

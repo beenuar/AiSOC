@@ -243,6 +243,25 @@ function swrFixture(key: string): unknown {
     // in. The panel's empty state is what axe should see.
     return [];
   }
+  if (key.startsWith("case:related/")) {
+    return {
+      related: [{
+        id: "related-case",
+        case_number: "CASE-0002",
+        title: "Earlier activity on the same host",
+        severity: "high",
+        status: "closed",
+        created_at: "2026-10-01T10:00:00Z",
+        reason: "shared_observables",
+        shared_alert_count: 0,
+        shared_alert_ids: [],
+        shared_observable_count: 1,
+        shared_observables: [{ kind: "host", value: "WIN-FIN-01" }],
+      }],
+      limit: 20,
+      has_more: false,
+    };
+  }
   if (key === "case" || key.startsWith("case/") || key.includes("/cases/")) {
     return {
       id: "c1",

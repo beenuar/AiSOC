@@ -81,6 +81,39 @@ single timestamp cannot tell them apart.
 | `playbook_runs` | PlaybookRun[] | Automation runs |
 | `ledger_entries` | LedgerEntry[] | Replayable agent decisions (see below) |
 
+## Related cases
+
+The case workspace's **Overview** shows other cases in the current tenant
+that share linked alerts or stored observables. Each result includes its
+status, severity, creation time, and the evidence behind the connection.
+Open the case title to continue investigating, or follow a shared alert ID
+to inspect that alert.
+
+An observable matches when both its `kind` and `value` are identical. For
+example, the same `host` value links two cases even when their graph node IDs
+differ. Matching is case-sensitive, and a `user` and a `host` with the same
+value remain distinct. Add observables through
+`POST /api/v1/cases/{case_id}/observables` to make that evidence available to
+the lookup. Empty or malformed observable nodes do not contribute matches.
+
+Results are ranked by the number of distinct shared alerts, then distinct
+shared observables, then creation time (newest first), with the case ID as a
+stable final tie-breaker. Closed cases remain eligible so analysts can
+recognize recurring evidence. A shared indicator is a lead to investigate;
+it does not by itself establish that two cases are the same incident.
+
+`GET /api/v1/cases/{case_id}/related` requires `cases:read` and derives the
+tenant from the authenticated principal. It returns up to 20 matches and
+sets `has_more` when additional matches exist. Each match includes
+`shared_alert_count` and `shared_observable_count`, plus up to 10 alert IDs
+and 10 observable pairs. The panel labels these limits when a list is
+truncated. **Refresh** checks for newly shared evidence; a failed request
+shows an error with **Retry**, while a successful empty response shows
+**No related cases found**.
+
+This is a read-only lookup against the operational database and needs no
+model or external service configuration.
+
 ## AI Investigation
 
 Click **Investigate with AI** to launch the multi-agent investigation pipeline:
