@@ -81,6 +81,7 @@ async def test_contributors_carry_the_host_of_their_alert(engine: EntityRiskEngi
     await engine.observe(_alert(hostname=None))
     record = await engine.get(_TENANT, "user", "root")
     assert record is not None
+    assert record.contributors, "the hostless alert must still contribute"
     assert "host" not in record.contributors[-1], "no host on the alert, no host key on the contribution"
 
 

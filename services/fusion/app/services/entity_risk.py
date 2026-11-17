@@ -118,13 +118,13 @@ class EntityRiskRecord:
     def hosts_list(self) -> list[dict]:
         """Hosts as the wire shape: count desc, then recency desc, then name."""
         items = [
-            {"name": name, "alert_count": int(info.get("count", 0)), "last_seen": info.get("last_seen")}
+            {"name": name, "alert_count": int(info.get("count", 0) or 0), "last_seen": info.get("last_seen")}
             for name, info in (self.hosts or {}).items()
         ]
         # Three stable passes compose into (count desc, last_seen desc, name asc).
-        items.sort(key=lambda h: h["name"])
-        items.sort(key=lambda h: h["last_seen"] or "", reverse=True)
-        items.sort(key=lambda h: h["alert_count"], reverse=True)
+        items.sort(key=lambda h: str(h["name"]))
+        items.sort(key=lambda h: str(h["last_seen"] or ""), reverse=True)
+        items.sort(key=lambda h: int(str(h["alert_count"])), reverse=True)
         return items
 
     def to_dict(self) -> dict:
