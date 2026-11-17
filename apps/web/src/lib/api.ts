@@ -2602,6 +2602,29 @@ export interface CasesResponse {
   pageSize: number;
 }
 
+export interface RelatedCase {
+  id: string;
+  case_number: string | null;
+  title: string;
+  severity: AlertSeverity;
+  status: CaseStatus;
+  created_at: string | null;
+  reason: "shared_alerts" | "shared_observables";
+  shared_alert_count: number;
+  shared_alert_ids: string[];
+  shared_observable_count: number;
+  shared_observables: Array<{
+    kind: "ip" | "user" | "host" | "domain" | "hash" | "file" | "process" | "alert";
+    value: string;
+  }>;
+}
+
+export interface RelatedCasesResponse {
+  related: RelatedCase[];
+  limit: number;
+  has_more: boolean;
+}
+
 // ─── WS-D2 — Per-case auto-summary artifact ─────────────────────────────────
 //
 // Mirrors the Pydantic schemas in ``services/api/app/services/case_summary.py``.
@@ -2842,6 +2865,9 @@ export const casesApi = {
     const raw = await request<unknown>(`/api/v1/cases/${id}`);
     return normalizeCase(raw);
   },
+
+  getRelated: (id: string) =>
+    request<RelatedCasesResponse>(`/api/v1/cases/${encodeURIComponent(id)}/related`),
 
   create: async (data: Partial<Case>) => {
     // The backend CreateCaseRequest speaks snake_case and does NOT enable

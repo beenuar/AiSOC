@@ -67,6 +67,7 @@ from app.services.case_postmortem import build_case_postmortem
 from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
+from app.services.related_cases import ObservableKind, RelatedCasesResponse, find_related_cases
 from app.services.semantic_memory import remember_closed_case
 
 logger = logging.getLogger(__name__)
@@ -247,7 +248,7 @@ class AddAlertsRequest(BaseModel):
 
 class ObservableNode(BaseModel):
     id: str
-    kind: Literal["ip", "user", "host", "domain", "hash", "file", "process", "alert"]
+    kind: ObservableKind
     value: str
     tags: list[str] = Field(default_factory=list)
 
@@ -2351,63 +2352,15 @@ async def case_investigation_pdf(
     )
 
 
-@router.get("/{case_id}/related", summary="List related cases (by alert/observable overlap)")
+@router.get("/{case_id}/related", response_model=RelatedCasesResponse, summary="List related cases (by alert/observable overlap)")
 async def list_related_cases(
     case_id: str,
     db: DBSession,
     user: CaseReader,
-) -> dict[str, Any]:
-    """Return other cases that share alerts or observables with this case.
-
-    This is intentionally a lightweight heuristic — we look for cases that
-    overlap on `alert_ids` or share an observable IP/host.  It's the smallest
-    thing the case detail page needs to stop 404'ing.
-    """
+) -> RelatedCasesResponse:
+    """Show shared evidence for this tenant's related cases without merging them."""
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
-    row = (
-        await db.execute(
-            text("SELECT alert_ids, observable_graph FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
-                id=cid, tenant_id=user.tenant_id
-            )
-        )
-    ).fetchone()
-    if not row:
+    result = await find_related_cases(db, tenant_id=user.tenant_id, case_id=cid)
+    if result is None:
         raise HTTPException(status_code=404, detail="Case not found.")
-
-    alert_ids = list(row.alert_ids or [])
-    related: list[dict[str, Any]] = []
-
-    if alert_ids:
-        rows = (
-            await db.execute(
-                text(
-                    """
-                    SELECT id, case_number, title, severity, status, created_at
-                    FROM aisoc_cases
-                    WHERE id <> :id
-                      AND tenant_id = :tenant_id
-                      AND alert_ids && CAST(:alerts AS UUID[])
-                    ORDER BY created_at DESC
-                    LIMIT 20
-                    """
-                ).bindparams(
-                    id=cid,
-                    tenant_id=user.tenant_id,
-                    alerts=[str(a) for a in alert_ids],
-                )
-            )
-        ).fetchall()
-        for r in rows:
-            related.append(
-                {
-                    "id": str(r.id),
-                    "case_number": r.case_number,
-                    "title": r.title,
-                    "severity": r.severity or "medium",
-                    "status": r.status or "new",
-                    "created_at": r.created_at.isoformat() if r.created_at else None,
-                    "reason": "shared_alerts",
-                }
-            )
-
-    return {"related": related}
+    return result
