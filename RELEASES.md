@@ -52,7 +52,54 @@ This file mirrors what used to live in the "What's new" section of [`README.md`]
 
 ## What's new
 
-`VERSION` is `23.4.0`. The **v23.4.0** release (2026-11-13) is the
+`VERSION` is `23.5.0`. The **v23.5.0** release (2026-11-18) is the
+community-wave release: three new EDR connectors, certificate auth for the
+Microsoft connectors, two analyst-facing console features built to their
+reporters' designs, and a credential-isolation fix for the LLM gateway —
+every line either contributed from outside or built to a community design.
+**The gateway stopped lending tenants the platform's own key**
+([@knowlet](https://github.com/knowlet), #1953, carried in #1954): when a
+BYOK row selected its own endpoint but the stored key was absent or failed
+to decrypt, the resolver fell back to the platform's provider key and sent
+it wherever the tenant's `base_url` pointed; an environment key is now
+inherited only when the destination is exactly the environment's own
+endpoint, the worker pins the paired key at the call site, and CI sabotages
+the gateway config three ways to prove each break fails the right test. The
+same contributor fixed **Wazuh event identity** (#1951) — the rule id as
+`external_id` made every hit of one rule look like a redelivery, so
+occurrence counts stuck at two while the estate kept firing; now the indexer
+document id, proven by an end-to-end recurrence test — and added **related
+cases with inspectable evidence** to the case Overview (#1952). The
+**Alerts → Entities queue says where an entity was seen** (designed by
+[@relains](https://github.com/relains) in #1950): fusion rolls up each
+contribution's hostname per entity — bounded, evicting, decay-aged, never
+for `host` entities — with top-3 chips on the row and the ranked list in
+the drawer. [@officialasishkumar](https://github.com/officialasishkumar)
+contributed the **ESET PROTECT** and **WithSecure Elements** connectors,
+the **Vectra AI Platform connector** joins them (#1858, part of #356), and
+[@dmitaj](https://github.com/dmitaj)'s first contribution adds
+**certificate authentication for Entra ID and M365 audit** (RS256
+`client_assertion` with signature-verified tests, carried in #1905).
+[@alexmateescu](https://github.com/alexmateescu)'s security review landed
+as four governed carries: **MFA verify is throttled** (#1942/#1946),
+**action requests require a principal by default** (#1900/#1903), **the
+threat-actor attribution API fails closed** (#1901/#1904), and **demo
+identities are refused outside development** (#1901/#1904).
+[GHSA-grv9-vcqp-f37v](https://github.com/beenuar/AiSOC/security/advisories/GHSA-grv9-vcqp-f37v)
+(medium, reported by **wuming815**) was reproduced, fixed in #1957, swept
+across all 145 prototype routes and published the same flow. Also here:
+analyst `false_positive` verdicts are durable suppression while AI verdicts
+are not (#1884/#1888), Kafka consumers in agents and UEBA restart on broker
+outages (#1930/#1936), and the bundled Prometheus finally scrapes every
+service it points at (#1878, #1887, #1893). **30 defects were fixed in this
+release, 34 across it and the two before** (30 here, 2 in v23.4.0, 2 in
+v23.3.0). **One breaking change:** action requests now require a structured
+principal by default — a principal-less caller must set
+`AISOC_ACTIONS_REQUIRE_PRINCIPAL=false` deliberately. Neither `stable`
+channel moves; the chart publishes as **`7.24.0`**, an `appVersion`-only
+move carrying v23.5.0.
+
+The **v23.4.0** release (2026-11-13) is the
 follow-through release, cut hours after v23.3.0 because the queue refilled
 with shippable community work. A third same-day advisory fix —
 [GHSA-xh3r-vqgc-cv78](https://github.com/beenuar/AiSOC/security/advisories/GHSA-xh3r-vqgc-cv78)
