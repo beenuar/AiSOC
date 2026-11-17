@@ -40,7 +40,10 @@ keeps these tests fast and deterministic.
 
 from __future__ import annotations
 
+import json
+import threading
 import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -50,6 +53,7 @@ from app.api.v1.endpoints.alert_explain import (
     _acquire_or_429,
     _explanation_to_payload,
 )
+from app.models.alert import Alert
 from app.services.alert_explain import (
     AlertExplanation,
     ContributingEvent,
@@ -821,6 +825,80 @@ class TestGenerateAlertExplanation:
         assert db.execute.await_count == 3
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("base_path", ["", "/v1"])
+    async def test_allowed_no_auth_route_calls_real_http_transport(self, monkeypatch: pytest.MonkeyPatch, base_path: str) -> None:
+        """A usable local endpoint does not need the deployment's credentials."""
+        from app.core import airgap as airgap_mod
+
+        calls: list[dict[str, Any]] = []
+        summary = "The user signed in from an unusual country. Review the login context."
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_POST(self) -> None:
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                calls.append({"path": self.path, "headers": dict(self.headers), "body": body})
+                response = json.dumps(
+                    {
+                        "id": "explain-fixture",
+                        "object": "chat.completion",
+                        "model": body["model"],
+                        "choices": [{"index": 0, "message": {"role": "assistant", "content": summary}, "finish_reason": "stop"}],
+                        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                    }
+                ).encode()
+                self.send_response(200 if self.path == "/v1/chat/completions" else 404)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+            def log_message(self, format: str, *args: object) -> None:
+                """Keep request headers out of the test runner's logs."""
+
+        monkeypatch.setenv("OPENAI_API_KEY", "environment-provider-test")
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "environment-gateway-test")
+        monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+        monkeypatch.setattr(airgap_mod.settings, "AISOC_AIRGAPPED", False)
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+
+        db = _fake_session()
+        db.execute = AsyncMock(
+            side_effect=[
+                _scalars_all_result([]),
+                _row_one_result(total=0, fps=0),
+                MagicMock(),
+            ]
+        )
+        cfg = LlmConfig(
+            allowed=True,
+            base_url=f"http://127.0.0.1:{server.server_port}{base_path}",
+            model="tenant-local-model",
+            api_key=None,
+            source="tenant",
+            reason="",
+        )
+        try:
+            with patch("app.services.alert_explain.resolve_llm_config", new=AsyncMock(return_value=cfg)):
+                explanation = await generate_alert_explanation(db, alert=Alert(**vars(_alert())))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+        assert explanation.llm_used is True, explanation.llm_reason
+        assert explanation.summary == summary
+        assert len(calls) == 1
+        request = calls[0]
+        assert request["path"] == "/v1/chat/completions"
+        assert request["body"]["model"] == "tenant-local-model"
+        headers = {name.lower(): value for name, value in request["headers"].items()}
+        assert headers["authorization"] == "Bearer aisoc-no-auth"
+        assert "environment-provider-test" not in str(request)
+        assert "environment-gateway-test" not in str(request)
+
+    @pytest.mark.asyncio
     async def test_falls_back_to_deterministic_on_empty_llm(self) -> None:
         # LLM allowed but returned an empty/error response → we keep
         # the deterministic summary and surface the failure reason.
@@ -994,8 +1072,6 @@ class TestExplanationToPayload:
         # Realistic safety check: the endpoint returns the payload
         # straight to FastAPI which json-encodes it. Anything not
         # JSON-clean would 500 the request.
-        import json
-
         payload = _explanation_to_payload(_stub_explanation())
         round_tripped = json.loads(json.dumps(payload))
         assert round_tripped["alert_id"] == payload["alert_id"]

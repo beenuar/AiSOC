@@ -594,6 +594,22 @@ jobs:
           echo "  web 200:          ${ok_web}"
           exit 1
 
+      # Exercise the documented Make targets against the images whose
+      # provenance was checked above. A moving-tag refresh here would replace
+      # locally built PR images with registry images and grade different code.
+      # This is a warm start on the clean stack booted above: the normal port
+      # resolver, schema guard, service wait and bootstrap still run.
+      - name: Documented make up, doctor and smoke on the checked images
+        if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
+        env:
+          AISOC_PULL_POLICY: never
+        run: |
+          set -euo pipefail
+          make up UP_FLAGS=--no-build \
+            | sed 's/^\([[:space:]]*Password[[:space:]]\).*/\1<redacted>/'
+          make doctor
+          make smoke
+
       - name: Record success summary
         if: success() && (steps.relevant.outputs.run == 'true' || github.event_name == 'push')
         run: |

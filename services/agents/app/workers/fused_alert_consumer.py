@@ -877,15 +877,17 @@ class FusedAlertTriageWorker:
                     # with whatever `OPENAI_MODEL` held — `gpt-4-turbo-preview`
                     # in the shipped .env.example, which the gateway 400s. An
                     # env default is not a per-tenant override.
-                    # The key needs the same treatment: the env baseline's key
-                    # is a *provider* key, and forcing it here would send it to
-                    # the gateway as a bearer token, which 401s. Left unset,
-                    # make_chat_model resolves the key that pairs with the route
-                    # it actually chose.
+                    # A tenant-selected endpoint must keep the resolver's paired
+                    # key, including an intentionally unauthenticated route. A
+                    # non-secret placeholder keeps the SDK from substituting
+                    # OPENAI_API_KEY. With no tenant endpoint/key override, let
+                    # the factory resolve credentials for its task-role route.
                     with (
                         timer.measure("decide"),
                         llm_override(
-                            api_key=cfg.api_key if getattr(cfg, "api_key_from_tenant", False) else None,
+                            api_key=(cfg.api_key or "aisoc-no-auth")
+                            if getattr(cfg, "base_url_from_tenant", False) or getattr(cfg, "api_key_from_tenant", False)
+                            else None,
                             base_url=cfg.base_url if getattr(cfg, "base_url_from_tenant", False) else None,
                             model=cfg.model if getattr(cfg, "model_from_tenant", False) else None,
                         ),
@@ -1592,7 +1594,7 @@ class FusedAlertTriageWorker:
         # the route it chose, so a deployment doing exactly what the compose
         # file sets up — gateway URL and master key, provider key held by the
         # gateway — reports a usable key here instead of "none configured".
-        return cfg if (cfg.allowed and cfg.api_key) else None
+        return cfg if cfg.allowed else None
 
     async def _llm_triage(self, state: InvestigationState) -> tuple[InvestigationState, str]:
         try:

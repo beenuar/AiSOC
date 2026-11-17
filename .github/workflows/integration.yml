@@ -119,6 +119,8 @@ jobs:
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
           migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py tests/isolation/test_alert_recurrence_after_closure_live.py services/fusion/app/services/alert_sink.py services/fusion/app/services/alert_status.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py services/api/app/api/v1/endpoints/triage_questions.py services/agents/app/context/triage_questions_store.py services/agents/app/hunt/source_report_store.py services/agents/app/api/router.py services/agents/tests/integration/ services/api/app/api/v1/endpoints/alerts.py services/api/tests/test_copilot_alert_filters_live.py services/api/tests/test_alert_list_search_filter.py'
+          # Extend the existing migration gate without replacing its paths.
+          migration_paths+=' services/api/tests/test_llm_byok_live.py services/api/app/services/llm_ services/api/app/api/v1/endpoints/llm_ services/agents/app/security/llm_resolver.py services/agents/app/llm/'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -809,6 +811,60 @@ jobs:
         env:
           MSSP_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/test_alert_list_search_filter.py -v --tb=short
+
+      # BYOK must survive the actual auth dependency, encrypted database row,
+      # runtime-role RLS and provider HTTP boundary. A tuple-only resolver test
+      # cannot show whether Settings and the connection-test route use it.
+      - name: Tenant BYOK routing (live PostgreSQL and provider HTTP)
+        working-directory: services/api
+        env:
+          AISOC_BYOK_LIVE_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/.venv-api-byok"
+          python3 ../../scripts/service_requirements.py api --locked > /tmp/api-byok.lock.txt
+          "$RUNNER_TEMP/.venv-api-byok/bin/pip" install --quiet --disable-pip-version-check --no-deps -r /tmp/api-byok.lock.txt
+          "$RUNNER_TEMP/.venv-api-byok/bin/python" -m pytest tests/test_llm_byok_live.py -q -p no:cacheprovider -rs 2>&1 | tee /tmp/byok-live.log
+          if grep -Eq '[0-9]+ skipped' /tmp/byok-live.log || ! grep -Eq '[1-9][0-9]* passed' /tmp/byok-live.log; then
+            echo '::error::BYOK live tests must execute against PostgreSQL; skips are not passing evidence'
+            exit 1
+          fi
+
+      - name: BYOK gate rejects the former probe credential mismatch
+        working-directory: services/api
+        env:
+          AISOC_BYOK_LIVE_REQUIRED: '1'
+        run: |
+          set -euo pipefail
+          source_file=app/api/v1/endpoints/llm_credentials.py
+          backup="$RUNNER_TEMP/byok-credentials.py"
+          cp "$source_file" "$backup"
+          trap 'cp "$backup" "$source_file"' EXIT
+          # Restore only the former probe behavior: a saved gateway route
+          # omitted its matching environment key. Status and resolution must
+          # still pass before the real provider HTTP request exposes it.
+          "$RUNNER_TEMP/.venv-api-byok/bin/python" - <<'PY'
+          from pathlib import Path
+          path = Path("app/api/v1/endpoints/llm_credentials.py")
+          source = path.read_text()
+          fixed = "    if api_key is None and inherit_env_key:\n        api_key = env_key\n"
+          assert source.count(fixed) == 1, "probe credential guard changed; update the negative control"
+          path.write_text(source.replace(fixed, ""))
+          PY
+          set +e
+          "$RUNNER_TEMP/.venv-api-byok/bin/python" -m pytest \
+            'tests/test_llm_byok_live.py::test_no_stored_key_reaches_only_the_selected_endpoint[True]' \
+            -q -p no:cacheprovider --tb=short 2>&1 | tee /tmp/byok-negative.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 1 ] \
+            || ! grep -Fq 'FAILED tests/test_llm_byok_live.py::test_no_stored_key_reaches_only_the_selected_endpoint[True]' /tmp/byok-negative.log \
+            || ! grep -Fq 'Bearer aisoc-no-auth' /tmp/byok-negative.log \
+            || ! grep -Fq 'Bearer gateway-live-fixture-key' /tmp/byok-negative.log; then
+            echo '::error::negative control must fail at the real provider Authorization assertion'
+            exit 1
+          fi
+          echo 'confirmed: the actual provider request detects a gateway credential mismatch'
 
       # The patch-window promotion sweep is the only path from
       # `asset_vulnerabilities` back into the alert queue, and its upsert
@@ -1734,6 +1790,10 @@ jobs:
           # Full history + tags so we can check out the released migration set.
           fetch-depth: 0
           fetch-tags: true
+      # Forks do not inherit the canonical repository's release tags.
+      - name: Fetch canonical release tags for fork checks
+        if: github.event.repository.fork
+        run: git fetch --no-tags https://github.com/beenuar/AiSOC.git 'refs/tags/v*:refs/tags/v*'
 
       - name: Start PostgreSQL with registry fallback
         uses: ./.github/actions/start-postgres

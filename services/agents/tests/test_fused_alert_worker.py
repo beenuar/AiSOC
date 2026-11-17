@@ -9,10 +9,14 @@ behavior hold.
 
 from __future__ import annotations
 
+import json
+import threading
 import uuid
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 from app.core.cost_governor import Decision, GovernorDecision
+from app.security.llm_resolver import LlmConfig
 from app.workers import fused_alert_consumer as worker_mod
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, build_state
 
@@ -156,6 +160,97 @@ async def test_llm_failure_falls_back_to_deterministic_non_null_verdict(monkeypa
     result = await _worker().triage(_fused())
     assert result["tier"] == "deterministic"
     assert result["verdict"] is not None
+
+
+@pytest.fixture
+def tenant_model_http():
+    """A real local HTTP boundary; the worker/model factory are not replaced."""
+    requests = []
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_POST(self):
+            payload = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+            requests.append((self.path, dict(self.headers), payload))
+            response = json.dumps(
+                {
+                    "id": "chatcmpl-worker-test",
+                    "object": "chat.completion",
+                    "created": 1,
+                    "model": payload["model"],
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": {
+                                "role": "assistant",
+                                "content": json.dumps(
+                                    {"verdict": "true_positive", "confidence": 0.8, "rationale": "Credential dumping requires review."}
+                                ),
+                            },
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response)))
+            self.end_headers()
+            self.wfile.write(response)
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}/v1", requests
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+        server.server_close()
+
+
+@pytest.mark.parametrize("resolved_key", [None, "paired-gateway-key"])
+async def test_tenant_endpoint_keeps_resolved_auth_through_worker_and_http(monkeypatch, tenant_model_http, resolved_key):
+    base_url, requests = tenant_model_http
+    monkeypatch.setenv("OPENAI_API_KEY", "foreign-provider-key")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "foreign-gateway-key")
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://other-gateway:4000/v1")
+    monkeypatch.setenv("AISOC_AIRGAPPED", "false")
+    monkeypatch.setenv("NO_PROXY", "127.0.0.1")
+    monkeypatch.setattr(
+        worker_mod,
+        "get_governor",
+        lambda: _FakeGovernor(GovernorDecision(decision=Decision.ALLOW, reason="test", remaining_usd=10.0)),
+    )
+
+    async def resolve(_tenant):
+        return LlmConfig(
+            allowed=True,
+            base_url=base_url,
+            model="tenant-model",
+            api_key=resolved_key,
+            source="tenant",
+            reason="",
+            base_url_from_tenant=True,
+            model_from_tenant=True,
+            api_key_from_tenant=False,
+        )
+
+    monkeypatch.setattr(worker_mod, "resolve_llm_config", resolve)
+    result = await _worker().triage(_fused())
+    assert result["tier"] == "llm"
+    assert result["verdict"] == "true_positive"
+    assert len(requests) == 1
+    path, headers, payload = requests[0]
+    assert path == "/v1/chat/completions"
+    assert payload["model"] == "tenant-model"
+    headers = {name.lower(): value for name, value in headers.items()}
+    assert headers["authorization"] == f"Bearer {resolved_key or 'aisoc-no-auth'}"
+    assert "foreign-provider-key" not in str(headers)
+    assert "foreign-gateway-key" not in str(headers)
 
 
 async def test_null_verdict_defaults_to_needs_review(monkeypatch):

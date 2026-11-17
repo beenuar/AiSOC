@@ -86,6 +86,9 @@ def _clear_llm_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "LLM_MODEL",
         "AISOC_LLM_MODEL",
         "AISOC_AIRGAPPED",
+        "AISOC_AIRGAP_ALLOWLIST",
+        "LLM_GATEWAY_URL",
+        "LITELLM_MASTER_KEY",
     ):
         monkeypatch.delenv(var, raising=False)
 
@@ -173,7 +176,7 @@ class TestEnvBaseline:
 
 
 class TestAirgapBlocks:
-    """Air-gap policy must mirror the legacy ``_llm_allowed`` helper."""
+    """Air-gap policy must match API egress and the explicit host allowlist."""
 
     def test_airgap_off_never_blocks(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # AISOC_AIRGAPPED unset → never block, regardless of host.
@@ -188,7 +191,7 @@ class TestAirgapBlocks:
         resolver = _import_resolver()
         blocked, reason = resolver._airgap_blocks("")
         assert blocked is True
-        assert "would default to api.openai.com" in reason
+        assert reason == "AISOC_AIRGAPPED is on and host 'api.openai.com' is not allowed by the egress policy."
 
     def test_airgap_blocks_openai_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
@@ -199,7 +202,7 @@ class TestAirgapBlocks:
         # bare hostname substring (avoids CodeQL's
         # ``py/incomplete-url-substring-sanitization`` heuristic, which fires on
         # any ``"api.openai.com" in <str>`` check even in test assertions).
-        assert reason == "AISOC_AIRGAPPED is on and base_url points at api.openai.com."
+        assert reason == "AISOC_AIRGAPPED is on and host 'api.openai.com' is not allowed by the egress policy."
 
     def test_airgap_allows_private_litellm_host(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setenv("AISOC_AIRGAPPED", "true")
@@ -373,7 +376,7 @@ class TestResolveNoTenant:
         # See note in ``test_airgap_blocks_openai_host``: assert against the full
         # literal reason to avoid CodeQL's
         # ``py/incomplete-url-substring-sanitization`` false positive.
-        assert cfg.reason == "AISOC_AIRGAPPED is on and base_url points at api.openai.com."
+        assert cfg.reason == "AISOC_AIRGAPPED is on and host 'api.openai.com' is not allowed by the egress policy."
 
     @pytest.mark.asyncio
     async def test_airgap_allows_private_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -559,11 +562,9 @@ class TestResolveWithTenant:
         assert cfg.source == "environment"
 
     @pytest.mark.asyncio
-    async def test_corrupt_ciphertext_falls_back_to_env_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # If the tenant's stored ciphertext can't be decrypted with the
-        # current vault key (mid-rotation, mistyped secret, etc.), the
-        # resolver must fall back to the env key — *not* fail open and
-        # *not* error out the explain request.
+    async def test_corrupt_ciphertext_does_not_forward_env_key_to_another_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        # A decryption failure must not send the deployment's provider key
+        # to a tenant-selected endpoint. The explain path degrades safely.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env-fallback")
         _set_vault_key(monkeypatch)
 
@@ -586,18 +587,16 @@ class TestResolveWithTenant:
         resolver = _import_resolver()
         cfg = await resolver.resolve_llm_config("tenant-a")
 
-        # Tenant base_url + model still apply (they decrypt fine), but
-        # the api_key fell back to the env value, so source is "mixed".
-        assert cfg.allowed is True
-        assert cfg.api_key == "sk-env-fallback"
+        assert cfg.allowed is False
+        assert cfg.api_key is None
         assert cfg.base_url == "http://tenant-llm.example/v1"
         assert cfg.model == "tenant-model"
-        assert cfg.source == "mixed"
+        assert cfg.source == "tenant"
 
     @pytest.mark.asyncio
-    async def test_vault_disabled_falls_back_to_env_key(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_vault_disabled_does_not_forward_env_key_to_another_endpoint(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # AISOC_CREDENTIAL_KEY missing → vault.get_vault() returns None.
-        # Resolver must still surface tenant base_url/model and use env key.
+        # Keep the requested route visible without sending a foreign key.
         monkeypatch.setenv("OPENAI_API_KEY", "sk-env-fallback")
         monkeypatch.delenv("AISOC_CREDENTIAL_KEY", raising=False)
         _reset_vault()
@@ -618,10 +617,10 @@ class TestResolveWithTenant:
         resolver = _import_resolver()
         cfg = await resolver.resolve_llm_config("tenant-a")
 
-        assert cfg.allowed is True
-        assert cfg.api_key == "sk-env-fallback"
+        assert cfg.allowed is False
+        assert cfg.api_key is None
         assert cfg.base_url == "http://tenant-llm.example/v1"
-        assert cfg.source == "mixed"
+        assert cfg.source == "tenant"
 
     @pytest.mark.asyncio
     async def test_no_tenant_row_uses_env_baseline(self, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -739,4 +738,76 @@ class TestAirgapWithTenantOverride:
         # See note in ``test_airgap_blocks_openai_host``: assert against the full
         # literal reason to avoid CodeQL's
         # ``py/incomplete-url-substring-sanitization`` false positive.
-        assert cfg.reason == "AISOC_AIRGAPPED is on and base_url points at api.openai.com."
+        assert cfg.reason == "AISOC_AIRGAPPED is on and host 'api.openai.com' is not allowed by the egress policy."
+
+
+class TestGatewayTenantRouting:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("provider", "expected_base", "expected_model"),
+        [
+            ("openai", "https://api.openai.com/v1", "gpt-4o-mini"),
+            ("anthropic", "https://api.anthropic.com/v1", "claude-haiku-4-5-20251001"),
+        ],
+    )
+    async def test_key_only_hosted_byok_replaces_gateway_route(
+        self, monkeypatch: pytest.MonkeyPatch, provider: str, expected_base: str, expected_model: str
+    ) -> None:
+        monkeypatch.setenv("LLM_GATEWAY_URL", "http://litellm:4000/v1")
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "gateway-test-key")
+        _set_vault_key(monkeypatch)
+        from app.security.credential_vault import get_vault
+
+        vault = get_vault()
+        assert vault is not None
+        row: dict[str, Any] = {
+            "provider": provider,
+            "base_url": None,
+            "model": None,
+            "api_key_vault": vault.encrypt("tenant-test-key"),
+            "settings": {},
+            "enabled": True,
+        }
+        _stub_ledger(monkeypatch, _make_pool_with_row(row))
+        cfg = await _import_resolver().resolve_llm_config("tenant-a")
+        assert cfg.allowed is True
+        assert (cfg.base_url, cfg.model, cfg.api_key) == (expected_base, expected_model, "tenant-test-key")
+        assert cfg.model_from_tenant and cfg.base_url_from_tenant and cfg.api_key_from_tenant
+        assert cfg.source == "tenant"
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("same_destination", [False, True])
+    async def test_gateway_key_stays_bound_to_gateway(self, monkeypatch: pytest.MonkeyPatch, same_destination: bool) -> None:
+        gateway = "http://litellm:4000/v1"
+        monkeypatch.setenv("LLM_GATEWAY_URL", gateway)
+        monkeypatch.setenv("LITELLM_MASTER_KEY", "gateway-test-key")
+        row: dict[str, Any] = {
+            "provider": "custom",
+            "base_url": gateway + "/" if same_destination else "https://tenant.example/v1",
+            "model": "aisoc-triage" if same_destination else "tenant-model",
+            "api_key_vault": None,
+            "settings": {},
+            "enabled": True,
+        }
+        _stub_ledger(monkeypatch, _make_pool_with_row(row))
+        cfg = await _import_resolver().resolve_llm_config("tenant-a")
+        assert cfg.allowed is True  # explicit no-key custom endpoints are supported
+        assert cfg.api_key == ("gateway-test-key" if same_destination else None)
+
+
+@pytest.mark.parametrize("hostname", ["api.anthropic.com", "API.ANTHROPIC.COM", "sub.api.anthropic.com", "api.anthropic.com."])
+def test_airgap_blocks_anthropic_default(monkeypatch: pytest.MonkeyPatch, hostname: str) -> None:
+    monkeypatch.setenv("AISOC_AIRGAPPED", "true")
+    blocked, reason = _import_resolver()._airgap_blocks(f"https://{hostname}/v1")
+    assert blocked is True
+    assert reason == f"AISOC_AIRGAPPED is on and host '{hostname.lower()}' is not allowed by the egress policy."
+
+
+@pytest.mark.parametrize("allowlist", ["api.anthropic.com", '["api.anthropic.com"]'])
+def test_airgap_honors_an_explicit_host_allowlist(monkeypatch: pytest.MonkeyPatch, allowlist: str) -> None:
+    monkeypatch.setenv("AISOC_AIRGAPPED", "true")
+    monkeypatch.setenv("AISOC_AIRGAP_ALLOWLIST", allowlist)
+    resolver = _import_resolver()
+    assert resolver._airgap_blocks("https://api.anthropic.com/v1") == (False, "")
+    assert resolver._airgap_blocks("https://unlisted.example/v1")[0] is True
+    assert resolver._airgap_blocks("http://ollama:11434/v1") == (False, "")

@@ -80,7 +80,7 @@ console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localh
 .PHONY: help install env up up-dev up-full up-gpu up-host-llm _gpu_preflight _llm_note pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script replay-eval replay-eval-verify \
-        upgrade _schema_guard _wait_postgres _upgrade_backup _migrate
+        upgrade llm-reload _schema_guard _wait_postgres _upgrade_backup _migrate
 
 help:
 	@echo ""
@@ -105,6 +105,7 @@ help:
 	@echo "    make pull           Refresh the images (what \`make up\` does on a moving tag)"
 	@echo "    make logs           Follow logs (SERVICE=fusion to narrow)"
 	@echo "    make restart        Restart the stack"
+	@echo "    make llm-reload     Recreate the LLM gateway after changing its environment or config"
 	@echo "    make down           Stop the stack, keep the data"
 	@echo "    make clean          Stop the stack and delete all volumes"
 	@echo "    make demo           Load clearly-labelled synthetic data"
@@ -476,11 +477,21 @@ upgrade:
 	@echo "==> Starting"
 	@$(MAKE) --no-print-directory _ports
 	$(COMPOSE) $(PROFILE_ARG) up -d
+	@$(MAKE) --no-print-directory llm-reload
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
 	@echo "  Upgrade complete. Console: $(console_url)"
 	@echo "  The pre-upgrade dump is under ./backups/ — keep it until you have"
 	@echo "  confirmed the new release behaves."
+
+# Compose detects changes to service configuration and environment, but not
+# to the contents of a bind-mounted file. LiteLLM reads its config at startup,
+# so an unchanged image can otherwise keep last release's routing in memory.
+# Recreate rather than restart: this also refreshes environment and file mounts.
+# Keep the same COMPOSE overlays and profile as the caller; leave other services
+# alone. A failed recreation must fail the upgrade before it reports completion.
+llm-reload:
+	$(COMPOSE) $(PROFILE_ARG) up -d --no-deps --force-recreate litellm
 
 # A local dump of the one store whose loss is unrecoverable, taken with the
 # stack still on the old code.

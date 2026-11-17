@@ -338,6 +338,47 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret the agents service presents to the API: the writeback route, identity context, and the context bundle's incident-context fetch (graph identity/asset/cloud/business/threat dimensions) all resolve it before the shared `AISOC_SERVICE_TOKEN`. **Unset disables each service path loudly** — the writeback posts nothing with a warning, and the bundle marks the dimension *unavailable* rather than dialing toward a guaranteed 401, so "no credential" never reads as "no business context". |
 | `AISOC_SIEM_WRITEBACK_TIMEOUT_S` | `20` | Timeout for the writeback call. A timeout is a skipped writeback, never a failed triage. |
 
+### Tenant BYOK in Settings → Deployment & AI
+
+An enabled tenant configuration applies to that tenant's live triage and
+explanation requests. Leave it disabled to inherit deployment settings,
+including Bedrock configured behind the bundled LiteLLM gateway.
+
+| UI selection | Endpoint and model when left blank | Credential |
+| --- | --- | --- |
+| OpenAI | OpenAI API and `gpt-4o-mini` | Tenant OpenAI key |
+| Anthropic | Anthropic API and `claude-haiku-4-5-20251001` | Tenant Anthropic key |
+| Local / custom / LiteLLM-compatible | Set the endpoint and its model or gateway alias | Endpoint-issued key, or leave blank for an endpoint that permits unauthenticated requests |
+
+A provider selection, endpoint, model and credential form one route. An
+environment key is reused only when the effective API endpoint matches the
+deployment endpoint; a key for the bundled gateway is never sent to a different
+tenant destination. Explicit endpoint and model values override provider
+defaults. An unreadable stored key does not disable authentication: only a
+matching deployment endpoint can still use its environment credential.
+
+The Anthropic connection test and live requests use its OpenAI-compatible
+chat-completions transport. Direct Anthropic requests omit unsupported
+`response_format: json_object` and sampling overrides; callers still parse and
+validate the requested JSON response. A successful connection test proves that
+the selected route answered, not that every later workload will succeed.
+
+The UI does not sign AWS requests or implement native Bedrock Converse/Invoke.
+For existing AWS credentials or Anthropic models on Bedrock, inherit the
+bundled gateway, or configure a tenant-specific LiteLLM-compatible gateway
+with its gateway-issued key and alias.
+
+For a model supporting Bedrock's OpenAI-compatible Chat Completions API,
+the existing custom option can instead use the explicit
+`https://bedrock-runtime.<region>.amazonaws.com/openai/v1` base, a supported
+model ID and its Bedrock API key. This uses bearer authentication; it does
+not discover local AWS credentials. Runtime `GET /models` is unavailable,
+so supply the model ID. Check the model's API/Region support and verify a real
+Explain or triage request in the target account. See the
+[gateway guide](../operations/llm-gateway) for the native and compatible API
+boundaries. A Bedrock key belongs only to the selected AWS endpoint, never
+to an unrelated OpenAI endpoint or a generic native gateway alias.
+
 ---
 
 ## Connectors service (`services/connectors`)
