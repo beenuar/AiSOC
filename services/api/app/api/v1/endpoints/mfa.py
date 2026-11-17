@@ -111,6 +111,7 @@ _MFA_THROTTLE_SCOPE = "mfa"
 def _mfa_throttle_key(user_id: object) -> str:
     return f"{_MFA_THROTTLE_SCOPE}-account:{user_id}"
 
+
 CHALLENGE_TOKEN_TYPE = "mfa_challenge"
 #: Long enough to open an authenticator app and read a code, short enough
 #: that a challenge left in a browser's history is not a standing
