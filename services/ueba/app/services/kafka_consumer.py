@@ -53,18 +53,39 @@ answered 200, and ``/readyz`` answered 200, for as long as anyone left it up.
 
 Continuing is only safe if a subscription that *does* end says so, so this
 class tracks whether it is attached and ``app/main.py`` registers that as a
-readiness probe. Detaching is not treated as recoverable in place: there is
-no reconnect loop here, because a loop would turn a permanent fault — a
-missing column, a revoked grant — into an indefinite retry that reads as
-ordinary churn. The honest report is a 503 on ``/readyz``, the exception in
-the log, and the restart decision left to whatever is supervising the
-container.
+readiness probe.
+
+Detachment and recovery (#1930)
+-------------------------------
+
+Earlier revisions deliberately had no reconnect loop, reasoning that a loop
+would turn a permanent fault — a missing column, a revoked grant — into an
+indefinite retry that reads as ordinary churn. That reasoning was sound about
+*message-level* faults, and those are already handled where they occur: a
+database error inside the handler is dead-lettered per event, never retried
+by the subscription. What the no-loop stance actually cost was the
+*subscription-level* transients — a broker that is down for eighteen seconds
+at boot ended the task permanently, and ``restart: unless-stopped`` never
+acts on a process that is still running. On the deployment that reported
+#1930 that was six days and ~827k unscored events.
+
+``run()`` therefore now supervises with the same three-class split as
+``services/fusion`` and the Go consumer's streamhealth: transient faults are
+retried with capped exponential backoff (escalating to an error naming the
+operator action once the streak outlives any transient explanation),
+Kafka-permanent faults (bad credentials, missing grants) stop the loop with
+the fix on the final log line, and poison messages never reach supervision
+because the handler dead-letters them. ``/readyz`` still reports 503 while
+detached and recovers on its own when a retry re-attaches.
 """
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import json
 import logging
+import time
 import uuid
 from typing import Any
 
@@ -77,7 +98,86 @@ from app.services.feature_extraction import extract
 from app.services.peer_group import PeerGroupService
 from app.services.scoring import ScoringService
 
+try:
+    # Declared dependency (pyproject pins aiokafka>=0.10). Module-level so the
+    # supervision tests can monkeypatch the constructors, mirroring
+    # services/fusion; the guard keeps the module importable without the dep,
+    # where run() reports it once and returns.
+    from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+    from aiokafka.errors import (
+        AuthenticationFailedError,
+        ClusterAuthorizationFailedError,
+        GroupAuthorizationFailedError,
+        IllegalSaslStateError,
+        TopicAuthorizationFailedError,
+        UnsupportedSaslMechanismError,
+        UnsupportedVersionError,
+    )
+except ImportError:  # pragma: no cover — exercised only without the dep installed
+    AIOKafkaConsumer = None  # type: ignore[assignment,misc]
+    AIOKafkaProducer = None  # type: ignore[assignment,misc]
+    AuthenticationFailedError = None  # type: ignore[assignment,misc]
+    ClusterAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    GroupAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    IllegalSaslStateError = None  # type: ignore[assignment,misc]
+    TopicAuthorizationFailedError = None  # type: ignore[assignment,misc]
+    UnsupportedSaslMechanismError = None  # type: ignore[assignment,misc]
+    UnsupportedVersionError = None  # type: ignore[assignment,misc]
+
 LOG = logging.getLogger(__name__)
+
+#: Backoff bounds for the supervised consumer (#1930). Module constants so a
+#: test can drive the real entry point — ``run()`` — at test speed. Values and
+#: rationale mirror services/fusion/app/workers/consumer.py.
+SUPERVISOR_INITIAL_BACKOFF_SECONDS = 1.0
+SUPERVISOR_MAX_BACKOFF_SECONDS = 60.0
+
+#: How long one uninterrupted failure may keep being called transient before
+#: the log escalates to an error naming the operator action.
+SUPERVISOR_STUCK_AFTER_SECONDS = 120.0
+
+
+def permanent_failure_action(exc: BaseException) -> str | None:
+    """What an operator must change, or ``None`` when a retry may still work.
+
+    The permanent arm of the three-class split described in the module
+    docstring. Everything absent from this table is treated as transient and
+    retried; see fusion's copy for why that direction is deliberate.
+    """
+    table: tuple[tuple[type[BaseException] | None, str], ...] = (
+        (
+            AuthenticationFailedError,
+            "fix the Kafka credentials this service presents (AISOC_KAFKA_SASL_USERNAME / _PASSWORD)",
+        ),
+        (
+            UnsupportedSaslMechanismError,
+            "set AISOC_KAFKA_SASL_MECHANISM to a mechanism this broker offers",
+        ),
+        (
+            IllegalSaslStateError,
+            "check the SASL mechanism and security protocol agree with the broker's listener",
+        ),
+        (
+            TopicAuthorizationFailedError,
+            "grant this principal Read on the raw-events topic and Write on the anomalies topic",
+        ),
+        (
+            GroupAuthorizationFailedError,
+            "grant this principal Read on the UEBA consumer group",
+        ),
+        (
+            ClusterAuthorizationFailedError,
+            "grant this principal the cluster permissions the broker requires, or point it at a cluster it may use",
+        ),
+        (
+            UnsupportedVersionError,
+            "the broker is older than this client requires; upgrade the broker or pin an older aiokafka",
+        ),
+    )
+    for error_type, action in table:
+        if error_type is not None and isinstance(exc, error_type):
+            return action
+    return None
 
 
 class UEBAKafkaConsumer:
@@ -90,6 +190,12 @@ class UEBAKafkaConsumer:
         # loop's ``finally`` so every exit path — clean stop, broker loss,
         # unhandled error — is reported the same way.
         self._attached = False
+        #: Successful attaches, so the supervisor's stuck-escalation clock
+        #: resets after a healthy stretch (#1930).
+        self._attach_count = 0
+        #: Signalled by stop() so a supervision backoff sleep wakes
+        #: immediately instead of making shutdown wait it out (#1930).
+        self._stop_event = asyncio.Event()
         self._dlq = DeadLetterSink(self._session_factory)
         self._stats: dict[str, Any] = {
             "processed": 0,
@@ -179,12 +285,91 @@ class UEBAKafkaConsumer:
             )
 
     async def run(self) -> None:
-        try:
-            from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
-        except ImportError:
+        """Consume under supervision until cancelled or stopped (#1930).
+
+        A transient Kafka failure — the commonest being "the broker is not up
+        yet" at boot, which used to end this task permanently while the
+        container stayed ``running`` — is retried with capped exponential
+        backoff. A failure no retry can clear stops the loop with the
+        operator action on the final log line. Shutdown is unchanged:
+        ``app/main.py`` cancels the task, and the cancellation propagates
+        straight through supervision.
+        """
+        if AIOKafkaConsumer is None:
             LOG.error("aiokafka not installed; Kafka consumer disabled.")
             return
 
+        backoff = SUPERVISOR_INITIAL_BACKOFF_SECONDS
+        failing_since: float | None = None
+        self._stop_event.clear()
+        while not self._stop_event.is_set():
+            attached_before = self._attach_count
+            try:
+                await self._attempt_start()
+                return  # consume loop ended on a clean stop request
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — classified below, not swallowed
+                if self._stop_event.is_set():
+                    return
+
+                action = permanent_failure_action(exc)
+                if action is not None:
+                    LOG.error(
+                        "UEBA Kafka consumer failed permanently (%s: %s). Operator action: %s. "
+                        "Supervision stopped because no retry can clear this; /readyz stays 503 "
+                        "until the cause is fixed and the service restarted.",
+                        type(exc).__name__,
+                        exc,
+                        action,
+                        exc_info=exc,
+                    )
+                    return
+
+                now = time.monotonic()
+                if self._attach_count > attached_before:
+                    failing_since = None
+                if failing_since is None:
+                    failing_since = now
+                failing_for = now - failing_since
+
+                if failing_for >= SUPERVISOR_STUCK_AFTER_SECONDS:
+                    LOG.error(
+                        "UEBA Kafka consumer still cannot attach after %.1fs (%s: %s). Check that "
+                        "KAFKA_BOOTSTRAP_SERVERS names a broker this container can resolve and "
+                        "reach, and that topic %s exists. Still retrying (backoff %.1fs).",
+                        failing_for,
+                        type(exc).__name__,
+                        exc,
+                        settings.kafka_input_topic,
+                        backoff,
+                        exc_info=exc,
+                    )
+                else:
+                    LOG.warning(
+                        "UEBA Kafka consumer crashed, retrying in %.1fs (%s: %s; failing for %.1fs).",
+                        backoff,
+                        type(exc).__name__,
+                        exc,
+                        failing_for,
+                    )
+
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
+                    return  # stop() was requested during the backoff
+                except TimeoutError:
+                    pass
+                backoff = min(backoff * 2, SUPERVISOR_MAX_BACKOFF_SECONDS)
+
+    async def _attempt_start(self) -> None:
+        """One bootstrap/consume/teardown cycle. Raises if it cannot start.
+
+        The ``finally`` covers the bootstrap as well as the consume loop. The
+        previous shape started both clients *before* entering its try block,
+        so a raise out of ``producer.start()`` left a started consumer that
+        nothing would ever stop — harmless once per process, a client leak
+        per attempt under supervision.
+        """
         consumer = AIOKafkaConsumer(
             settings.kafka_input_topic,
             bootstrap_servers=settings.kafka_bootstrap_servers,
@@ -197,14 +382,14 @@ class UEBAKafkaConsumer:
             bootstrap_servers=settings.kafka_bootstrap_servers,
             **kafka_client_kwargs(),
         )
-
-        await consumer.start()
-        await producer.start()
-        self._running = True
-        self._attached = True
-        LOG.info("UEBA Kafka consumer started (topic=%s)", settings.kafka_input_topic)
-
         try:
+            await consumer.start()
+            await producer.start()
+            self._running = True
+            self._attached = True
+            self._attach_count += 1
+            LOG.info("UEBA Kafka consumer started (topic=%s)", settings.kafka_input_topic)
+
             async for msg in consumer:
                 if not self._running:
                     break
@@ -218,10 +403,13 @@ class UEBAKafkaConsumer:
             # Before the awaits below, not after: ``consumer.stop()`` can
             # itself raise on a broker that has gone away, and readiness must
             # already be reporting detached by then rather than staying 200
-            # through a failed teardown.
+            # through a failed teardown. Suppressed so a teardown raise
+            # cannot replace the exception the supervisor needs to classify.
             self._attached = False
-            await consumer.stop()
-            await producer.stop()
+            with contextlib.suppress(Exception):
+                await consumer.stop()
+            with contextlib.suppress(Exception):
+                await producer.stop()
             LOG.info("UEBA Kafka consumer stopped.")
 
     async def _handler_failed(self, msg: Any, exc: Exception) -> None:
@@ -271,4 +459,6 @@ class UEBAKafkaConsumer:
             self._stats["dead_lettered"] += 1
 
     def stop(self) -> None:
+        # First, so a supervision backoff sleep wakes immediately (#1930).
+        self._stop_event.set()
         self._running = False

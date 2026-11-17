@@ -237,6 +237,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   credential the config reads is not forwarded by the enrichment service in
   compose.
 
+- **Kafka consumers in agents and UEBA recover from transient broker
+  outages instead of dying permanently** (#1930). Both services
+  bootstrapped their consumer exactly once: a `KafkaConnectionError` at
+  startup (a broker still booting after a host reboot, a leader election, a
+  DNS record not up yet) ended the consume task for the life of the
+  container, while the container itself stayed `Up` — so `restart:
+  unless-stopped` never acted, Compose does not restart unhealthy
+  containers, and on the reporting deployment six days passed with 1,058
+  fused alerts untriaged and ~827k events unscored. Both workers now run
+  under the same supervision the fusion worker shipped: transient failures
+  are retried with capped exponential backoff (escalating to an error
+  naming the operator action once a streak outlives any transient
+  explanation), Kafka-permanent failures (bad SASL credentials, missing
+  grants) stop the loop with the fix on the final log line, and `/readyz`
+  recovers on its own when a retry re-attaches. The restructure also closes
+  a client leak in UEBA (a failed `producer.start()` left a started
+  consumer nothing would ever stop) and covers the bootstrap with the
+  teardown `finally` in both services. The `agents` service gained the
+  `/readyz` compose healthcheck it was missing (UEBA already had one; the
+  Helm chart already probes both paths), so a detached subscription is
+  visible in `docker compose ps` while supervision recovers it.
+
 - **An offline endpoint's late-uploaded ESET detections are swept, not
   skipped** (#1890). ESET filters `/v1/detections` on `occurTime` — when the
   detection happened on the device — so a laptop that spent the night
