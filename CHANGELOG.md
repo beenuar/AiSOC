@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [23.5.0] - 2026-11-18
+
 ### Added
 
 - **The entity queue says where an entity was seen** (#1950). A `user`, `ip`
@@ -154,6 +158,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The LLM gateway no longer sends the platform's provider key to a
+  tenant-selected endpoint** (#1953, carried in #1954). When a tenant's BYOK
+  row selected its own endpoint but the stored key was absent or failed to
+  decrypt, the resolver fell back to the environment key — the platform's
+  own gateway/provider credential — and sent it wherever the tenant's
+  `base_url` pointed, so a tenant could harvest it with a deliberately
+  broken vault token. An environment key is now inherited only when the
+  resolved destination is exactly the environment's own endpoint (scheme,
+  host, port, path and query compared; userinfo refused), the triage worker
+  pins the resolver's paired key at the call site so the SDK cannot
+  substitute `OPENAI_API_KEY`, keyless operation is permitted only for
+  local/custom providers that never stored a key, and the agents' air-gap
+  check mirrors the API's egress classifier instead of blocking one
+  hostname. The gateway container normalises empty-vs-absent env before
+  LiteLLM's entrypoint (Bedrock's SDK credential chain and keyless custom
+  endpoints both keep working), with negative controls running in CI that
+  sabotage the config three ways and assert each breaks the right test.
+  Contributed by @knowlet.
+
+- **The threat-actor attribution API fails closed, and the default stack
+  carries the key** (#1901, SEC-15/NC-7, carried in #1904).
+  `/api/v1/actors/*` was fail-open by design: an unset
+  `AISOC_THREATINTEL_SERVICE_TOKEN` warned once and allowed every caller, so
+  a deployment that exposed the service beyond the private network served
+  actor profiles to anyone who could reach the port. The gate now answers
+  503 when the token is unset (the open behaviour survives only behind an
+  explicit `AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1`), `ensure_env.py`
+  generates the token as the sixteenth secret, and compose forwards it to
+  the enforcing `threatintel` container *and* the calling `agents`
+  container — a generated value that reaches neither end is a 503 for every
+  attribution call, pinned by a tree-derived, negative-controlled gate.
+  Contributed by @alexmateescu.
+
+- **Tenant provisioning refuses demo identities outside development**
+  (#1901, SEC-2, carried in #1904). The demo dataset creates a
+  known-password administrator inside the live tenant, and the seeder's own
+  production guard covered only the standalone script —
+  `provision_from_waitlist` bypassed it, so a production waitlist
+  provisioning that asked for demo seeding got the known-password admin. A
+  non-development `ENVIRONMENT` never seeds demo identity now, whatever the
+  caller asked for. Contributed by @alexmateescu.
+
+- **The archived prototype's region reads require the tenant context**
+  (GHSA-grv9-vcqp-f37v, #1957). In `plans/cyble-aisoc/platform/backend`,
+  `GET /regions/tenants/{tenant_id}/events` and `.../home` carried no auth
+  dependency while their sibling PUT did — an unauthenticated caller could
+  read any tenant's home region and migration audit trail (operator
+  identity, free-text notes). Both now require the tenant context and map
+  cross-tenant reads to 403; the reporter's framework-level method stays as
+  a regression gate that walks FastAPI's dependency table (145 routes) and
+  refuses any tenant-scoped route with zero dependencies — and refuses a
+  clean verdict over a table it could not enumerate. The shipping services
+  never had these routes. Reported by @wuming815.
+
 - **MFA verify is throttled; a phished `mfa_token` can no longer sweep the
   TOTP space** (#1942). `POST /auth/login` consults the shared
   `LoginThrottle`, but passing login only *issues* the challenge — the
@@ -261,6 +319,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   range moves, three lines of churn.
 
 ### Fixed
+
+- **Distinct Wazuh documents are distinct events; repeat occurrences count**
+  (#1951). The connector set `external_id` to the *rule* id, so every hit of
+  one rule shared one replay-stable event identity and fusion's occurrence
+  guard discarded real repeats as redeliveries — the count stuck while the
+  estate kept firing. `external_id` is now the indexer document `_id`;
+  fusion's occurrence rollup updates the alert's `first_seen`/`last_seen`
+  window atomically with the count, inspects provenance before appending it
+  (an identified repeat of an id-less original is counted once, and a failed
+  rollup returns before the append so a retry can recover it), and ingest's
+  tenant directory serves the last observed answer when Postgres blinks
+  mid-outage instead of 503ing pushes after the cache TTL. An end-to-end
+  recurrence test drives the real connector output through authenticated
+  HTTP, Kafka, fusion and Postgres in CI, Redis windows expired for real.
+  Contributed by @knowlet.
 
 - **Case comments save again, and the Resolution panel actually persists**
   (#1932). `casesApi.addComment` sent `{"comment": ...}` while the API's

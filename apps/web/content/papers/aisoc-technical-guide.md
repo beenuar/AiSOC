@@ -2,7 +2,7 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.3"
+version: "v1.4"
 date: "2026-11-05"
 license: "MIT (same as the AiSOC project)"
 abstract: |
@@ -245,7 +245,7 @@ you re-run it. Git, Docker Desktop, Node, pnpm and Python 3 are the
 prerequisites it installs; Python is on that list because three steps of the
 install are Python programs.
 
-It generates `.env`'s fifteen secrets with the same generator `make up` uses
+It generates `.env`'s sixteen secrets with the same generator `make up` uses
 and resolves port conflicts the same way — both repaired in v20.2.0, when a
 fresh Windows install could not boot at all: the template it used to copy
 ships `ENVIRONMENT=production` with its secrets empty, which is exactly the
