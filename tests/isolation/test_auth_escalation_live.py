@@ -205,21 +205,25 @@ async def principals(engine):  # noqa: ANN001
                 },
             )
 
-        entry_id = uuid.uuid4()
-        made["waitlist_entry"] = entry_id
-        await conn.execute(
-            sqlalchemy.text(
-                "INSERT INTO aisoc_waitlist_entries (id, email, company, role, motivation, status) "
-                "VALUES (CAST(:i AS uuid), :e, :c, :r, :m, 'new') ON CONFLICT (id) DO NOTHING"
-            ),
-            {
-                "i": str(entry_id),
-                "e": f"prospect-{entry_id}@example.com",
-                "c": "Prospect Ltd",
-                "r": "CISO",
-                "m": "evaluating",
-            },
-        )
+        for label, company in (
+            ("waitlist_entry", "Prospect Ltd"),
+            ("managed_seed_waitlist", "Managed Seed Ltd"),
+        ):
+            entry_id = uuid.uuid4()
+            made[label] = entry_id
+            await conn.execute(
+                sqlalchemy.text(
+                    "INSERT INTO aisoc_waitlist_entries (id, email, company, role, motivation, status) "
+                    "VALUES (CAST(:i AS uuid), :e, :c, :r, :m, 'new') ON CONFLICT (id) DO NOTHING"
+                ),
+                {
+                    "i": str(entry_id),
+                    "e": f"prospect-{entry_id}@example.com",
+                    "c": company,
+                    "r": "CISO",
+                    "m": "evaluating",
+                },
+            )
     yield made
 
 
@@ -421,6 +425,126 @@ async def test_a_tenant_admin_cannot_modify_a_waitlist_entry(client, principals)
     )
 
     assert response.status_code == 403, f"a tenant_admin modified a waitlist entry: {response.status_code} {response.text[:300]}"
+
+
+# ---------------------------------------------------------------------------
+# Managed starter data must not create the published demo administrator
+# ---------------------------------------------------------------------------
+
+
+async def test_upgrade_retires_an_existing_managed_demo_admin(engine):  # noqa: ANN001
+    """Apply the upgrade migration to the vulnerable row shape."""
+    from pathlib import Path
+
+    from sqlalchemy import text
+
+    tenant_id = uuid.uuid4()
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:id AS uuid), 'Legacy managed seed', :slug, true)"),
+                {"id": str(tenant_id), "slug": f"legacy-managed-seed-{tenant_id.hex[:8]}"},
+            )
+            await conn.execute(
+                text(
+                    "INSERT INTO users "
+                    "(id, tenant_id, email, username, hashed_password, role, is_active, is_verified) "
+                    "VALUES ('00000000-0000-0000-0000-000000000002', CAST(:tenant AS uuid), "
+                    "'demo@example.com', 'demo', 'known-demo-hash', 'admin', true, true) "
+                    "ON CONFLICT (id) DO UPDATE SET tenant_id = EXCLUDED.tenant_id, "
+                    "email = EXCLUDED.email, hashed_password = EXCLUDED.hashed_password, "
+                    "role = EXCLUDED.role, is_active = true, is_verified = true, sessions_revoked_at = NULL"
+                ),
+                {"tenant": str(tenant_id)},
+            )
+
+        migration = (Path(__file__).resolve().parents[2] / "services/api/migrations/163_retire_managed_demo_admin.sql").read_text()
+        async with engine.begin() as conn:
+            await conn.exec_driver_sql(migration)
+
+        async with engine.connect() as conn:
+            retired = (
+                await conn.execute(
+                    text(
+                        "SELECT hashed_password, role, is_active, is_verified, sessions_revoked_at "
+                        "FROM users WHERE id = '00000000-0000-0000-0000-000000000002'"
+                    )
+                )
+            ).one()
+
+        assert retired.hashed_password == "!retired-managed-demo-login"
+        assert retired.role == "viewer"
+        assert retired.is_active is False
+        assert retired.is_verified is False
+        assert retired.sessions_revoked_at is not None
+    finally:
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("DELETE FROM tenants WHERE id = CAST(:tenant AS uuid)"),
+                {"tenant": str(tenant_id)},
+            )
+
+
+async def test_managed_seed_has_no_published_demo_login(client, principals, engine):  # noqa: ANN001
+    """Provision through the real route, then attempt the reported login."""
+    from sqlalchemy import text
+
+    tenant_id: str | None = None
+    try:
+        response = await client.post(
+            "/api/v1/admin/tenants/provision",
+            headers=_session(principals["platform_admin"]),
+            json={"waitlist_entry_id": str(principals["managed_seed_waitlist"]), "seed_demo": True},
+        )
+        assert response.status_code in (200, 201), f"managed provisioning failed: {response.status_code} {response.text[:300]}"
+
+        provisioned = response.json()
+        assert provisioned["demo_seeded"] is True
+        tenant_id = provisioned["tenant_id"]
+
+        async with engine.connect() as conn:
+            published_admins = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM users "
+                    "WHERE tenant_id = CAST(:tenant AS uuid) AND email = 'demo@example.com' "
+                    "AND role = 'admin' AND is_active = true"
+                ),
+                {"tenant": tenant_id},
+            )
+            pending_admins = await conn.scalar(
+                text(
+                    "SELECT count(*) FROM users "
+                    "WHERE tenant_id = CAST(:tenant AS uuid) AND email = :email "
+                    "AND role = 'tenant_admin' AND is_active = false"
+                ),
+                {"tenant": tenant_id, "email": provisioned["admin_user"]["email"]},
+            )
+            alerts = await conn.scalar(
+                text("SELECT count(*) FROM alerts WHERE tenant_id = CAST(:tenant AS uuid)"),
+                {"tenant": tenant_id},
+            )
+            cases = await conn.scalar(
+                text("SELECT count(*) FROM aisoc_cases WHERE tenant_id = CAST(:tenant AS uuid)"),
+                {"tenant": tenant_id},
+            )
+
+        assert published_admins == 0, "managed provisioning created the public demo administrator"
+        assert pending_admins == 1, "the customer's invite-pending tenant administrator was not preserved"
+        assert alerts == 30, "the managed starter alert dataset was not preserved"
+        assert cases == 28, "the managed starter case dataset was not preserved"
+
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "demo@example.com", "password": "aisoc-demo"},
+        )
+        assert login.status_code == 401, f"the published demo credentials still authenticated: {login.status_code} {login.text[:300]}"
+    finally:
+        if tenant_id is not None:
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("DELETE FROM tenants WHERE id = CAST(:tenant AS uuid)"),
+                    {"tenant": tenant_id},
+                )
 
 
 # ---------------------------------------------------------------------------

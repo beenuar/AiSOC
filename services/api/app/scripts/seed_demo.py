@@ -1631,7 +1631,15 @@ async def _ensure_user(session, tenant: Tenant) -> User:
     stale email like the old ``demo@aisoc.local``, or a different password),
     bring it back into sync rather than skipping. This keeps re-seeds idempotent
     *and* self-healing against drift introduced by previous schema decisions.
+
+    The published demo credentials belong only to the canonical demo tenant.
+    Refuse any other tenant before reading or mutating the deterministic user:
+    this helper is imported by seed-data consumers, and moving that user into a
+    managed tenant would expose a known wildcard login there.
     """
+    if tenant.id != DEMO_TENANT_ID:
+        raise ValueError("demo credentials may only be seeded into the canonical demo tenant")
+
     result = await session.execute(select(User).where(User.id == DEMO_USER_ID))
     user = result.scalar_one_or_none()
     hashed = get_password_hash("aisoc-demo")

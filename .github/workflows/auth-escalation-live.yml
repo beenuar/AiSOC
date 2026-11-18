@@ -214,3 +214,62 @@ jobs:
           restore
           trap - EXIT
           python -m pytest "$SUITE" -q
+
+      # Negative control three: reconnect managed provisioning to the demo
+      # credential helper and remove that helper's canonical-tenant guard.
+      # Both layers are intentional: the provisioner keeps starter content
+      # without creating a login, while the helper refuses future non-demo
+      # callers before they can move the deterministic wildcard user.
+      - name: The suite fails when managed demo credentials return
+        working-directory: services/api
+        env:
+          ISOLATION_AUTHESC_DSN: ${{ env.AUTHESC_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          PROVISIONER=app/services/tenant_provision/provisioner.py
+          SEEDER=app/scripts/seed_demo.py
+          cp "$PROVISIONER" /tmp/tenant_provisioner.bak
+          cp "$SEEDER" /tmp/seed_demo.bak
+          restore() {
+            cp /tmp/tenant_provisioner.bak "$PROVISIONER"
+            cp /tmp/seed_demo.bak "$SEEDER"
+          }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+
+          provisioner = pathlib.Path("app/services/tenant_provision/provisioner.py")
+          source = provisioner.read_text()
+          import_line = "    from app.scripts.seed_demo import _seed_alerts_and_cases, _seed_connectors  # noqa: PLC0415\n"
+          connector_call = "    await _seed_connectors(db, tenant)\n"
+          if import_line not in source or connector_call not in source:
+              print("FAIL: the managed seeder boundary is not there to weaken.")
+              sys.exit(1)
+          source = source.replace(
+              import_line,
+              "    from app.scripts.seed_demo import _ensure_user, _seed_alerts_and_cases, _seed_connectors  # noqa: PLC0415\n",
+              1,
+          )
+          provisioner.write_text(source.replace(connector_call, "    await _ensure_user(db, tenant)\n" + connector_call, 1))
+
+          seeder = pathlib.Path("app/scripts/seed_demo.py")
+          source = seeder.read_text()
+          guard = (
+              "    if tenant.id != DEMO_TENANT_ID:\n"
+              '        raise ValueError("demo credentials may only be seeded into the canonical demo tenant")\n\n'
+          )
+          if guard not in source:
+              print("FAIL: the canonical demo-tenant guard is not there to weaken.")
+              sys.exit(1)
+          seeder.write_text(source.replace(guard, "", 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed after managed provisioning regained the published demo login."
+            echo "      It is not grading the original provisioning-to-login path."
+            exit 1
+          fi
+          echo "OK: restoring the managed demo login makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q
