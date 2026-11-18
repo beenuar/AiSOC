@@ -37,9 +37,7 @@ TOKEN = "AISOC_THREATINTEL_SERVICE_TOKEN"
 
 
 def _load_ensure_env():
-    spec = importlib.util.spec_from_file_location(
-        "ensure_env", ROOT / "scripts" / "ensure_env.py"
-    )
+    spec = importlib.util.spec_from_file_location("ensure_env", ROOT / "scripts" / "ensure_env.py")
     mod = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
     sys.modules["ensure_env"] = mod
@@ -52,8 +50,7 @@ def test_generator_mints_the_token() -> None:
     generated = getattr(mod, "GENERATED", None)
     assert generated is not None, "ensure_env.py no longer exposes GENERATED"
     assert TOKEN in generated, (
-        f"{TOKEN} is not in ensure_env.GENERATED — a fresh install ships a "
-        "fail-closed gate with no key, so /api/v1/actors/* answers 503."
+        f"{TOKEN} is not in ensure_env.GENERATED — a fresh install ships a fail-closed gate with no key, so /api/v1/actors/* answers 503."
     )
 
 
@@ -88,9 +85,7 @@ def test_compose_delivers_the_token_to_every_reader() -> None:
             # scope for compose delivery.
             continue
         env = svc.get("environment") or {}
-        keys = set(env) if isinstance(env, dict) else {
-            e.split("=", 1)[0] for e in env
-        }
+        keys = set(env) if isinstance(env, dict) else {e.split("=", 1)[0] for e in env}
         if TOKEN not in keys:
             missing.append(svc_name)
 

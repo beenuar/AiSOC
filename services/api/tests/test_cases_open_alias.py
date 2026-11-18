@@ -70,8 +70,7 @@ async def test_open_alias_expands_to_open_statuses() -> None:
     assert "status IN (" in sql, f"alias not expanded: {sql}"
     bound = {v for k, v in params.items() if k.startswith("status_")}
     assert bound == set(case_status.OPEN_STATUSES), (
-        "the alias must expand to case_status.OPEN_STATUSES — one definition "
-        f"of open, everywhere; got {bound!r}"
+        f"the alias must expand to case_status.OPEN_STATUSES — one definition of open, everywhere; got {bound!r}"
     )
     assert "tenant_id = :tenant_id" in sql
 
