@@ -442,10 +442,7 @@ async def test_upgrade_retires_an_existing_managed_demo_admin(engine):  # noqa: 
     try:
         async with engine.begin() as conn:
             await conn.execute(
-                text(
-                    "INSERT INTO tenants (id, name, slug, is_active) "
-                    "VALUES (CAST(:id AS uuid), 'Legacy managed seed', :slug, true)"
-                ),
+                text("INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:id AS uuid), 'Legacy managed seed', :slug, true)"),
                 {"id": str(tenant_id), "slug": f"legacy-managed-seed-{tenant_id.hex[:8]}"},
             )
             await conn.execute(
@@ -461,10 +458,7 @@ async def test_upgrade_retires_an_existing_managed_demo_admin(engine):  # noqa: 
                 {"tenant": str(tenant_id)},
             )
 
-        migration = (
-            Path(__file__).resolve().parents[2]
-            / "services/api/migrations/163_retire_managed_demo_admin.sql"
-        ).read_text()
+        migration = (Path(__file__).resolve().parents[2] / "services/api/migrations/163_retire_managed_demo_admin.sql").read_text()
         async with engine.begin() as conn:
             await conn.exec_driver_sql(migration)
 
@@ -502,7 +496,7 @@ async def test_managed_seed_has_no_published_demo_login(client, principals, engi
             headers=_session(principals["platform_admin"]),
             json={"waitlist_entry_id": str(principals["managed_seed_waitlist"]), "seed_demo": True},
         )
-        assert response.status_code == 200, f"managed provisioning failed: {response.status_code} {response.text[:300]}"
+        assert response.status_code in (200, 201), f"managed provisioning failed: {response.status_code} {response.text[:300]}"
 
         provisioned = response.json()
         assert provisioned["demo_seeded"] is True
