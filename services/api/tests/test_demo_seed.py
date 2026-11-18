@@ -41,6 +41,7 @@ from app.scripts.seed_demo import (
     _DEMO_QUICK_DEFAULT_CLOCK_ISO,
     _DEMO_QUICK_INCIDENTS,
     _demo_quick_uuid,
+    _ensure_user,
     _parse_clock,
 )
 
@@ -159,6 +160,19 @@ def test_demo_quick_clock_parses_default_iso() -> None:
     # ISO surface — UTC anchored. tz must be present; a naive datetime
     # here would mean ``utcnow()`` snuck back in.
     assert parsed.utcoffset() is not None
+
+
+def test_demo_credentials_refuse_a_non_demo_tenant() -> None:
+    """A shared seed helper must not publish the demo administrator elsewhere."""
+
+    class _NoDatabaseAccess:
+        async def execute(self, _statement: Any) -> Any:
+            raise AssertionError("the tenant guard must run before the user lookup")
+
+    tenant = type("ManagedTenant", (), {"id": uuid.uuid4()})()
+
+    with pytest.raises(ValueError, match="canonical demo tenant"):
+        asyncio.run(_ensure_user(_NoDatabaseAccess(), tenant))  # type: ignore[arg-type]
 
 
 # ─── Heavy integration test ───────────────────────────────────────────────────
