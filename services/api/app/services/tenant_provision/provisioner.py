@@ -568,13 +568,12 @@ async def _default_demo_seeder(db: AsyncSession, tenant: Tenant) -> None:
     # one transaction. The seed module's helper functions are public-
     # ish (single-underscore prefix is "implementation detail" rather
     # than truly private) so we can reuse them safely.
-    from app.scripts.seed_demo import (  # noqa: PLC0415
-        _ensure_user,
-        _seed_alerts_and_cases,
-        _seed_connectors,
-    )
+    from app.scripts.seed_demo import _seed_alerts_and_cases, _seed_connectors  # noqa: PLC0415
 
-    await _ensure_user(db, tenant)
+    # Managed tenants get labelled starter data, never the canonical demo
+    # identity. That identity has published credentials and a wildcard role;
+    # creating or moving it here would turn ordinary provisioning into a
+    # public administrative login for the new tenant.
     await _seed_connectors(db, tenant)
     # ``_seed_alerts_and_cases`` returns a tuple; we discard the count.
     await _seed_alerts_and_cases(db, tenant, alert_count=30)
