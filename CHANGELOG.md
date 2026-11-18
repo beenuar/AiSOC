@@ -7,7 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Security
+
+- **The threat-actor attribution API is fail-closed again** (#1967, restoring
+  #1904/#1901). A stale-base push serialized an old tree over `main`: the
+  #1933 merge (a cases fix) silently reverted the fail-closed enforcer in
+  `services/threatintel/app/api/auth.py` back to warn-once-and-allow, reverted
+  its tests, and deleted the `tests/test_threatintel_token_env_gate.py` gate —
+  so the v23.5.0 and v23.5.1 tags shipped an enforcer that allows every caller
+  when the token is unset, while both releases' notes described 503. (The same
+  revert took the token generation and compose wiring, which #1961 had already
+  re-added without knowing it was a restoration, and the provisioner demo-seed
+  gate, which #1966 supersedes structurally.) This restores the enforcer
+  (unset token → 503 unless `AISOC_THREATINTEL_ALLOW_UNAUTHENTICATED=1` is set
+  deliberately), its once-only `lru_cache` warning, the reverted
+  `test_actor_attribution_auth.py` assertions, and the compose-forwarding gate
+  — which now coexists with #1961's source-derived wiring gate, two detectors
+  for one contract.
+
+### Fixed
+
+- **The realtime OpenTelemetry bump is re-applied** (#1967). The same #1933
+  stale-base merge reverted Dependabot #1928's
+  `@opentelemetry/exporter-trace-otlp-grpc` and `@opentelemetry/sdk-node`
+  0.301.0 → 0.301.2 bump in `services/realtime`; package.json and the lockfile
+  are restored to the bumped state.
+
 
 ## [23.5.1] - 2026-11-18
 
