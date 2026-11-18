@@ -19,7 +19,7 @@ Huntress Managed EDR incident reports — footholds, ransomware canaries, proces
 | Field | Label | Type | Required | Default | Notes |
 |-------|-------|------|----------|---------|-------|
 | `api_key` | API key | secret | yes | — | **encrypted at rest** · The public half of a Huntress API credential. It is half of the credential, so the vault encrypts it too. |
-| `api_secret` | API secret key | secret | yes | — | **encrypted at rest** · Generated with the API key at <your subdomain>.huntress.io under API Credentials. |
+| `api_secret` | API secret key | secret | yes | — | **encrypted at rest** · Generated with the API key at `<your subdomain>`.huntress.io under API Credentials. |
 
 :::note Credential handling
 `api_key`, `api_secret` are encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API — a read of the saved connector shows the field as set, not its contents. See [credential vault](../operations/credentials.md).
