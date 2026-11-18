@@ -46,6 +46,7 @@ from app.services.tenant_provision import (
 )
 from app.services.tenant_provision.provisioner import (
     _build_admin_invite,
+    _default_demo_seeder,
     _normalize_slug_seed,
     _slug_with_shard,
 )
@@ -558,6 +559,42 @@ class TestProvisionFromWaitlist:
         assert result.demo_seeded is True
         assert len(called) == 1
         assert called[0][1].slug == "acme-inc"
+
+    def test_default_demo_seeder_never_creates_demo_identity(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        session = _MockSession()
+        tenant = Tenant(
+            id=uuid.uuid4(),
+            name="Acme Inc",
+            slug="acme-inc",
+            plan="managed-beta",
+            is_active=True,
+            settings={},
+            limits={},
+            created_at=datetime.now(UTC),
+        )
+        seeded: list[str] = []
+
+        async def _identity_trap(_db: Any, _tenant: Tenant) -> None:
+            raise AssertionError("tenant provisioning must not create the known-password demo user")
+
+        async def _seed_connectors(_db: Any, _tenant: Tenant) -> int:
+            seeded.append("connectors")
+            return 1
+
+        async def _seed_alerts_and_cases(_db: Any, _tenant: Tenant, *, alert_count: int) -> tuple[int, int]:
+            assert alert_count == 30
+            seeded.append("alerts_and_cases")
+            return alert_count, 1
+
+        from app.scripts import seed_demo  # noqa: PLC0415 — keep the heavy seed catalogue lazy.
+
+        monkeypatch.setattr(seed_demo, "_ensure_user", _identity_trap)
+        monkeypatch.setattr(seed_demo, "_seed_connectors", _seed_connectors)
+        monkeypatch.setattr(seed_demo, "_seed_alerts_and_cases", _seed_alerts_and_cases)
+
+        _run(_default_demo_seeder(session, tenant))  # type: ignore[arg-type]
+
+        assert seeded == ["connectors", "alerts_and_cases"]
 
     def test_demo_seeder_failure_does_not_break_provisioning(self) -> None:
         session = _MockSession()
