@@ -2,7 +2,7 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.4"
+version: "v1.5"
 date: "2026-11-05"
 license: "MIT (same as the AiSOC project)"
 abstract: |
@@ -464,6 +464,19 @@ Every factor that moved the score is recorded with its contribution. An
 ordering you cannot interrogate is one you stop trusting the first time it
 surprises you.
 
+### The entity queue
+
+![The entity-risk queue, with the hosts each entity was seen on](apps/web/public/screenshots/entity-risk-queue.png)
+
+*The Entities tab rolls every alert up to the entity it touched — a user, a
+host, an IP — and scores that entity over a decaying window, so the thing that
+appears in five alerts rises above five unrelated single alerts. New in
+v23.5.0, each row now names the hosts the entity was **seen on**: `j.doe` on
+`WS-FINANCE-04`, `sso-gateway-01` carrying two alerts of its own. The host set
+is bounded and least-recently-seen-evicted, computed by fusion rather than
+guessed at the display layer, and it is the difference between "this account is
+risky" and "this account is risky, and here is where to go look."*
+
 ### The investigation rail
 
 ![The investigation rail](apps/web/public/screenshots/investigation-rail.png)
@@ -549,7 +562,7 @@ attribute to a credential precisely because it is silent.
 
 ![The CISA KEV catalogue](apps/web/public/screenshots/threat-intel-kev.png)
 
-*1,754 real Known Exploited Vulnerabilities entries, fetched from the public
+*1,782 real Known Exploited Vulnerabilities entries, fetched from the public
 CISA catalogue at capture time. Not synthetic, not ours, unmodified — and the
 page distinguishes the catalogue size from the hundred rows it is showing.*
 
@@ -566,11 +579,11 @@ Hunting needs the `full` profile, because it reads the ClickHouse lake.
 
 ![The entity graph](apps/web/public/screenshots/attack-graph.png)
 
-*The graph over real ingested telemetry, with Neo4j running. Dated honestly:
-this one is a v10.0.0 capture, kept because it is the only populated view
-recorded so far and the page needs the `full` profile to produce one. Every
-other figure in this guide is from v20.1.0, so the console chrome here is a
-release behind — the graph itself is unchanged.*
+*The graph over real ingested telemetry, with Neo4j running — a genuine
+v23.5.0 capture under `make up-full`, the profile that starts Neo4j and the
+ingest graph writer. Users, hosts, IPs and network paths built from the sample
+events as they flowed through ingest, colour-coded by type and refreshing as
+new events arrive. Nothing here was drawn by hand.*
 
 ![The same page in CORE](apps/web/public/screenshots/attack-graph-core-degraded.png)
 
@@ -603,10 +616,14 @@ new → triaged → investigating → contained → resolved → closed
 
 Two readings catch people out. **`resolved` is not terminal** — it means the
 case has an outcome, not that it has been closed out; only `closed` writes
-`closed_at`, which every duration metric reads. And **`open` is not a state**:
-it belonged to a pre-consolidation vocabulary and the database rejects it, so
-a filter naming it returns nothing rather than erroring, which is why it took
-a while to notice.
+`closed_at`, which every duration metric reads. And **`open` is not a stored
+state** — you cannot set a case to `open`, and the database rejects it as a
+value — but the list filter accepts `?status=open` as an alias for every
+non-terminal status, which is what the console's "add to existing case" picker
+queries. (That alias used to match nothing on read while the write path
+accepted it, so the picker always showed an empty list; v23.5.0 expands the
+alias through the same `case_status.OPEN_STATUSES` the rest of the product
+uses.)
 
 Forward-only is deliberate. It is what makes "this case was closed" mean
 something, and without it a title edit that happens to carry a status could
@@ -624,16 +641,29 @@ It requires a reason, increments `reopen_count`, and clears `closed_at` and
 `reopen_count` exists because `reopened_at` is overwritten each time — a case
 reopened four times is a different conversation from one reopened once.
 
-### Honest empty states
+### Cases and their relationships
 
-![No cases](apps/web/public/screenshots/cases-empty.png)
+![A real caseload](apps/web/public/screenshots/cases.png)
+
+*Four cases created from their alerts through the console's own escalate flow —
+two open, two closed — counted by status rather than lumped into one total.*
+
+![Related cases sharing an alert](apps/web/public/screenshots/case-related-cases.png)
+
+*New in v23.5.0: the case Overview surfaces sibling investigations that share
+an alert or an exact observable, ranked by shared alerts then observables, so
+two analysts working the same intrusion from different entry points can see
+each other's work. The relationship here is real — the two cases genuinely
+share one linked alert — not a seeded example.*
+
+### Honest empty states
 
 ![Federated search with no SIEM connected](apps/web/public/screenshots/federated-search.png)
 
-*Both say plainly that there is nothing, and the second names the four SIEMs
-it would query. Production never falls back to synthetic data: an unreachable
-backend makes the console name the failure rather than invent an
-investigation.*
+*It says plainly that there is nothing, and names the SIEMs it would query.
+Production never falls back to synthetic data: an unreachable backend makes the
+console name the failure rather than invent an investigation — the same
+discipline the CORE attack-graph `503` above shows.*
 
 ---
 
