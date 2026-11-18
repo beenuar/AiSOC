@@ -802,6 +802,10 @@ services:
       # of hidden reasoning (thinking-tier models). Unset = provider default.
       AISOC_LLM_THINKING: ${AISOC_LLM_THINKING:-}
       REALTIME_URL: ${REALTIME_URL:-http://realtime:4000}
+      # The investigation agent sends this when it asks threatintel for actor
+      # attribution; threatintel's gate fails closed, so the caller must hold
+      # the same generated value the enforcer holds.
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
       # Where the context bundle reads per-entity behavioural baselines.
       # UEBA listens on 8004 inside the network (published as 8007); the
       # code default used to name :8086 and every lookup failed silently
@@ -1456,6 +1460,11 @@ services:
       # Same credential the API presents when it proxies /threat-intel/indicators.
       SECRET_KEY: ${SECRET_KEY:-dev_secret_key_change_in_production}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      # The actor-attribution gate fails closed on this value. ensure_env
+      # generates it; this service *enforces* it, so a deployment where the
+      # generated value never reaches this container serves 503 for every
+      # /api/v1/actors/* call — which is exactly what v23.5.0 shipped.
+      AISOC_THREATINTEL_SERVICE_TOKEN: ${AISOC_THREATINTEL_SERVICE_TOKEN:-}
       AISOC_DEV_MODE: ${AISOC_DEV_MODE:-0}
       # What this deployment published, so the service can refuse the
       # anonymous auth shim on an address someone else can reach. It

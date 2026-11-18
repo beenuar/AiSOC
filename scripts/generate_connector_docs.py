@@ -152,18 +152,10 @@ def _mdx_safe(text: str) -> str:
     Segments already inside a code span are left alone — MDX does not
     parse JSX there, and adding backticks inside backticks produces a
     nested span that renders as literal punctuation.
-
-    The placeholder pattern accepts space-separated word tokens, not just
-    a single token. `<your subdomain>` parses in MDX as a `your` tag with
-    a boolean `subdomain` attribute — still JSX, still unclosed — and the
-    single-token pattern this function started with let exactly that shape
-    through: the Huntress page's help text broke every docs deploy for six
-    days while this escape hatch sat here looking like coverage.
     """
     # Split on code spans (longest fences first) and escape only outside.
     parts = re.split(r"(`{1,3}[^`]*`{1,3})", text)
-    placeholder = re.compile(r"<([A-Za-z][\w.-]*(?: +[\w.-]+)*)>")
-    return "".join(part if part.startswith("`") else placeholder.sub(r"`<\1>`", part) for part in parts)
+    return "".join(part if part.startswith("`") else re.sub(r"<([A-Za-z][\w.-]*)>", r"`<\1>`", part) for part in parts)
 
 
 def _is_secret(field) -> bool:

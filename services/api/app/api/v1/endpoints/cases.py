@@ -551,7 +551,19 @@ async def list_cases(
         "offset": offset,
         "tenant_id": user.tenant_id,
     }
-    if status_filter:
+    if status_filter == "open":
+        # "open" is not a stored status (the CHECK vocabulary is new/triaged/
+        # investigating/contained/resolved/closed) but the update schema has
+        # always accepted it as a legacy alias, and the console's add-to-case
+        # picker queries it. Honouring the alias on write while string-matching
+        # it on read meant `?status=open` matched zero rows on every
+        # deployment, which silently killed that picker. Expand it through the
+        # same predicate the rest of the product uses (case_status.is_open).
+        placeholders = ", ".join(f":status_{i}" for i in range(len(case_status.OPEN_STATUSES)))
+        where_clauses.append(f"status IN ({placeholders})")
+        for i, value in enumerate(case_status.OPEN_STATUSES):
+            params[f"status_{i}"] = value
+    elif status_filter:
         where_clauses.append("status = :status")
         params["status"] = status_filter
     if severity:

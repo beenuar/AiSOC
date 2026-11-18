@@ -6,41 +6,37 @@ onboarding hero link to the paths below; treat them as a stable contract.
 
 | Asset | What it is | Size |
 |---|---|---|
-| `demo.mp4` | The deployment walkthrough — 2 min 57 s, 1280×720, H.264, no audio | ~1.6 MB |
-| `hero.gif` | README preview loop, 17 s, 860×484, cut from `demo.mp4` | ~1.2 MB |
-| `demo-poster.png` | 1280×720 still from the recording, used as a thumbnail | ~0.3 MB |
+| `demo.mp4` | The deployment walkthrough — 2 min 1 s, 1280×720, H.264, no audio | ~2.4 MB |
+| `hero.gif` | README preview loop, 17 s, 820×462, cut from the browser segments | ~1.5 MB |
+| `demo-poster.png` | 1280×720 still from the recording, used as a thumbnail | ~0.1 MB |
 
 ## What the recording shows, and what is real in it
 
-A single host reached by its LAN address rather than `localhost`, taken from
-nothing to an AI triage verdict: `make up`, the console signed into, the CISA
-Known Exploited Vulnerabilities feed already populated, one event pushed
-through the documented ingest path, `make smoke` reporting ten stages, and the
-resulting alert with its measured token counts.
+A single host taken from nothing to an AI triage verdict, captured on a
+**v23.5.0** stack on 2026-11-18: `make up` on empty volumes pulling the
+published `ghcr.io` images, sixteen generated secrets, the schema initialised,
+sixteen services up, `docker compose ps` healthy; then the console signed into,
+the setup wizard's **Load sample data** pushing five scenarios through the same
+ingest endpoint a real connector uses; the alert queue filling, a local-model
+triage verdict opened in the investigation rail, the risk-based entity queue
+with its seen-on hosts, the live CISA KEV catalogue, the cost dashboard; and
+`make smoke` closing on ten green stages.
 
 The stack, the images (pulled from `ghcr.io`, not built locally), the threat
-feed, the alert and the token counts are real. Demo mode was off and nothing
-was seeded. The event was **authored to be representative** — everything
-downstream of it is the product's own work. Terminal waits are shortened,
-disclosed by an on-screen badge for the whole of every segment it applies to;
-browser sections run at real speed.
+feed, the alerts, the verdicts and the token counts are real. Demo mode was
+off and nothing was seeded into the database. The sample events are the
+labelled `aisoc_sample` set, authored to be representative and pushed through
+the ingest API — everything downstream of them is the product's own work.
+Terminal idle waits are capped (disclosed by an on-screen badge); the browser
+sections run at real speed.
 
-In this recording both triage runs fell back to the deterministic path, which
-the console labels (`model_used` reads `kafka:auto_triage:deterministic`), and
-the closing card says so.
-
-The console in the recording is **v11.0.0**, which is older than the stills in
-`apps/web/public/screenshots/` — those were re-captured at v20.1.0. The
-navigation gained entries after this was recorded, so the two do not match
-pixel for pixel. The sequence the recording demonstrates is unchanged, and it
-is kept as recorded rather than re-cut; see "Re-recording" below for what
-replacing it would involve.
-
-**That is no longer the common case.** Triage now asks the provider to
-constrain its reply to a JSON object: measured over 50 alerts through the
-gateway, replies triage could use went from 44 of 50 to 50 of 50. The recording
-predates that change and is kept as recorded rather than re-cut to flatter the
-product, so it shows the fallback the older build took.
+**The triage verdicts in this recording are real local-model output.** All
+five alerts were triaged by the bundled `llama3.2:3b-instruct-q4_K_M` through
+the LiteLLM gateway — ~1,245 prompt tokens and ~25 s per investigation on CPU,
+persisted to the ledger — not the deterministic fallback an earlier recording
+showed. No hosted provider was configured and none has ever been exercised
+here. The console footer reads `v23.5.0`, matching the stills in
+`apps/web/public/screenshots/` captured from the same release.
 
 ## How it was produced
 
@@ -50,9 +46,10 @@ product, so it shows the fallback the older build took.
 - **Assembly** — `ffmpeg`, concatenating the segments with title cards
   rasterised in a browser (this `ffmpeg` build has no `drawtext` filter).
 - **Secrets** — the generated administrator password was filtered out of the
-  terminal stream as it was printed (`sed` in the recorded pipeline, visible in
-  the recording), the ingest token was only ever held in a shell variable, and
-  the browser shows nothing but a masked password field.
+  terminal stream as it was printed (`sed` in the recorded pipeline), `make
+  smoke` reports an ingest credential is available without printing it, and the
+  browser shows nothing but a masked password field. The password used to sign
+  in was read from the capture host out of band, never on screen.
 
 ## Re-recording
 

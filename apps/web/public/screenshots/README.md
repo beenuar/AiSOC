@@ -26,18 +26,24 @@ visible in the captures themselves — that label is the point, not decoration.
 
 What is real in these images, stated precisely:
 
-- **The deployment.** Sixteen containers, the images built from this
-  repository, Postgres/Kafka/Qdrant/Ollama running locally.
-- **The pipeline.** Normalization, detection, promotion, correlation and
-  alerting were all performed by the running services. No row was seeded into
-  the database.
-- **The threat intelligence.** 1,754 CISA Known Exploited Vulnerabilities
+- **The deployment.** Sixteen containers on `make up`, the images built from
+  this repository, Postgres/Kafka/Qdrant/Ollama running locally. The single
+  attack-graph tile that needs Neo4j was captured from the same release under
+  `make up-full`, noted in its row below.
+- **The pipeline.** Normalization, detection, promotion, correlation,
+  entity-risk rollup and alerting were all performed by the running services.
+  No row was seeded into the database.
+- **The threat intelligence.** 1,782 CISA Known Exploited Vulnerabilities
   entries, fetched from the public catalogue at capture time. Not ours, not
   synthetic, unmodified.
 - **The AI verdict.** Produced by the bundled local `llama3.2:3b-instruct-q4_K_M`
   through the LiteLLM gateway, with real token counts and latency in the
-  Investigation Ledger. Not a hosted provider — no key was configured, and
-  none has ever been exercised here.
+  Investigation Ledger — measured at ~1,245 prompt tokens and ~25 s per
+  triage on CPU for these events. Not a hosted provider — no key was
+  configured, and none has ever been exercised here.
+- **The cases.** The two open cases were created from their alerts through the
+  console's own escalate / add-to-case flow, and the related-cases panel
+  resolves them from a genuinely shared alert — not a seeded relationship.
 - **The empty and degraded states.** Genuinely empty and genuinely degraded.
   They are as much of the product as the populated ones.
 
@@ -48,26 +54,32 @@ they are.
 
 ## The captures
 
-Unless a row says otherwise, every image below was captured from a v20.1.0
-stack on 2026-10-22 and the console footer in it reads `v20.1.0`.
+Unless a row says otherwise, every image below was captured from a v23.5.0
+stack on 2026-11-18 and the console footer in it reads `v23.5.0`. The stack
+also carried the two fixes shipped in the same pull request as this refresh
+(the generated threat-intel service token reaching both ends, and the
+`?status=open` case filter), without which the cases tiles could not have been
+produced honestly.
 
 | File | Surface | What is worth seeing |
 |---|---|---|
-| `dashboard.png` | `/dashboard` | Operations funnel over real counts. `MTTR` reads *not measured · no cases closed* rather than `0`. |
-| `alerts-queue.png` | `/alerts` | The five alerts the pipeline produced, each attributed to the `aisoc_sample` source that fed it. |
-| `investigation-rail.png` | `/alerts` → row | The rail's Story view. Progression says *No ATT&CK tactic is mapped to this alert … that is a gap in the detection's metadata rather than a statement about the activity.* |
-| `ai-triage-verdict.png` | `/alerts` → row → Details | A real local-model verdict: `true positive`, confidence 85/100, groundedness *not assessed*, and the model's own rationale verbatim. |
-| `threat-intel-kev.png` | `/threat-intel` | 1,754 real KEV entries; the page distinguishes the catalogue size from the hundred rows it is showing. |
-| `soc-operations.png` | `/dashboards/operations` | Pipeline health against a tenant with no connectors — *"Nothing is feeding the pipeline yet, so an empty alert queue is expected."* |
+| `dashboard.png` | `/dashboard` | Operations funnel over real counts. `MTTD` and `MTTR` read *not measured* rather than `0`; signal/noise is a real 80%. |
+| `alerts-queue.png` | `/alerts` → Alerts tab | The five alerts the pipeline produced, each attributed to the `aisoc_sample` source that fed it, every one `triaged` by the local model. |
+| `entity-risk-queue.png` | `/alerts` → Entities tab | **New in v23.5.0.** The risk-based queue rolls each alert up to the entity it touched and shows, under every row, the hosts that entity was *seen on* — `j.doe@example.com` on `WS-FINANCE-04`, `sso-gateway-01` carrying two alerts — the feature this release added. |
+| `investigation-rail.png` | `/alerts` → row | The rail's Story view beside the queue. Evidence counts (`aisoc_sample`, Connector, Host, Rule, User) and a fusion confidence of `56/100`; Progression says *No ATT&CK tactic is mapped … a gap in the detection's metadata rather than a statement about the activity.* |
+| `ai-triage-verdict.png` | `/alerts` → row → Details | A real local-model verdict: `true positive`, triage confidence 80/100, groundedness *not assessed*, and the model's own rationale verbatim — naming the host, the 0.00 vendor risk score and why it escalated anyway. |
+| `threat-intel-kev.png` | `/threat-intel` | 1,782 real KEV entries; the page distinguishes the catalogue size from the hundred rows it is showing. |
+| `soc-operations.png` | `/dashboards/operations` | Pipeline health, *"Every panel is driven by a live API response; a panel with no data says so rather than showing a placeholder."* Connector fleet empty, `Nothing rejected` over the window. |
 | `connector-wizard.png` | `/connectors` | The connector surface with nothing connected: counters at zero rather than hidden, and `Universal capture (push)` offered for vendors with no connector of their own. |
-| `attack-graph.png` | `/graph` | The entity graph over real ingested telemetry, with Neo4j running. **A v10.0.0 capture, not v20.1.0** — the populated view needs the `full` profile, so this is the most recent one recorded. The console chrome is a release behind; the graph is not. |
-| `attack-graph-core-degraded.png` | `/graph` | The same page in CORE, where Neo4j is not running: it names the failure (`API 503 … /api/v1/graph`) instead of drawing an invented graph. |
-| `federated-search.png` | `/federated-search` | Honest empty state — no SIEM connected, and it says which four it would query. |
-| `playbooks.png` | `/playbooks` | The playbook library: 63 playbooks, split into 51 shipped pack entries and 12 custom. |
-| `playbook-editor.png` | `/playbooks/{id}` | A shipped pack open in the editor — nine steps as an ordered list and as the graph that runs. Step 6 is `Wait for human approval`, which the palette withheld until `approval` became a durable pause. |
-| `detection-rules.png` | `/detection` | The rule surface, reporting the catalogue figure (2,614) and `0 authored here` — the catalogue is a different measurement from the executable-rule count the README quotes. |
-| `hunt.png` | `/hunt` | The hunt workbench: plain English on the left, the generated KQL on the right. |
-| `cases-empty.png` | `/cases` | No cases, said plainly. |
+| `cases.png` | `/cases` | A real caseload: four cases, two open and two closed, counted by status, each with its linked alert count. |
+| `case-related-cases.png` | `/cases/{id}` → Overview | **New in v23.5.0.** The related-cases panel surfaces the sibling investigation that shares an alert — ranked by shared alerts then observables — beside the case's own timeline, linked alert and tasks. |
+| `attack-graph.png` | `/graph` | **Captured under `make up-full` on the same v23.5.0 release**, Neo4j live: the entity graph over real ingested telemetry — users, hosts, IPs and network paths, colour-coded by type, auto-refreshing as events arrive. The populated view needs the `full` profile; this is a genuine v23.5.0 capture, not a back-level one. |
+| `attack-graph-core-degraded.png` | `/graph` | The same page in CORE, where Neo4j is not running: it names the failure (*not part of this deployment … bring it up with `make up-full`*, `HTTP 503`) instead of drawing an invented graph. |
+| `federated-search.png` | `/federated-search` | Honest empty state — no SIEM connected, and it says which it would query. |
+| `playbooks.png` | `/playbooks` | The playbook library: 64 playbooks, split into 52 shipped pack entries and 12 custom, filterable by MITRE tactic and integration. |
+| `playbook-editor.png` | `/playbooks/{id}` | A shipped pack open in the editor — its steps as an ordered list and as the graph that runs, including the `Wait for human approval` durable pause. |
+| `detection-rules.png` | `/detection` | The rule surface, reporting the catalogue figure (3,045 loaded by the engine) and `0 authored here` — the catalogue is a different measurement from the executable-rule count the README quotes. |
+| `hunt.png` | `/hunt` | The hunt workbench: plain English turned into runnable ES\|QL by the HuntAgent, with an honest *the event lake runs in the `full` profile* note where CORE has no ClickHouse to execute it against. |
 
 ## Refreshing them
 

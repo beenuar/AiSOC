@@ -161,6 +161,12 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Bearer for /metrics. Prometheus sends it; without it the endpoint is unauthenticated.",
     ),
+    "AISOC_THREATINTEL_SERVICE_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Service token for the threat-actor attribution API. The gate fails "
+        "closed: unset, every /api/v1/actors/* call answers 503, so the "
+        "generator must produce it or a fresh install ships a dead feature.",
+    ),
     "JWT_SECRET": (
         lambda: secrets.token_urlsafe(32),
         "HS256 key for the session tokens the SAML and OIDC callbacks issue.",
