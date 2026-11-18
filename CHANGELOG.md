@@ -7,7 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [23.5.2] - 2026-11-19
+
 ### Security
+
+- **Managed-tenant provisioning no longer publishes the known-password demo
+  administrator** (#1966). `_default_demo_seeder` called
+  `seed_demo._ensure_user`, which upserts the deterministic `demo@example.com`
+  user with the published password, an `admin` wildcard role and
+  `is_active=True` — and *moves* an existing row into the newly provisioned
+  tenant. Because `provision_from_waitlist` defaults to `seed_demo=True` and
+  the provision endpoint exposes no seeder field, every ordinary managed
+  promote created a public administrative login. (The #1904 env-gate that
+  covered this was itself a casualty of the #1933 stale-base revert — and this
+  fix supersedes it structurally rather than restoring it.) Provisioning now
+  seeds labelled starter content only, never the identity; `_ensure_user`
+  itself refuses any tenant but the canonical demo tenant before touching the
+  database; migration 163 retires already-published demo admins in managed
+  tenants (deactivated, sessions revoked, hash replaced with a sentinel, role
+  demoted) while leaving the canonical demo tenant working; and a live
+  negative control re-weakens both layers and asserts the suite fails.
+  Contributed by @knowlet.
 
 - **The threat-actor attribution API is fail-closed again** (#1967, restoring
   #1904/#1901). A stale-base push serialized an old tree over `main`: the
