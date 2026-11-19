@@ -58,7 +58,7 @@ const ALL_TOPICS: { id: string; label: string; help: string }[] = [
   {
     id: 'p0_alert',
     label: 'Security alerts',
-    help: 'Fused detections meeting your minimum alert risk setting below.',
+    help: 'Fused detections meeting your selected minimum alert risk.',
   },
   {
     id: 'agent_approval',
@@ -108,6 +108,7 @@ export default function ResponderSettingsPage() {
   const [pushBusy, setPushBusy] = useState<boolean>(false);
   const [topics, setTopics] = useState<Set<string>>(() => new Set());
   const [minimumAlertSeverity, setMinimumAlertSeverity] = useState<AlertPushSeverity>('high');
+  const [alertNotificationsEnabled, setAlertNotificationsEnabled] = useState(true);
   const [installAvailable, setInstallAvailable] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus | null>(null);
@@ -158,7 +159,9 @@ export default function ResponderSettingsPage() {
   useEffect(() => {
     setProfile(getProfile());
     setTopics(loadTopicPrefs());
-    setMinimumAlertSeverity(readAlertPushPreferences().minimumAlertSeverity);
+    const alertPreferences = readAlertPushPreferences();
+    setMinimumAlertSeverity(alertPreferences.minimumAlertSeverity);
+    setAlertNotificationsEnabled(alertPreferences.desktopNotifications);
     setStandalone(isStandalone());
     void refreshPushState();
     void getServiceWorkerStatus().then(setSwStatus);
@@ -191,6 +194,7 @@ export default function ResponderSettingsPage() {
 
   const enableNotifications = useCallback(async () => {
     setPushBusy(true);
+    let savedLocally: boolean | undefined;
     try {
       const permission = await requestNotificationPermission();
       if (!permission.supported) {
@@ -210,23 +214,32 @@ export default function ResponderSettingsPage() {
       }
       // Explicitly enabling push here also enables alert pages if they were
       // disabled in the desktop console on the same device.
-      saveAlertPushPreferences({ desktopNotifications: true });
-      const sub = await subscribeToPush({ topics: Array.from(topics) });
+      const alertPreferences = { minimumAlertSeverity, desktopNotifications: true };
+      setAlertNotificationsEnabled(true);
+      savedLocally = saveAlertPushPreferences(alertPreferences);
+      const sub = await subscribeToPush({ topics: Array.from(topics), alertPreferences });
       if (sub) {
         setPushState('subscribed');
-        showToast('Notifications enabled.');
+        showToast(savedLocally
+          ? 'Notifications enabled.'
+          : 'Notifications enabled, but preferences could not be saved locally.');
       } else {
-        showToast('Push disabled by server.');
+        showToast(savedLocally
+          ? 'Saved locally, but push is disabled by the server.'
+          : 'Preferences could not be saved locally, and push is disabled by the server.');
         setPushState('granted-unsubscribed');
       }
     } catch (err) {
       console.error('[responder] enable push failed', err);
-      showToast(err instanceof Error ? err.message : 'Failed to enable push.');
+      const detail = err instanceof Error ? err.message : 'Failed to enable push.';
+      showToast(savedLocally === undefined ? detail : `${savedLocally
+        ? 'Saved locally, but push could not be enabled'
+        : 'Preferences could not be saved locally or applied to push'}: ${detail}`);
       await refreshPushState();
     } finally {
       setPushBusy(false);
     }
-  }, [refreshPushState, showToast, topics]);
+  }, [minimumAlertSeverity, refreshPushState, showToast, topics]);
 
   const disableNotifications = useCallback(async () => {
     setPushBusy(true);
@@ -273,30 +286,42 @@ export default function ResponderSettingsPage() {
       // toast for every toggle — that would be noisy — but errors still pop.
       if (pushState === 'subscribed') {
         try {
-          await subscribeToPush({ topics: Array.from(next) });
+          await subscribeToPush({
+            topics: Array.from(next),
+            alertPreferences: { minimumAlertSeverity, desktopNotifications: alertNotificationsEnabled },
+          });
         } catch (err) {
           console.error('[responder] topic resubscribe failed', err);
           showToast('Couldn’t update topic preferences.');
         }
       }
     },
-    [pushState, showToast, topics],
+    [alertNotificationsEnabled, minimumAlertSeverity, pushState, showToast, topics],
   );
 
   const updateMinimumRisk = useCallback(async (minimum: AlertPushSeverity) => {
     setMinimumAlertSeverity(minimum);
-    saveAlertPushPreferences({ minimumAlertSeverity: minimum });
+    const alertPreferences = { minimumAlertSeverity: minimum, desktopNotifications: alertNotificationsEnabled };
+    const savedLocally = saveAlertPushPreferences(alertPreferences);
     if (pushState !== 'subscribed') {
-      showToast('Saved on this device; enable push to receive alerts.');
+      showToast(savedLocally
+        ? 'Saved on this device; enable push to receive alerts.'
+        : 'Could not save preferences locally. No Web Push subscription is active on this device.');
       return;
     }
     try {
-      await subscribeToPush({ topics: Array.from(topics) });
-      showToast('Alert risk threshold applied.');
+      const sub = await subscribeToPush({ topics: Array.from(topics), alertPreferences });
+      if (!sub) throw new Error('Web Push is not configured on the server');
+      showToast(savedLocally
+        ? 'Alert risk threshold applied.'
+        : 'Alert risk threshold applied, but preferences could not be saved locally.');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Could not sync alert risk threshold.');
+      const status = savedLocally
+        ? 'Saved locally, but push could not be updated'
+        : 'Preferences could not be saved locally or applied to push';
+      showToast(`${status}: ${err instanceof Error ? err.message : 'Could not sync alert risk threshold.'}`);
     }
-  }, [pushState, showToast, topics]);
+  }, [alertNotificationsEnabled, pushState, showToast, topics]);
 
   // ─── Install ────────────────────────────────────────────────────────────
 
