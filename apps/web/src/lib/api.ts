@@ -2120,6 +2120,20 @@ function normalizeAlertFacets(raw: unknown): AlertFacets | undefined {
 export interface AlertFilters {
   severity?: string;
   status?: string;
+  /**
+   * Unresolved-only queue (server: `unresolved_only`, the same
+   * `alert_status.unresolved_filter` the dashboard tiles count with). Set by
+   * the dashboard's Active/Critical tiles so a clicked number opens the list
+   * that produced it.
+   */
+  unresolvedOnly?: boolean;
+  /**
+   * Exact-match on the triage disposition (e.g. 'needs_review'). The console
+   * defaults to 'needs_review' — the operator queue that spans new + triaged
+   * escalated rows. HARD LINE: do not remove; NeedsReviewDefault.test.tsx
+   * pins it. (Backend: services/api/app/api/v1/endpoints/alerts.py.)
+   */
+  disposition?: string;
   source?: string;
   assignee?: string;
   startTime?: string;
@@ -2161,6 +2175,26 @@ export interface AlertUpdate {
   case_id?: string | null;
 }
 
+/**
+ * Map console filter state onto the server's query vocabulary.
+ *
+ * The server reads `page_size` (capped at 200) and `unresolved_only`; the
+ * console's state is camelCase, and the previous blind pass-through sent
+ * `pageSize` — a name FastAPI discards as undeclared, which pinned every
+ * queue page to the server default of 25 no matter what the console asked
+ * for. Silence here is a UX bug, not a compatibility shim.
+ */
+function alertListParams(filters: AlertFilters): Record<string, string> {
+  const { pageSize, unresolvedOnly, ...rest } = filters;
+  const params: Record<string, string> = {};
+  for (const [key, value] of Object.entries(rest)) {
+    if (value !== undefined && value !== null && value !== "") params[key] = String(value);
+  }
+  if (pageSize) params.page_size = String(pageSize);
+  if (unresolvedOnly) params.unresolved_only = "true";
+  return params;
+}
+
 export const alertsApi = {
   list: async (filters: AlertFilters = {}) => {
     const raw = await request<{
@@ -2172,7 +2206,7 @@ export const alertsApi = {
       pageSize?: number;
       facets?: unknown;
     }>("/api/v1/alerts", {
-      params: filters as Record<string, string>,
+      params: alertListParams(filters),
     });
     // `AlertListResponse` puts the rows under `items`, not `alerts`
     // (services/api/app/api/v1/endpoints/alerts.py). Reading only `alerts`

@@ -15,6 +15,11 @@
  * *not* count, so "fix the tile" cannot quietly become "count every row".
  *
  * Against the pre-change tree all of these fail.
+ *
+ * Second era (2026-11-19): operator rule — a tile labelled "Total
+ * Connectors" is the configured inventory, the same number the connectors
+ * page lists. The delivering count moved to the caption, where naming the
+ * sources keeps the webhook-tenant honesty this test was written for.
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,7 +101,13 @@ afterEach(() => {
 });
 
 describe('the dashboard reports sources that are actually delivering', () => {
-  it('shows three, not zero, for a tenant ingesting over webhooks', () => {
+  it('totals the configured inventory and names what is actually delivering', () => {
+    // Contract changed 2026-11-19 (the operator): the tile is labelled
+    // "Total Connectors", so it must equal the /connectors page's total —
+    // the configured inventory — and not the in-window delivering count.
+    // The delivering sources are still surfaced, as names in the caption,
+    // so a webhook-only tenant is never left staring at a bare number
+    // (the defect this test originally pinned).
     swrData.set('dashboard-metrics', WEBHOOK_ONLY_METRICS);
 
     render(
@@ -105,15 +116,19 @@ describe('the dashboard reports sources that are actually delivering', () => {
       </TimeWindowProvider>,
     );
 
-    // The tile's label and the panel's heading carry the same words — which
-    // is exactly why "0" above a list of three reads as a contradiction. The
-    // tile is the `<p>`, the panel heading is an `<h3>`.
     const tile = screen
-      .getByText('Connected Sources', { selector: 'p' })
+      .getByText('Total Connectors', { selector: 'p' })
       .closest('div') as HTMLElement;
 
-    expect(within(tile).getByText('3')).toBeInTheDocument();
-    expect(within(tile).queryByText('0')).toBeNull();
+    // The three delivering sources are named inside the tile.
+    expect(
+      within(tile).getByText('splunk_notable, aws_eventbridge, generic_webhook'),
+    ).toBeTruthy();
+    // The tile links to the page whose total it now matches.
+    expect(within(tile).getByText('Total Connectors').closest('a')).toHaveAttribute(
+      'href',
+      '/connectors',
+    );
   });
 });
 
