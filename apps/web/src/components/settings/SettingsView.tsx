@@ -64,6 +64,7 @@ import {
   isAlertPushSeverity,
   registerServiceWorker,
   requestNotificationPermission,
+  saveAlertPushPreferences,
   subscribeToPush,
   syncPushNotificationSettings,
   type AlertPushSeverity,
@@ -1387,7 +1388,11 @@ function NotificationsPanel() {
   // from a user gesture so the permission prompt is permitted by browsers.
   const updateAlertPush = async (next: Preferences, activate = false) => {
     setPrefs(next);
-    savePreferences(next);
+    const alertPreferences = {
+      minimumAlertSeverity: next.minimumAlertSeverity,
+      desktopNotifications: next.desktopNotifications,
+    };
+    const savedLocally = saveAlertPushPreferences(alertPreferences);
     try {
       if (activate) {
         const permission = await requestNotificationPermission();
@@ -1396,19 +1401,30 @@ function NotificationsPanel() {
           throw new Error('Allow notifications in your browser to enable alert push');
         }
         if (!await registerServiceWorker()) throw new Error('Service worker registration failed');
-        const subscription = await subscribeToPush();
+        const subscription = await subscribeToPush({ alertPreferences });
         if (!subscription) throw new Error('Web Push is not configured on the server');
-        toast.success('Alert push enabled on this device');
+        if (savedLocally) toast.success('Alert push enabled on this device');
+        else toast('Alert push enabled, but preferences could not be saved locally.');
         return;
       }
 
-      const updated = await syncPushNotificationSettings();
-      if (updated) toast.success('Alert push preferences applied to this device');
-      else if (next.desktopNotifications) toast('Saved locally. Enable Web Push to receive alerts.');
-      else toast.success('Alert notifications disabled on this device');
+      const updated = await syncPushNotificationSettings(alertPreferences);
+      if (updated) {
+        if (savedLocally) toast.success('Alert push preferences applied to this device');
+        else toast('Alert push preferences applied, but could not be saved locally.');
+      } else if (savedLocally) {
+        toast(next.desktopNotifications
+          ? 'Saved locally. Enable Web Push to receive alerts.'
+          : 'Saved locally. No Web Push subscription is active on this device.');
+      } else {
+        toast.error('Could not save preferences locally. No Web Push subscription is active on this device.');
+      }
     } catch (err) {
+      const status = savedLocally
+        ? 'Saved locally, but push could not be updated'
+        : 'Preferences could not be saved locally or applied to push';
       toast.error(
-        `Saved locally, but push could not be updated: ${err instanceof Error ? err.message : String(err)}`,
+        `${status}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
   };

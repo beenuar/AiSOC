@@ -10,10 +10,14 @@ import { responderApi } from './api';
 
 export type AlertPushSeverity = 'critical' | 'high' | 'medium' | 'low';
 
+export interface AlertPushPreferences {
+  minimumAlertSeverity: AlertPushSeverity;
+  desktopNotifications: boolean;
+}
+
 const ALERT_PUSH_RISKS: readonly AlertPushSeverity[] = ['critical', 'high', 'medium', 'low'];
 const ALERT_PUSH_PREF_KEY = 'aisoc:settings:preferences';
 const RESPONDER_TOPIC_PREF_KEY = 'aisoc.responder.push.topics';
-const DEFAULT_PUSH_TOPICS = ['p0_alert', 'agent_approval', 'oncall_handoff'];
 
 export function isAlertPushSeverity(value: unknown): value is AlertPushSeverity {
   return typeof value === 'string' && ALERT_PUSH_RISKS.some((risk) => risk === value);
@@ -23,10 +27,7 @@ export function isAlertPushSeverity(value: unknown): value is AlertPushSeverity 
  * Console and responder PWA share per-device alert preferences. A missing
  * setting means High+Critical, the existing deployment behaviour.
  */
-export function readAlertPushPreferences(): {
-  minimumAlertSeverity: AlertPushSeverity;
-  desktopNotifications: boolean;
-} {
+export function readAlertPushPreferences(): AlertPushPreferences {
   const fallback = { minimumAlertSeverity: 'high' as AlertPushSeverity, desktopNotifications: true };
   if (typeof window === 'undefined') return fallback;
   try {
@@ -47,23 +48,30 @@ export function readAlertPushPreferences(): {
   }
 }
 
-/** Update only alert fields without overwriting appearance or other settings. */
+/** Update only alert fields, returning whether they were saved on this device. */
 export function saveAlertPushPreferences(
-  update: Partial<ReturnType<typeof readAlertPushPreferences>>,
-): void {
-  if (typeof window === 'undefined') return;
+  update: Partial<AlertPushPreferences>,
+): boolean {
+  if (typeof window === 'undefined') return false;
   try {
     const raw = window.localStorage.getItem(ALERT_PUSH_PREF_KEY);
-    const parsed: unknown = raw ? JSON.parse(raw) : {};
+    let parsed: unknown = {};
+    if (raw) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch {
+        // A malformed value can be replaced if storage is still writable.
+      }
+    }
     const existing = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
     window.localStorage.setItem(ALERT_PUSH_PREF_KEY, JSON.stringify({ ...existing, ...update }));
+    return true;
   } catch {
-    // Private browsing may prevent local persistence; the gateway still
-    // receives explicit values when a subscription is updated.
+    return false;
   }
 }
 
-function storedTopics(topics?: string[]): string[] {
+function storedTopics(topics?: string[]): string[] | undefined {
   if (topics) return topics;
   if (typeof window !== 'undefined') {
     try {
@@ -71,10 +79,10 @@ function storedTopics(topics?: string[]): string[] {
       const parsed: unknown = raw ? JSON.parse(raw) : null;
       if (Array.isArray(parsed)) return parsed.filter((x): x is string => typeof x === 'string');
     } catch {
-      // Fallback to the pre-existing topics.
+      // The gateway preserves existing topics when this field is omitted.
     }
   }
-  return DEFAULT_PUSH_TOPICS;
+  return undefined;
 }
 
 /** Convert a URL-safe base64 VAPID key into a Uint8Array. */
@@ -186,7 +194,7 @@ export async function requestNotificationPermission(): Promise<PushPermissionRes
  * realtime gateway. Returns the active subscription on success.
  */
 export async function subscribeToPush(
-  options: { topics?: string[] } = {},
+  options: { topics?: string[]; alertPreferences?: AlertPushPreferences } = {},
 ): Promise<PushSubscription | null> {
   if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
     return null;
@@ -199,7 +207,7 @@ export async function subscribeToPush(
   if (existing) {
     // Already subscribed; re-register with the gateway in case the
     // tenant context changed.
-    await registerSubscriptionWithGateway(existing, options.topics);
+    await registerSubscriptionWithGateway(existing, options.topics, options.alertPreferences);
     return existing;
   }
 
@@ -216,19 +224,23 @@ export async function subscribeToPush(
     applicationServerKey: urlBase64ToUint8Array(public_key) as BufferSource,
   });
 
-  await registerSubscriptionWithGateway(sub, options.topics);
+  await registerSubscriptionWithGateway(sub, options.topics, options.alertPreferences);
   return sub;
 }
 
 async function registerSubscriptionWithGateway(
   sub: PushSubscription,
   topics?: string[],
+  alertPreferences?: AlertPushPreferences,
 ): Promise<void> {
   const json = sub.toJSON();
   const keys = (json.keys ?? {}) as Record<string, string>;
   if (!json.endpoint || !keys.p256dh || !keys.auth) {
     throw new Error('Push subscription missing endpoint/keys');
   }
+  // A user-selected value must reach the gateway even when local storage fails.
+  // Automatic renewal can continue to use the saved device preferences.
+  const preferences = alertPreferences ?? readAlertPushPreferences();
   await responderApi.subscribe({
     subscription: {
       endpoint: json.endpoint,
@@ -238,8 +250,8 @@ async function registerSubscriptionWithGateway(
     user_agent:
       typeof navigator !== 'undefined' ? navigator.userAgent : undefined,
     topics: storedTopics(topics),
-    minimum_alert_severity: readAlertPushPreferences().minimumAlertSeverity,
-    alert_notifications_enabled: readAlertPushPreferences().desktopNotifications,
+    minimum_alert_severity: preferences.minimumAlertSeverity,
+    alert_notifications_enabled: preferences.desktopNotifications,
   });
 }
 
@@ -247,12 +259,14 @@ async function registerSubscriptionWithGateway(
  * Re-register an existing device after settings change, preserving its
  * responder topic selection. Never triggers a browser permission prompt.
  */
-export async function syncPushNotificationSettings(): Promise<boolean> {
+export async function syncPushNotificationSettings(
+  alertPreferences?: AlertPushPreferences,
+): Promise<boolean> {
   if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return false;
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
   if (!sub) return false;
-  await registerSubscriptionWithGateway(sub);
+  await registerSubscriptionWithGateway(sub, undefined, alertPreferences);
   return true;
 }
 
