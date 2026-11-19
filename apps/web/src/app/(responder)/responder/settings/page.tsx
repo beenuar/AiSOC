@@ -43,6 +43,9 @@ import {
   isStandalone,
   onInstallPromptAvailable,
   requestNotificationPermission,
+  readAlertPushPreferences,
+  saveAlertPushPreferences,
+  type AlertPushSeverity,
   showInstallPrompt,
   subscribeToPush,
   type ServiceWorkerStatus,
@@ -54,8 +57,8 @@ type PushState = 'unsupported' | 'denied' | 'idle' | 'granted-unsubscribed' | 's
 const ALL_TOPICS: { id: string; label: string; help: string }[] = [
   {
     id: 'p0_alert',
-    label: 'P0 alerts',
-    help: 'Highest-severity detections that need eyes on glass now.',
+    label: 'Security alerts',
+    help: 'Fused detections meeting your minimum alert risk setting below.',
   },
   {
     id: 'agent_approval',
@@ -104,6 +107,7 @@ export default function ResponderSettingsPage() {
   const [pushState, setPushState] = useState<PushState>('idle');
   const [pushBusy, setPushBusy] = useState<boolean>(false);
   const [topics, setTopics] = useState<Set<string>>(() => new Set());
+  const [minimumAlertSeverity, setMinimumAlertSeverity] = useState<AlertPushSeverity>('high');
   const [installAvailable, setInstallAvailable] = useState(false);
   const [standalone, setStandalone] = useState(false);
   const [swStatus, setSwStatus] = useState<ServiceWorkerStatus | null>(null);
@@ -154,6 +158,7 @@ export default function ResponderSettingsPage() {
   useEffect(() => {
     setProfile(getProfile());
     setTopics(loadTopicPrefs());
+    setMinimumAlertSeverity(readAlertPushPreferences().minimumAlertSeverity);
     setStandalone(isStandalone());
     void refreshPushState();
     void getServiceWorkerStatus().then(setSwStatus);
@@ -203,6 +208,9 @@ export default function ResponderSettingsPage() {
         setPushState('idle');
         return;
       }
+      // Explicitly enabling push here also enables alert pages if they were
+      // disabled in the desktop console on the same device.
+      saveAlertPushPreferences({ desktopNotifications: true });
       const sub = await subscribeToPush({ topics: Array.from(topics) });
       if (sub) {
         setPushState('subscribed');
@@ -274,6 +282,21 @@ export default function ResponderSettingsPage() {
     },
     [pushState, showToast, topics],
   );
+
+  const updateMinimumRisk = useCallback(async (minimum: AlertPushSeverity) => {
+    setMinimumAlertSeverity(minimum);
+    saveAlertPushPreferences({ minimumAlertSeverity: minimum });
+    if (pushState !== 'subscribed') {
+      showToast('Saved on this device; enable push to receive alerts.');
+      return;
+    }
+    try {
+      await subscribeToPush({ topics: Array.from(topics) });
+      showToast('Alert risk threshold applied.');
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not sync alert risk threshold.');
+    }
+  }, [pushState, showToast, topics]);
 
   // ─── Install ────────────────────────────────────────────────────────────
 
@@ -393,7 +416,7 @@ export default function ResponderSettingsPage() {
               ? 'Permission was denied. Re-enable in your browser settings.'
               : pushState === 'subscribed'
                 ? 'You’ll get pushes for the topics below — even when this tab is closed.'
-                : 'Tap to enable pushes for P0 alerts and approvals.'
+                : 'Tap to enable pushes for security alerts and approvals.'
         }
       >
         <div className="space-y-3">
@@ -431,6 +454,27 @@ export default function ResponderSettingsPage() {
                 </button>
               )}
             </div>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800/80 bg-zinc-900/30 px-4 py-3">
+            <label htmlFor="responder-alert-risk" className="text-sm font-medium text-zinc-100">
+              Minimum alert risk to notify
+            </label>
+            <select
+              id="responder-alert-risk"
+              value={minimumAlertSeverity}
+              onChange={(e) => void updateMinimumRisk(e.target.value as AlertPushSeverity)}
+              className="mt-2 w-full rounded-lg bg-zinc-950 border border-zinc-700 px-3 py-2 text-sm text-zinc-100"
+            >
+              <option value="critical">Critical only</option>
+              <option value="high">High and Critical (default)</option>
+              <option value="medium">Medium and above</option>
+              <option value="low">Low and above</option>
+            </select>
+            <p className="text-[11px] text-zinc-500 mt-2">
+              Applies to new fused alert pushes on this device only.
+              Approval and on-call notifications are always separate.
+            </p>
           </div>
 
           {/* Topic preferences — visible when push is supported, even before
