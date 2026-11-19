@@ -82,6 +82,10 @@ That layout is what lets a single `PushManager.sendToTarget(...)` call fan out t
 | `agent_approval` | agents | An LLM-initiated action is waiting on a human. |
 | `oncall_handoff` | api (oncall endpoints) | The on-call schedule rolled over. |
 
+For `POST /subscribe`, omitting `topics` uses these defaults on first
+registration and preserves the existing topic selection on renewal; an
+explicit empty array (`"topics": []`) subscribes to no topics.
+
 ### Set a minimum alert risk
 
 In **Settings → Notifications** in the desktop console, or **Responder → Settings → Notifications** in the PWA, choose the *minimum alert risk to notify*:
@@ -100,14 +104,37 @@ receive only High and Critical alerts. Unsupported or missing alert severity
 never triggers a push. Other topics (agent approvals, on-call hand-off and
 manual tests) are **not** gated by risk level.
 
-The desktop console's **Desktop notifications** control toggles alert
-pages without silencing approvals or hand-offs. The separate **Enable /
-refresh Web Push on this device** button registers the service worker, requests
-browser permission and enrolls this device; saving a preference alone does
-not activate push. You must configure VAPID and the realtime gateway as above.
+In the desktop console, turning **Desktop notifications** on or clicking
+**Enable / refresh Web Push on this device** requests browser notification
+permission when needed, registers the service worker, and enrolls or refreshes
+this device's push subscription. Changing only the minimum alert risk updates
+an existing subscription without requesting permission; if no subscription
+exists, the preference is saved locally for later enrollment.
+
+The current selection is sent explicitly when updating a push subscription.
+If browser storage is unavailable, the settings screen reports the local
+save failure separately from the gateway result.
+
+Turning **Desktop notifications** off disables fused-alert pushes on the
+existing subscription without unsubscribing the device or silencing agent
+approvals, on-call hand-offs or manual test pushes. You must configure VAPID
+and the realtime gateway as above.
 These settings **do not** filter the in-app alert queue, email digests, Slack,
 ITSM or playbook actions. The existing `p0_alert` topic identifier is kept so
 previous responder subscriptions remain compatible.
+
+### Settings previews
+
+These browser captures use a labelled local test session with a synthetic
+account and simulated browser notification, service-worker and push APIs.
+
+**Desktop console**
+
+![Desktop notification settings in a local test session](/img/console/notifications-settings.png)
+
+**Responder PWA**
+
+![Responder notification settings in a local test session](/img/console/responder-notifications.png)
 
 If push delivery returns `404` or `410` (subscription expired or removed by the browser), the realtime service evicts the subscription from Redis automatically — the next `/subscribe` call from the PWA replaces it.
 
