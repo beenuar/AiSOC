@@ -76,8 +76,10 @@ from app.ingest_client import IngestClient, IngestClientError
 from app.leader_lease import LeaderLease, election_enabled
 from app.pipeline import (
     apply_filter_rules,
+    compute_dynamic_fingerprint,
     compute_fingerprint,
-    diff_fingerprints,
+    evaluate_drift,
+    stable_keys,
 )
 from app.security.credential_vault import CredentialVault, CredentialVaultError, get_vault
 from app.security.egress import EgressRefused, refuse_internal_destinations
@@ -743,34 +745,38 @@ class ConnectorScheduler:
         # legitimate upstream schema change by dropping all instances of
         # the new field. Empty batches return None and we don't update
         # the baseline in that case (see fingerprint.compute_fingerprint).
-        new_fingerprint = compute_fingerprint(kept)
+        new_fingerprint = compute_dynamic_fingerprint(kept)
+        full_fingerprint = compute_fingerprint(kept)
         drift_detected = False
         drift_details: dict[str, Any] | None = None
 
-        if new_fingerprint is not None and target.schema_fingerprint is not None:
-            if new_fingerprint != target.schema_fingerprint:
+        # Drift-sentinel v2: the baseline is the persisted *stable core*
+        # field set (`schema_fields`, migration 163) — dynamic param_* names
+        # and conditional optional fields are excluded because they vary
+        # legitimately between batches on busy tenants, and a hash over the
+        # full union made every ordinary poll look like drift. Drift is now
+        # flagged ONLY when a baseline core field disappears: the
+        # rename/removal failure mode this sentinel exists to catch.
+        # Additions (including brand-new core fields) silently grow the
+        # baseline; `schema_fields` and the fingerprint are advanced
+        # together in _record_success so the baseline never goes stale.
+        current_keys = sorted(stable_keys(kept))
+        baseline_fields = list(target.schema_fields or [])
+
+        if new_fingerprint is not None and baseline_fields:
+            eval_result = evaluate_drift(baseline_fields, current_keys)
+            if eval_result["drift_detected"]:
                 drift_detected = True
-                # Recompute the union of keys so we can describe what
-                # changed. We don't store prior keys in the row (only the
-                # hash), so we approximate "removed" by diffing against
-                # the current batch's keys vs. the keys set we'd expect
-                # from the prior fingerprint. Since we don't have the
-                # prior keys, we record the new key set and ``added`` is
-                # the entire new set. This is good enough for the UI to
-                # surface "schema changed at <timestamp>"; a future
-                # iteration can persist the prior key list.
-                current_keys = sorted({k for ev in kept for k in ev.keys()})
-                drift_details = diff_fingerprints(
-                    previous_keys=[],  # baseline keys not persisted yet
-                    current_keys=current_keys,
-                )
+                drift_details = dict(eval_result)
+                drift_details.pop("drift_detected", None)
                 drift_details["sample_event_count"] = len(kept)
                 drift_details["new_fingerprint"] = new_fingerprint
                 drift_details["previous_fingerprint"] = target.schema_fingerprint
                 logger.warning(
-                    "connector.scheduler.schema_drift id=%s type=%s added=%d",
+                    "connector.scheduler.schema_drift id=%s type=%s removed=%d added=%d",
                     connector_id,
                     target.connector_type,
+                    len(drift_details.get("removed", [])),
                     len(drift_details.get("added", [])),
                 )
 
@@ -918,6 +924,7 @@ class ConnectorScheduler:
             events_added=accepted,
             events_dropped=dropped_count,
             schema_fingerprint=new_fingerprint,
+            schema_fields=current_keys if new_fingerprint is not None else None,
             last_event_at=last_event_at,
             last_event_kind=last_event_kind,
         )
@@ -959,6 +966,7 @@ class ConnectorScheduler:
         events_added: int,
         events_dropped: int = 0,
         schema_fingerprint: str | None = None,
+        schema_fields: list[str] | None = None,
         last_event_at: datetime | None = None,
         last_event_kind: str | None = None,
     ) -> None:
@@ -972,6 +980,7 @@ class ConnectorScheduler:
                     events_added=events_added,
                     events_dropped=events_dropped,
                     schema_fingerprint=schema_fingerprint,
+                    schema_fields=schema_fields,
                     last_event_at=last_event_at,
                     last_event_kind=last_event_kind,
                 )
