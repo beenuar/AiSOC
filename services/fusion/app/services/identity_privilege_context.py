@@ -108,7 +108,11 @@ class IdentityPrivilegeResolver:
         if not principal or not self._dsn:
             return dict(UNKNOWN_STAMP)
 
-        at = alert.timestamp or datetime.now(tz=_utc())
+        # event_time is the models field for the source events time;
+        # timestamp never existed on RawAlert, so this line raised
+        # AttributeError for every alert carrying a username — the opposite
+        # of the never-raises contract documented on this method.
+        at = alert.event_time or datetime.now(tz=_utc())
         # Bucketed to the minute so two alerts a second apart share a cache
         # entry. Posture intervals are hours to days long, so a minute of
         # granularity cannot select a different version in any case the
