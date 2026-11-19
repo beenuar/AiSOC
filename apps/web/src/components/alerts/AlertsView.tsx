@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import Link from 'next/link';
 import { BulkTriageBar } from './BulkTriageBar';
@@ -381,6 +381,55 @@ export function AlertsView() {
     setFilters(newFilters);
   }, []);
 
+  // Deep links: the dashboard's stat tiles open /alerts?unresolved_only=true
+  // [&severity=critical] so a clicked number lands on the list that produced
+  // it. A query param is authoritative for the keys it sets — the Needs
+  // Review default is a landing state, not a straitjacket — and a bare
+  // /alerts keeps it. Read once at mount; back/forward reloads naturally.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const q = new URLSearchParams(window.location.search);
+    if ([...q.keys()].length === 0) return;
+    setFilters(() => {
+      const next: AlertFilters = { page: 1, pageSize: 25, sort: 'priority' };
+      const page = Number(q.get('page'));
+      if (Number.isFinite(page) && page >= 1) next.page = page;
+      const size = Number(q.get('pageSize') ?? q.get('page_size'));
+      if ([25, 50, 100, 200].includes(size)) next.pageSize = size;
+      for (const key of ['severity', 'status', 'search', 'disposition'] as const) {
+        const value = q.get(key);
+        if (value && value !== 'any') next[key] = value;
+      }
+      if (q.get('unresolved_only') === 'true') next.unresolvedOnly = true;
+      return next;
+    });
+  }, []);
+
+  // Write the queue back into the URL so any filter state is linkable and
+  // survives a refresh. replaceState, not push: paging is not history.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const url = new URL(window.location.href);
+      const entries: Record<string, string | number | undefined> = {
+        page: filters.page,
+        pageSize: filters.pageSize,
+        severity: filters.severity,
+        status: filters.status,
+        disposition: filters.disposition,
+        search: filters.search,
+        unresolved_only: filters.unresolvedOnly ? 'true' : undefined,
+      };
+      for (const [key, value] of Object.entries(entries)) {
+        if (value === undefined || value === null || value === '') url.searchParams.delete(key);
+        else url.searchParams.set(key, String(value));
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch {
+      // Best-effort URL sync; state remains the source of truth either way.
+    }
+  }, [filters]);
+
   const alerts = data?.alerts || [];
   const total = data?.total || 0;
 
@@ -748,6 +797,16 @@ function AlertsPagination({
     <div className="flex items-center justify-between text-xs text-gray-500">
       <span>Showing {alerts.length} of {count}</span>
       <div className="flex items-center gap-1">
+        <select
+          aria-label="Page size"
+          value={filters.pageSize || 25}
+          onChange={(e) => onFilterChange({ ...filters, pageSize: Number(e.target.value), page: 1 })}
+          className="bg-gray-800 text-gray-200 rounded px-1.5 py-1 border border-gray-700"
+        >
+          {[25, 50, 100, 200].map((n) => (
+            <option key={n} value={n}>{n}/page</option>
+          ))}
+        </select>
         <button
           onClick={() => onFilterChange({ ...filters, page: Math.max(1, (filters.page || 1) - 1) })}
           disabled={(filters.page || 1) <= 1}

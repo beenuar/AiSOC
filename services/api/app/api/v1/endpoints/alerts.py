@@ -802,6 +802,12 @@ async def list_alerts(
     ),
     severity: str | None = Query(default=None),
     status: str | None = Query(default=None),
+    unresolved_only: bool = Query(
+        default=False,
+        description="Restrict to unresolved alerts (alert_status.unresolved_filter: any "
+        "status that is not terminal). Dashboard tiles deep-link with this so the "
+        "clicked number and the resulting list answer the same question.",
+    ),
     disposition: str | None = Query(
         default=None,
         description="Exact-match on the triage disposition (e.g. 'needs_review'). "
@@ -878,6 +884,8 @@ async def list_alerts(
         filters.append(Alert.severity == severity)
     if status:
         filters.append(Alert.status == status)
+    if unresolved_only:
+        filters.append(unresolved_filter(Alert.status))
     if disposition:
         filters.append(Alert.disposition == disposition)
     if category:

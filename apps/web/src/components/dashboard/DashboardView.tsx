@@ -16,7 +16,7 @@
 
 import React, { Component, Suspense, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import useSWR from 'swr';
-import { metricsApi, type DashboardMetrics } from '@/lib/api';
+import { connectorsApi, metricsApi, type DashboardMetrics } from '@/lib/api';
 import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
 import { TIME_WINDOW_LONG_LABEL, TIME_WINDOW_SHORT_LABEL } from '@/lib/timeWindow';
 import { clsx } from 'clsx';
@@ -181,6 +181,13 @@ interface MetricCardProps {
   sub?: string;
   color?: 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'gray';
   trend?: { value: number; label: string };
+  /**
+   * When set the whole card becomes a link. Every count on this dashboard is
+   * an aggregate of rows the analyst can open; a number that cannot be
+   * clicked to its own result set makes the analyst re-derive the query by
+   * hand — and the tiles and the queue then measure different things.
+   */
+  href?: string;
 }
 
 const COLOR_MAP = {
@@ -193,9 +200,10 @@ const COLOR_MAP = {
   gray: 'text-gray-400',
 };
 
-function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProps) {
-  return (
-    <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
+function MetricCard({ label, value, sub, color = 'blue', trend, href }: MetricCardProps) {
+  const cardClass = 'bg-gray-900/60 border border-gray-800/60 rounded-xl p-5';
+  const inner = (
+    <>
       <div>
         <p className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-2">{label}</p>
         <p className={clsx('text-3xl font-bold', COLOR_MAP[color])}>{value}</p>
@@ -210,8 +218,16 @@ function MetricCard({ label, value, sub, color = 'blue', trend }: MetricCardProp
           <span className="text-gray-600">{trend.label}</span>
         </div>
       )}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className={clsx(cardClass, 'block hover:border-gray-500/70 transition-colors')}>
+        {inner}
+      </Link>
+    );
+  }
+  return <div className={cardClass}>{inner}</div>;
 }
 
 // ─── Honest data-absent panel ─────────────────────────────────────────────────
@@ -529,6 +545,18 @@ export function DashboardView() {
     void mutateMetrics();
   }, [mutateMetrics]);
 
+  // The connector inventory, from the same endpoint the /connectors page
+  // lists. The "Total Connectors" tile used to be countConnectedSources —
+  // sources that produced an alert inside the metrics window — so it read
+  // one number next to a connectors page showing another, and both were
+  // correct for different questions. Configured inventory is what a tile
+  // labelled "Total Connectors" promises.
+  const { data: connectorInventory } = useSWR(
+    'dashboard-connector-inventory',
+    () => connectorsApi.list(),
+    { refreshInterval: 120000, revalidateOnFocus: false },
+  );
+
   const metricsErrorMessage =
     metricsError instanceof Error
       ? metricsError.message
@@ -638,18 +666,21 @@ export function DashboardView() {
               value={metrics.alerts.active ?? metrics.alerts.total}
               sub={`${metrics.alerts.total} in last ${periodLabel}`}
               color="blue"
+              href="/alerts?unresolved_only=true"
             />
             <MetricCard
               label="Critical Active"
               value={metrics.alerts.criticalActive ?? metrics.alerts.critical}
               sub={`${metrics.alerts.resolved ?? 0} resolved`}
               color={metrics.alerts.criticalActive ? 'red' : 'gray'}
+              href="/alerts?unresolved_only=true&severity=critical"
             />
             <MetricCard
               label="Open Cases"
               value={metrics.cases.open}
               sub={`${metrics.cases.inProgress} in progress · ${metrics.cases.openedThisWeek ?? 0} opened / ${metrics.cases.closedThisWeek ?? 0} closed (7d)`}
               color="orange"
+              href="/cases"
             />
             {/* `mttr` is hours and this rendered it with an `m` suffix, so a
                 1.5-hour MTTR would have read "1.5m". It only ever showed
@@ -671,8 +702,8 @@ export function DashboardView() {
               color="green"
             />
             <MetricCard
-              label="Connected Sources"
-              value={activeSourceCount}
+              label="Total Connectors"
+              value={connectorInventory?.total ?? demoFallback(sources.length) ?? '—'}
               // The caption used to be the literal "EDR, SIEM, Cloud, IAM,
               // SaaS" beside a live count, so the card read "5 — EDR, SIEM,
               // Cloud, IAM, SaaS" on a tenant whose five sources were
@@ -682,6 +713,7 @@ export function DashboardView() {
               // it counted.
               sub={describeConnectedSources(sources)}
               color="purple"
+              href="/connectors"
             />
           </div>
         ) : (
