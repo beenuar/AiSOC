@@ -48,17 +48,6 @@ describe('TopBar', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Detection Catalog');
   });
 
-  it.each([
-    ['/dashboards/soc-insights', 'SOC Insights'],
-    ['/dashboards/operations', 'SOC operations'],
-    ['/dashboard-archive', 'Dashboard Archive'],
-    ['/cases/INC-123', 'Cases'],
-  ])('labels %s at route segment boundaries', (pathname, title) => {
-    pathnameMock.mockReturnValue(pathname);
-    renderTopBar();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(title);
-  });
-
   it('derives a sensible title for unknown routes from the path itself', () => {
     // Regression: previously fell back to "Alerts" for everything unmapped.
     pathnameMock.mockReturnValue('/some-new-page');

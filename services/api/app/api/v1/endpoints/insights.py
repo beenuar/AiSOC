@@ -19,13 +19,12 @@ hop:
     * **Agent cost per investigation** — total LLM USD spend (from
       ``aisoc_run_costs``) divided by distinct ``run_id`` count over
       the window.
-    * **Analyst hours saved** — closed cases × the named
-      ``MANUAL_INVESTIGATION_MINUTES`` heuristic.
+    * **Analyst hours saved** — auto-closed cases (resolved without
+      analyst override) × the named ``MANUAL_INVESTIGATION_MINUTES``
+      constant.
 
 Every tile also returns a 24-bucket sparkline for the window so the UI
-can render an inline trendline without a follow-up request. Three grouped
-queries cover both comparison windows and return at most 25 rows each,
-independent of the number of alerts, cases or cost records.
+can render an inline trendline without a follow-up request.
 
 Tenant scoping
 --------------
@@ -49,26 +48,26 @@ from __future__ import annotations
 
 import logging
 import uuid
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import Integer, case, func, select, text
+from sqlalchemy import and_, func, select, text
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.v1.deps import AuthUser, DBSession
-from app.db.best_effort import savepoint
 from app.models.alert import Alert
 from app.models.case import Case
 from app.services import case_status
 from app.services.alert_disposition import decided_filter
 
 logger = logging.getLogger(__name__)
+
+
+def _tid(t):
+    """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
+    return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
 
 
 router = APIRouter(prefix="/insights", tags=["insights"])
@@ -78,7 +77,7 @@ router = APIRouter(prefix="/insights", tags=["insights"])
 # Constants
 # ---------------------------------------------------------------------------
 
-# heuristic: closed cases × avg manual investigation time (45 min)
+# heuristic: auto-closed cases × avg manual investigation time (45 min)
 #
 # Calibrated against community benchmarks for analyst tier-1 triage on a
 # medium-severity incident. Surfaced as a tile assumption in the docs so
@@ -192,213 +191,249 @@ def _delta_pct(current: float | None, previous: float | None) -> float | None:
     return round(((current - previous) / previous) * 100.0, 2)
 
 
-@dataclass
-class _AlertTotals:
-    count: int = 0
-    mtta_sum: Decimal = Decimal(0)
-    mtta_n: int = 0
-    mttr_sum: Decimal = Decimal(0)
-    mttr_n: int = 0
-    decided: int = 0
-    false_positives: int = 0
-
-    @property
-    def mtta(self) -> float:
-        return round(float(self.mtta_sum / self.mtta_n), 2) if self.mtta_n else 0.0
-
-    @property
-    def mttr(self) -> float:
-        return round(float(self.mttr_sum / self.mttr_n), 2) if self.mttr_n else 0.0
-
-    @property
-    def fp_rate(self) -> float:
-        return round(self.false_positives / self.decided, 4) if self.decided else 0.0
-
-
-@dataclass
-class _CaseTotals:
-    count: int = 0
-    closed: int = 0
-
-
-@dataclass
-class _CostTotals:
-    cost: float = 0.0
-    runs: int = 0
-
-
-def _bucket(column: Any, start: datetime, end: datetime) -> ColumnElement[int]:
-    """One previous-window group and 24 current-window groups.
-
-    The WHERE clause bounds the read to two windows. Folding the entire
-    previous window into -1 avoids transferring buckets we never display.
-    """
-    bucket_seconds = (end - start).total_seconds() / _SPARKLINE_BUCKETS
-    return (
-        case(
-            (column < start, -1),
-            else_=func.floor(func.extract("epoch", column - start) / bucket_seconds),
-        )
-        .cast(Integer)
-        .label("bucket")
-    )
-
-
-async def _alert_aggregates(
-    db: AsyncSession,
+async def _mean_hours(
+    db,
     tenant_id: uuid.UUID,
-    prev_start: datetime,
     start: datetime,
     end: datetime,
-) -> tuple[_AlertTotals, _AlertTotals, list[float]]:
-    """Aggregate counts, duration numerators and verdicts in one bounded read."""
-    bucket = _bucket(Alert.created_at, start, end)
-    rows = (
+    *,
+    start_col,
+    end_col,
+    extra_filters=(),
+) -> tuple[float, int]:
+    """Mean hours between two alert timestamp columns, with its denominator.
+
+    Returns `(mean, count)`. The count is the point: this used to return
+    the mean alone through `round(float(result or 0.0), 2)`, so an empty
+    average was indistinguishable from a real zero — and for MTTA that was
+    every deployment, because `alerts.first_seen_at` had no writer at all.
+    A bare zero there reads as instant acknowledgement.
+
+    The count travels with the mean because a mean over three alerts and a
+    mean over three thousand are the same number and different facts.
+    """
+    filters = [
+        Alert.tenant_id == tenant_id,
+        Alert.created_at >= start,
+        Alert.created_at < end,
+        start_col.isnot(None),
+        end_col.isnot(None),
+    ]
+    filters.extend(extra_filters)
+    row = (
         await db.execute(
             select(
-                bucket,
-                func.count().label("count"),
-                func.sum(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600).label("mtta_sum"),
-                func.count(Alert.first_seen_at).label("mtta_n"),
-                func.sum(func.extract("epoch", Alert.resolved_at - Alert.created_at) / 3600).label("mttr_sum"),
-                func.count(Alert.resolved_at).label("mttr_n"),
-                func.count().filter(decided_filter(Alert.disposition)).label("decided"),
-                func.count().filter(Alert.disposition == "false_positive").label("false_positives"),
-            )
-            .where(
+                func.avg(func.extract("epoch", end_col - start_col) / 3600),
+                func.count(),
+            ).where(and_(*filters))
+        )
+    ).first()
+    if row is None or row[1] == 0 or row[0] is None:
+        # 0.0 with a count of 0. The pair is the measurement: the count is
+        # what distinguishes "responded instantly" from "nobody responded".
+        return 0.0, 0
+    return round(float(row[0]), 2), int(row[1])
+
+
+async def _count(db, model, tenant_id: uuid.UUID, start: datetime, end: datetime, *extra) -> int:
+    filters = [model.tenant_id == tenant_id, model.created_at >= start, model.created_at < end]
+    filters.extend(extra)
+    return int(await db.scalar(select(func.count()).where(and_(*filters))) or 0)
+
+
+async def _fp_rate(db, tenant_id: uuid.UUID, start: datetime, end: datetime) -> tuple[float, int]:
+    """``(rate, denominator)`` over alerts somebody reached a conclusion about.
+
+    Returns the denominator because a ratio over nothing is not zero. This
+    tile rendered **FP Rate 0.0%** next to MTTA and MTTR correctly reading
+    "not measured" on the same row, and the card already knows how to say
+    so -- it renders "not measured" when ``sample_count`` is 0, and this
+    tile never set one.
+
+    The denominator is ``alert_disposition.DECIDED_DISPOSITIONS`` rather
+    than ``disposition IS NOT NULL``. The auto-triage worker writes
+    ``needs_review`` -- an abstention -- on every alert it cannot decide,
+    and counting those gave this surface a different denominator from
+    ``/metrics/funnel`` asking the identical question.
+    """
+    total = await db.scalar(
+        select(func.count()).where(
+            and_(
                 Alert.tenant_id == tenant_id,
-                Alert.created_at >= prev_start,
+                decided_filter(Alert.disposition),
+                Alert.created_at >= start,
                 Alert.created_at < end,
             )
-            .group_by(bucket)
         )
-    ).mappings()
-    current, previous = _AlertTotals(), _AlertTotals()
-    sparkline = [0.0] * _SPARKLINE_BUCKETS
-    for row in rows:
-        idx = int(row["bucket"])
-        totals = previous if idx == -1 else current
-        totals.count += int(row["count"])
-        # Add numerators and denominators, not means: unevenly populated
-        # buckets must retain their weight in the window-wide average. Keep
-        # PostgreSQL numeric sums as Decimal until the final rounding step.
-        totals.mtta_sum += row["mtta_sum"] or Decimal(0)
-        totals.mtta_n += int(row["mtta_n"])
-        totals.mttr_sum += row["mttr_sum"] or Decimal(0)
-        totals.mttr_n += int(row["mttr_n"])
-        totals.decided += int(row["decided"])
-        totals.false_positives += int(row["false_positives"])
-        if idx >= 0:
-            sparkline[idx] = float(row["count"])
-    return current, previous, sparkline
+    )
+    if not total:
+        return 0.0, 0
+    fp = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.disposition == "false_positive",
+                Alert.created_at >= start,
+                Alert.created_at < end,
+            )
+        )
+    )
+    return round((int(fp or 0) / int(total)), 4), int(total)
 
 
-async def _case_aggregates(
-    db: AsyncSession,
+async def _alert_sparkline(
+    db,
     tenant_id: uuid.UUID,
-    prev_start: datetime,
     start: datetime,
     end: datetime,
-) -> tuple[_CaseTotals, _CaseTotals, list[float]]:
-    bucket = _bucket(Case.created_at, start, end)
+) -> list[float]:
+    """24 evenly-spaced buckets of alert volume across [start, end)."""
+    total_seconds = max((end - start).total_seconds(), 1.0)
+    bucket_seconds = total_seconds / _SPARKLINE_BUCKETS
     rows = (
         await db.execute(
-            select(
-                bucket,
-                func.count().label("count"),
-                # Use the same terminal-state vocabulary in both windows;
-                # resolved cases still await closure on an analyst's queue.
-                func.count().filter(Case.status.in_(case_status.CLOSED_STATUSES)).label("closed"),
+            select(Alert.created_at).where(
+                and_(
+                    Alert.tenant_id == tenant_id,
+                    Alert.created_at >= start,
+                    Alert.created_at < end,
+                )
             )
-            .where(
-                Case.tenant_id == tenant_id,
-                Case.created_at >= prev_start,
-                Case.created_at < end,
-            )
-            .group_by(bucket)
         )
-    ).mappings()
-    current, previous = _CaseTotals(), _CaseTotals()
-    sparkline = [0.0] * _SPARKLINE_BUCKETS
-    for row in rows:
-        idx = int(row["bucket"])
-        totals = previous if idx == -1 else current
-        totals.count += int(row["count"])
-        totals.closed += int(row["closed"])
+    ).all()
+    buckets = [0.0] * _SPARKLINE_BUCKETS
+    for (ts,) in rows:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        delta = (ts - start).total_seconds()
+        idx = min(int(delta / bucket_seconds), _SPARKLINE_BUCKETS - 1)
         if idx >= 0:
-            sparkline[idx] = float(row["count"])
-    return current, previous, sparkline
+            buckets[idx] += 1
+    return buckets
 
 
-async def _cost_aggregates(
-    db: AsyncSession,
+async def _case_sparkline(
+    db,
     tenant_id: uuid.UUID,
-    prev_start: datetime,
     start: datetime,
     end: datetime,
-) -> tuple[_CostTotals, _CostTotals, list[float]]:
-    """Measured spend, distinct runs and spend buckets from one optional read.
+) -> list[float]:
+    """24 evenly-spaced buckets of case-open volume across [start, end)."""
+    total_seconds = max((end - start).total_seconds(), 1.0)
+    bucket_seconds = total_seconds / _SPARKLINE_BUCKETS
+    # Raw SQL on aisoc_cases — the ORM Case model reads the empty legacy
+    # `cases` table, so the sparkline was flat zero for live tenants.
+    rows = (
+        await db.execute(
+            text("SELECT created_at FROM aisoc_cases WHERE tenant_id = :tenant_id AND created_at >= :start AND created_at < :end"),
+            {"tenant_id": _tid(tenant_id), "start": start, "end": end},
+        )
+    ).all()
+    buckets = [0.0] * _SPARKLINE_BUCKETS
+    for (ts,) in rows:
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=UTC)
+        delta = (ts - start).total_seconds()
+        idx = min(int(delta / bucket_seconds), _SPARKLINE_BUCKETS - 1)
+        if idx >= 0:
+            buckets[idx] += 1
+    return buckets
 
-    Scope costs through their investigation: historical cost writers also
-    used tenant aliases, while the investigation owns the authenticated
-    tenant UUID. A run has one started_at, so it belongs to exactly one
-    bucket even when several model-cost records contribute to its spend.
 
-    Materialize the permitted runs before the text-key join. With RLS on
-    both tables, cardinality underestimation otherwise allows a nested-loop
-    plan that repeatedly scans runs and evaluates their visibility policy
-    for each cost record. This keeps both policies in force while evaluating
-    the run filter once, regardless of the join plan chosen afterwards.
+# TODO(T2.4-followup): ``aisoc_run_costs`` is populated by the agents
+# service's cost telemetry path (Track 2 / T2.4). When that table hasn't
+# been deployed yet — e.g. fresh demos, or services/api running
+# disconnected from the agents DSN — the query below raises a
+# ``UndefinedTable`` we swallow into ``(0.0, 0)``. Once T2.4 ships in
+# every environment, the swallow can be tightened to log-only.
+async def _llm_cost_aggregate(
+    db,
+    tenant_id: uuid.UUID,
+    start: datetime,
+    end: datetime,
+) -> tuple[float, int]:
+    """Return ``(measured_cost_usd, distinct_run_count)`` over the window.
+
+    Joins ``aisoc_run_costs`` with ``investigation_runs`` to tenant-scope
+    the spend. Returns ``(0.0, 0)`` if the cost table isn't deployed
+    yet so the UI can render zeroes rather than a 500.
+
+    The sum is over ``measured_cost_usd`` — cost the gateway reported — not
+    ``total_cost_usd``, which on rows written before migration 063 holds a
+    list-price guess keyed on a gateway alias. Summing those published spend
+    for a deployment that had spent nothing.
     """
     sql = text(
         """
-        WITH scoped_runs AS MATERIALIZED (
-            SELECT r.id::text AS run_id, r.started_at
-            FROM investigation_runs r
-            WHERE r.tenant_id = :tenant_id
-              AND r.started_at >= :prev_start
-              AND r.started_at < :end_at
-        )
-        SELECT CASE WHEN r.started_at < :start_at THEN -1
-                    ELSE FLOOR(EXTRACT(EPOCH FROM (r.started_at - :start_at))
-                               / :bucket_seconds)::integer END AS bucket,
-               COALESCE(SUM(c.measured_cost_usd), 0.0) AS cost,
-               COUNT(DISTINCT c.run_id) AS runs
-        FROM scoped_runs r
-        JOIN aisoc_run_costs c ON c.run_id = r.run_id
-        GROUP BY 1
+        SELECT COALESCE(SUM(c.measured_cost_usd), 0.0) AS cost,
+               COUNT(DISTINCT c.run_id)                AS runs
+        FROM aisoc_run_costs c
+        JOIN investigation_runs r ON r.id::text = c.run_id
+        WHERE r.tenant_id = :tenant_id
+          AND r.started_at >= :start_at
+          AND r.started_at < :end_at
         """
     )
-    current, previous = _CostTotals(), _CostTotals()
-    sparkline = [0.0] * _SPARKLINE_BUCKETS
     try:
-        # Catching a PostgreSQL statement error alone leaves the surrounding
-        # transaction aborted. Roll back only this optional read so the
-        # request's session and its later work remain usable.
-        async with savepoint(db):
-            rows = (
+        row = (
+            (
                 await db.execute(
                     sql,
-                    {
-                        "tenant_id": tenant_id,
-                        "prev_start": prev_start,
-                        "start_at": start,
-                        "end_at": end,
-                        "bucket_seconds": (end - start).total_seconds() / _SPARKLINE_BUCKETS,
-                    },
+                    {"tenant_id": str(tenant_id), "start_at": start, "end_at": end},
                 )
-            ).mappings()
-            for row in rows:
-                idx = int(row["bucket"])
-                totals = previous if idx == -1 else current
-                totals.cost += float(row["cost"])
-                totals.runs += int(row["runs"])
-                if idx >= 0:
-                    sparkline[idx] = float(row["cost"])
+            )
+            .mappings()
+            .first()
+        )
+        if not row:
+            return 0.0, 0
+        return float(row["cost"] or 0.0), int(row["runs"] or 0)
     except SQLAlchemyError:
+        # Either table doesn't exist yet, or RLS denied us — log and
+        # return zeroes so the dashboard stays renderable.
         logger.debug("insights.cost_aggregate_unavailable", exc_info=True)
-        return _CostTotals(), _CostTotals(), [0.0] * _SPARKLINE_BUCKETS
-    return current, previous, sparkline
+        return 0.0, 0
+
+
+async def _llm_cost_sparkline(
+    db,
+    tenant_id: uuid.UUID,
+    start: datetime,
+    end: datetime,
+) -> list[float]:
+    """24 evenly-spaced cost-USD buckets across [start, end)."""
+    total_seconds = max((end - start).total_seconds(), 1.0)
+    bucket_seconds = total_seconds / _SPARKLINE_BUCKETS
+    sql = text(
+        """
+        SELECT r.started_at AS started_at,
+               c.measured_cost_usd AS cost
+        FROM aisoc_run_costs c
+        JOIN investigation_runs r ON r.id::text = c.run_id
+        WHERE r.tenant_id = :tenant_id
+          AND r.started_at >= :start_at
+          AND r.started_at < :end_at
+        """
+    )
+    buckets = [0.0] * _SPARKLINE_BUCKETS
+    try:
+        result = await db.execute(
+            sql,
+            {"tenant_id": str(tenant_id), "start_at": start, "end_at": end},
+        )
+        for r in result.mappings():
+            ts = r["started_at"]
+            if ts is None:
+                continue
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=UTC)
+            delta = (ts - start).total_seconds()
+            idx = min(int(delta / bucket_seconds), _SPARKLINE_BUCKETS - 1)
+            if idx >= 0:
+                buckets[idx] += float(r["cost"] or 0.0)
+    except SQLAlchemyError:
+        logger.debug("insights.cost_sparkline_unavailable", exc_info=True)
+    return buckets
 
 
 # ---------------------------------------------------------------------------
@@ -432,58 +467,122 @@ async def get_soc_insights(
     prev_start = start - delta
     window_days = max(_VALID_WINDOWS[window], 1)
 
-    alerts, prev_alerts, alert_spark = await _alert_aggregates(db, tenant_id, prev_start, start, now)
-    cases, prev_cases, case_spark = await _case_aggregates(db, tenant_id, prev_start, start, now)
-    costs, prev_costs, cost_spark = await _cost_aggregates(db, tenant_id, prev_start, start, now)
+    # ── Window-current values ─────────────────────────────────────────────
+    mtta_hours, mtta_n = await _mean_hours(
+        db,
+        tenant_id,
+        start,
+        now,
+        start_col=Alert.created_at,
+        end_col=Alert.first_seen_at,
+    )
+    mttr_hours, mttr_n = await _mean_hours(
+        db,
+        tenant_id,
+        start,
+        now,
+        start_col=Alert.created_at,
+        end_col=Alert.resolved_at,
+    )
+    fp_rate, fp_denominator = await _fp_rate(db, tenant_id, start, now)
+    alert_count = await _count(db, Alert, tenant_id, start, now)
+    case_count = await _count(db, Case, tenant_id, start, now)
+    cost_total, run_count = await _llm_cost_aggregate(db, tenant_id, start, now)
+    auto_closed = await _count(
+        db,
+        Case,
+        tenant_id,
+        start,
+        now,
+        # `closed`, not `resolved`. A resolved case is still on a queue;
+        # only `closed` writes `closed_at` and means the work finished.
+        Case.status.in_(case_status.CLOSED_STATUSES),
+    )
 
-    alerts_per_day = round(alerts.count / window_days, 2)
-    cases_per_day = round(cases.count / window_days, 2)
-    prev_alerts_per_day = round(prev_alerts.count / window_days, 2)
-    prev_cases_per_day = round(prev_cases.count / window_days, 2)
+    # ── Previous-window comparisons for delta ─────────────────────────────
+    prev_mtta, _prev_mtta_n = await _mean_hours(
+        db,
+        tenant_id,
+        prev_start,
+        start,
+        start_col=Alert.created_at,
+        end_col=Alert.first_seen_at,
+    )
+    prev_mttr, _prev_mttr_n = await _mean_hours(
+        db,
+        tenant_id,
+        prev_start,
+        start,
+        start_col=Alert.created_at,
+        end_col=Alert.resolved_at,
+    )
+    prev_fp_rate, prev_fp_denominator = await _fp_rate(db, tenant_id, prev_start, start)
+    prev_alert_count = await _count(db, Alert, tenant_id, prev_start, start)
+    prev_case_count = await _count(db, Case, tenant_id, prev_start, start)
+    prev_cost_total, prev_run_count = await _llm_cost_aggregate(db, tenant_id, prev_start, start)
+    prev_auto_closed = await _count(
+        db,
+        Case,
+        tenant_id,
+        prev_start,
+        start,
+        Case.status == "resolved",
+    )
 
-    cost_per_inv = round(costs.cost / costs.runs, 4) if costs.runs else 0.0
-    prev_cost_per_inv = round(prev_costs.cost / prev_costs.runs, 4) if prev_costs.runs else 0.0
+    # ── Derived ───────────────────────────────────────────────────────────
+    alerts_per_day = round(alert_count / window_days, 2)
+    cases_per_day = round(case_count / window_days, 2)
+    prev_alerts_per_day = round(prev_alert_count / window_days, 2)
+    prev_cases_per_day = round(prev_case_count / window_days, 2)
 
-    hours_saved = round((cases.closed * MANUAL_INVESTIGATION_MINUTES) / 60.0, 2)
-    prev_hours_saved = round((prev_cases.closed * MANUAL_INVESTIGATION_MINUTES) / 60.0, 2)
+    cost_per_inv = round(cost_total / run_count, 4) if run_count else 0.0
+    prev_cost_per_inv = round(prev_cost_total / prev_run_count, 4) if prev_run_count else 0.0
+
+    hours_saved = round((auto_closed * MANUAL_INVESTIGATION_MINUTES) / 60.0, 2)
+    prev_hours_saved = round((prev_auto_closed * MANUAL_INVESTIGATION_MINUTES) / 60.0, 2)
+
+    # ── Sparklines ────────────────────────────────────────────────────────
+    alert_spark = await _alert_sparkline(db, tenant_id, start, now)
+    case_spark = await _case_sparkline(db, tenant_id, start, now)
+    cost_spark = await _llm_cost_sparkline(db, tenant_id, start, now)
 
     tiles: list[InsightTile] = [
         InsightTile(
             key="mtta",
             label="MTTA",
-            value=alerts.mtta,
-            sample_count=alerts.mtta_n,
+            value=mtta_hours,
+            sample_count=mtta_n,
             unit="hours",
-            previous_value=prev_alerts.mtta,
+            previous_value=prev_mtta,
             delta_pct=_delta_pct(
-                alerts.mtta if alerts.mtta_n else None,
-                prev_alerts.mtta if prev_alerts.mtta_n else None,
+                mtta_hours if mtta_n else None,
+                prev_mtta if _prev_mtta_n else None,
             ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
         InsightTile(
             key="mttr",
             label="MTTR",
-            value=alerts.mttr,
-            sample_count=alerts.mttr_n,
+            value=mttr_hours,
+            sample_count=mttr_n,
             unit="hours",
-            previous_value=prev_alerts.mttr,
+            previous_value=prev_mttr,
             delta_pct=_delta_pct(
-                alerts.mttr if alerts.mttr_n else None,
-                prev_alerts.mttr if prev_alerts.mttr_n else None,
+                mttr_hours if mttr_n else None,
+                prev_mttr if _prev_mttr_n else None,
             ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
         InsightTile(
             key="fp_rate",
             label="FP Rate",
-            value=alerts.fp_rate,
-            sample_count=alerts.decided,
+            value=fp_rate,
+            sample_count=fp_denominator,
             unit="pct",
-            previous_value=prev_alerts.fp_rate,
+            previous_value=prev_fp_rate,
             delta_pct=_delta_pct(
-                alerts.fp_rate if alerts.decided else None,
-                prev_alerts.fp_rate if prev_alerts.decided else None,
+                fp_rate if fp_denominator else None,
+                prev_fp_rate if prev_fp_denominator else None,
             ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
@@ -514,12 +613,12 @@ async def get_soc_insights(
             # which is the most flattering number this product can print and
             # describes a measurement nobody took. `/costs` on the same
             # stack already got this right.
-            sample_count=costs.runs,
+            sample_count=run_count,
             unit="usd",
             previous_value=prev_cost_per_inv,
             delta_pct=_delta_pct(
-                cost_per_inv if costs.runs else None,
-                prev_cost_per_inv if prev_costs.runs else None,
+                cost_per_inv if run_count else None,
+                prev_cost_per_inv if prev_run_count else None,
             ),
             sparkline=InsightSparkline(points=cost_spark),
         ),
@@ -527,16 +626,16 @@ async def get_soc_insights(
             key="analyst_hours_saved",
             label="Analyst hours saved",
             value=hours_saved,
-            # Modelled, not measured: `cases.closed * MANUAL_INVESTIGATION_MINUTES`.
-            # With no closures the model has no input, and "0h" presents
+            # Modelled, not measured: `auto_closed * MANUAL_INVESTIGATION_MINUTES`.
+            # With no auto-closures the model has no input, and "0h" presents
             # an estimate built on nothing as an observation. The count of
             # closures the estimate rests on travels with it.
-            sample_count=cases.closed,
+            sample_count=auto_closed,
             unit="hours_saved",
             previous_value=prev_hours_saved,
             delta_pct=_delta_pct(
-                hours_saved if cases.closed else None,
-                prev_hours_saved if prev_cases.closed else None,
+                hours_saved if auto_closed else None,
+                prev_hours_saved if prev_auto_closed else None,
             ),
             sparkline=InsightSparkline(points=case_spark),
         ),

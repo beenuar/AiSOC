@@ -41,6 +41,43 @@ export interface SubscribeRequestBody {
   user_agent?: string;
   user_id?: string | null;
   topics?: string[];
+  /** Minimum fused-alert risk to push to this device (inclusive). */
+  minimum_alert_severity?: AlertSeverity;
+  /** False disables alert pages without disabling approvals or hand-offs. */
+  alert_notifications_enabled?: boolean;
+}
+
+export type AlertSeverity = 'critical' | 'high' | 'medium' | 'low';
+
+const ALERT_SEVERITY_RANK: Record<AlertSeverity, number> = {
+  low: 1,
+  medium: 2,
+  high: 3,
+  critical: 4,
+};
+
+export function isAlertSeverity(value: unknown): value is AlertSeverity {
+  return typeof value === 'string'
+    && Object.prototype.hasOwnProperty.call(ALERT_SEVERITY_RANK, value);
+}
+
+/**
+ * Alert preferences are per subscription. Legacy subscriptions default to
+ * High, matching the previous High/Critical-only Kafka fan-out. Never apply
+ * this gate to approval, hand-off or manual test notifications.
+ */
+export function shouldDeliverPush(
+  record: Pick<SubscriptionRecord, 'minimum_alert_severity' | 'alert_notifications_enabled'>,
+  notification: Pick<PushNotification, 'topic' | 'severity'>,
+): boolean {
+  if (notification.topic !== 'p0_alert') return true;
+  if (record.alert_notifications_enabled === false || !isAlertSeverity(notification.severity)) {
+    return false;
+  }
+  const minimum = isAlertSeverity(record.minimum_alert_severity)
+    ? record.minimum_alert_severity
+    : 'high';
+  return ALERT_SEVERITY_RANK[notification.severity] >= ALERT_SEVERITY_RANK[minimum];
 }
 
 export interface SubscriptionRecord {
@@ -51,6 +88,8 @@ export interface SubscriptionRecord {
   keys: { p256dh: string; auth: string };
   user_agent: string | null;
   topics: string[];
+  minimum_alert_severity?: AlertSeverity;
+  alert_notifications_enabled?: boolean;
   created_at: string;
   last_seen_at: string;
 }
@@ -198,8 +237,23 @@ export class PushManager {
       ? (JSON.parse(existingRaw) as SubscriptionRecord)
       : null;
 
-    const topics =
-      body.topics && body.topics.length > 0 ? body.topics : DEFAULT_TOPICS;
+    // An explicit empty topic list means 'none', not 'reset to defaults'.
+    const topics = body.topics ?? DEFAULT_TOPICS;
+    if (body.minimum_alert_severity !== undefined
+      && !isAlertSeverity(body.minimum_alert_severity)) {
+      throw new Error('minimum_alert_severity must be critical, high, medium, or low');
+    }
+    if (body.alert_notifications_enabled !== undefined
+      && typeof body.alert_notifications_enabled !== 'boolean') {
+      throw new Error('alert_notifications_enabled must be a boolean');
+    }
+    const minimumAlertSeverity = body.minimum_alert_severity
+      ?? (isAlertSeverity(existing?.minimum_alert_severity)
+        ? existing.minimum_alert_severity
+        : 'high');
+    const alertNotificationsEnabled = body.alert_notifications_enabled
+      ?? existing?.alert_notifications_enabled
+      ?? true;
 
     const record: SubscriptionRecord = {
       id,
@@ -209,6 +263,8 @@ export class PushManager {
       keys: { p256dh: sub.keys.p256dh, auth: sub.keys.auth },
       user_agent: body.user_agent ?? null,
       topics,
+      minimum_alert_severity: minimumAlertSeverity,
+      alert_notifications_enabled: alertNotificationsEnabled,
       created_at: existing?.created_at ?? this.now().toISOString(),
       last_seen_at: this.now().toISOString(),
     };
@@ -418,7 +474,15 @@ export class PushManager {
     };
     if (!this.enabled) return stats;
 
-    const records = await this.resolveSubscriptions(target);
+    const subscriptions = await this.resolveSubscriptions(target);
+    // The Kafka alert topic remains 'p0_alert' for backwards-compatible
+    // subscriptions; the per-device threshold decides which risk levels page.
+    const records = subscriptions.filter((record) =>
+      shouldDeliverPush(record, {
+        topic: target.topic === 'p0_alert' ? 'p0_alert' : notification.topic,
+        severity: notification.severity,
+      }),
+    );
     stats.attempted = records.length;
 
     // Fan out concurrently but cap to avoid hammering FCM/APNs in big tenants.

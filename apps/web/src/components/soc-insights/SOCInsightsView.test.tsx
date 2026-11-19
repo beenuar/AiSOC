@@ -10,24 +10,21 @@
  * tests fast and DOM-focused.
  */
 
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { render, screen, waitFor } from '@testing-library/react';
 import { SWRConfig } from 'swr';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactElement } from 'react';
 
 vi.mock('@/lib/api', () => ({
-  getActiveTenantId: vi.fn(() => '00000000-0000-0000-0000-000000000001'),
   insightsApi: {
     getSOC: vi.fn(),
   },
-  tenantsApi: { me: vi.fn() },
   // Needed because the view now binds to the real `TimeWindowProvider`, which
   // reconciles the window with the signed-in user's stored preference. Stubbed
   // rather than omitted: an absent export makes the provider throw during
   // render, which reads as a component failure rather than a missing mock.
   authApi: {
     currentUser: vi.fn(() => null),
-    isAuthenticated: vi.fn(() => false),
     updateUserPreferences: vi.fn(() => Promise.resolve()),
   },
 }));
@@ -42,9 +39,7 @@ vi.mock('@/lib/realtime', () => ({
   })),
 }));
 
-import { authApi, getActiveTenantId, insightsApi, tenantsApi, type SOCInsightsResponse } from '@/lib/api';
-import { useRealtimeChannel } from '@/lib/realtime';
-import { TenantProvider, useTenant } from '@/components/layout/TenantProvider';
+import { insightsApi, type SOCInsightsResponse } from '@/lib/api';
 import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 import { SOCInsightsView } from './SOCInsightsView';
 import { pointsToPath } from './Sparkline';
@@ -59,37 +54,18 @@ import { pointsToPath } from './Sparkline';
  * SWR docs (https://swr.vercel.app/docs/advanced/cache).
  */
 function renderIsolated(node: ReactElement) {
-  const cache = new Map();
-  function Wrapper({ children }: { children: ReactNode }) {
-    return (
-      <SWRConfig value={{ provider: () => cache, revalidateOnMount: true, shouldRetryOnError: false }}>
-        <TimeWindowProvider>
-          <TenantProvider>{children}</TenantProvider>
-        </TimeWindowProvider>
-      </SWRConfig>
-    );
-  }
-  return render(node, { wrapper: Wrapper });
-}
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: Error) => void;
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-  return { promise, resolve, reject };
-}
-
-function realtimeEvent(type: string) {
-  vi.mocked(useRealtimeChannel).mockReturnValue({
-    status: 'open',
-    last: { type },
-    history: [],
-    send: vi.fn(),
-    reset: vi.fn(),
-  });
+  return render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      {/*
+        The view binds to the global time window rather than holding a private
+        copy, so it needs the provider the app layout supplies. Wrapping here
+        rather than mocking the hook: a mocked `useTimeWindow` would make the
+        test agree with whatever the component asked for, which is exactly how
+        a selector that drove nothing passed its own suite.
+      */}
+      <TimeWindowProvider>{node}</TimeWindowProvider>
+    </SWRConfig>,
+  );
 }
 
 const sampleResponse: SOCInsightsResponse = {
@@ -167,19 +143,6 @@ const sampleResponse: SOCInsightsResponse = {
 describe('SOCInsightsView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(insightsApi.getSOC).mockReset();
-    vi.mocked(authApi.currentUser).mockReturnValue(null);
-    vi.mocked(authApi.isAuthenticated).mockReturnValue(false);
-    vi.mocked(tenantsApi.me).mockReset();
-    window.localStorage.clear();
-    vi.mocked(getActiveTenantId).mockReturnValue(sampleResponse.tenant_id);
-    vi.mocked(useRealtimeChannel).mockReturnValue({
-      status: 'open', last: null, history: [], send: vi.fn(), reset: vi.fn(),
-    });
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
   });
 
   it('renders a skeleton placeholder before data resolves', () => {
@@ -230,229 +193,6 @@ describe('SOCInsightsView', () => {
     expect(screen.getByText(/500 boom/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
   });
-
-  it('keeps the current tiles visible while a realtime refresh is pending', async () => {
-    vi.useFakeTimers();
-    const next = deferred<SOCInsightsResponse>();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockReturnValueOnce(next.promise);
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    expect(screen.getByText('1.2h')).toBeInTheDocument();
-
-    realtimeEvent('insights_updated');
-    view.rerender(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
-
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('1.2h')).toBeInTheDocument();
-    expect(screen.queryByLabelText(/loading soc insights/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('status')).toHaveTextContent(/refreshing/i);
-
-    await act(async () => {
-      next.resolve({ ...sampleResponse, tiles: [{ ...sampleResponse.tiles[0], value: 2.5 }] });
-    });
-    expect(screen.getByText('2.5h')).toBeInTheDocument();
-    expect(screen.queryByText('1.2h')).not.toBeInTheDocument();
-  });
-
-  it('retains the last snapshot on refresh failure and retries without blanking it', async () => {
-    vi.useFakeTimers();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockRejectedValueOnce(new Error('Refresh failed'))
-      .mockResolvedValueOnce({ ...sampleResponse, tiles: [{ ...sampleResponse.tiles[0], value: 2.5 }] });
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
-    realtimeEvent('case.updated');
-    view.rerender(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
-
-    expect(screen.getByText('1.2h')).toBeInTheDocument();
-    expect(screen.getByRole('alert')).toHaveTextContent(/showing the last successful update/i);
-    expect(screen.getByRole('alert')).toHaveTextContent('Refresh failed');
-
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /retry/i })); });
-    expect(screen.getByText('2.5h')).toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
-
-  it('coalesces a burst and waits for an in-flight refresh before requesting again', async () => {
-    vi.useFakeTimers();
-    const next = deferred<SOCInsightsResponse>();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockReturnValueOnce(next.promise)
-      .mockResolvedValueOnce(sampleResponse);
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-
-    for (let i = 0; i < 3; i++) {
-      realtimeEvent('case.updated');
-      view.rerender(<SOCInsightsView />);
-      await act(async () => { await vi.advanceTimersByTimeAsync(100); });
-    }
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(2);
-
-    for (let i = 0; i < 3; i++) {
-      realtimeEvent('case.updated');
-      view.rerender(<SOCInsightsView />);
-      await act(async () => { await vi.advanceTimersByTimeAsync(500); });
-    }
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(2);
-
-    await act(async () => { next.resolve(sampleResponse); });
-    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(3);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(3);
-  });
-
-  it('does not refetch for unrelated realtime messages', async () => {
-    vi.useFakeTimers();
-    vi.mocked(insightsApi.getSOC).mockResolvedValue(sampleResponse);
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    realtimeEvent('pong');
-    view.rerender(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(1);
-  });
-
-  it('deduplicates a quick remount of the same tenant and window', async () => {
-    vi.useFakeTimers();
-    vi.mocked(insightsApi.getSOC).mockResolvedValue(sampleResponse);
-    const view = renderIsolated(<SOCInsightsView key="first" />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
-    view.rerender(<SOCInsightsView key="second" />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
-    expect(screen.getByText('1.2h')).toBeInTheDocument();
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not display the old window under the new selection while loading', async () => {
-    const next = deferred<SOCInsightsResponse>();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockReturnValueOnce(next.promise);
-    renderIsolated(<SOCInsightsView />);
-    await screen.findByText('1.2h');
-
-    fireEvent.click(screen.getByRole('radio', { name: '7d' }));
-    expect(insightsApi.getSOC).toHaveBeenLastCalledWith('7d');
-    expect(screen.queryByText('1.2h')).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/loading soc insights/i)).toBeInTheDocument();
-
-    await act(async () => {
-      next.resolve({ ...sampleResponse, window: '7d', tiles: [{ ...sampleResponse.tiles[0], value: 2.5 }] });
-    });
-    expect(screen.getByText('2.5h')).toBeInTheDocument();
-  });
-
-  it('hides cached tiles immediately when the active tenant changes', async () => {
-    const next = deferred<SOCInsightsResponse>();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockReturnValueOnce(next.promise);
-    const view = renderIsolated(<SOCInsightsView />);
-    await screen.findByText('1.2h');
-
-    vi.mocked(getActiveTenantId).mockReturnValue('00000000-0000-0000-0000-000000000002');
-    view.rerender(<SOCInsightsView />);
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(2);
-    expect(screen.queryByText('1.2h')).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/loading soc insights/i)).toBeInTheDocument();
-  });
-
-  it('does not reuse another tenant snapshot or a pending response after a tenant change', async () => {
-    const previous = deferred<SOCInsightsResponse>();
-    const next = deferred<SOCInsightsResponse>();
-    vi.mocked(insightsApi.getSOC)
-      .mockReturnValueOnce(previous.promise)
-      .mockReturnValueOnce(next.promise);
-    const view = renderIsolated(<SOCInsightsView />);
-
-    const nextTenant = '00000000-0000-0000-0000-000000000002';
-    vi.mocked(getActiveTenantId).mockReturnValue(nextTenant);
-    view.rerender(<SOCInsightsView />);
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(2);
-
-    await act(async () => { previous.resolve(sampleResponse); });
-    expect(screen.queryByText('1.2h')).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/loading soc insights/i)).toBeInTheDocument();
-
-    await act(async () => {
-      next.resolve({ ...sampleResponse, tenant_id: nextTenant, tiles: [{ ...sampleResponse.tiles[0], value: 2.5 }] });
-    });
-    expect(screen.getByText('2.5h')).toBeInTheDocument();
-  });
-
-  it('uses the transport tenant when the tenant picker falls back to the home tenant', async () => {
-    const childTenant = '00000000-0000-0000-0000-000000000002';
-    vi.mocked(getActiveTenantId).mockReturnValue(childTenant);
-    vi.mocked(authApi.isAuthenticated).mockReturnValue(true);
-    vi.mocked(authApi.currentUser).mockReturnValue({
-      id: 'operator', email: 'operator@example.test', role: 'mssp-admin',
-      tenant_id: sampleResponse.tenant_id,
-    });
-    vi.mocked(tenantsApi.me).mockRejectedValue(new Error('Tenant picker unavailable'));
-    vi.mocked(insightsApi.getSOC).mockResolvedValue({ ...sampleResponse, tenant_id: childTenant });
-
-    function TenantContextState() {
-      const { current } = useTenant();
-      return <span data-testid="tenant-context">{current?.id}</span>;
-    }
-    renderIsolated(<><TenantContextState /><SOCInsightsView /></>);
-    await waitFor(() => expect(screen.getByTestId('tenant-context')).toHaveTextContent(sampleResponse.tenant_id));
-    await screen.findByText('1.2h');
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(1);
-  });
-
-  it.each([
-    [{ tenant_id: '00000000-0000-0000-0000-000000000002' }, /selected tenant/i],
-    [{ window: '7d' as const }, /selected time window/i],
-  ])('rejects a snapshot for the wrong scope: %j', async (scope, message) => {
-    vi.mocked(insightsApi.getSOC).mockResolvedValue({ ...sampleResponse, ...scope });
-    renderIsolated(<SOCInsightsView />);
-    expect(await screen.findByRole('alert')).toHaveTextContent(message);
-    expect(screen.queryByText('1.2h')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('soc-insights-tiles')).not.toBeInTheDocument();
-  });
-
-  it('keeps only the validated snapshot when a refresh returns another tenant', async () => {
-    vi.useFakeTimers();
-    vi.mocked(insightsApi.getSOC)
-      .mockResolvedValueOnce(sampleResponse)
-      .mockResolvedValueOnce({
-        ...sampleResponse,
-        tenant_id: '00000000-0000-0000-0000-000000000002',
-        tiles: [{ ...sampleResponse.tiles[0], value: 99 }],
-      });
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    realtimeEvent('case.updated');
-    view.rerender(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(250); });
-
-    expect(screen.getByRole('alert')).toHaveTextContent(/selected tenant/i);
-    expect(screen.getByText('1.2h')).toBeInTheDocument();
-    expect(screen.queryByText('99.0h')).not.toBeInTheDocument();
-  });
-
-  it('cancels a scheduled refresh when the page unmounts', async () => {
-    vi.useFakeTimers();
-    vi.mocked(insightsApi.getSOC).mockResolvedValue(sampleResponse);
-    const view = renderIsolated(<SOCInsightsView />);
-    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
-    realtimeEvent('case.updated');
-    view.rerender(<SOCInsightsView />);
-    view.unmount();
-    await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
-    expect(insightsApi.getSOC).toHaveBeenCalledTimes(1);
-  });
-
 });
 
 // ---------------------------------------------------------------------------

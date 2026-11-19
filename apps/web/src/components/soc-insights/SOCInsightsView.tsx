@@ -8,8 +8,7 @@
  */
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
-import { useTenant } from '@/components/layout/TenantProvider';
+import { useEffect, useMemo } from 'react';
 import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
 import useSWR from 'swr';
 
@@ -19,7 +18,6 @@ import {
   type InsightsWindow,
   type SOCInsightsResponse,
   insightsApi,
-  getActiveTenantId,
 } from '@/lib/api';
 
 import { InsightTileCard } from './InsightTileCard';
@@ -45,108 +43,58 @@ export function SOCInsightsView() {
   const { window: globalWindow, setWindow: setGlobalWindow } = useTimeWindow();
   const clamped = globalWindow === '1h';
   const window: InsightsWindow = clamped ? '24h' : globalWindow;
-  // Subscribe to tenant changes, but key by the exact identity used by the
-  // transport. The picker can fall back to the home tenant on a list error
-  // while a child override remains active. No picker request blocks this read.
-  useTenant();
-  const tenantId = getActiveTenantId();
-  const { last } = useRealtimeChannel<RealtimePoke>('insights');
+  const setWindow = setGlobalWindow;
 
-  return (
-    <InsightsPanel
-      key={`${tenantId}:${window}`}
-      tenantId={tenantId}
-      window={window}
-      clamped={clamped}
-      onWindowChange={setGlobalWindow}
-      last={last}
-    />
-  );
-}
-
-interface InsightsPanelProps {
-  tenantId: string;
-  window: InsightsWindow;
-  clamped: boolean;
-  onWindowChange: (w: InsightsWindow) => void;
-  last: RealtimePoke | null;
-}
-
-function InsightsPanel({ tenantId, window, clamped, onWindowChange, last }: InsightsPanelProps) {
-  const { data, error, isValidating, mutate } = useSWR<SOCInsightsResponse>(
-    ['insights:soc', tenantId, window],
-    async () => {
-      const snapshot = await insightsApi.getSOC(window);
-      // The API owns tenant authorization. Never label a credential-scoped
-      // response as another tenant.
-      if (snapshot.tenant_id !== tenantId) {
-        throw new Error('SOC Insights did not return data for the selected tenant.');
-      }
-      if (snapshot.window !== window) {
-        throw new Error('SOC Insights did not return data for the selected time window.');
-      }
-      return snapshot;
-    },
+  const { data, error, isLoading, mutate } = useSWR<SOCInsightsResponse>(
+    ['insights:soc', window],
+    () => insightsApi.getSOC(window),
     {
-      // Focus/remount requests share SWR's short deduplication window. An
-      // explicit realtime refresh below still fetches a fresh snapshot.
+      // The realtime channel pokes us every 30s; we also revalidate
+      // on focus in case the tab was backgrounded long enough for
+      // the WebSocket to disconnect.
       revalidateOnFocus: true,
       revalidateIfStale: true,
-      dedupingInterval: 2_000,
+      // Don't dedupe identical-key refetches — the realtime poke is
+      // explicit "go look again", we want it honoured even if SWR
+      // just fetched.
+      dedupingInterval: 0,
     },
   );
 
-  const seenEvent = useRef(last);
-  const refreshPending = useRef(false);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Subscribe to `insights_updated` events from the realtime service.
+  // The hook keeps the socket alive and reconnects with exponential
+  // backoff; we just react to the last received frame.
+  const { last } = useRealtimeChannel<RealtimePoke>('insights');
 
   useEffect(() => {
-    if (last !== seenEvent.current) {
-      seenEvent.current = last;
-      if (last?.type === 'insights_updated' || last?.type === 'case.updated') {
-        refreshPending.current = true;
-      }
+    if (last?.type === 'insights_updated' || last?.type === 'case.updated') {
+      // Force a re-fetch — pass false to suppress the optimistic
+      // "loading" flash; users keep seeing the old tiles for the
+      // 100-200ms until the new ones arrive.
+      mutate(undefined, { revalidate: true });
     }
-
-    // A burst becomes one request. Events arriving during a request queue
-    // one follow-up, so a slow response cannot cause overlapping queries.
-    if (isValidating) {
-      if (refreshTimer.current !== null) clearTimeout(refreshTimer.current);
-      refreshTimer.current = null;
-      return;
-    }
-    if (!refreshPending.current || refreshTimer.current !== null) return;
-    refreshTimer.current = setTimeout(() => {
-      refreshTimer.current = null;
-      refreshPending.current = false;
-      // No data argument: keep the successful snapshot while revalidating.
-      void mutate();
-    }, 250);
-  }, [last, isValidating, mutate]);
-
-  useEffect(() => () => {
-    if (refreshTimer.current !== null) clearTimeout(refreshTimer.current);
-  }, []);
+  }, [last, mutate]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 p-6">
       <Header
         window={window}
         clamped={clamped}
-        onWindowChange={onWindowChange}
+        onWindowChange={setWindow}
         generatedAt={data?.generated_at}
         manualMinutes={data?.manual_investigation_minutes}
-        refreshing={Boolean(data && isValidating)}
       />
 
       {error ? (
         <ErrorState
           message={error instanceof Error ? error.message : String(error)}
-          stale={Boolean(data)}
-          onRetry={() => { void mutate(); }}
+          onRetry={() => mutate()}
         />
-      ) : null}
-      {data ? <TileGrid tiles={data.tiles} /> : error ? null : <LoadingSkeleton />}
+      ) : isLoading || !data ? (
+        <LoadingSkeleton />
+      ) : (
+        <TileGrid tiles={data.tiles} />
+      )}
     </div>
   );
 }
@@ -161,10 +109,9 @@ interface HeaderProps {
   onWindowChange: (w: InsightsWindow) => void;
   generatedAt: string | undefined;
   manualMinutes: number | undefined;
-  refreshing: boolean;
 }
 
-function Header({ window, clamped, onWindowChange, generatedAt, manualMinutes, refreshing }: HeaderProps) {
+function Header({ window, clamped, onWindowChange, generatedAt, manualMinutes }: HeaderProps) {
   const stamp = useMemo(() => {
     if (!generatedAt) return null;
     try {
@@ -177,12 +124,12 @@ function Header({ window, clamped, onWindowChange, generatedAt, manualMinutes, r
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 className="text-xl font-semibold text-fg-primary">SOC Insights</h1>
-        <p className="mt-1 max-w-prose text-sm text-fg-muted">
+        <h1 className="text-2xl font-semibold tracking-tight">SOC Insights</h1>
+        <p className="mt-1 max-w-prose text-sm text-muted-foreground">
           Seven operational tiles for the SOC, refreshed every 30 seconds and
           on case changes. Deltas compare against the immediately preceding
-          window. Estimated analyst hours saved assumes {manualMinutes ?? 45}
-          {' '}minutes per closed case.
+          window. Hours-saved assumes {manualMinutes ?? 45} minutes of analyst
+          time per auto-closed case.
         </p>
         {clamped ? (
           <p className="mt-1 text-xs text-amber-500/90">
@@ -192,8 +139,8 @@ function Header({ window, clamped, onWindowChange, generatedAt, manualMinutes, r
       </div>
       <div className="flex items-center gap-4">
         {stamp ? (
-          <span role="status" className="text-xs text-fg-muted">
-            {refreshing ? 'Refreshing…' : `Updated ${stamp}`}
+          <span className="text-xs text-muted-foreground" aria-live="polite">
+            Updated {stamp}
           </span>
         ) : null}
         <WindowSelector value={window} onChange={onWindowChange} />
@@ -212,7 +159,7 @@ function WindowSelector({ value, onChange }: WindowSelectorProps) {
     <div
       role="radiogroup"
       aria-label="Window"
-      className="inline-flex rounded-md border border-surface-border bg-surface-card p-0.5 text-xs"
+      className="inline-flex rounded-md border border-border bg-card p-0.5 text-xs"
     >
       {WINDOW_OPTIONS.map((option) => {
         const active = option === value;
@@ -225,8 +172,8 @@ function WindowSelector({ value, onChange }: WindowSelectorProps) {
             onClick={() => onChange(option)}
             className={
               active
-                ? 'rounded bg-brand-600 px-3 py-1 font-medium text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50'
-                : 'rounded px-3 py-1 text-fg-muted hover:bg-surface-hover hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50'
+                ? 'rounded bg-primary px-3 py-1 font-medium text-primary-foreground'
+                : 'rounded px-3 py-1 text-muted-foreground hover:text-foreground'
             }
           >
             {option}
@@ -262,7 +209,8 @@ function TileGrid({ tiles }: TileGridProps) {
 }
 
 function LoadingSkeleton() {
-  // Match the tile grid and minimum card height while the first snapshot loads.
+  // 7 skeleton tiles arranged on the same grid. The fixed heights
+  // mean the layout doesn't reflow when the real data arrives.
   return (
     <div
       className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -272,7 +220,7 @@ function LoadingSkeleton() {
       {Array.from({ length: 7 }).map((_, i) => (
         <div
           key={i}
-          className="h-32 animate-pulse rounded-xl border border-surface-border bg-surface-card"
+          className="h-32 animate-pulse rounded-lg border border-border bg-card"
         />
       ))}
     </div>
@@ -281,26 +229,23 @@ function LoadingSkeleton() {
 
 interface ErrorStateProps {
   message: string;
-  stale: boolean;
   onRetry: () => void;
 }
 
-function ErrorState({ message, stale, onRetry }: ErrorStateProps) {
+function ErrorState({ message, onRetry }: ErrorStateProps) {
   return (
     <div
       role="alert"
-      className="rounded-xl border border-red-500/30 bg-red-500/5 p-5 text-sm"
+      className="rounded-lg border border-destructive/30 bg-destructive/5 p-6 text-sm"
     >
-      <p className="font-medium text-fg-primary">
-        {stale
-          ? 'Unable to refresh SOC Insights. Showing the last successful update.'
-          : 'SOC Insights are temporarily unavailable.'}
+      <p className="font-medium text-destructive">
+        SOC Insights are temporarily unavailable.
       </p>
-      <p className="mt-1 text-fg-muted">{message}</p>
+      <p className="mt-1 text-muted-foreground">{message}</p>
       <button
         type="button"
         onClick={onRetry}
-        className="mt-3 rounded-md border border-surface-border bg-surface-card px-3 py-1.5 text-xs font-medium text-fg-secondary hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+        className="mt-3 rounded border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted"
       >
         Retry
       </button>
