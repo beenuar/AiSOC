@@ -116,6 +116,7 @@ test('subscription metadata defaults, validates and persists on renewal', async 
     topics: ['p0_alert'],
   };
   const first = await mgr.upsertSubscription('tenant-1', 'analyst-1', body);
+  assert.deepEqual(first.topics, ['p0_alert']);
   assert.equal(first.minimum_alert_severity, 'high');
   assert.equal(first.alert_notifications_enabled, true);
   const changed = await mgr.upsertSubscription('tenant-1', 'analyst-1', {
@@ -123,9 +124,21 @@ test('subscription metadata defaults, validates and persists on renewal', async 
   });
   assert.equal(changed.minimum_alert_severity, 'medium');
   assert.equal(changed.alert_notifications_enabled, false);
-  const renewal = await mgr.upsertSubscription('tenant-1', 'analyst-1', body);
+  const renewal = await mgr.upsertSubscription('tenant-1', 'analyst-1', {
+    subscription: body.subscription,
+  });
+  assert.deepEqual(renewal.topics, ['p0_alert']);
   assert.equal(renewal.minimum_alert_severity, 'medium');
   assert.equal(renewal.alert_notifications_enabled, false);
+  await mgr.upsertSubscription('tenant-1', 'analyst-1', { ...body, topics: [] });
+  const mutedRenewal = await mgr.upsertSubscription('tenant-1', 'analyst-1', {
+    subscription: body.subscription,
+  });
+  assert.deepEqual(mutedRenewal.topics, []);
+  const newDevice = await mgr.upsertSubscription('tenant-1', 'analyst-1', {
+    subscription: { ...body.subscription, endpoint: 'https://push.example/2' },
+  });
+  assert.deepEqual(newDevice.topics, ['p0_alert', 'agent_approval', 'oncall_handoff']);
   await assert.rejects(
     mgr.upsertSubscription('tenant-1', 'analyst-1', { ...body, minimum_alert_severity: 'urgent' as never }),
     /minimum_alert_severity must be/,
