@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Checkpoint cursors order and compare the instant a timestamp names, not
+  its text** (#1970, fixed in #1973 by @Varshith-Kali, reported with failing
+  tests by @pavancharak). `apply_checkpoint` ordered and compared vendor
+  timestamps as raw strings, so a `10:00:00.500Z` row was dropped against a
+  `10:00:00Z` cursor and a cursor written with a `+05:00` offset dropped later
+  rows. Rows are now ordered and compared by the aware UTC instant their
+  timestamp names, with the id breaking ties within one instant, and the
+  staged cursor names the newest instant — so fractional-second and UTC-offset
+  forms no longer drop newer rows. A timestamp that does not parse keeps the
+  row and falls back to the previous text comparison, so an unreadable time
+  degrades to the old behaviour instead of losing data. Pinned by
+  `tests/connectors/test_checkpoint_instant_ordering.py`.
+
+- **Huntress, Cisco Secure Endpoint and Sophos Central persist an event-time
+  cursor and overlap one poll interval** (#1971, fixed in #1973 by
+  @Varshith-Kali, reported with failing tests by @pavancharak). The three
+  connectors polled clock-derived windows with no persisted cursor, so a run
+  the scheduler skipped left a window no later poll requested and no backfill
+  ever covered. Each now declares a checkpoint and widens its poll window by
+  the persisted cursor (one interval of overlap when none exists), so a
+  skipped run's gap is covered, and skipped runs are logged
+  (`connector.scheduler.poll_skipped`) instead of vanishing silently. Pinned
+  by `tests/connectors/test_poll_window_overlap.py`.
 
 ## [23.5.2] - 2026-11-19
 
