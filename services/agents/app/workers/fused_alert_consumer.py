@@ -48,7 +48,8 @@ try:
     # worker then reports the missing client once instead of the module
     # failing to import. Module-level on purpose: the supervision tests
     # monkeypatch these names the way the fusion worker's do.
-    from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
+    from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
+    from aiokafka.structs import OffsetAndMetadata
     from aiokafka.errors import (
         AuthenticationFailedError,
         ClusterAuthorizationFailedError,
@@ -61,6 +62,8 @@ try:
 except ImportError:  # pragma: no cover — exercised only without the dep installed
     AIOKafkaConsumer = None  # type: ignore[assignment,misc]
     AIOKafkaProducer = None  # type: ignore[assignment,misc]
+    TopicPartition = None  # type: ignore[assignment,misc]
+    OffsetAndMetadata = None  # type: ignore[assignment,misc]
     AuthenticationFailedError = None  # type: ignore[assignment,misc]
     ClusterAuthorizationFailedError = None  # type: ignore[assignment,misc]
     GroupAuthorizationFailedError = None  # type: ignore[assignment,misc]
@@ -651,7 +654,7 @@ class FusedAlertTriageWorker:
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
             **kafka_client_kwargs(),
         )
-        last_commit = time.monotonic()
+        _commit_task: asyncio.Task | None = None
         try:
             await self._consumer.start()
             self._running = True
@@ -663,6 +666,41 @@ class FusedAlertTriageWorker:
                 group=self._group_id,
                 entity_concurrency=self._lanes.limit,
             )
+            # (partition, offset) per in-flight lane task; the highest offset
+            # seen per partition; the watermark committed per partition.
+            _inflight: set[tuple[int, int]] = set()
+            _highest: dict[int, int] = {}
+            _committed: dict[int, int] = {}
+
+            async def _commit_watermarks() -> None:
+                # Commits run on a timer, NOT on message arrival. The previous
+                # shape evaluated the window only when a new message arrived,
+                # so a topic that went quiet after a burst never committed the
+                # work that had finished (observed in the field: 104 triages
+                # completed, nothing committed, the offset frozen until the
+                # next message arrived). An offset becomes committable only
+                # once every lower offset in this assignment completed — a
+                # bare commit() commits the fetch position instead, ahead of
+                # in-flight work, and a restart then loses alerts that were
+                # never triaged.
+                while True:
+                    await asyncio.sleep(_COMMIT_WINDOW_SECONDS)
+                    offsets: dict = {}
+                    parts = set(_highest) | {p for (p, _) in _inflight}
+                    for part in parts:
+                        pend = [o for (pp, o) in _inflight if pp == part]
+                        wm = min(pend) if pend else _highest[part] + 1
+                        if wm > _committed.get(part, -1):
+                            _committed[part] = wm
+                            offsets[TopicPartition(self._topic, part)] = OffsetAndMetadata(wm, "")
+                    if not offsets:
+                        continue
+                    try:
+                        await self._consumer.commit(offsets)
+                    except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
+                        logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
+
+            _commit_task = asyncio.create_task(_commit_watermarks())
             async for msg in self._consumer:
                 if not self._running:
                     break
@@ -704,37 +742,26 @@ class FusedAlertTriageWorker:
                             exc_info=True,
                         )
 
-                await self._lanes.submit(entity_of(payload), _handle)
+                if offset is not None and partition is not None:
+                    # Track in-flight offsets so the timer can commit the
+                    # watermark; submit stays non-blocking so distinct
+                    # entities actually overlap.
+                    key = (partition, offset)
+                    _inflight.add(key)
+                    _highest[partition] = max(_highest.get(partition, offset), offset)
 
-                # Commit only after everything in flight has finished, and
-                # only when the window is full or has been open long
-                # enough. Committing with work in flight would break the
-                # at-least-once contract this loop's own comment
-                # describes: a crash after the commit loses an alert that
-                # was never triaged.
-                #
-                # The time bound matters as much as the count. Without it
-                # a topic that goes quiet below the concurrency bound
-                # leaves the last few alerts triaged and uncommitted
-                # indefinitely, so a restart replays work that was already
-                # done — correct, and wasteful every single time.
-                window_full = self._lanes.in_flight >= self._lanes.limit
-                window_old = (time.monotonic() - last_commit) >= _COMMIT_WINDOW_SECONDS
-                if window_full or window_old:
-                    await self._lanes.drain()
-                    last_commit = time.monotonic()
-                    try:
-                        await self._consumer.commit()
-                    except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
-                        logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
-                    continue
+                    async def _handle_tracked(_key=key, _h=_handle) -> None:
+                        try:
+                            await _h()
+                        finally:
+                            _inflight.discard(_key)
 
-                await self._lanes.drain()
-                try:
-                    await self._consumer.commit()
-                except Exception as commit_exc:  # noqa: BLE001 — reprocess on restart
-                    logger.warning("auto_triage_worker.commit_failed", error=str(commit_exc))
+                    await self._lanes.submit(entity_of(payload), _handle_tracked)
+                else:
+                    await self._lanes.submit(entity_of(payload), _handle)
         finally:
+            if _commit_task is not None:
+                _commit_task.cancel()
             # Cleared before the teardown await, which can itself raise on a
             # broker that has gone away — and suppressed, because a teardown
             # raise inside this finally would replace the exception the
