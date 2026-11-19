@@ -237,8 +237,9 @@ export class PushManager {
       ? (JSON.parse(existingRaw) as SubscriptionRecord)
       : null;
 
-    // An explicit empty topic list means 'none', not 'reset to defaults'.
-    const topics = body.topics ?? DEFAULT_TOPICS;
+    // Renewal without topics preserves the selection, including an empty list.
+    // Only a new subscription without topics receives the defaults.
+    const topics = body.topics ?? existing?.topics ?? DEFAULT_TOPICS;
     if (body.minimum_alert_severity !== undefined
       && !isAlertSeverity(body.minimum_alert_severity)) {
       throw new Error('minimum_alert_severity must be critical, high, medium, or low');
