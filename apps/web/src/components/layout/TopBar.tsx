@@ -17,6 +17,8 @@ const routeLabels: Record<string, { title: string; description: string }> = {
   '/settings/rbac': { title: 'Roles & Permissions', description: 'Access control and team management' },
   '/settings/mfa': { title: 'Two-factor authentication', description: 'Your second factor, and whether this tenant requires one' },
   '/settings/users': { title: 'Users', description: 'Member and role management' },
+  '/dashboards/soc-insights': { title: 'SOC Insights', description: 'Operational performance and trends' },
+  '/dashboards/operations': { title: 'SOC operations', description: 'Detection pipeline health and throughput' },
   '/dashboard': { title: 'Dashboard', description: 'SOC overview and metrics' },
   '/alerts': { title: 'Alerts', description: 'Security alerts and incidents' },
   '/cases': { title: 'Cases', description: 'Incident case management' },
@@ -71,7 +73,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
   // and routeLabels lists nested routes (e.g. /detection/catalog) before
   // their parents so startsWith() picks the deepest match.
   const routeKey = Object.keys(routeLabels).find(
-    (key) => key !== '/' && pathname.startsWith(key)
+    (key) => key !== '/' && (pathname === key || pathname.startsWith(`${key}/`))
   ) || (pathname === '/' ? '/' : null);
 
   // Derive a sensible title for unknown routes from the URL itself instead
