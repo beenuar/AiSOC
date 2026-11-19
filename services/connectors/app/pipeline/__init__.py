@@ -18,11 +18,20 @@ scheduler state — that's the scheduler's job.
 from __future__ import annotations
 
 from app.pipeline.filter_rules import FilterDecision, apply_filter_rules
-from app.pipeline.fingerprint import compute_fingerprint, diff_fingerprints
+from app.pipeline.fingerprint import (
+    compute_dynamic_fingerprint,
+    compute_fingerprint,
+    diff_fingerprints,
+    evaluate_drift,
+    stable_keys,
+)
 
 __all__ = [
     "FilterDecision",
     "apply_filter_rules",
+    "compute_dynamic_fingerprint",
     "compute_fingerprint",
     "diff_fingerprints",
+    "evaluate_drift",
+    "stable_keys",
 ]

@@ -1,36 +1,46 @@
 """Schema fingerprinting for the Connector Health & Schema-Drift Sentinel.
 
-We compute a stable hash of the *set of top-level field names* that appear
-across a batch of normalized events. The hash is deliberately simple so that
-two polls of the same upstream API produce the same fingerprint as long as
-the field set is unchanged — even if values change, even if events arrive in
-a different order, even if some events omit optional fields.
+Two fingerprint flavours, both stable, both order/value independent:
 
-The intent is not to detect every possible upstream change (a value-type
-change from string→int wouldn't be caught here, for example). The intent is
-to catch the **single most common silent failure mode**: an upstream vendor
-renames or removes a field, the connector's normalize() logic now produces
-events missing critical attributes, and detections silently start firing
-less frequently. Even this coarse fingerprint catches that case quickly.
+* ``compute_fingerprint`` (legacy) — SHA-256 over the union of *all*
+  top-level field names of a batch. Kept for compatibility and for the
+  drift *evidence* snapshot; prefer the sentinel flavour below for the
+  baseline.
 
-Algorithm
----------
+* ``compute_dynamic_fingerprint`` — SHA-256 over the union of top-level
+  field names **excluding dynamic and optional fields**. This is the
+  baseline the drift sentinel stores. It answers the question the sentinel
+  actually asks: "did upstream *rename or remove* a field we rely on?",
+  without the false-positive storm caused by legitimate batch composition.
 
-For a batch of N normalized events:
+Why the union-of-everything baseline was wrong
+-----------------------------------------------
 
-1. Union all top-level keys across all N events into a set.
-2. Sort lexicographically (stable across runs, so the hash is stable).
-3. Join with ``\\x1f`` (ASCII unit separator — guaranteed not to appear in
-   a JSON field name).
-4. SHA-256 the joined string and return the hex digest.
+``normalize()`` emits several fields conditionally (``src_ip``,
+``object_id``, ``record_type``, ``result_status``, ...): they appear only
+when the upstream record carries them. Some connectors additionally lift
+event-specific key/value pairs into dynamically named fields
+(``m365_audit`` turns every ``Parameters`` entry into ``param_<name>``).
+On a busy tenant the *set* of dynamically named fields therefore changes
+with every poll — a SharePoint file event today, an Entra ID role
+assignment tomorrow — while nothing about the upstream contract changed.
 
-Two batches with identical field sets produce identical fingerprints.
-A batch with one extra field (``new_field``) or one missing field produces
-a different fingerprint, which the scheduler treats as drift.
+Hashing the union of everything made every ordinary poll look like schema
+drift (the noisy all-added, zero-removed entries the dashboard surfaced),
+which trains operators to ignore the sentinel and hides the one real
+failure it exists to catch.
 
-Empty batches return ``None`` rather than a fingerprint of the empty set,
-because we don't want a quiet hour (no events) to clobber the baseline
-fingerprint we recorded the previous time the connector returned events.
+Contract of the dynamic fingerprint
+----------------------------------
+* Dynamic fields (``param_*`` and friends, per ``DYNAMIC_FIELD_PREFIXES``)
+  are excluded from the hash entirely.
+* Optional fields (``OPTIONAL_FIELDS``) never flip the fingerprint — in
+  either direction.
+* Drift is reported **only** when a previously-seen core field goes
+  missing from a batch (``removed`` is non-empty). Pure additions — even
+  of new core fields — update the baseline silently; a new stable field
+  appearing is a vendor improvement, not a breakage, and the drift details
+  keep full evidence if one wants to audit it.
 """
 
 from __future__ import annotations
@@ -48,15 +58,48 @@ from typing import Any
 
 _SEPARATOR = "\x1f"
 
+#: Top-level field-name prefixes whose names are generated at normalize()
+#: time from event content (Microsoft 365 ``Parameters`` pairs today; the
+#: convention for other connectors lifting key/value payloads). These names
+#: legitimately vary from batch to batch and must never flip a fingerprint.
+DYNAMIC_FIELD_PREFIXES: tuple[str, ...] = ("param_",)
 
-def compute_fingerprint(events: Iterable[dict[str, Any]]) -> str | None:
-    """Return a stable SHA-256 hex digest of the union of top-level field names.
+#: Normalize-output fields that are present only when the upstream record
+#: carries the source attribute. They may appear or disappear between
+#: batches without any upstream contract change.
+OPTIONAL_FIELDS: frozenset[str] = frozenset(
+    {
+        "src_ip",
+        "object_id",
+        "record_type",
+        "result_status",
+        "actor_email",
+        "sha256",
+        "file_name",
+        "parent_process",
+        "command_line",
+        "dns_query",
+        "url",
+        "destination_ip",
+        "user_agent",
+        "http_method",
+        "http_status",
+        "asset_id",
+        "container_id",
+        "image_id",
+        "instance_id",
+        "vulnerability_id",
+        "cve_id",
+    }
+)
 
-    Returns ``None`` if no events have any keys (e.g. an empty list, or a
-    list of empty dicts). Returning ``None`` lets the caller distinguish
-    "no events this poll" from "the upstream changed schema to the empty
-    set", which is essentially never what we want to flag as drift.
-    """
+
+def _is_dynamic(name: str) -> bool:
+    return name.startswith(DYNAMIC_FIELD_PREFIXES)
+
+
+def batch_keys(events: Iterable[dict[str, Any]]) -> set[str]:
+    """Union of top-level field names across structured events in a batch."""
     keys: set[str] = set()
     for event in events:
         if not isinstance(event, dict):
@@ -65,13 +108,71 @@ def compute_fingerprint(events: Iterable[dict[str, Any]]) -> str | None:
             # problem, not the fingerprinter's.
             continue
         keys.update(event.keys())
+    return keys
 
+
+def stable_keys(events: Iterable[dict[str, Any]]) -> set[str]:
+    """Field names that participate in the fingerprint: the batch key union
+    minus dynamic (``param_*``-style) and optional fields."""
+    return {k for k in batch_keys(events) if not _is_dynamic(k) and k not in OPTIONAL_FIELDS}
+
+
+def compute_fingerprint(events: Iterable[dict[str, Any]]) -> str | None:
+    """Legacy fingerprint: union of *all* top-level keys, hashed.
+
+    Returns ``None`` if no events have any keys, letting the caller
+    distinguish "no events this poll" from "schema became the empty set".
+
+    Retained for evidence snapshots and existing tests. The drift baseline
+    must use :func:`compute_dynamic_fingerprint` instead.
+    """
+    keys = batch_keys(events)
     if not keys:
         return None
-
     joined = _SEPARATOR.join(sorted(keys))
-    digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
-    return digest
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def compute_dynamic_fingerprint(events: Iterable[dict[str, Any]]) -> str | None:
+    """Sentinel fingerprint: stable core field names only.
+
+    Excludes dynamic (``param_*``-style) and optional fields so that two
+    batches of *different event kinds from the same schema* produce the
+    same fingerprint. Returns ``None`` for empty/keyless batches so the
+    caller leaves the stored baseline untouched.
+    """
+    keys = stable_keys(events)
+    if not keys:
+        return None
+    joined = _SEPARATOR.join(sorted(keys))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
+def evaluate_drift(
+    baseline_keys: Iterable[str],
+    current_keys: Iterable[str],
+) -> dict[str, Any]:
+    """Decide whether the current batch represents real schema drift.
+
+    Takes the *stored* baseline key set (``schema_fields`` on the row;
+    a connector with no persisted baseline cannot drift — the first
+    non-empty batch just seeds one) and the current batch's stable key
+    set.
+
+    Returns a dict with ``drift_detected`` (bool) plus the evidence
+    (``added``/``removed``/``unchanged_count``). Drift is True **only**
+    when at least one baseline core field is missing from the current
+    batch — the rename/removal failure mode the sentinel exists to catch.
+    """
+    prev = set(baseline_keys or [])
+    curr = set(current_keys or [])
+    removed = sorted(prev - curr)
+    return {
+        "drift_detected": bool(prev) and bool(removed),
+        "added": sorted(curr - prev),
+        "removed": removed,
+        "unchanged_count": len(prev & curr),
+    }
 
 
 def diff_fingerprints(
@@ -83,8 +184,7 @@ def diff_fingerprints(
     Used by the scheduler to populate ``last_drift_details`` so the UI can
     show "added: X; removed: Y" instead of just "fingerprint changed".
     Both arguments are the raw key sets — the caller is responsible for
-    pulling them from the most recent batch and the prior baseline batch
-    (we cache the prior batch's keys in-memory in the scheduler).
+    pulling them from the most recent batch and the prior baseline batch.
 
     The mapping is not homogeneous: ``added`` and ``removed`` are sorted key
     lists and ``unchanged_count`` is an int. It was declared
@@ -105,4 +205,13 @@ def diff_fingerprints(
     }
 
 
-__all__ = ["compute_fingerprint", "diff_fingerprints"]
+__all__ = [
+    "DYNAMIC_FIELD_PREFIXES",
+    "OPTIONAL_FIELDS",
+    "batch_keys",
+    "compute_dynamic_fingerprint",
+    "compute_fingerprint",
+    "diff_fingerprints",
+    "evaluate_drift",
+    "stable_keys",
+]

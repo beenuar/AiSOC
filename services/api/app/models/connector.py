@@ -32,6 +32,8 @@ class Connector(Base):
     schema_fingerprint: Mapped[str | None] = mapped_column(Text, nullable=True)
     last_schema_drift_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_drift_details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Drift-sentinel v2 (migration 164): stable core baseline field set.
+    schema_fields: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     # Workstream 1 / 5: distinct from `last_sync` (which ticks every poll
     # cycle including empty polls). `last_event_at` only advances when an
     # event actually lands — it's what the onboarding "verify data flowing"
