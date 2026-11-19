@@ -6291,6 +6291,8 @@ export interface PushSubscribeRequest {
   user_agent?: string;
   user_id?: string | null;
   topics?: string[];
+  minimum_alert_severity?: 'critical' | 'high' | 'medium' | 'low';
+  alert_notifications_enabled?: boolean;
 }
 
 export interface PushSubscribeResponse {

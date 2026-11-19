@@ -8,7 +8,7 @@
  *   - Workspace      Tenant / org-level metadata.
  *   - Integrations   Connectors managed via the connectorsApi.
  *   - API keys       Programmatic access (demo).
- *   - Notifications  Alerting preferences (localStorage).
+ *   - Notifications  Per-device alert preferences (localStorage + Web Push).
  *   - Appearance     Theme, density, motion (localStorage).
  *   - Audit log      Recent settings/security events (demo).
  *   - About          Build, license, support links.
@@ -60,6 +60,15 @@ import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider
 import { useConsoleVersion } from '@/hooks/useConsoleVersion';
 import { useUrlTab } from '@/hooks/useUrlTab';
 import { canUseDemoData } from '@/lib/demoFallback';
+import {
+  isAlertPushSeverity,
+  registerServiceWorker,
+  requestNotificationPermission,
+  saveAlertPushPreferences,
+  subscribeToPush,
+  syncPushNotificationSettings,
+  type AlertPushSeverity,
+} from '@/lib/pwa';
 import { rbacApi, authApi } from '@/lib/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -106,6 +115,7 @@ interface Preferences {
   emailDigestFrequency: 'realtime' | 'hourly' | 'daily' | 'off';
   defaultTimeRange: '15m' | '1h' | '24h' | '7d';
   desktopNotifications: boolean;
+  minimumAlertSeverity: AlertPushSeverity;
   copilotAutoOpen: boolean;
 }
 
@@ -117,6 +127,7 @@ const DEFAULT_PREFS: Preferences = {
   emailDigestFrequency: 'hourly',
   defaultTimeRange: '24h',
   desktopNotifications: true,
+  minimumAlertSeverity: 'high',
   copilotAutoOpen: false,
 };
 
@@ -267,7 +278,14 @@ function loadPreferences(): Preferences {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_PREFS;
-    return { ...DEFAULT_PREFS, ...(JSON.parse(raw) as Partial<Preferences>) };
+    const stored = JSON.parse(raw) as Partial<Preferences>;
+    return {
+      ...DEFAULT_PREFS,
+      ...stored,
+      minimumAlertSeverity: isAlertPushSeverity(stored.minimumAlertSeverity)
+        ? stored.minimumAlertSeverity
+        : 'high',
+    };
   } catch {
     return DEFAULT_PREFS;
   }
@@ -1362,22 +1380,101 @@ function NotificationsPanel() {
       savePreferences(next);
       return next;
     });
-    toast.success('Saved');
+    toast.success('Saved on this device');
+  };
+
+  // Saving to localStorage is not evidence of a working notification channel.
+  // Sync an existing subscription at the gateway, or explicitly enrol one
+  // from a user gesture so the permission prompt is permitted by browsers.
+  const updateAlertPush = async (next: Preferences, activate = false) => {
+    setPrefs(next);
+    const alertPreferences = {
+      minimumAlertSeverity: next.minimumAlertSeverity,
+      desktopNotifications: next.desktopNotifications,
+    };
+    const savedLocally = saveAlertPushPreferences(alertPreferences);
+    try {
+      if (activate) {
+        const permission = await requestNotificationPermission();
+        if (!permission.supported) throw new Error('This browser does not support Web Push');
+        if (permission.state !== 'granted') {
+          throw new Error('Allow notifications in your browser to enable alert push');
+        }
+        if (!await registerServiceWorker()) throw new Error('Service worker registration failed');
+        const subscription = await subscribeToPush({ alertPreferences });
+        if (!subscription) throw new Error('Web Push is not configured on the server');
+        if (savedLocally) toast.success('Alert push enabled on this device');
+        else toast('Alert push enabled, but preferences could not be saved locally.');
+        return;
+      }
+
+      const updated = await syncPushNotificationSettings(alertPreferences);
+      if (updated) {
+        if (savedLocally) toast.success('Alert push preferences applied to this device');
+        else toast('Alert push preferences applied, but could not be saved locally.');
+      } else if (savedLocally) {
+        toast(next.desktopNotifications
+          ? 'Saved locally. Enable Web Push to receive alerts.'
+          : 'Saved locally. No Web Push subscription is active on this device.');
+      } else {
+        toast.error('Could not save preferences locally. No Web Push subscription is active on this device.');
+      }
+    } catch (err) {
+      const status = savedLocally
+        ? 'Saved locally, but push could not be updated'
+        : 'Preferences could not be saved locally or applied to push';
+      toast.error(
+        `${status}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   };
 
   return (
     <div>
       <PanelHeader
         title="Notifications"
-        description="How AiSOC pings you when things happen."
+        description="Configure which new security alerts are pushed to this device."
       />
       <div className="space-y-3 px-6 py-5">
         <Toggle
           label="Desktop notifications"
-          description="Native browser notifications for new critical alerts."
+          description="Enable alert pages for this device. Agent approvals and on-call notices are separate."
           checked={prefs.desktopNotifications}
-          onChange={(v) => update('desktopNotifications', v)}
+          onChange={(v) => void updateAlertPush({ ...prefs, desktopNotifications: v }, v)}
         />
+        <div className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 space-y-3">
+          <Field
+            label="Minimum alert risk to notify"
+            hint="Inclusive: High also notifies Critical; Medium adds Medium; Low includes all four levels."
+          >
+            <select
+              aria-label="Minimum alert risk to notify"
+              className={inputClass()}
+              value={prefs.minimumAlertSeverity}
+              onChange={(e) => void updateAlertPush({
+                ...prefs,
+                minimumAlertSeverity: e.target.value as AlertPushSeverity,
+              })}
+            >
+              <option value="critical">Critical only</option>
+              <option value="high">High and Critical (default)</option>
+              <option value="medium">Medium and above</option>
+              <option value="low">Low and above</option>
+            </select>
+          </Field>
+          <button
+            type="button"
+            className="rounded-lg border border-gray-700 px-3 py-2 text-sm text-gray-200 hover:bg-gray-800"
+            onClick={() => void updateAlertPush({ ...prefs, desktopNotifications: true }, true)}
+          >
+            Enable / refresh Web Push on this device
+          </button>
+          <p className="text-xs text-gray-500">
+            Web Push requires browser permission and VAPID configuration.
+            This per-device threshold affects fused alert push only, not the alert inbox,
+            email digests, playbook notifications, or approval requests.
+          </p>
+        </div>
         <Toggle
           label="Alert sounds"
           description="Play a short tone when a critical alert arrives."

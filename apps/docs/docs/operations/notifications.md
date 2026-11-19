@@ -15,7 +15,7 @@ environment to make them work.
 
 | Surface | Who sees it | Triggered by | Service |
 |---|---|---|---|
-| **Web Push** (PWA) | On-call responder on a phone/desktop | P0 alerts, agent approvals, on-call hand-off | `services/realtime` |
+| **Web Push** (PWA) | On-call responder on a phone/desktop | New fused alerts at/above device risk threshold, agent approvals, on-call hand-off | `services/realtime` |
 | **Slack ChatOps** | Whole `#security-alerts` channel | Playbook `notify_slack` action, slash commands | `services/slack-bot` |
 | **Slack/Teams verification prompt** | A specific user (the affected account) | `chatops.verify` action in a playbook | `services/actions` |
 | **Ticketing** (Jira / ServiceNow / PagerDuty) | The ITSM queue | Playbook `create_ticket` action | `services/actions` |
@@ -31,7 +31,7 @@ up and the user clicks **Yes, that was me**.
 
 ## 1. Web Push to the responder PWA
 
-The mobile responder PWA lives at `apps/web` and is delivered by `services/realtime`. When a P0 fires, an agent needs an approval, or you snooze yourself off the on-call rotation, the realtime service fans out a [Web Push](https://www.w3.org/TR/push-api/) notification to every registered subscription for the target user / tenant / topic.
+The mobile responder PWA lives at `apps/web` and is delivered by `services/realtime`. On a new fused alert meeting each device's configured minimum risk, an agent approval, or an on-call hand-off, the realtime service fans out a [Web Push](https://www.w3.org/TR/push-api/) notification to eligible registered subscriptions for the target user / tenant / topic.
 
 **How to enable it**
 
@@ -78,9 +78,63 @@ That layout is what lets a single `PushManager.sendToTarget(...)` call fan out t
 
 | Topic | Sender | Meaning |
 |---|---|---|
-| `p0_alert` | alert-fusion | A new P0 / high-severity alert was just produced. |
+| `p0_alert` | alert-fusion | New fused security alert meeting the device's minimum risk. The topic name is retained for compatibility with existing subscribers. |
 | `agent_approval` | agents | An LLM-initiated action is waiting on a human. |
 | `oncall_handoff` | api (oncall endpoints) | The on-call schedule rolled over. |
+
+For `POST /subscribe`, omitting `topics` uses these defaults on first
+registration and preserves the existing topic selection on renewal; an
+explicit empty array (`"topics": []`) subscribes to no topics.
+
+### Set a minimum alert risk
+
+In **Settings → Notifications** in the desktop console, or **Responder → Settings → Notifications** in the PWA, choose the *minimum alert risk to notify*:
+
+| Minimum selected | New fused alert pushes |
+|---|---|
+| Critical | Critical only |
+| High (default) | High and Critical |
+| Medium | Medium, High and Critical |
+| Low | Low, Medium, High and Critical |
+
+The threshold is **inclusive and per device**, stored in the existing browser
+preferences and copied to the Redis push subscription on enrollment or
+settings change. Older subscriptions without a stored threshold continue to
+receive only High and Critical alerts. Unsupported or missing alert severity
+never triggers a push. Other topics (agent approvals, on-call hand-off and
+manual tests) are **not** gated by risk level.
+
+In the desktop console, turning **Desktop notifications** on or clicking
+**Enable / refresh Web Push on this device** requests browser notification
+permission when needed, registers the service worker, and enrolls or refreshes
+this device's push subscription. Changing only the minimum alert risk updates
+an existing subscription without requesting permission; if no subscription
+exists, the preference is saved locally for later enrollment.
+
+The current selection is sent explicitly when updating a push subscription.
+If browser storage is unavailable, the settings screen reports the local
+save failure separately from the gateway result.
+
+Turning **Desktop notifications** off disables fused-alert pushes on the
+existing subscription without unsubscribing the device or silencing agent
+approvals, on-call hand-offs or manual test pushes. You must configure VAPID
+and the realtime gateway as above.
+These settings **do not** filter the in-app alert queue, email digests, Slack,
+ITSM or playbook actions. The existing `p0_alert` topic identifier is kept so
+previous responder subscriptions remain compatible.
+
+### Settings previews
+
+These browser captures use a labelled local test session with a synthetic
+account and simulated browser notification, service-worker and push APIs.
+
+**Desktop console**
+
+![Desktop notification settings in a local test session](/img/console/notifications-settings.png)
+
+**Responder PWA**
+
+![Responder notification settings in a local test session](/img/console/responder-notifications.png)
 
 If push delivery returns `404` or `410` (subscription expired or removed by the browser), the realtime service evicts the subscription from Redis automatically — the next `/subscribe` call from the PWA replaces it.
 

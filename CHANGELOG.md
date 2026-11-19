@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Per-device minimum severity for fused-alert Web Push notifications** in
+  the console's Settings → Notifications and Responder settings. Choose
+  Critical, High, Medium or Low, with the selected level included in the
+  threshold. Existing subscriptions without a stored threshold retain High
+  and Critical alerts. The Desktop notifications control enables alert push
+  on this device or disables fused-alert pushes without silencing agent
+  approvals, on-call hand-offs or manual test pushes.
+
 ### Fixed
 
 - **SOC Insights uses the console theme and keeps its last successful snapshot
