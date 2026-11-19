@@ -7,7 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **SOC Insights uses the console theme and keeps its last successful snapshot
+  during refresh.** Remove duplicate page padding and undefined colour tokens,
+  correct the dashboard route title, deduplicate remount requests and coalesce
+  realtime updates without mixing tenants or time windows. Background failures
+  retain the visible metrics with an explicit retry message. The API combines
+  17–19 sequential data reads into three aggregate SELECTs, returning at most
+  25 grouped rows per read instead of every sparkline event. Both comparison
+  periods count closed cases consistently; optional cost reads use a savepoint
+  so a missing cost table cannot abort the request transaction. Materializing
+  the permitted investigation runs also prevents repeated scans when the
+  row-security estimates produce a slow generic cost-join plan.
 
 ## [23.5.2] - 2026-11-19
 

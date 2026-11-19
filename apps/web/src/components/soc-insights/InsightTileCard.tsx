@@ -28,23 +28,23 @@ export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
 
   return (
     <div
-      className="flex flex-col justify-between rounded-lg border border-border bg-card p-4"
+      className="flex min-h-32 flex-col justify-between rounded-xl border border-surface-border bg-surface-card p-5"
       // The `aria-label` rolls the value + delta into one string so a
       // screen reader announces the change without us shipping a
       // table-with-headers.
       aria-label={`${tile.label}: ${formatValue(tile)}, ${deltaTitle}`}
     >
       <div className="flex items-start justify-between gap-2">
-        <span className="text-xs uppercase tracking-wide text-muted-foreground">
+        <span className="text-xs uppercase tracking-wide text-fg-muted">
           {tile.label}
         </span>
         <span
           className={
             direction === 'up'
-              ? 'rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300'
+              ? 'rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-400 [[data-theme=light]_&]:text-emerald-700'
               : direction === 'down'
-                ? 'rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-700 dark:text-rose-300'
-                : 'rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground'
+                ? 'rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-medium text-rose-400 [[data-theme=light]_&]:text-rose-700'
+                : 'rounded-full bg-surface-hover px-2 py-0.5 text-xs font-medium text-fg-muted'
           }
           title={deltaTitle}
         >
@@ -52,9 +52,9 @@ export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
         </span>
       </div>
 
-      <div className="mt-2 flex items-end justify-between gap-2">
-        <span className="text-2xl font-semibold tabular-nums">{formatValue(tile)}</span>
-        <div className="text-muted-foreground">{sparkline}</div>
+      <div className="mt-2 flex flex-wrap items-end justify-between gap-2">
+        <span className="text-3xl font-bold tabular-nums text-fg-primary">{formatValue(tile)}</span>
+        <div className="text-fg-muted">{sparkline}</div>
       </div>
     </div>
   );
@@ -109,7 +109,7 @@ function formatDelta(delta: number | null): string {
  * Note: for tiles where "more = worse" (MTTA, MTTR, FP rate, cost,
  * alerts/day) a positive delta should *not* be celebrated. We push
  * those into ``down`` (red) so the colour matches the operator's
- * intuition. ``hours_saved`` and ``cases_per_day`` flip the polarity.
+ * intuition. ``analyst_hours_saved`` flips the polarity.
  */
 function deltaDirection(tile: InsightTile): 'up' | 'down' | 'flat' {
   if (tile.delta_pct === null || tile.delta_pct === 0) return 'flat';
