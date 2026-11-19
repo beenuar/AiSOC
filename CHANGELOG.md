@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [23.5.3] - 2026-11-19
+
 ### Fixed
 
 - **Checkpoint cursors order and compare the instant a timestamp names, not
