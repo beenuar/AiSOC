@@ -8,7 +8,7 @@ import Redis from 'ioredis';
 import pino from 'pino';
 import rateLimit from 'express-rate-limit';
 
-import { PushManager } from './push';
+import { PushManager, isAlertSeverity } from './push';
 import { resolveTicketSecret, verifyRealtimeTicket } from './auth';
 import { setupTelemetry, type Shutdown } from './telemetry';
 import { resolveKafkaTransport } from './kafkaTransport.js';
@@ -520,18 +520,17 @@ async function startKafkaConsumer(onCrash: (err: unknown) => void) {
           timestamp: new Date().toISOString(),
         });
 
-        // Fan out P0/critical alerts to mobile responders. Lower-severity
-        // alerts stay WebSocket-only so we don't pager-storm on-call.
+        // Every recognised severity reaches the push manager; the per-device
+        // threshold decides what is actually sent. Unknown values stay WS-only.
         const severity = String(
           event?.alert?.severity ?? event?.severity ?? '',
         ).toLowerCase();
-        if (
-          pushManager.enabled &&
-          (severity === 'critical' || severity === 'high')
-        ) {
+        if (pushManager.enabled && isAlertSeverity(severity)) {
           const alertId =
             event?.alert?.id ?? event?.alert?.alert_id ?? event?.id ?? 'unknown';
-          const title = `${severity === 'critical' ? 'P0' : 'P1'} alert · ${
+          const priority = severity === 'critical' ? 'P0'
+            : severity === 'high' ? 'P1' : severity.toUpperCase();
+          const title = `${priority} alert · ${
             event?.alert?.title ?? event?.title ?? 'New alert'
           }`;
           pushManager
