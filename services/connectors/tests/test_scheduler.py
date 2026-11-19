@@ -15,8 +15,10 @@ We do *not* test APScheduler itself — that has its own tests.
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -24,6 +26,11 @@ import pytest
 from app.connectors.base import AcknowledgementResult, BaseConnector, ConnectorSchema
 from app.db.connector_repo import ConnectorInstance
 from app.scheduler import ConnectorScheduler, _coerce_poll_interval
+from apscheduler.events import (
+    EVENT_JOB_EXECUTED,
+    EVENT_JOB_MAX_INSTANCES,
+    EVENT_JOB_MISSED,
+)
 
 
 def _make_instance(
@@ -1507,3 +1514,33 @@ async def test_a_redelivery_after_a_lost_acknowledgement_is_not_a_duplicate(monk
 
     assert (resumed_ingest.last_payload or {})["events"] == [], "the event was already accepted downstream once"
     assert resumed_queue.acked == ["h1"], "and the message still has to leave the queue"
+
+
+# ---------------------------------------------------------------------------
+# #1971: a skipped poll run is recorded, not silent.
+# ---------------------------------------------------------------------------
+
+
+def test_a_skipped_run_is_recorded_not_silent(caplog):
+    """With max_instances=1 a poll that overruns has its next run dropped,
+    and the outage backfill never fires for it because a skip sets no
+    last_outage_at. The listener is what leaves a trace of the skip."""
+    scheduler = ConnectorScheduler()
+    job_id = f"connector:{uuid.uuid4()}"
+    with caplog.at_level(logging.WARNING, logger="aisoc.connectors.scheduler"):
+        scheduler._on_scheduler_event(SimpleNamespace(code=EVENT_JOB_MAX_INSTANCES, job_id=job_id))
+        scheduler._on_scheduler_event(SimpleNamespace(code=EVENT_JOB_MISSED, job_id=job_id))
+
+    assert caplog.text.count("connector.scheduler.poll_skipped") == 2
+    assert job_id in caplog.text
+    assert "max_instances" in caplog.text
+    assert "misfire" in caplog.text
+
+
+def test_an_unrelated_scheduler_event_is_ignored(caplog):
+    """The listener only answers for skipped or missed runs."""
+    scheduler = ConnectorScheduler()
+    with caplog.at_level(logging.WARNING, logger="aisoc.connectors.scheduler"):
+        scheduler._on_scheduler_event(SimpleNamespace(code=EVENT_JOB_EXECUTED, job_id="connector:x"))
+
+    assert "connector.scheduler.poll_skipped" not in caplog.text

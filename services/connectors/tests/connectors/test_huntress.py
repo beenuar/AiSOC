@@ -223,7 +223,9 @@ class TestReadingTheWindow:
         )
         out = await vendor.connector().fetch_alerts(since_seconds=300)
         assert len(vendor.report_requests()) == 2
-        assert [row["external_id"] for row in out] == ["1", "3"]
+        # The checkpoint orders by (sent_at, id), oldest first, so the
+        # 120-second-old report precedes the 60-second-old one.
+        assert [row["external_id"] for row in out] == ["3", "1"]
 
     @pytest.mark.asyncio
     async def test_a_report_updated_mid_read_is_returned_once(self) -> None:
@@ -273,10 +275,16 @@ class TestWhatIsReturned:
         assert [row["external_id"] for row in out] == ["2"]
 
     @pytest.mark.asyncio
-    async def test_the_window_opens_since_seconds_ago(self) -> None:
-        vendor = Vendor(_serving(_page([_report(1, sent=500), _report(2, sent=700)])))
+    async def test_the_window_opens_two_intervals_ago(self) -> None:
+        """One interval of overlap (#1971): a run the scheduler skipped
+        leaves a gap the next poll must reach back over, so a report
+        delivered 700 seconds ago is inside a 600-second poll's window,
+        and one delivered 1300 seconds ago is outside it."""
+        vendor = Vendor(_serving(_page([_report(1, sent=500), _report(2, sent=700), _report(3, sent=1300)])))
         out = await vendor.connector().fetch_alerts(since_seconds=600)
-        assert [row["external_id"] for row in out] == ["1"]
+        # The checkpoint orders by (sent_at, id), oldest first, so the
+        # 700-second-old report precedes the 500-second-old one.
+        assert [row["external_id"] for row in out] == ["2", "1"]
 
     @pytest.mark.asyncio
     async def test_an_offset_timestamp_is_compared_as_the_instant_it_names(self) -> None:

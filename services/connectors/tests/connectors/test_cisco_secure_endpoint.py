@@ -235,13 +235,16 @@ class TestReadingTheWindowToTheEnd:
         assert any(entry["event"] == "connector.paging.page_cap_reached" for entry in logs)
 
     @pytest.mark.asyncio
-    async def test_the_window_opens_since_seconds_ago_in_iso_8601(self) -> None:
+    async def test_the_window_opens_two_intervals_ago_in_iso_8601(self) -> None:
+        """One interval of overlap (#1971): a run the scheduler skipped
+        leaves a gap the next poll must reach back over, so the window opens
+        two intervals ago rather than one."""
         vendor = Vendor()
         before = datetime.now(UTC)
         await vendor.connector().fetch_alerts(since_seconds=600)
         start = datetime.fromisoformat(vendor.requests[0].url.params["start_date"])
         assert start.utcoffset() == timedelta(0)
-        assert before - timedelta(seconds=601) <= start <= datetime.now(UTC) - timedelta(seconds=599)
+        assert before - timedelta(seconds=1201) <= start <= datetime.now(UTC) - timedelta(seconds=1199)
 
 
 class TestWhatIsReturned:
