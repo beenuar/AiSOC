@@ -165,6 +165,15 @@ class TestAdoptionIsCountedNotAssumed:
         # and the next window opens there: a poll the page bound cut short,
         # or a run of failed polls, is caught up rather than slid past.
         "withsecure_elements": (("createdTimestamp",), ("incidentId",)),
+        # Issue #1971, same mechanism again: Huntress, Cisco Secure
+        # Endpoint and Sophos Central each read a clock window with no
+        # persisted cursor, so a poll the scheduler skipped left a gap no
+        # later poll ever requested. All three now declare a cursor on the
+        # row's event time and open their window at it (plus one interval
+        # of overlap for a single skipped run with no cursor yet).
+        "huntress": (("sent_at",), ("id",)),
+        "cisco_secure_endpoint": (("date",), ("id",)),
+        "sophos_central": (("created_at", "when"), ("id",)),
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),

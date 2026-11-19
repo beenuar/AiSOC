@@ -57,6 +57,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from apscheduler.events import EVENT_JOB_MAX_INSTANCES, EVENT_JOB_MISSED
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -236,6 +237,14 @@ class ConnectorScheduler:
         self._scheduler = AsyncIOScheduler(timezone="UTC")
         self._scheduler.start()
 
+        # A skipped run leaves no trace by default (#1971): with
+        # max_instances=1 the next run is dropped while a poll overruns, and
+        # the outage backfill only fires from last_outage_at, which a skip
+        # never sets. The listener records the skip so the gap it leaves is
+        # visible in the logs rather than silent; the connectors' own
+        # cursors are what close the gap.
+        self._scheduler.add_listener(self._on_scheduler_event, EVENT_JOB_MAX_INSTANCES | EVENT_JOB_MISSED)
+
         if self._lease is not None:
             # Renewal runs whether or not this replica is the leader: a
             # follower has to keep trying to acquire, or a dead leader is
@@ -282,6 +291,29 @@ class ConnectorScheduler:
         logger.info(
             "connector.scheduler.started reload_interval=%ss",
             self._reload_interval_s,
+        )
+
+    def _on_scheduler_event(self, event: Any) -> None:
+        """Record a poll run APScheduler skipped or missed (#1971).
+
+        A skip is not a connector failure: the poll that overran is still
+        running, so this records the skip and leaves ``last_outage_at``
+        alone rather than marking the connector unhealthy. The next poll's
+        window reaches back over the gap (see
+        ``BaseConnector.contiguous_since_seconds``), so the record exists
+        to explain a late event, not to trigger a backfill.
+        """
+        code = getattr(event, "code", None)
+        if code == EVENT_JOB_MAX_INSTANCES:
+            reason = "max_instances"
+        elif code == EVENT_JOB_MISSED:
+            reason = "misfire"
+        else:
+            return
+        logger.warning(
+            "connector.scheduler.poll_skipped job_id=%s reason=%s",
+            getattr(event, "job_id", None),
+            reason,
         )
 
     def _remove_all_poll_jobs(self) -> None:

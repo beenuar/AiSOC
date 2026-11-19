@@ -35,6 +35,31 @@ if TYPE_CHECKING:
 logger = structlog.get_logger()
 
 
+def _parse_checkpoint_time(value: str) -> datetime | None:
+    """An ISO 8601 timestamp as the aware UTC instant it names, or None.
+
+    A naive value is read as UTC, matching :meth:`BaseConnector.checkpointed_since_seconds`.
+    Anything ``fromisoformat`` cannot read returns None so the caller can fall
+    back to the previous text comparison instead of guessing where a row
+    belongs: an unparseable time is never a reason to drop a row.
+    """
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+#: Sort placeholder for a row whose time does not parse. It sorts before every
+#: real instant, so the staged cursor comes from the newest parseable row
+#: rather than naming a row no later poll can place.
+_MIN_CHECKPOINT_TIME = datetime.min.replace(tzinfo=UTC)
+
+
 # ---------------------------------------------------------------------------
 # Capability taxonomy (Workstream 4)
 #
@@ -862,17 +887,14 @@ class BaseConnector(ABC):
         raw_time = str(cursor.get("time") or "")
         if not raw_time:
             return since_seconds
-        try:
-            cursor_time = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
-        except ValueError:
+        cursor_time = _parse_checkpoint_time(raw_time)
+        if cursor_time is None:
             logger.debug(
                 "connector.checkpoint.unparseable_time",
                 connector=self.connector_id,
                 time=raw_time[:64],
             )
             return since_seconds
-        if cursor_time.tzinfo is None:
-            cursor_time = cursor_time.replace(tzinfo=UTC)
 
         current = now or datetime.now(UTC)
         gap = math.ceil((current - cursor_time).total_seconds()) + self.checkpoint_overlap_seconds
@@ -890,6 +912,22 @@ class BaseConnector(ABC):
             )
             return self.max_checkpoint_lookback_seconds
         return gap
+
+    def contiguous_since_seconds(self, since_seconds: int, *, now: datetime | None = None) -> int:
+        """The lookback that keeps consecutive polls contiguous (#1971).
+
+        The clock window ``[now - since, now]`` loses the interval between
+        two polls whenever the scheduler skips one: a poll that overruns its
+        interval has its next run dropped (``max_instances=1``,
+        ``coalesce=True``), and the poll after it opens one interval later.
+        Asking for two intervals instead covers exactly one skipped run,
+        with no cursor needed, and the persisted cursor covers anything
+        longer through :meth:`checkpointed_since_seconds`. The overlap
+        re-reads rows :meth:`apply_checkpoint` already drops, so the extra
+        read costs a re-request, never a lost row.
+        """
+        lookback = max(1, int(since_seconds))
+        return max(2 * lookback, self.checkpointed_since_seconds(lookback, now=now))
 
     # ----------------------------- acknowledgement (phase 3) -----------------
     #
@@ -1003,6 +1041,20 @@ class BaseConnector(ABC):
     def _row_identity(self, row: dict[str, Any]) -> str:
         return self._first_present(row, self.dedup_identity_field)
 
+    def _checkpoint_order(self, row: dict[str, Any]) -> tuple[int, datetime, str, str]:
+        """Sort position of a row under the cursor: instant, then id.
+
+        A row whose time parses sorts by the instant it names, with the id
+        breaking ties within one instant. A row whose time does not parse
+        sorts before every real instant, ordered by its raw text, so the
+        staged cursor comes from the newest parseable row rather than naming
+        a row no later poll can place.
+        """
+        instant = _parse_checkpoint_time(self._row_time(row))
+        if instant is None:
+            return (0, _MIN_CHECKPOINT_TIME, self._row_time(row), self._row_id(row))
+        return (1, instant, "", self._row_id(row))
+
     def apply_checkpoint(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """De-duplicate against the cursor and stage the advance.
 
@@ -1010,20 +1062,35 @@ class BaseConnector(ABC):
         it is safe to call unconditionally from ``fetch_alerts``. Dispatches
         on which cursor the connector declared: an event-time watermark for an
         ordered poll, a bounded identity set for an unordered queue.
+
+        Rows are ordered and compared by the instant their time names, not
+        by the text the vendor sent (#1970): ``...10:00:00.500Z`` is half a
+        second after ``...10:00:00Z`` but sorts before it as text, and
+        ``...11:00:00+05:00`` (06:00Z) sorts after ``...10:00:00Z``. The id
+        breaks ties within one instant. A time that does not parse keeps the
+        old text comparison, so a vendor that stops sending ISO timestamps
+        degrades to the previous behaviour instead of dropping rows a parse
+        failure cannot place.
         """
         if self.dedup_identity_field:
             return self._apply_identity_dedup(rows)
         if not self.checkpoints():
             return rows
 
-        ordered = sorted(rows, key=lambda r: (self._row_time(r), self._row_id(r)))
+        ordered = sorted(rows, key=self._checkpoint_order)
         cursor = self._incoming_checkpoint or {}
+        cursor_time = _parse_checkpoint_time(str(cursor.get("time") or ""))
         cursor_key = (str(cursor.get("time") or ""), str(cursor.get("id") or ""))
 
         fresh: list[dict[str, Any]] = []
         for row in ordered:
-            if cursor_key[0] and (self._row_time(row), self._row_id(row)) <= cursor_key:
-                continue
+            if cursor_key[0]:
+                row_time = _parse_checkpoint_time(self._row_time(row))
+                if row_time is not None and cursor_time is not None:
+                    if (row_time, self._row_id(row)) <= (cursor_time, cursor_key[1]):
+                        continue
+                elif (self._row_time(row), self._row_id(row)) <= cursor_key:
+                    continue
             fresh.append(row)
 
         # Staged, never persisted here. Advancing on read rather than on

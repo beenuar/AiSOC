@@ -44,6 +44,12 @@ time the request arrives, and the API refuses the whole request. So the
 window is shortened to fit and the shortening is logged, rather than turning
 a recovery poll into a failed one.
 
+The window overlaps the previous poll by one interval and opens at the
+persisted cursor when one exists (#1971). The scheduler drops a run when
+the previous poll is still active, and without the overlap the interval in
+between would never be requested. Rows the overlap re-reads are dropped
+against the cursor before the batch leaves the connector.
+
 The severity ladder, and why it stops at `high`
 -----------------------------------------------
 The alert schema's `severity` "must be one of: LOW, MEDIUM, HIGH". Those map
@@ -63,6 +69,7 @@ from __future__ import annotations
 
 import time
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -100,6 +107,12 @@ class SophosCentralConnector(BaseConnector):
     connector_id = "sophos_central"
     connector_name = "Sophos Central"
     connector_category = "edr"
+
+    #: The cursor resumes on the alert creation time, with the vendor id
+    #: breaking ties within one instant (#1971). ``when`` is the fallback
+    #: for an alert that carries no ``created_at``.
+    checkpoint_time_field = ("created_at", "when")
+    checkpoint_id_field = ("id",)
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -296,7 +309,12 @@ class SophosCentralConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        lookback = max(1, int(since_seconds))
+        # Two intervals of overlap plus the persisted cursor (#1971): the
+        # scheduler drops a run when the previous poll is still active, and
+        # without the overlap the interval between the two polls would never
+        # be requested. The cursor covers anything longer than one skipped
+        # run; apply_checkpoint below drops the rows the overlap re-reads.
+        lookback = self.contiguous_since_seconds(since_seconds, now=datetime.now(UTC))
         if lookback > _MAX_LOOKBACK_SECONDS:
             logger.warning(
                 "sophos_central.window_shortened",
@@ -328,6 +346,11 @@ class SophosCentralConnector(BaseConnector):
                 more_field="has_more",
                 feed="sophos_central.alerts",
             )
+        # Dedup against the cursor and stage its advance. The overlapped
+        # window deliberately re-reads the previous interval; this is what
+        # drops those rows, and the advance is persisted only after ingest
+        # accepts the batch (scheduler ordering).
+        alerts = self.apply_checkpoint(alerts)
         return [self.normalize(alert) for alert in alerts]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:

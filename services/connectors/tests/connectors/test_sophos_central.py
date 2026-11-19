@@ -280,7 +280,10 @@ class TestReadingTheWindowToTheEnd:
         vendor = Vendor(alerts)
         out = await vendor.connector().fetch_alerts()
 
-        assert [row["external_id"] for row in out] == [f"alert-{i}" for i in range(2003)]
+        # The checkpoint orders rows by (created_at, id), so the batch
+        # leaves sorted by id rather than in page order; every alert
+        # carries the same created_at here, and the id is a plain string.
+        assert [row["external_id"] for row in out] == sorted(f"alert-{i}" for i in range(2003))
         first, *following = vendor.alert_requests()
         assert set(first.url.params) == {"from_date", "limit"}
         assert first.url.params["limit"] == "1000"
@@ -316,12 +319,15 @@ class TestReadingTheWindowToTheEnd:
 
 class TestTheWindow:
     @pytest.mark.asyncio
-    async def test_the_window_opens_since_seconds_ago(self) -> None:
+    async def test_the_window_opens_two_intervals_ago(self) -> None:
+        """One interval of overlap (#1971): a run the scheduler skipped
+        leaves a gap the next poll must reach back over, so the window opens
+        two intervals ago rather than one."""
         vendor = Vendor()
         before = int(time.time())
         await vendor.connector().fetch_alerts(since_seconds=600)
         from_date = int(vendor.alert_requests()[0].url.params["from_date"])
-        assert before - 600 <= from_date <= int(time.time()) - 600
+        assert before - 1200 <= from_date <= int(time.time()) - 1200
 
     @pytest.mark.asyncio
     async def test_a_backfill_past_the_24_hour_ceiling_is_shortened_and_logged(self) -> None:

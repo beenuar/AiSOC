@@ -37,6 +37,12 @@ pushes every row down by one and the row at a page boundary is returned
 twice. That costs a duplicate, never a lost row, and the duplicate is dropped
 by its `id` before the batch leaves the connector.
 
+The window overlaps the previous poll by one interval and opens at the
+persisted cursor when one exists (#1971). The scheduler drops a run when
+the previous poll is still active, and without the overlap the interval in
+between would never be requested. Rows the overlap re-reads are dropped
+against the cursor before the batch leaves the connector.
+
 What is read, and what is not
 -----------------------------
 The events stream is every event the console records: detections and
@@ -97,6 +103,11 @@ class CiscoSecureEndpointConnector(BaseConnector):
     connector_id = "cisco_secure_endpoint"
     connector_name = "Cisco Secure Endpoint"
     connector_category = "edr"
+
+    #: The cursor resumes on the event date, with the vendor id breaking
+    #: ties within one second (#1971).
+    checkpoint_time_field = ("date",)
+    checkpoint_id_field = ("id",)
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -172,7 +183,14 @@ class CiscoSecureEndpointConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        start_date = (datetime.now(UTC) - timedelta(seconds=max(1, int(since_seconds)))).isoformat(timespec="seconds")
+        window_end = datetime.now(UTC)
+        # Two intervals of overlap plus the persisted cursor (#1971): the
+        # scheduler drops a run when the previous poll is still active, and
+        # without the overlap the interval between the two polls would never
+        # be requested. The cursor covers anything longer than one skipped
+        # run; apply_checkpoint below drops the rows the overlap re-reads.
+        effective_since = self.contiguous_since_seconds(since_seconds, now=window_end)
+        start_date = (window_end - timedelta(seconds=max(1, int(effective_since)))).isoformat(timespec="seconds")
 
         async with self._client(60.0) as client:
 
@@ -219,6 +237,11 @@ class CiscoSecureEndpointConnector(BaseConnector):
                 returned=len(rated),
                 detail="events Cisco does not rate (policy updates, scans, installs) are operational records, not detections",
             )
+        # Dedup against the cursor and stage its advance. The overlapped
+        # window deliberately re-reads the previous interval; this is what
+        # drops those rows, and the advance is persisted only after ingest
+        # accepts the batch (scheduler ordering).
+        rated = self.apply_checkpoint(rated)
         return [self.normalize(event) for event in rated]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:

@@ -36,6 +36,12 @@ down to the window's start reaches every one of them. The window is closed at
 the moment the read started: a report delivered while it runs belongs to the
 next poll's window and is raised there, not twice.
 
+The window overlaps the previous poll by one interval and opens at the
+persisted cursor when one exists (#1971). The scheduler drops a run when
+the previous poll is still active, and without the overlap the interval in
+between would never be requested. Rows the overlap re-reads are dropped
+against the cursor before the batch leaves the connector.
+
 A report without `sent_at` was never delivered — the SOC dismissed it before
 sending, or it is still a draft — and is not returned.
 
@@ -109,6 +115,13 @@ class HuntressConnector(BaseConnector):
     connector_name = "Huntress"
     connector_category = "edr"
 
+    #: The cursor resumes on the moment a report was delivered, with the
+    #: vendor id breaking ties within one second (#1971). Delivery, not
+    #: last update, is the event: a report updated again after delivery
+    #: must not be raised twice.
+    checkpoint_time_field = ("sent_at",)
+    checkpoint_id_field = ("id",)
+
     @classmethod
     def schema(cls) -> ConnectorSchema:
         return ConnectorSchema(
@@ -172,7 +185,13 @@ class HuntressConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         window_end = datetime.now(UTC)
-        window_start = window_end - timedelta(seconds=max(1, int(since_seconds)))
+        # Two intervals of overlap plus the persisted cursor (#1971): the
+        # scheduler drops a run when the previous poll is still active, and
+        # without the overlap the interval between the two polls would never
+        # be requested. The cursor covers anything longer than one skipped
+        # run; apply_checkpoint below drops the rows the overlap re-reads.
+        effective_since = self.contiguous_since_seconds(since_seconds, now=window_end)
+        window_start = window_end - timedelta(seconds=max(1, int(effective_since)))
 
         async with self._client(60.0) as client:
 
@@ -223,6 +242,12 @@ class HuntressConnector(BaseConnector):
                 sent_at = _timestamp(report.get("sent_at"))
                 if sent_at is not None and window_start <= sent_at < window_end:
                     delivered.append(report)
+
+            # Dedup against the cursor and stage its advance, before spending
+            # agent lookups on rows the overlap re-read. The advance is
+            # persisted only after ingest accepts the batch (scheduler
+            # ordering), so a failed hand-off re-reads rather than loses.
+            delivered = self.apply_checkpoint(delivered)
 
             agents = await self._agents(client, delivered)
 
