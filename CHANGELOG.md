@@ -7,7 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **Live vendor evidence is no longer described to the model as stale
+  knowledge-base documents** (#1991, fixed in #1992). The vendor-evidence
+  block borrowed the knowledge base's boundary note, so the triage prompt
+  said the records were "excerpts from documents … written by people …
+  background guidance that may be out of date" one line after saying they
+  were read just now from the vendors' own APIs — two contradicting
+  descriptions of the same bytes that taught the model to discount fresh
+  vendor reads (an EDR read showing a host already isolated could lose to a
+  stale mental model). The channel now carries its own note, accurate about
+  live machine-returned records and about the attacker-influenced text they
+  quote, with the injection-refusal tail unchanged — and a new invariant test
+  holds every untrusted channel's note (vendor, knowledge base, MCP) to the
+  full refusal tail, so per-channel wording can evolve without weakening the
+  boundary. Reported by @swf1996120.
+
 
 ## [23.6.0] - 2026-11-20
 
