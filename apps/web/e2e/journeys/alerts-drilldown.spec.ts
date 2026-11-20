@@ -157,14 +157,14 @@ test("a removed filter stays removed after leaving the route and traversing hist
   const criticalRows = ["critical-new", "critical-escalated", "critical-resolved", "critical-old"];
   await expectRows(page, criticalRows);
   await page.getByRole("link", { name: "SOC Operations", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "SOC operations", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "SOC operations", exact: true })).toBeVisible();
 
   await page.goBack();
   await expectRows(page, criticalRows);
   await expect(page).toHaveURL((url) => url.pathname === "/alerts" && !url.searchParams.has("unresolved_only"));
   await expect(page.getByRole("button", { name: "Remove unresolved-only filter" })).toHaveCount(0);
   await page.goForward();
-  await expect(page.getByRole("heading", { name: "SOC operations", exact: true })).toBeVisible();
+  await expect(page.getByRole("main").getByRole("heading", { name: "SOC operations", exact: true })).toBeVisible();
   await page.goBack();
   await expectRows(page, criticalRows);
 });
