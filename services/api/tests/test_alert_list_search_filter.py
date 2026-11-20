@@ -109,6 +109,7 @@ async def _list_ids(db, **overrides) -> set[str]:
         "limit": None,
         "severity": None,
         "status": None,
+        "unresolved_only": False,
         "disposition": None,
         "category": None,
         "assigned_to_me": False,
