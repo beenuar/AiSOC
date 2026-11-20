@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [23.6.0] - 2026-11-20
+
 ### Added
+
+- **Operations alert posture drills down to the alert grid** (#1988). The
+  SOC-operations posture counters and every severity/status segment and legend
+  now open the matching alert-grid filter, with the URL, visible chips and
+  browser history kept consistent across chip removal, reload and
+  back/forward — and an explicit drilldown is no longer replaced by a default
+  saved view. Two opt-in API filters carry it: `unresolved_only` and
+  `created_within_hours` (bounded, validated, same predicate and `created_at`
+  column as the statistics endpoint, tenant scope from the authenticated
+  principal as before). Contributed by @knowlet.
 
 - **Per-device minimum severity for fused-alert Web Push notifications** in
   the console's Settings → Notifications and Responder settings. Choose
@@ -23,6 +37,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   time. Tenant scope continues to come from the authenticated principal.
 
 ### Fixed
+
+- **The parallel-triage loop commits finished work, not the fetch position**
+  (#1980, carried in #1984). A bare `consumer.commit()` commits ahead of
+  everything prefetched and mid-triage, so a crash lost alerts that were
+  received and never triaged while lag read zero; and the commit window was
+  evaluated only when a message arrived, so a topic that went quiet after a
+  burst never committed what had finished (observed in the field: 104 triages
+  completed, offset frozen). Offsets now advance through per-partition
+  watermarks — an offset becomes committable only when every lower offset in
+  the assignment has completed — on a timer rather than on arrival. The carry
+  also fixed the new test's own teardown (an unawaited async `stop()` plus a
+  quiet-topic fake that made the suite time out deterministically).
+  Contributed by @alexmateescu.
+
+- **The alerts page-size control reaches the server, and dashboard tiles open
+  the queue they count** (#1981, carried in #1985). The console sent
+  `pageSize` while the API reads `page_size`, so the control silently pinned
+  the list to the server default; the stat tiles were plain cards whose
+  "Total Connectors" counted alert-producing sources rather than the
+  configured inventory, so a clicked tile opened a list that did not contain
+  the number just displayed. The carry regenerated `docs/openapi.yaml` for
+  the new `unresolved_only` parameter and restructured the console's query
+  parameter loop over a compile-time key set, clearing the code-scanning
+  finding the original raised. Contributed by @alexmateescu.
+
+- **The identity-privilege resolver honours its never-raises contract**
+  (#1983, carried in #1986). Its first line past the guards read
+  `alert.timestamp`, an attribute `RawAlert` never had (the field is
+  `event_time`), so every alert carrying a username raised `AttributeError`
+  at exactly the point the docstring promised graceful degradation, and the
+  alert lost its privilege stamp silently. The regression test proves the
+  degraded path with an unreachable DSN. Contributed by @alexmateescu.
+
+- **The connector drift sentinel stops crying wolf** (#1982, carried in
+  #1987). It fingerprinted the SHA-256 of each batch's full field-name union,
+  which legitimately varies (m365_audit lifts every OData `Parameters` pair
+  into `param_<name>` fields; several core outputs are conditional), so busy
+  tenants saw `schema_drift` on nearly every poll — all-added, zero-removed
+  noise — and with only a hash persisted, the "removed" diff could never be
+  computed. Migration 164 persists the stable-core baseline field set
+  (dynamic and optional fields excluded) and drift now flags only when a
+  baseline core field disappears: the rename/removal failure mode the
+  sentinel exists to catch. Contributed by @alexmateescu.
 
 - **SOC Insights uses the console theme and keeps its last successful snapshot
   during refresh.** Remove duplicate page padding and undefined colour tokens,
