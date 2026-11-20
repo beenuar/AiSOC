@@ -44,6 +44,14 @@ Grouped by reason, so the fix is visible from the panel. "Nothing rejected" rend
 
 Total, new in 24h, critical still open, plus severity and disposition distributions.
 
+All three counters and every severity/status breakdown entry are links to
+the alert-centric grid at `/alerts?view=alerts`, with the relevant filters
+preselected. `Critical open` combines `severity=critical` with the same
+canonical unresolved-status predicate used by the statistics endpoint;
+`New (24h)` filters on alert `created_at`, not the event timestamp.
+The drill-down's extra filters appear as removable chips above the grid.
+Tenant scope still comes from the logged-in principal, never URL parameters.
+
 This is a **snapshot, not a trend**, and the panel says so. No endpoint in the tree buckets disposition over time, so there is no series to draw. Period-over-period movement is published by `/metrics/funnel` and rendered by the funnel strip at the top of the page; nothing here duplicates it with an arrow it cannot source.
 
 ### Detection coverage

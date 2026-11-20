@@ -185,10 +185,17 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.new;
+  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
+  // The operations disposition breakdown includes worker/vendor statuses not
+  // represented by the quick-filter buttons. Never label these as "New":
+  // the actual server status is what the operator clicked to inspect.
+  const label = cfg?.label ?? status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
   return (
-    <span className={clsx('text-xs px-2 py-0.5 rounded border', cfg.color)}>
-      {cfg.label}
+    <span className={clsx(
+      'text-xs px-2 py-0.5 rounded border',
+      cfg?.color ?? 'text-gray-300 bg-gray-500/10 border-gray-600/20',
+    )}>
+      {label}
     </span>
   );
 }
@@ -240,6 +247,36 @@ function FiltersBar({
           </button>
         ))}
       </div>
+      {filters.unresolvedOnly && (
+        <button
+          type="button"
+          aria-label="Remove unresolved-only filter"
+          onClick={() => onChange({ ...filters, unresolvedOnly: undefined, page: 1 })}
+          className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs text-blue-300 hover:bg-blue-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Unresolved only ×
+        </button>
+      )}
+      {filters.createdWithinHours && (
+        <button
+          type="button"
+          aria-label="Remove created-within-hours filter"
+          onClick={() => onChange({ ...filters, createdWithinHours: undefined, page: 1 })}
+          className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs text-blue-300 hover:bg-blue-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Created in last {filters.createdWithinHours}h ×
+        </button>
+      )}
+      {filters.status && !statuses.includes(filters.status as typeof statuses[number]) && (
+        <button
+          type="button"
+          aria-label="Remove status filter"
+          onClick={() => onChange({ ...filters, status: undefined, page: 1 })}
+          className="rounded border border-gray-600/60 px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Status: {filters.status.replace(/_/g, ' ')} ×
+        </button>
+      )}
       <span className="ml-auto text-xs text-gray-600">{total} total</span>
     </div>
   );
@@ -342,7 +379,13 @@ function AlertRow({
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-export function AlertsView() {
+export function AlertsView({
+  initialFilters,
+  initialViewMode = 'entities',
+}: {
+  initialFilters?: Partial<AlertFilters>;
+  initialViewMode?: ViewMode;
+} = {}) {
   // `sort: 'priority'` because the API defaults to reverse-chronological for
   // its SDK clients, and in a console that is the wrong default: a noisy
   // low-severity source emitting faster than an analyst pages pushes a
@@ -351,11 +394,12 @@ export function AlertsView() {
     page: 1,
     pageSize: 25,
     sort: 'priority',
+    ...initialFilters,
   });
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.
-  const [viewMode, setViewMode] = useState<ViewMode>('entities');
+  const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const { t } = useLocale();
 
   const { data, error, isLoading } = useSWR(
@@ -735,14 +779,14 @@ function AlertsTableGrid({
             filter-aware copy is the difference between an analyst thinking
             "the system is broken" and "I should clear my filters".
           */}
-          {filters.severity || filters.status ? (
+          {filters.severity || filters.status || filters.unresolvedOnly || filters.createdWithinHours ? (
             <EmptyState
               icon={EmptyStateIcons.search}
               title="No alerts match these filters"
               description="Try clearing the severity or status filter to widen the search."
               action={
                 <button
-                  onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25 })}
+                  onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25, sort: filters.sort })}
                   className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
                 >
                   Clear filters
