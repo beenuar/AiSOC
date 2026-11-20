@@ -270,6 +270,7 @@ async def test_poll_one_filter_rules_drop_events(monkeypatch):
         events_added: int,
         events_dropped: int = 0,
         schema_fingerprint: str | None = None,
+        schema_fields: list[str] | None = None,
         last_event_at: Any = None,
         last_event_kind: str | None = None,
     ) -> None:
@@ -326,22 +327,25 @@ async def test_poll_one_first_poll_records_fingerprint_no_drift(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_poll_one_detects_schema_drift(monkeypatch):
-    """When the new fingerprint differs from the stored baseline,
-    record_schema_drift should be called with details describing the
-    change before record_poll_success is invoked."""
-    # Synthesize a baseline fingerprint that differs from what the
-    # current poll will produce.
+    """Drift-sentinel v2: drift fires ONLY when a persisted baseline core
+    field disappears from the batch (rename/removal upstream), and
+    record_schema_drift is called with that field in `removed` before
+    record_poll_success is invoked. Pure additions grow the baseline
+    silently — that direction is pinned by
+    test_poll_one_stable_schema_no_drift and test_drift_sentinel_v2.py."""
     from app.pipeline.fingerprint import compute_fingerprint as cf
 
-    stale_fp = cf([{"severity": "high"}])  # baseline: only one field
+    stale_fp = cf([{"severity": "high"}])
     inst = _make_instance(
         connector_type="fake_connector",
         connector_config={"poll_interval_seconds": 60},
     )
     inst.schema_fingerprint = stale_fp
+    # Persisted stable-core baseline: `new_field` is about to vanish.
+    inst.schema_fields = ["host", "new_field", "severity"]
 
     fake_connector = MagicMock()
-    fake_connector.fetch_alerts = AsyncMock(return_value=[{"severity": "high", "host": "h1", "new_field": "x"}])
+    fake_connector.fetch_alerts = AsyncMock(return_value=[{"severity": "high", "host": "h1"}])
     fake_connector.normalize = MagicMock(side_effect=lambda e: e)
 
     monkeypatch.setattr(
@@ -362,15 +366,16 @@ async def test_poll_one_detects_schema_drift(monkeypatch):
     drift = fake_engine.drift_calls[0]
     assert drift["connector_id"] == inst.id
     assert drift["fingerprint"] != stale_fp
-    assert "added" in drift["details"]
+    assert drift["details"]["removed"] == ["new_field"]
     assert "previous_fingerprint" in drift["details"]
     assert drift["details"]["previous_fingerprint"] == stale_fp
 
 
 @pytest.mark.asyncio
 async def test_poll_one_stable_schema_no_drift(monkeypatch):
-    """If the new fingerprint matches the stored baseline, the row's
-    fingerprint is rewritten via success but no drift event fires."""
+    """Drift-sentinel v2: a persisted baseline whose core fields all still
+    appear in the batch fires no drift — the fingerprint is advanced via
+    success, and additions would only grow the baseline silently."""
     from app.pipeline.fingerprint import compute_fingerprint as cf
 
     events = [{"severity": "high", "host": "h1"}]
@@ -380,6 +385,7 @@ async def test_poll_one_stable_schema_no_drift(monkeypatch):
         connector_config={"poll_interval_seconds": 60},
     )
     inst.schema_fingerprint = baseline_fp
+    inst.schema_fields = ["host", "severity"]  # exactly the batch's stable core
 
     fake_connector = MagicMock()
     fake_connector.fetch_alerts = AsyncMock(return_value=events)
@@ -434,11 +440,13 @@ async def test_poll_one_quiet_hour_does_not_clobber_fingerprint(monkeypatch):
         events_added: int,
         events_dropped: int = 0,
         schema_fingerprint: str | None = None,
+        schema_fields: list[str] | None = None,
         last_event_at: Any = None,
         last_event_kind: str | None = None,
     ) -> None:
         conn.engine.success_calls.append(connector_id)
         captured_success["schema_fingerprint"] = schema_fingerprint
+        captured_success["schema_fields"] = schema_fields
 
     monkeypatch.setattr("app.scheduler.record_poll_success", capture_record_poll_success)
 
@@ -1018,6 +1026,7 @@ def _patch_repo_calls(monkeypatch):
         events_added: int,
         events_dropped: int = 0,
         schema_fingerprint: str | None = None,
+        schema_fields: list[str] | None = None,
         last_event_at: Any = None,
         last_event_kind: str | None = None,
     ) -> None:
@@ -1032,6 +1041,7 @@ def _patch_repo_calls(monkeypatch):
         *,
         fingerprint: str,
         details: dict[str, Any],
+        schema_fields: list[str] | None = None,
     ) -> None:
         getattr(conn.engine, "drift_calls", []).append({"connector_id": connector_id, "fingerprint": fingerprint, "details": details})
 
