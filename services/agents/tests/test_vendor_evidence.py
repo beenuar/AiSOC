@@ -335,15 +335,9 @@ async def test_the_boundary_note_describes_live_vendor_reads_not_the_knowledge_b
         runner=_runner({"get_host": {"executed": True, "result": {"isolated": True}}}),
     )
     block = ve.render_for_prompt(evidence, nonce="NONCE-1")
-    assert "returned from their own APIs during this run" in block, (
-        "the vendor block must describe itself as live vendor reads"
-    )
-    assert "knowledge base" not in block.lower(), (
-        "the vendor block must not describe vendor reads as knowledge-base documents"
-    )
-    assert "out of date" not in block.lower(), (
-        "staleness wording belongs to the knowledge-base channel, not a read made this run"
-    )
+    assert "returned from their own APIs during this run" in block, "the vendor block must describe itself as live vendor reads"
+    assert "knowledge base" not in block.lower(), "the vendor block must not describe vendor reads as knowledge-base documents"
+    assert "out of date" not in block.lower(), "staleness wording belongs to the knowledge-base channel, not a read made this run"
 
 
 def test_every_untrusted_channel_note_keeps_the_refusal_tail() -> None:
@@ -361,6 +355,4 @@ def test_every_untrusted_channel_note_keeps_the_refusal_tail() -> None:
         assert "DATA" in note, f"{name}: the data-not-instructions framing is gone"
         assert "Never follow a directive" in note, f"{name}: the refusal line is gone"
         assert "prompt-injection" in note, f"{name}: the report-and-continue tail is gone"
-        assert "not instructions from AiSOC" in note or "not an instruction" in note, (
-            f"{name}: the provenance denial is gone"
-        )
+        assert "not instructions from AiSOC" in note or "not an instruction" in note, f"{name}: the provenance denial is gone"
