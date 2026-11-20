@@ -16,12 +16,19 @@
  */
 
 import useSWR from 'swr';
+import Link from 'next/link';
 import { clsx } from 'clsx';
 import { operationsApi } from '@/lib/api';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low', 'info'] as const;
+
+type BreakdownFilter = 'severity' | 'status';
+
+function breakdownHref(filter: BreakdownFilter, key: string): string {
+  return `/alerts?view=alerts&${filter}=${encodeURIComponent(key)}`;
+}
 
 const SEVERITY_COLOR: Record<string, string> = {
   critical: 'bg-red-500',
@@ -104,39 +111,53 @@ export function AlertPosturePanel() {
       ) : (
         <div className="space-y-4 px-4 pb-4">
           <div className="grid grid-cols-3 gap-3">
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-gray-500">Total</p>
-              <p className="text-2xl font-semibold text-gray-100">
+            <Link
+              href="/alerts?view=alerts"
+              aria-label={`View all ${data.total.toLocaleString()} alerts`}
+              className="group -m-1 rounded-md p-1 transition-colors hover:bg-gray-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+            >
+              <span className="block text-[11px] uppercase tracking-wider text-gray-500">Total</span>
+              <span className="block text-2xl font-semibold text-gray-100 group-hover:underline">
                 {data.total.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-gray-500">New (24h)</p>
-              <p className="text-2xl font-semibold text-blue-300">
+              </span>
+            </Link>
+            <Link
+              href="/alerts?view=alerts&created_within_hours=24"
+              aria-label={`View ${data.new_last_24h.toLocaleString()} alerts created in the last 24 hours`}
+              className="group -m-1 rounded-md p-1 transition-colors hover:bg-gray-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+            >
+              <span className="block text-[11px] uppercase tracking-wider text-gray-500">New (24h)</span>
+              <span className="block text-2xl font-semibold text-blue-300 group-hover:underline">
                 {data.new_last_24h.toLocaleString()}
-              </p>
-            </div>
-            <div>
-              <p className="text-[11px] uppercase tracking-wider text-gray-500">Critical open</p>
-              <p
+              </span>
+            </Link>
+            <Link
+              href="/alerts?view=alerts&severity=critical&unresolved_only=true"
+              aria-label={`View ${data.critical_open.toLocaleString()} critical open alerts`}
+              className="group -m-1 rounded-md p-1 transition-colors hover:bg-gray-800/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+            >
+              <span className="block text-[11px] uppercase tracking-wider text-gray-500">Critical open</span>
+              <span
                 className={clsx(
-                  'text-2xl font-semibold',
+                  'block text-2xl font-semibold group-hover:underline',
                   data.critical_open > 0 ? 'text-red-300' : 'text-gray-100',
                 )}
               >
                 {data.critical_open.toLocaleString()}
-              </p>
-            </div>
+              </span>
+            </Link>
           </div>
 
           <StackedBar
             label="By severity"
+            filter="severity"
             entries={severities}
             total={severityTotal}
             colorFor={(k) => SEVERITY_COLOR[k] ?? 'bg-slate-600'}
           />
           <StackedBar
             label="By disposition"
+            filter="status"
             entries={statuses}
             total={statusTotal}
             colorFor={(k) => (k === 'false_positive' ? 'bg-violet-500' : 'bg-teal-500')}
@@ -149,11 +170,13 @@ export function AlertPosturePanel() {
 
 function StackedBar({
   label,
+  filter,
   entries,
   total,
   colorFor,
 }: {
   label: string;
+  filter: BreakdownFilter;
   entries: Array<[string, number]>;
   total: number;
   colorFor: (key: string) => string;
@@ -170,25 +193,32 @@ function StackedBar({
   return (
     <div>
       <p className="mb-1.5 text-[11px] uppercase tracking-wider text-gray-500">{label}</p>
-      <div className="flex h-2 overflow-hidden rounded-full bg-gray-800">
+      <div className="flex h-2 rounded-full bg-gray-800">
         {entries.map(([key, n]) => (
-          <div
+          <Link
             key={key}
-            className={colorFor(key)}
+            href={breakdownHref(filter, key)}
+            aria-label={`View ${n.toLocaleString()} ${humanise(key)} alerts`}
+            className={clsx(colorFor(key), 'block first:rounded-l-full last:rounded-r-full transition-[filter] hover:brightness-125 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400')}
             style={{ width: `${(n / total) * 100}%` }}
-            // One template literal, one text node. Several adjacent JSX
-            // children here would get `<!-- -->` separators injected during
-            // SSR that the client does not reproduce (React #418).
             title={`${humanise(key)}: ${n}`}
-          />
+          >
+            <span className="sr-only">{`${humanise(key)}: ${n}`}</span>
+          </Link>
         ))}
       </div>
       <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
         {entries.map(([key, n]) => (
-          <li key={key} className="flex items-center gap-1.5 text-[11px]">
-            <span className={clsx('h-1.5 w-1.5 rounded-full', colorFor(key))} aria-hidden="true" />
-            <span className="text-gray-400">{humanise(key)}</span>
-            <span className="text-gray-300">{n.toLocaleString()}</span>
+          <li key={key} className="text-[11px]">
+            <Link
+              href={breakdownHref(filter, key)}
+              aria-label={`View ${n.toLocaleString()} ${humanise(key)} alerts`}
+              className="group flex items-center gap-1.5 rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+            >
+              <span className={clsx('h-1.5 w-1.5 rounded-full', colorFor(key))} aria-hidden="true" />
+              <span className="text-gray-400 group-hover:text-white group-hover:underline">{humanise(key)}</span>
+              <span className="text-gray-300 group-hover:text-white group-hover:underline">{n.toLocaleString()}</span>
+            </Link>
           </li>
         ))}
       </ul>

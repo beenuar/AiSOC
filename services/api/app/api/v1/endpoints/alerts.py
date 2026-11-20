@@ -4,7 +4,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
@@ -808,6 +808,10 @@ async def list_alerts(
         "status that is not terminal). Dashboard tiles deep-link with this so the "
         "clicked number and the resulting list answer the same question.",
     ),
+    created_within_hours: Annotated[
+        int | None,
+        Query(ge=1, le=8760, description="Alerts created within the last N hours (created_at, not event_time)."),
+    ] = None,
     disposition: str | None = Query(
         default=None,
         description="Exact-match on the triage disposition (e.g. 'needs_review'). "
@@ -886,6 +890,10 @@ async def list_alerts(
         filters.append(Alert.status == status)
     if unresolved_only:
         filters.append(unresolved_filter(Alert.status))
+    if created_within_hours is not None:
+        # Same timestamp column as /alerts/stats new_last_24h; event_since
+        # intentionally filters event_time and cannot represent this counter.
+        filters.append(Alert.created_at >= datetime.now(UTC) - timedelta(hours=created_within_hours))
     if disposition:
         filters.append(Alert.disposition == disposition)
     if category:
@@ -967,7 +975,6 @@ async def get_alert_stats(
     db: DBSession,
 ) -> AlertStatsResponse:
     """Get alert statistics for the dashboard."""
-    from datetime import timedelta
 
     tenant_filter = Alert.tenant_id == current_user.tenant_id
 

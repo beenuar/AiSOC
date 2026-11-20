@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { BulkTriageBar } from './BulkTriageBar';
 import { alertsApi, type Alert, type AlertFacets, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
 import { clsx } from 'clsx';
@@ -14,6 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
+import { mergeAlertFiltersFromUrl, readAlertDrilldown } from '@/lib/alertDrilldown';
 
 // Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
 // rolled-up Risk-Based Alerting queue — alerts contribute time-decayed risk
@@ -185,10 +187,17 @@ function SeverityBadge({ severity }: { severity: string }) {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG] || STATUS_CONFIG.new;
+  const cfg = STATUS_CONFIG[status as keyof typeof STATUS_CONFIG];
+  // The operations disposition breakdown includes worker/vendor statuses not
+  // represented by the quick-filter buttons. Never label these as "New":
+  // the actual server status is what the operator clicked to inspect.
+  const label = cfg?.label ?? status.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
   return (
-    <span className={clsx('text-xs px-2 py-0.5 rounded border', cfg.color)}>
-      {cfg.label}
+    <span className={clsx(
+      'text-xs px-2 py-0.5 rounded border',
+      cfg?.color ?? 'text-gray-300 bg-gray-500/10 border-gray-600/20',
+    )}>
+      {label}
     </span>
   );
 }
@@ -240,6 +249,36 @@ function FiltersBar({
           </button>
         ))}
       </div>
+      {filters.unresolvedOnly && (
+        <button
+          type="button"
+          aria-label="Remove unresolved-only filter"
+          onClick={() => onChange({ ...filters, unresolvedOnly: undefined, page: 1 })}
+          className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs text-blue-300 hover:bg-blue-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Unresolved only ×
+        </button>
+      )}
+      {filters.createdWithinHours && (
+        <button
+          type="button"
+          aria-label="Remove created-within-hours filter"
+          onClick={() => onChange({ ...filters, createdWithinHours: undefined, page: 1 })}
+          className="rounded border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-xs text-blue-300 hover:bg-blue-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Created in last {filters.createdWithinHours}h ×
+        </button>
+      )}
+      {filters.status && !statuses.includes(filters.status as typeof statuses[number]) && (
+        <button
+          type="button"
+          aria-label="Remove status filter"
+          onClick={() => onChange({ ...filters, status: undefined, page: 1 })}
+          className="rounded border border-gray-600/60 px-2 py-1 text-xs text-gray-300 hover:bg-gray-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+        >
+          Status: {filters.status.replace(/_/g, ' ')} ×
+        </button>
+      )}
       <span className="ml-auto text-xs text-gray-600">{total} total</span>
     </div>
   );
@@ -342,20 +381,41 @@ function AlertRow({
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-export function AlertsView() {
+export function AlertsView({
+  initialFilters,
+  initialViewMode = 'entities',
+}: {
+  initialFilters?: Partial<AlertFilters>;
+  initialViewMode?: ViewMode;
+} = {}) {
   // `sort: 'priority'` because the API defaults to reverse-chronological for
   // its SDK clients, and in a console that is the wrong default: a noisy
   // low-severity source emitting faster than an analyst pages pushes a
   // critical off page one and keeps it there.
-  const [filters, setFilters] = useState<AlertFilters>({
+  const searchParams = useSearchParams();
+  const searchKey = searchParams?.toString() ?? '';
+  const drilldown = useMemo(() => {
+    if (searchKey === '') return undefined;
+    return readAlertDrilldown(new URLSearchParams(searchKey));
+  }, [searchKey]);
+  const [localFilters, setFilters] = useState<AlertFilters>({
     page: 1,
     pageSize: 25,
     sort: 'priority',
+    ...initialFilters,
   });
+  // History can restore cached server props after a chip was removed. Read
+  // URL-controlled fields from the live router, keeping local sort, page size,
+  // and other saved-view fields when replacing the URL.
+  const filters: AlertFilters = useMemo(
+    () => mergeAlertFiltersFromUrl(localFilters, drilldown),
+    [drilldown, localFilters],
+  );
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.
-  const [viewMode, setViewMode] = useState<ViewMode>('entities');
+  const [viewMode, setViewMode] = useState<ViewMode>(drilldown?.viewMode ?? initialViewMode);
+  const [autoApplyDefault] = useState((drilldown?.viewMode ?? initialViewMode) !== 'alerts');
   const { t } = useLocale();
 
   const { data, error, isLoading } = useSWR(
@@ -379,56 +439,30 @@ export function AlertsView() {
 
   const handleFilterChange = useCallback((newFilters: AlertFilters) => {
     setFilters(newFilters);
-  }, []);
 
-  // Deep links: the dashboard's stat tiles open /alerts?unresolved_only=true
-  // [&severity=critical] so a clicked number lands on the list that produced
-  // it. A query param is authoritative for the keys it sets — the Needs
-  // Review default is a landing state, not a straitjacket — and a bare
-  // /alerts keeps it. Read once at mount; back/forward reloads naturally.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const q = new URLSearchParams(window.location.search);
-    if ([...q.keys()].length === 0) return;
-    setFilters(() => {
-      const next: AlertFilters = { page: 1, pageSize: 25, sort: 'priority' };
-      const page = Number(q.get('page'));
-      if (Number.isFinite(page) && page >= 1) next.page = page;
-      const size = Number(q.get('pageSize') ?? q.get('page_size'));
-      if ([25, 50, 100, 200].includes(size)) next.pageSize = size;
-      for (const key of ['severity', 'status', 'search', 'disposition'] as const) {
-        const value = q.get(key);
-        if (value && value !== 'any') next[key] = value;
-      }
-      if (q.get('unresolved_only') === 'true') next.unresolvedOnly = true;
-      return next;
-    });
-  }, []);
-
-  // Write the queue back into the URL so any filter state is linkable and
-  // survives a refresh. replaceState, not push: paging is not history.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      const url = new URL(window.location.href);
-      const entries: Record<string, string | number | undefined> = {
-        page: filters.page,
-        pageSize: filters.pageSize,
-        severity: filters.severity,
-        status: filters.status,
-        disposition: filters.disposition,
-        search: filters.search,
-        unresolved_only: filters.unresolvedOnly ? 'true' : undefined,
-      };
-      for (const [key, value] of Object.entries(entries)) {
-        if (value === undefined || value === null || value === '') url.searchParams.delete(key);
-        else url.searchParams.set(key, String(value));
-      }
-      window.history.replaceState({}, '', url.toString());
-    } catch {
-      // Best-effort URL sync; state remains the source of truth either way.
+    const url = new URL(window.location.href);
+    const params = {
+      view: 'alerts',
+      page: newFilters.page && newFilters.page > 1 ? newFilters.page : undefined,
+      pageSize:
+        newFilters.pageSize && newFilters.pageSize !== 25 ? newFilters.pageSize : undefined,
+      severity: newFilters.severity || undefined,
+      status: newFilters.status || undefined,
+      disposition: newFilters.disposition || undefined,
+      search: newFilters.search || undefined,
+      unresolved_only: newFilters.unresolvedOnly ? 'true' : undefined,
+      created_within_hours: newFilters.createdWithinHours?.toString(),
+    };
+    for (const [name, value] of Object.entries(params)) {
+      if (value === undefined) url.searchParams.delete(name);
+      else url.searchParams.set(name, String(value));
     }
-  }, [filters]);
+
+    // Keep a reload on the same queue, including when its final chip is
+    // removed. Native history preserves local sort/pagination and unrelated
+    // query parameters without a server navigation remounting this view.
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
 
   const alerts = data?.alerts || [];
   const total = data?.total || 0;
@@ -509,6 +543,7 @@ export function AlertsView() {
           total={total}
           facets={facets}
           filters={filters}
+          autoApplyDefault={autoApplyDefault}
           isLoading={isLoading}
           error={error}
           onFilterChange={handleFilterChange}
@@ -525,6 +560,7 @@ function AlertsTable({
   total,
   facets,
   filters,
+  autoApplyDefault,
   isLoading,
   error,
   onFilterChange,
@@ -533,6 +569,7 @@ function AlertsTable({
   total: number;
   facets?: AlertFacets;
   filters: AlertFilters;
+  autoApplyDefault: boolean;
   isLoading: boolean;
   error: unknown;
   onFilterChange: (f: AlertFilters) => void;
@@ -587,6 +624,7 @@ function AlertsTable({
       <SavedViewsBar<AlertFilters>
         viewType="alerts"
         filters={filters}
+        autoApplyDefault={autoApplyDefault}
         onApply={(applied) =>
           onFilterChange({
             ...applied,
@@ -735,14 +773,14 @@ function AlertsTableGrid({
             filter-aware copy is the difference between an analyst thinking
             "the system is broken" and "I should clear my filters".
           */}
-          {filters.severity || filters.status ? (
+          {filters.severity || filters.status || filters.unresolvedOnly || filters.createdWithinHours ? (
             <EmptyState
               icon={EmptyStateIcons.search}
               title="No alerts match these filters"
-              description="Try clearing the severity or status filter to widen the search."
+              description="Try clearing the severity, status, unresolved-only, or creation-time filters to widen the search."
               action={
                 <button
-                  onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25 })}
+                  onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25, sort: filters.sort })}
                   className="text-xs px-3 py-1.5 rounded-md border border-blue-500/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-colors"
                 >
                   Clear filters

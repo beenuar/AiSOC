@@ -789,6 +789,18 @@ paths:
         description: 'Restrict to unresolved alerts (alert_status.unresolved_filter:
           any status that is not terminal). Dashboard tiles deep-link with this so
           the clicked number and the resulting list answer the same question.'
+      - name: created_within_hours
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 8760
+            minimum: 1
+          - type: 'null'
+          description: Alerts created within the last N hours (created_at, not event_time).
+          title: Created Within Hours
+        description: Alerts created within the last N hours (created_at, not event_time).
       - name: disposition
         in: query
         required: false

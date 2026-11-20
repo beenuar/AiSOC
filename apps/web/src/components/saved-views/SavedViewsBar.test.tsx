@@ -231,6 +231,58 @@ describe('SavedViewsBar', () => {
     expect(onApply).not.toHaveBeenCalled();
   });
 
+  it('does not apply or highlight a default that arrives after an explicit deep link', () => {
+    const onApply = vi.fn();
+    const onDefaultLoaded = vi.fn();
+    const toolbar = () => (
+      <SavedViewsBar<TestFilters>
+        viewType="alerts"
+        filters={{ status: 'escalated' }}
+        onApply={onApply}
+        onDefaultLoaded={onDefaultLoaded}
+        autoApplyDefault={false}
+      />
+    );
+    const { rerender } = render(toolbar());
+
+    seedViews('alerts', [
+      makeView({ id: 'v-default', is_default: true, filters: { status: 'resolved' } }),
+    ]);
+    rerender(toolbar());
+
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onDefaultLoaded).not.toHaveBeenCalled();
+    expect(screen.getByTestId('saved-view-chip-v-default')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('allows manually selecting a default preset when automatic application is disabled', async () => {
+    const defaultFilters = { status: 'resolved' };
+    seedViews('alerts', [
+      makeView({ id: 'v-default', is_default: true, filters: defaultFilters }),
+    ]);
+    const onApply = vi.fn();
+    const onDefaultLoaded = vi.fn();
+    render(
+      <SavedViewsBar<TestFilters>
+        viewType="alerts"
+        filters={{ status: 'escalated' }}
+        onApply={onApply}
+        onDefaultLoaded={onDefaultLoaded}
+        autoApplyDefault={false}
+      />,
+    );
+
+    const preset = screen.getByTestId('saved-view-chip-v-default');
+    expect(onApply).not.toHaveBeenCalled();
+    expect(preset).toHaveAttribute('aria-pressed', 'false');
+
+    await userEvent.click(preset);
+
+    expect(onApply).toHaveBeenCalledExactlyOnceWith(defaultFilters);
+    expect(onDefaultLoaded).not.toHaveBeenCalled();
+    expect(preset).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('saves the current filters with the typed name', async () => {
     seedViews('alerts', []);
     createMock.mockResolvedValue(makeView({ id: 'v-new', name: 'My filter' }));

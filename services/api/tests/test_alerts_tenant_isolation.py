@@ -35,7 +35,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -57,6 +57,7 @@ from app.api.v1.endpoints.alerts import (
     claim_alert_endpoint as claim_alert_route,
 )
 from app.models.alert import Alert
+from app.services.alert_status import RESOLVED_STATUSES
 from fastapi import HTTPException, Request
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -290,11 +291,17 @@ _LIST_ALERTS_DEFAULTS: dict[str, Any] = {
     "limit": None,
     "severity": None,
     "status": None,
+    "unresolved_only": False,
+    "created_within_hours": None,
+    "disposition": None,
     "category": None,
     "assigned_to_me": False,
     "search": None,
     "min_confidence": None,
     "confidence_label": None,
+    "event_since": None,
+    "event_until": None,
+    "hostname": None,
     # `list_alerts` is called here as a plain function, so FastAPI's
     # `Query(...)` defaults never apply and every parameter must be named.
     "sort": "newest",
@@ -347,6 +354,57 @@ async def test_list_alerts_with_filters_keeps_tenant_scope() -> None:
     for sql, _params in alerts_stmts:
         normalized = re.sub(r"\s+", " ", sql).lower()
         assert "tenant_id" in normalized, f"alerts statement missing tenant_id: {sql}"
+
+
+@pytest.mark.asyncio
+async def test_list_alerts_posture_drilldown_uses_the_same_open_and_created_predicates() -> None:
+    """The critical-open and new-24h links must select the rows counted by stats.
+
+    Open is NOT status == 'new': triaged and unknown non-terminal statuses
+    are also unresolved. 24h filtering is on created_at, NOT event_time.
+    """
+    user = _user()
+    db = _mk_db([0, [], [], []])
+    await list_alerts(
+        current_user=user,
+        db=db,
+        http_request=_http_request(),
+        **{
+            **_LIST_ALERTS_DEFAULTS,
+            "severity": "critical",
+            "unresolved_only": True,
+            "created_within_hours": 24,
+        },
+    )
+
+    assert len(db.executed) == 4
+    _assert_tenant_scoped(db.executed, user.tenant_id)
+    for sql, params in db.executed:
+        assert "alerts.severity" in sql
+        assert "alerts.status NOT IN" in sql
+        assert "alerts.status IS NULL" in sql
+        assert "alerts.created_at >=" in sql
+
+        # SQLAlchemy expands IN values into lists. Check every canonical
+        # terminal state without depending on the bound collection type.
+        terminal_groups = [v for v in params.values() if isinstance(v, (list, tuple))]
+        assert any(set(group) == set(RESOLVED_STATUSES) for group in terminal_groups)
+        cutoffs = [v for v in params.values() if isinstance(v, datetime)]
+        assert len(cutoffs) == 1
+        expected = datetime.now(UTC) - timedelta(hours=24)
+        assert abs((cutoffs[0] - expected).total_seconds()) < 10
+
+
+@pytest.mark.asyncio
+async def test_list_alerts_posture_drilldown_filters_are_opt_in() -> None:
+    """Ordinary /alerts callers must not inherit a hidden 24h/open filter."""
+    user = _user()
+    db = _mk_db([0, [], [], []])
+    await list_alerts(current_user=user, db=db, http_request=_http_request(), **_LIST_ALERTS_DEFAULTS)
+
+    for sql, _params in db.executed:
+        assert "alerts.status NOT IN" not in sql
+        assert "alerts.created_at >=" not in sql
 
 
 @pytest.mark.asyncio

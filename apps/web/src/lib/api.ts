@@ -2134,6 +2134,8 @@ export interface AlertFilters {
    * pins it. (Backend: services/api/app/api/v1/endpoints/alerts.py.)
    */
   disposition?: string;
+  /** Filter by created_at, not event_time; powers the 24-hour posture KPI. */
+  createdWithinHours?: number;
   source?: string;
   assignee?: string;
   startTime?: string;
@@ -2185,7 +2187,7 @@ export interface AlertUpdate {
  * for. Silence here is a UX bug, not a compatibility shim.
  */
 function alertListParams(filters: AlertFilters): Record<string, string> {
-  const { pageSize, unresolvedOnly, ...rest } = filters;
+  const { pageSize, unresolvedOnly, createdWithinHours, startTime, endTime, ...rest } = filters;
   // Every pass-through key is enumerated at compile time — a missing or extra
   // key is a type error — so the property names written below are constants,
   // never a name derived from runtime input (CodeQL js/remote-property-injection),
@@ -2196,8 +2198,6 @@ function alertListParams(filters: AlertFilters): Record<string, string> {
     disposition: true,
     source: true,
     assignee: true,
-    startTime: true,
-    endTime: true,
     search: true,
     page: true,
     tenantId: true,
@@ -2209,7 +2209,12 @@ function alertListParams(filters: AlertFilters): Record<string, string> {
     if (value !== undefined && value !== null && value !== "") params[key] = String(value);
   }
   if (pageSize) params.page_size = String(pageSize);
-  if (unresolvedOnly) params.unresolved_only = "true";
+  if (unresolvedOnly !== undefined) params.unresolved_only = String(unresolvedOnly);
+  if (createdWithinHours !== undefined && createdWithinHours !== null) {
+    params.created_within_hours = String(createdWithinHours);
+  }
+  if (startTime) params.event_since = startTime;
+  if (endTime) params.event_until = endTime;
   return params;
 }
 

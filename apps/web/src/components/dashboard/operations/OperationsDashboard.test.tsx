@@ -40,8 +40,8 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({ children, ...props }: React.ComponentProps<'a'>) => (
+    <a {...props}>{children}</a>
   ),
 }));
 
@@ -293,6 +293,31 @@ describe('panels render real API values', () => {
     expect(await screen.findByText('128')).toBeTruthy();
     expect(screen.getByText(/By disposition/i)).toBeTruthy();
     expect(screen.getByText('False positive')).toBeTruthy();
+  });
+
+  it('links every alert posture counter and breakdown to the matching alert filter', async () => {
+    renderDashboard();
+    await screen.findByText('128');
+    const panel = within(screen.getByRole('region', { name: 'Alert posture' }));
+
+    expect(panel.getByRole('link', { name: 'View all 128 alerts' }).getAttribute('href'))
+      .toBe('/alerts?view=alerts');
+    expect(panel.getByRole('link', { name: 'View 22 alerts created in the last 24 hours' }).getAttribute('href'))
+      .toBe('/alerts?view=alerts&created_within_hours=24');
+    expect(panel.getByRole('link', { name: 'View 3 critical open alerts' }).getAttribute('href'))
+      .toBe('/alerts?view=alerts&severity=critical&unresolved_only=true');
+
+    // Both the bar segment and the legend count offer the same drill-down.
+    const critical = panel.getAllByRole('link', { name: 'View 3 Critical alerts' });
+    expect(critical.length).toBe(2);
+    for (const link of critical) {
+      expect(link.getAttribute('href')).toBe('/alerts?view=alerts&severity=critical');
+    }
+    const falsePositives = panel.getAllByRole('link', { name: 'View 17 False positive alerts' });
+    expect(falsePositives.length).toBe(2);
+    for (const link of falsePositives) {
+      expect(link.getAttribute('href')).toBe('/alerts?view=alerts&status=false_positive');
+    }
   });
 
   it('labels agent throughput as runs, which is what the endpoint measures', async () => {

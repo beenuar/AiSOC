@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   on this device or disables fused-alert pushes without silencing agent
   approvals, on-call hand-offs or manual test pushes.
 
+- Operations dashboard alert-posture counters and severity/status breakdowns
+  now open the corresponding filtered alert grid. Critical-open links use the
+  canonical unresolved-status predicate; the 24-hour view uses alert creation
+  time. Tenant scope continues to come from the authenticated principal.
+
 ### Fixed
 
 - **SOC Insights uses the console theme and keeps its last successful snapshot
@@ -30,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a missing cost table cannot abort the request transaction. Materializing
   the permitted investigation runs also prevents repeated scans when the
   row-security estimates produce a slow generic cost-join plan.
+
+- Alert drill-down filters now stay in sync with the URL when changed or
+  cleared, so reloading or restoring browser history does not revive removed
+  filters. Explicit drill-downs take precedence over default saved views while
+  preserving manual preset selection. Empty-state guidance
+  includes unresolved-only and creation-time filters, and posture bar links
+  have a visible keyboard-focus indicator. Regression tests preserve link
+  accessibility attributes, accept SQLAlchemy's expanding collection binds,
+  and verify the alerts client's HTTP query parameter names.
 
 ## [23.5.3] - 2026-11-19
 
