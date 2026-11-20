@@ -58,6 +58,8 @@ interface SavedViewsBarProps<TFilters extends object> {
    * mount, so it can avoid double-applying or fire analytics.
    */
   onDefaultLoaded?: (view: SavedView) => void;
+  /** Set false to preserve explicit deep-link filters instead of loading the user's default. */
+  autoApplyDefault?: boolean;
   /** Hide the "Save current view" affordance, e.g. in read-only demos. */
   readOnly?: boolean;
 }
@@ -67,6 +69,7 @@ export function SavedViewsBar<TFilters extends object>({
   filters,
   onApply,
   onDefaultLoaded,
+  autoApplyDefault = true,
   readOnly = false,
 }: SavedViewsBarProps<TFilters>) {
   // Each page key is unique so multiple bars on the same screen wouldn't
@@ -91,7 +94,9 @@ export function SavedViewsBar<TFilters extends object>({
   // nothing", which is the state a delete leaves behind — collapsing the two
   // would re-light the default chip the moment its row was removed.
   const [picked, setPicked] = useState<{ id: string | null } | null>(null);
-  const defaultViewId = isLoading ? null : (views.find((v) => v.is_default)?.id ?? null);
+  const defaultViewId = isLoading || !autoApplyDefault
+    ? null
+    : (views.find((v) => v.is_default)?.id ?? null);
   const activeViewId = picked ? picked.id : defaultViewId;
 
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -125,7 +130,7 @@ export function SavedViewsBar<TFilters extends object>({
   // since changed.
   const defaultAppliedRef = useRef(false);
   useEffect(() => {
-    if (defaultAppliedRef.current || isLoading || views.length === 0) return;
+    if (!autoApplyDefault || defaultAppliedRef.current || isLoading || views.length === 0) return;
     defaultAppliedRef.current = true;
 
     const def = views.find((v) => v.is_default);
@@ -133,7 +138,7 @@ export function SavedViewsBar<TFilters extends object>({
 
     onApplyRef.current(def.filters as TFilters);
     onDefaultLoadedRef.current?.(def);
-  }, [views, isLoading]);
+  }, [views, isLoading, autoApplyDefault]);
 
   const apply = useCallback(
     (view: SavedView) => {
@@ -268,6 +273,7 @@ export function SavedViewsBar<TFilters extends object>({
             <button
               type="button"
               onClick={() => apply(view)}
+              aria-pressed={activeViewId === view.id}
               className={clsx(
                 'inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-l-lg transition-colors border-l border-y',
                 activeViewId === view.id

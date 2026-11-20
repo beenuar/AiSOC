@@ -57,6 +57,7 @@ from app.api.v1.endpoints.alerts import (
     claim_alert_endpoint as claim_alert_route,
 )
 from app.models.alert import Alert
+from app.services.alert_status import RESOLVED_STATUSES
 from fastapi import HTTPException, Request
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -384,9 +385,10 @@ async def test_list_alerts_posture_drilldown_uses_the_same_open_and_created_pred
         assert "alerts.status IS NULL" in sql
         assert "alerts.created_at >=" in sql
 
-        # Canonical unresolved_filter includes all terminal states.
-        terminal_groups = [v for v in params.values() if isinstance(v, tuple)]
-        assert any("false_positive" in group and "resolved" in group for group in terminal_groups)
+        # SQLAlchemy expands IN values into lists. Check every canonical
+        # terminal state without depending on the bound collection type.
+        terminal_groups = [v for v in params.values() if isinstance(v, (list, tuple))]
+        assert any(set(group) == set(RESOLVED_STATUSES) for group in terminal_groups)
         cutoffs = [v for v in params.values() if isinstance(v, datetime)]
         assert len(cutoffs) == 1
         expected = datetime.now(UTC) - timedelta(hours=24)

@@ -162,3 +162,77 @@ describe('alertsApi.list ordering', () => {
     expect(url).toContain('sort=priority');
   });
 });
+
+describe('alertsApi.list request parameters', () => {
+  beforeEach(() => {
+    fetchMock.mockResolvedValue(jsonResponse({ items: [], total: 0, page: 1, page_size: 25 }));
+  });
+
+  it('sends the backend query names while preserving the existing alert filters', async () => {
+    await alertsApi.list({
+      page: 2,
+      pageSize: 50,
+      severity: 'critical',
+      status: 'escalated',
+      source: 'connector',
+      assignee: 'analyst@example.com',
+      search: 'PowerShell + download',
+      sort: 'priority',
+      startTime: '2026-05-06T00:00:00+00:00',
+      endTime: '2026-05-07T00:00:00+00:00',
+      unresolvedOnly: true,
+      createdWithinHours: 24,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const url = new URL(String(fetchMock.mock.calls[0][0]), window.location.origin);
+    expect(url.pathname).toBe('/api/v1/alerts');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      page: '2',
+      page_size: '50',
+      severity: 'critical',
+      status: 'escalated',
+      source: 'connector',
+      assignee: 'analyst@example.com',
+      search: 'PowerShell + download',
+      sort: 'priority',
+      event_since: '2026-05-06T00:00:00+00:00',
+      event_until: '2026-05-07T00:00:00+00:00',
+      unresolved_only: 'true',
+      created_within_hours: '24',
+    });
+  });
+
+  it('preserves the responder queue page size without adding drilldown filters', async () => {
+    await alertsApi.list({ pageSize: 100 });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), window.location.origin);
+    expect(Object.fromEntries(url.searchParams)).toEqual({ page_size: '100' });
+  });
+
+  it('omits unset and empty filters so the server defaults still apply', async () => {
+    await alertsApi.list({
+      page: undefined,
+      pageSize: undefined,
+      severity: '',
+      status: '',
+      source: '',
+      assignee: '',
+      search: '',
+      startTime: '',
+      endTime: undefined,
+      unresolvedOnly: undefined,
+      createdWithinHours: undefined,
+    });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), window.location.origin);
+    expect(url.search).toBe('');
+  });
+
+  it('retains an explicit false value when unresolved filtering is disabled', async () => {
+    await alertsApi.list({ unresolvedOnly: false });
+
+    const url = new URL(String(fetchMock.mock.calls[0][0]), window.location.origin);
+    expect(Object.fromEntries(url.searchParams)).toEqual({ unresolved_only: 'false' });
+  });
+});

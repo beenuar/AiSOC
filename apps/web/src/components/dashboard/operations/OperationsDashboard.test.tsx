@@ -40,8 +40,8 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('next/link', () => ({
   __esModule: true,
-  default: ({ children, href }: { children: React.ReactNode; href: string }) => (
-    <a href={href}>{children}</a>
+  default: ({ children, ...props }: React.ComponentProps<'a'>) => (
+    <a {...props}>{children}</a>
   ),
 }));
 

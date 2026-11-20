@@ -193,13 +193,13 @@ function StackedBar({
   return (
     <div>
       <p className="mb-1.5 text-[11px] uppercase tracking-wider text-gray-500">{label}</p>
-      <div className="flex h-2 overflow-hidden rounded-full bg-gray-800">
+      <div className="flex h-2 rounded-full bg-gray-800">
         {entries.map(([key, n]) => (
           <Link
             key={key}
             href={breakdownHref(filter, key)}
             aria-label={`View ${n.toLocaleString()} ${humanise(key)} alerts`}
-            className={clsx(colorFor(key), 'block transition-[filter] hover:brightness-125 focus-visible:brightness-125')}
+            className={clsx(colorFor(key), 'block first:rounded-l-full last:rounded-r-full transition-[filter] hover:brightness-125 focus-visible:z-10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-400')}
             style={{ width: `${(n / total) * 100}%` }}
             title={`${humanise(key)}: ${n}`}
           >
