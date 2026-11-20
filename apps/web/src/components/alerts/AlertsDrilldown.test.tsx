@@ -286,6 +286,46 @@ describe('operations posture links open the filtered alert grid', () => {
     expect(screen.getByTestId('entity-queue')).toBeTruthy();
   });
 
+  it('restores page size, search, and disposition from the URL after a reload-shaped remount', async () => {
+    const cachedPage = await AlertsPage({
+      searchParams: Promise.resolve({ view: 'alerts' }),
+    });
+    window.history.replaceState(
+      null,
+      '',
+      '/alerts?view=alerts&page=2&pageSize=50&search=powershell&disposition=needs_review',
+    );
+    const { unmount } = render(cachedPage, { wrapper: NavigationTestProvider });
+
+    expect(requestedFilters()).toMatchObject({
+      page: 2,
+      pageSize: 50,
+      search: 'powershell',
+      disposition: 'needs_review',
+      sort: 'priority',
+    });
+
+    unmount();
+    await renderCurrentUrl();
+    expect(requestedFilters()).toMatchObject({
+      page: 2,
+      pageSize: 50,
+      search: 'powershell',
+      disposition: 'needs_review',
+    });
+  });
+
+  it('does not thrash list requests when the URL carries pagination params', async () => {
+    window.history.replaceState(null, '', '/alerts?view=alerts&pageSize=50');
+    await renderCurrentUrl();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const alertKeys = requestedKeys.filter(
+      (key): key is [string, Record<string, unknown>] => Array.isArray(key) && key[0] === 'alerts',
+    );
+    expect(alertKeys.length).toBeLessThanOrEqual(2);
+    expect(requestedFilters()?.pageSize).toBe(50);
+  });
+
   it('does not send invalid time windows or unexpected status strings to the API', async () => {
     const page = await AlertsPage({
       searchParams: Promise.resolve({

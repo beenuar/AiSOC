@@ -15,7 +15,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
-import { readAlertDrilldown } from '@/lib/alertDrilldown';
+import { mergeAlertFiltersFromUrl, readAlertDrilldown } from '@/lib/alertDrilldown';
 
 // Wave 1 of the AiSOC v6 capability roadmap. The "entities" tab renders the
 // rolled-up Risk-Based Alerting queue — alerts contribute time-decayed risk
@@ -393,7 +393,11 @@ export function AlertsView({
   // low-severity source emitting faster than an analyst pages pushes a
   // critical off page one and keeps it there.
   const searchParams = useSearchParams();
-  const drilldown = searchParams ? readAlertDrilldown(searchParams) : undefined;
+  const searchKey = searchParams?.toString() ?? '';
+  const drilldown = useMemo(() => {
+    if (searchKey === '') return undefined;
+    return readAlertDrilldown(new URLSearchParams(searchKey));
+  }, [searchKey]);
   const [localFilters, setFilters] = useState<AlertFilters>({
     page: 1,
     pageSize: 25,
@@ -404,16 +408,7 @@ export function AlertsView({
   // URL-controlled fields from the live router, keeping local sort, page size,
   // and other saved-view fields when replacing the URL.
   const filters: AlertFilters = useMemo(
-    () =>
-      drilldown
-        ? {
-            ...localFilters,
-            severity: drilldown.filters.severity,
-            status: drilldown.filters.status,
-            unresolvedOnly: drilldown.filters.unresolvedOnly,
-            createdWithinHours: drilldown.filters.createdWithinHours,
-          }
-        : localFilters,
+    () => mergeAlertFiltersFromUrl(localFilters, drilldown),
     [drilldown, localFilters],
   );
   // Default to the entity-centric queue — that's the whole point of Wave 1's
