@@ -185,3 +185,11 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # rule's id so regeneration cannot renumber it. The scanner's key/value
 # heuristic reads the pair as an api key; it is a rule identifier in a
 # generated lock file.
+
+# WS2 archive live harness: the MinIO root credential for the THROWAWAY CI
+# container the step itself creates two lines above (docker run -e
+# MINIO_ROOT_USER/PASSWORD) and destroys at the end of the step. It
+# authenticates nothing outside that container's 15-minute life; rotating
+# it means editing the same workflow line. Same class as the postgres
+# aisoc_ci_secret entries above.
+.github/workflows/integration.yml:curl-auth-user:1189

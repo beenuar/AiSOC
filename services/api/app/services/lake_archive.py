@@ -353,6 +353,7 @@ async def load_rehydration(
             # the belt-and-braces that refuses to TRUST that, because a
             # bucket is not a tenancy boundary.
             await execute_lake_query(
+                # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
                 f"INSERT INTO {table} SELECT * FROM s3(%(url)s, %(ak)s, %(sk)s, 'Parquet')",  # noqa: S608 — table name is machine-derived and regex-pinned
                 params={"url": dest.url(key), "ak": dest.access_key, "sk": dest.secret_key},
                 timeout_seconds=600.0,
@@ -361,6 +362,7 @@ async def load_rehydration(
     # requested connector filter — after landing, where the columns carry
     # the table's own types and no pushdown is involved.
     await execute_lake_query(
+        # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
         f"ALTER TABLE {table} DELETE WHERE tenant_id != toUUID(%(tenant_id)s)",  # noqa: S608
         params={"tenant_id": str(tenant_id)},
         extra_settings={"mutations_sync": 2},
@@ -368,12 +370,14 @@ async def load_rehydration(
     )
     if connector_type:
         await execute_lake_query(
+            # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
             f"ALTER TABLE {table} DELETE WHERE connector_type != %(connector_type)s",  # noqa: S608
             params={"connector_type": connector_type},
             extra_settings={"mutations_sync": 2},
             timeout_seconds=600.0,
         )
     count = await execute_lake_query(
+        # nosemgrep — regex-pinned scratch table identifier
         f"SELECT count() FROM {table}",  # noqa: S608 — regex-pinned scratch table
         timeout_seconds=60.0,
     )
