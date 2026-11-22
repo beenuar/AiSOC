@@ -654,12 +654,20 @@ class ContentInventoryRequest(BaseModel):
 
 
 @router.post("/connectors/{connector_id}/content")
-async def list_detection_content(connector_id: str, payload: ContentInventoryRequest):
+async def list_detection_content(
+    connector_id: str,
+    payload: ContentInventoryRequest,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+):
     """List the SIEM's own detection content, read-only (WS1.2).
 
     501 for connectors that have not opted in (`supports_content_inventory`),
     mirroring federated search's refusal shape so the API layer renders
     "this vendor does not expose it here" rather than an error.
+
+    ``principal`` is bound as a parameter rather than left to the router's
+    own dependency so the caller's subject lands in the audit log line — the
+    router-binding gate's rule for every new route.
     """
     cls = CONNECTOR_REGISTRY.get(connector_id)
     if cls is None:
@@ -674,11 +682,21 @@ async def list_detection_content(connector_id: str, payload: ContentInventoryReq
     try:
         rules = await connector.list_detection_content()
     except Exception as exc:  # noqa: BLE001 — one SIEM's failure is a verdict, not a crash
-        logger.exception("connector.content.runtime_error", connector_id=_safe_log_val(connector_id))
+        logger.exception(
+            "connector.content.runtime_error",
+            connector_id=_safe_log_val(connector_id),
+            subject=_safe_log_val(principal.subject),
+        )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Content listing failed. Check connector configuration and connectivity.",
         ) from exc
+    logger.info(
+        "connector.content.listed",
+        connector_id=_safe_log_val(connector_id),
+        rule_count=len(rules),
+        subject=_safe_log_val(principal.subject),
+    )
     return {"connector_id": connector_id, "rule_count": len(rules), "rules": rules}
 
 
