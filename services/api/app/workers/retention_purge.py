@@ -420,13 +420,15 @@ async def _purge_alerts(
     count_sql += " AND tenant_id = :tenant_id" + exempt_sql
     params_with_tenant: dict[str, object] = {**params, "tenant_id": str(tenant_id), **exempt_params}
 
-    # nosemgrep — count_sql is machine-composed from fixed fragments; every value (tenant, days, hold subjects, windows) is a bound parameter
+    # nosemgrep — count_sql is machine-composed from fixed fragments; every
+    # value (tenant, days, hold subjects, windows) is a bound parameter
     doomed = int((await db.execute(text(count_sql), params_with_tenant)).scalar_one())
     if doomed == 0 or dry_run:
         return doomed
 
     await db.execute(
-        # nosemgrep — exempt_sql comes from build_alert_hold_exemption: fixed fragments with every hold subject and window bound as :hold_* parameters
+        # nosemgrep — exempt_sql comes from build_alert_hold_exemption: fixed
+        # fragments, every hold subject and window bound as :hold_* parameters
         text("DELETE FROM alerts WHERE tenant_id = :tenant_id AND created_at < now() - make_interval(days => :days)" + exempt_sql),
         params_with_tenant,
     )
