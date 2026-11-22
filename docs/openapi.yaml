@@ -1004,6 +1004,49 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/{alert_id}/dlp-finding:
+    get:
+      tags:
+      - alerts
+      summary: The alert's normalized DLP finding, if it is one
+      description: 'One vocabulary over Netskope, Purview-via-Defender and the M365
+        audit
+
+        trail (WS4.1): policy, rule, data classes, file, channel, destination and
+
+        its class, what the DLP product itself did, user and device.
+
+
+        ``finding: null`` is the honest answer for an alert that is not a DLP
+
+        event or whose source has no profile — a finding is never synthesized.'
+      operationId: get_alert_dlp_finding_api_v1_alerts__alert_id__dlp_finding_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: alert_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Alert Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Alert Dlp Finding Api V1 Alerts  Alert Id  Dlp
+                  Finding Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/alerts/{alert_id}:
     get:
       tags:

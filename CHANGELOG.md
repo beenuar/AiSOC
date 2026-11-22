@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A DLP alert normalizes into one finding, whatever vendor raised it**
+  (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
+  insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit
+  trail's `DlpRuleMatch` events each arrived as their vendor shaped them,
+  readable only through `raw_event`. `app/services/dlp_finding.py` derives
+  the shared vocabulary — policy, rule, data classes/sensitivity labels,
+  file (name, hash, size), channel, destination and its class, **what the
+  DLP product itself already did** (`blocked|warned|allowed|audited`), user
+  and device — through per-source profiles that map only vendor-documented
+  fields (Netskope's published alert sample; the O365 DLP schema with its
+  EnforcementMode ladder 1=audit/2–3=warn/4=block/5=allow; Graph evidence
+  objects). An absent vendor fact stays empty, a destination class is
+  derived only from Netskope's explicit `managed_app`, Purview's unstated
+  per-event outcome stays null, and a source without a profile yields no
+  finding rather than a best-effort parse. Served at
+  `GET /alerts/{id}/dlp-finding` with `finding: null` as the honest non-DLP
+  answer. 15 cases over the vendors' own shapes; the negative control
+  corrupts one enforcement mapping and watches two fail.
+
+### Added
+
 - **Every open case has an accountable owner and a next-action clock**
   (WS7.4, completing WS7 of the gap-closure program). An owner is a person
   (`assigned_to_id`) or an agent run (`owner_agent_run_id`, migration 167):
