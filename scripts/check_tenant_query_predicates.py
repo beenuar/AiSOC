@@ -782,6 +782,18 @@ RATCHET: dict[str, str] = {
         "approval_expiry.run_once, and it was the clearest instance of the defect this rule "
         "closes: it was credited by `RETURNING id, tenant_id`, a clause that constrains nothing"
     ),
+    "services/api/app/services/insider_watchlist.py::<module>::user_risk_profiles": (
+        "the watchlist-expiry sweep (WS4.4): flips every tenant's expired rows in one statement, "
+        "bounded by `watchlist_expires_at <= :now` — the same shape and the same reason as "
+        "approval_expiry's UPDATE two entries above. Its RETURNING tenant_id drives the per-tenant "
+        "managed-rule rebuild and constrains nothing"
+    ),
+    "services/api/app/services/insider_watchlist.py::<module>::insider_watchlist_policies": (
+        "the HR-door sweep's tenant enumeration (WS4.4): SELECT the tenants whose policy row "
+        "opted in (`hr_sync_enabled = TRUE`), after which each tenant's workforce rows are read "
+        "under that tenant's own id — the same enumeration-then-scoped-work shape as "
+        "fusion sessions.py's DISTINCT tenant_id entry"
+    ),
     "services/fusion/app/services/sessions.py::<module>::sessions": (
         "SELECT DISTINCT tenant_id of sessions due for expiry — the enumeration that drives the "
         "sweep, which then closes each tenant's sessions under its own id"
@@ -937,7 +949,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 80
+MAX_RATCHET = 82
 
 
 # ---------------------------------------------------------------------------

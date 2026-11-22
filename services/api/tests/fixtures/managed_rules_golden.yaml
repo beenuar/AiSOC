@@ -1,0 +1,47 @@
+# Managed by the insider watchlist — do not edit by hand.
+# Regenerated whenever the watchlist changes; expired rows are excluded.
+rules:
+  - id: managed-insider-watchlist-0-tag
+    description: 'Insider watchlist: resignation accepted (expires 2030-01-15)'
+    priority: 10
+    when:
+      field: username
+      op: eq
+      value: 'mallory@example.com'
+    then:
+      tag: insider-watchlist
+  - id: managed-insider-watchlist-0-floor
+    description: 'Insider watchlist: resignation accepted (expires 2030-01-15)'
+    priority: 11
+    when:
+      all:
+        - field: username
+          op: eq
+          value: 'mallory@example.com'
+        - field: severity
+          op: in
+          value: [info, low]
+    then:
+      set_severity: medium
+  - id: managed-insider-watchlist-1-tag
+    description: 'Insider watchlist: HR: status ''terminated'' last day 2030-01-01 (expires 2030-01-15)'
+    priority: 10
+    when:
+      field: username
+      op: eq
+      value: 'o''brien@example.com'
+    then:
+      tag: insider-watchlist
+  - id: managed-insider-watchlist-1-floor
+    description: 'Insider watchlist: HR: status ''terminated'' last day 2030-01-01 (expires 2030-01-15)'
+    priority: 11
+    when:
+      all:
+        - field: username
+          op: eq
+          value: 'o''brien@example.com'
+        - field: severity
+          op: in
+          value: [info, low]
+    then:
+      set_severity: medium

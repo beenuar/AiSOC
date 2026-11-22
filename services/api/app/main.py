@@ -41,6 +41,7 @@ from app.workers.approval_expiry import run_forever as run_approval_expiry
 from app.workers.autonomy_drift import run_forever as run_autonomy_drift
 from app.workers.case_auto_close import run_forever as run_case_auto_close
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
+from app.workers.insider_watchlist_sweep import run_forever as run_insider_watchlist_sweep
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
 from app.workers.phishing_report_intake import run_forever as run_phishing_report_intake
@@ -78,6 +79,7 @@ _PHISHING_INTAKE_LOCK_TTL_SECONDS = 300
 # held for half an hour after a crashed replica would leave approvals
 # un-expired for far longer than the work takes.
 _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
+_INSIDER_WATCHLIST_LOCK_TTL_SECONDS = 900
 
 _CASE_AUTO_CLOSE_LOCK_TTL_SECONDS = 1800
 # Comfortably past one pass. The scheduler's own poll is 300s and a pass
@@ -554,6 +556,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
         )
 
+    # WS4.4 — insider-watchlist sweep. Expiry hygiene for every tenant
+    # (a watchlist row promised to end; silence would break that promise),
+    # plus the HR door for tenants whose policy row opted in.
+    insider_watchlist_task: asyncio.Task | None = None
+    if settings.INSIDER_WATCHLIST_SWEEP_ENABLED:
+        try:
+            insider_watchlist_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="insider_watchlist_sweep",
+                    ttl_seconds=_INSIDER_WATCHLIST_LOCK_TTL_SECONDS,
+                    worker=run_insider_watchlist_sweep,
+                ),
+                name="insider_watchlist_sweep_worker",
+            )
+            logger.info("insider_watchlist_sweep worker started")
+        except Exception as exc:
+            logger.warning("insider_watchlist_sweep worker failed to start", error=str(exc))
+    else:
+        logger.info(
+            "insider_watchlist_sweep disabled; expired watchlist rows will keep elevating "
+            "and the HR door will not run. Set INSIDER_WATCHLIST_SWEEP_ENABLED=true to sweep"
+        )
+
     case_auto_close_task: asyncio.Task | None = None
     if settings.CASE_AUTO_CLOSE_ENABLED:
         try:
@@ -746,6 +771,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("autonomy_drift worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("autonomy_drift worker shutdown error", error=type(exc).__name__)
+
+    if insider_watchlist_task is not None and not insider_watchlist_task.done():
+        insider_watchlist_task.cancel()
+        try:
+            await insider_watchlist_task
+        except asyncio.CancelledError:
+            logger.debug("insider_watchlist_sweep worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("insider_watchlist_sweep worker shutdown error", error=type(exc).__name__)
 
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()
