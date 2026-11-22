@@ -89,8 +89,7 @@ def test_web_sources_ship_no_dead_destinations() -> None:
     assert not hits, (
         "Shipped web sources link to destinations verified dead on "
         "2026-11-22. Point the surface at a live venue (GitHub Discussions, "
-        "the published docs) or delete the link and rewrite the sentence:\n"
-        + "\n".join(hits)
+        "the published docs) or delete the link and rewrite the sentence:\n" + "\n".join(hits)
     )
 
 
@@ -105,8 +104,7 @@ def test_mesh_claims_name_no_dead_hub() -> None:
     for rel in ("docs/architecture/mesh.md", "services/mesh/app/main.py"):
         text = (REPO / rel).read_text(encoding="utf-8")
         assert "mesh.tryaisoc.com" not in text, (
-            f"{rel} still names mesh.tryaisoc.com, which does not resolve; "
-            "describe the hub as self-hosted instead of claiming a dead host"
+            f"{rel} still names mesh.tryaisoc.com, which does not resolve; describe the hub as self-hosted instead of claiming a dead host"
         )
 
 
@@ -117,9 +115,5 @@ def test_scan_is_not_vacuous() -> None:
     sources, so a moved tree or broken glob reads as failure rather than
     as a clean bill.
     """
-    count = sum(
-        1
-        for p in WEB_SRC.rglob("*")
-        if p.is_file() and p.suffix in {".ts", ".tsx"}
-    )
+    count = sum(1 for p in WEB_SRC.rglob("*") if p.is_file() and p.suffix in {".ts", ".tsx"})
     assert count > 200, f"only {count} web sources seen — scan is broken"
