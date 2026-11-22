@@ -192,4 +192,4 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # authenticates nothing outside that container's 15-minute life; rotating
 # it means editing the same workflow line. Same class as the postgres
 # aisoc_ci_secret entries above.
-.github/workflows/integration.yml:curl-auth-user:1189
+.github/workflows/integration.yml:curl-auth-user:1190

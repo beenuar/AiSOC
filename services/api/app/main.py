@@ -579,6 +579,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info(
             "insider_watchlist_sweep disabled; expired watchlist rows will keep elevating "
             "and the HR door will not run. Set INSIDER_WATCHLIST_SWEEP_ENABLED=true to sweep"
+        )
+
     # WS2 — the archive-tier sweep (per-tenant policy rows gate the exports).
     lake_archive_task: asyncio.Task | None = None
     if settings.LAKE_ARCHIVE_SWEEP_ENABLED:
