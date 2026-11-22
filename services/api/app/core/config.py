@@ -526,6 +526,11 @@ class Settings(BaseSettings):
     )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
 
+    # WS1.2 — the SIEM content inventory sweep (hours, not minutes: the
+    # vendor admin APIs it reads are rate-limited surfaces).
+    SIEM_CONTENT_SWEEP_ENABLED: bool = True
+    SIEM_CONTENT_SWEEP_INTERVAL_SECONDS: int = 21600  # 6h
+
     # Resolved->closed auto-close sweep. A human moves a case to `resolved`;
     # the system closes it after it has stayed resolved for this many days.
     #

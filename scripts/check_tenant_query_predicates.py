@@ -780,6 +780,15 @@ RATCHET: dict[str, str] = {
         "the hypothesis scheduler's policy enumeration (WS6.2): SELECT every enabled, due "
         "policy row, after which every selection, campaign and marking is bound to that "
         "row's own tenant_id — the enumeration-then-scoped-work shape"
+    "services/api/app/workers/siem_content_sweep.py::run_once::Connector": (
+        "WS1.2's inventory sweep: enumerate every enabled content-capable SIEM connector "
+        "across tenants, after which sweep_tenant binds every read and write to that "
+        "connector's own tenant_id — the enumeration-then-scoped-work shape"
+    ),
+    "services/api/app/workers/siem_content_sweep.py::run_once::Connector": (
+        "WS1.2's inventory sweep: enumerate every enabled content-capable SIEM connector "
+        "across tenants, after which sweep_tenant binds every read and write to that "
+        "connector's own tenant_id — the enumeration-then-scoped-work shape"
     ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "

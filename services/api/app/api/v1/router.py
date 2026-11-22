@@ -96,6 +96,7 @@ from app.api.v1.endpoints import (
     saved_views,
     scim_tokens,
     semantic_memory,
+    siem_content,
     sla,
     software_inventory,
     sso_connections,
@@ -272,6 +273,7 @@ api_router.include_router(costs.router)
 # Mobile responder PWA (Phase 4B)
 api_router.include_router(push.router)
 api_router.include_router(oncall.router)
+api_router.include_router(siem_content.router)
 api_router.include_router(approvals.router)
 api_router.include_router(outbound_webhooks.router)
 api_router.include_router(passkeys.router)

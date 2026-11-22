@@ -50,6 +50,7 @@ from app.workers.report_scheduler import run_forever as run_report_scheduler
 from app.workers.retention_purge import run_forever as run_retention_purge
 from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
 from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
+from app.workers.siem_content_sweep import run_forever as run_siem_content_sweep
 from app.workers.war_room_sync import run_forever as run_war_room_sync
 from app.workers.weekly_digest_task import run_forever as run_weekly_digest
 
@@ -444,6 +445,23 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Retention purge. Default off: retention policies were storable (and
     # documented as enforced) long before anything deleted, so switching this
     # on by default would turn an upgrade into unannounced data loss.
+    # WS1.2 — the SIEM content inventory sweep. Hygiene, on by default;
+    # a tenant with no content-capable SIEM connector contributes nothing.
+    siem_content_task: asyncio.Task | None = None
+    if getattr(settings, "SIEM_CONTENT_SWEEP_ENABLED", True):
+        try:
+            siem_content_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="siem_content_sweep",
+                    ttl_seconds=600,
+                    worker=run_siem_content_sweep,
+                ),
+                name="siem_content_sweep_worker",
+            )
+            logger.info("siem_content_sweep worker started")
+        except Exception as exc:
+            logger.warning("siem_content_sweep worker failed to start", error=str(exc))
+
     retention_purge_task: asyncio.Task | None = None
     if settings.RETENTION_WORKER_ENABLED:
         try:
@@ -811,6 +829,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("lake_archive_sweep worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("lake_archive_sweep worker shutdown error", error=type(exc).__name__)
+
+    if siem_content_task is not None and not siem_content_task.done():
+        siem_content_task.cancel()
+        try:
+            await siem_content_task
+        except asyncio.CancelledError:
+            logger.debug("siem_content_sweep worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("siem_content_sweep worker shutdown error", error=type(exc).__name__)
 
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()

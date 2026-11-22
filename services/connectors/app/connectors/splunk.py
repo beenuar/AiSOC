@@ -81,6 +81,7 @@ class SplunkConnector(BaseConnector):
     connector_name = "Splunk SIEM"
     connector_category = "siem"
     supports_federated_search = True
+    supports_content_inventory = True
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -162,6 +163,52 @@ class SplunkConnector(BaseConnector):
             self._page_size = _DEFAULT_PAGE_SIZE
         # Checkpoint plumbing (#529) lives on BaseConnector (10b); the two
         # cursor fields declared above are all this connector contributes.
+
+    async def list_detection_content(self) -> list[dict[str, Any]]:
+        """Scheduled and correlation saved searches, from the documented
+        ``/services/saved/searches`` REST collection (WS1.2).
+
+        Read-only. Only the vendor's published entry fields are read;
+        the inventory keeps `search` (the SPL text) because the content
+        hash is computed over it — drift in the SPL is exactly what the
+        snapshot exists to see.
+        """
+        out: list[dict[str, Any]] = []
+        offset = 0
+        page = 100
+        async with httpx.AsyncClient(timeout=30.0, verify=self._ssl_verify) as client:
+            while True:
+                resp = await client.get(
+                    f"{self._base_url}/services/saved/searches",
+                    params={"output_mode": "json", "count": page, "offset": offset},
+                    headers={"Authorization": f"Bearer {self._token}"},
+                )
+                resp.raise_for_status()
+                entries = resp.json().get("entry") or []
+                for entry in entries:
+                    content = entry.get("content") or {}
+                    is_scheduled = bool(content.get("is_scheduled"))
+                    is_correlation = str(content.get("action.correlationsearch.enabled", "")).lower() in ("1", "true")
+                    if not is_scheduled and not is_correlation:
+                        continue
+                    out.append(
+                        {
+                            "vendor_rule_id": str(entry.get("id") or entry.get("name") or ""),
+                            "name": str(entry.get("name") or ""),
+                            "enabled": not bool(content.get("disabled")),
+                            "kind": "correlation" if is_correlation else "scheduled",
+                            "query": str(content.get("search") or ""),
+                            "cron": str(content.get("cron_schedule") or ""),
+                            "severity": str(content.get("alert.severity") or ""),
+                            "attack": [],
+                        }
+                    )
+                if len(entries) < page:
+                    break
+                offset += page
+                if offset >= 5000:  # bounded: an inventory, not a mirror
+                    break
+        return out
 
     def _headers(self) -> dict[str, str]:
         return {

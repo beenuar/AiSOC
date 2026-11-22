@@ -104,6 +104,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stays exactly true. 8 + 2 + 27 unit cases, 5 live-Postgres cases in
   `integration.yml`, negative controls on the judged-score guard and the
   drift hash comparison.
+- **SIEM detection engineering on the customer's SIEM: inventory, health,
+  outbound translation and the governed tuning arm** (WS1.2–1.6 of the
+  gap-closure program; migration 180). A read-only, versioned, per-tenant
+  inventory of the SIEM's own detection content — Splunk
+  scheduled/correlation searches and Elastic Security rules through the
+  vendors' documented admin APIs, content-hashed so drift is a fact (an
+  unchanged hash advances `last_seen`; a changed one bumps `version` and
+  keeps the prior hash), refreshed on a schedule and from the console's
+  new SIEM-content tab (honest empty/error/not-measured states). Rule
+  health comes from outcomes this platform attributed: FP rate over the
+  DISPOSED denominator with zero reading "not measured" never 0.0, vendor
+  execution state only where the listing exposed it. Outbound translation
+  (`packages/aisoc-migrate/outbound.py`) renders native rules to SPL, KQL
+  and EQL strictly within the subset the inbound parser reads back
+  identically — every fixture roundtrips through the real
+  `inbound.translate` — refusing with the roundtrip reason everything
+  else, with AQL explicitly render-only. SIEM-rule tuning proposals land
+  as DRAFTs on the same governed detection-proposal path native rules
+  use, applied (after review) through the fixed per-vendor
+  `sync_detection_rule` verb with content read-back verification.
+  Sentinel/QRadar inventory legs, the silent-sources monitor (WS1.4) and
+  the federated backtest plug into seams named in the PR and are recorded
+  follow-ups. 7 + 3 + 3 unit/mock-vendor cases, 3 live-Postgres cases in
+  `integration.yml`, negative control on drift versioning.
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it**
   (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
