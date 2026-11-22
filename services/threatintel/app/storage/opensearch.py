@@ -7,6 +7,7 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 from __future__ import annotations
 
 import hashlib
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
@@ -14,6 +15,36 @@ import structlog
 from opensearchpy import AsyncOpenSearch, helpers
 
 logger = structlog.get_logger(__name__)
+
+
+@dataclass(frozen=True)
+class BulkIndexOutcome:
+    """What a bulk write actually did, per item.
+
+    ``async_bulk(raise_on_error=False)`` reports a rejected document by
+    *returning* it in the errors list rather than raising — so "the sink
+    refused every document" and "the sink stored every document" both come
+    back through the no-exception path. Collapsing the two into a bare count
+    is what let a cluster-block 429 (disk flood-stage watermark) mark a whole
+    KEV batch as stored while the index held nothing, permanently: the
+    pipeline's per-sink dedup keys were recorded for documents OpenSearch
+    had refused, so no later poll ever offered them again.
+
+    ``rejected_ids`` carries the ``_id`` of every refused document so the
+    caller can withhold exactly those from its dedup record, and
+    ``error_sample`` carries the first few vendor reasons so the operator
+    log says *why* ("cluster_block_exception … flood-stage watermark")
+    instead of only how many.
+    """
+
+    accepted: int
+    rejected_ids: frozenset[str] = frozenset()
+    error_sample: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def rejected(self) -> int:
+        return len(self.rejected_ids)
+
 
 _IOC_INDEX = "threatintel-iocs"
 _ACTOR_INDEX = "threatintel-actors"
@@ -72,10 +103,18 @@ class OpenSearchStore:
                 await self._os.indices.create(index=index, body=mapping)
                 logger.info("Created OpenSearch index", index=index)
 
-    async def bulk_index_iocs(self, iocs: list[dict[str, Any]]) -> int:
-        """Bulk upsert IOCs into OpenSearch. Returns count of indexed docs."""
+    async def bulk_index_iocs(self, iocs: list[dict[str, Any]]) -> BulkIndexOutcome:
+        """Bulk upsert IOCs into OpenSearch.
+
+        Returns a :class:`BulkIndexOutcome` naming the rejected document ids
+        rather than a bare count, so the pipeline can keep refused documents
+        out of its per-sink dedup record and re-offer them on a later poll
+        (writes are idempotent upserts on a stable ``_id``). The warning log
+        carries the first rejection reasons — a count alone hid a disk
+        flood-stage cluster block behind "4 bulk errors".
+        """
         if not iocs:
-            return 0
+            return BulkIndexOutcome(accepted=0)
 
         now = datetime.now(UTC).isoformat()
         actions = []
@@ -96,9 +135,29 @@ class OpenSearchStore:
             )
 
         success, errors = await helpers.async_bulk(self._os, actions, raise_on_error=False)
+        rejected_ids: set[str] = set()
+        samples: list[str] = []
+        for item in errors or []:
+            # Each item is {"<op>": {"_id": ..., "status": ..., "error": {...}}}
+            detail = next(iter(item.values()), {}) if isinstance(item, dict) else {}
+            doc_id = str(detail.get("_id", ""))
+            if doc_id:
+                rejected_ids.add(doc_id)
+            if len(samples) < 3:
+                err = detail.get("error")
+                reason = f"{err.get('type', 'unknown')}: {err.get('reason', '')}" if isinstance(err, dict) else str(err)
+                samples.append(f"status={detail.get('status', '?')} {reason}"[:300])
         if errors:
-            logger.warning("OpenSearch bulk errors", count=len(errors))
-        return success
+            logger.warning(
+                "OpenSearch bulk errors",
+                count=len(errors),
+                sample=samples,
+            )
+        return BulkIndexOutcome(
+            accepted=int(success),
+            rejected_ids=frozenset(rejected_ids),
+            error_sample=tuple(samples),
+        )
 
     async def bulk_index_actors(self, actors: list[dict[str, Any]]) -> int:
         """Bulk upsert threat actors."""

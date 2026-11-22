@@ -9,7 +9,7 @@ description: Connect Zscaler Internet Access to AiSOC.
     schema(). Edit the schema, not this block. Prose between the HUMAN
     NOTES markers below is preserved across regeneration. */}
 
-Zscaler Internet Access web security logs via the ZIA API.
+Zscaler Internet Access admin audit logs — policy changes, portal sign-ins and API calls — via the ZIA audit log report API.
 
 - **Connector id:** `zscaler`
 - **Category:** network

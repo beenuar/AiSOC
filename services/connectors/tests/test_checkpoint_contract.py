@@ -173,6 +173,12 @@ class TestAdoptionIsCountedNotAssumed:
         # of overlap for a single skipped run with no cursor yet).
         "huntress": (("sent_at",), ("id",)),
         "cisco_secure_endpoint": (("date",), ("id",)),
+        # The audit-report rewrite: ZIA audit rows carry no vendor id, so
+        # the row id is a digest of the identifying columns, and the time is
+        # the report's admin-timezone stamp parsed to UTC where the
+        # abbreviation is unambiguous. The overlap window re-reads are
+        # dropped against this cursor.
+        "zscaler": (("event_time",), ("row_id",)),
         "sophos_central": (("created_at", "when"), ("id",)),
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),

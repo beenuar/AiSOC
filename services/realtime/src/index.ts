@@ -436,6 +436,11 @@ const subscriptions = new Map<string, SubscriptionState>();
 // cause is a broker or topic that is not there *yet*, which a retry fixes;
 // the cap stops a permanently-broken cluster becoming a busy loop, and the
 // state above stops a permanent failure being silent while it retries.
+// The slice of a kafkajs Consumer the supervisor needs: enough to tear a
+// crashed instance down before replacing it. Structural rather than the
+// kafkajs type so a test can hand in a bare object.
+type KafkaConsumerHandle = { disconnect(): Promise<void> };
+
 const RETRY_BASE_MS = 2_000;
 const RETRY_MAX_MS = 60_000;
 
@@ -449,7 +454,9 @@ const RETRY_MAX_MS = 60_000;
  */
 function superviseConsumer(
   name: string,
-  start: (onCrash: (err: unknown) => void) => Promise<void>,
+  // `undefined` from a starter means disabled-by-config (e.g. an empty
+  // topic name): there is nothing to supervise and nothing to tear down.
+  start: (onCrash: (err: unknown) => void) => Promise<KafkaConsumerHandle | undefined>,
 ): void {
   subscriptions.set(name, { attached: false, attempts: 0 });
 
@@ -457,9 +464,10 @@ function superviseConsumer(
     const state = subscriptions.get(name)!;
     for (;;) {
       state.attempts += 1;
+      let consumer: KafkaConsumerHandle | undefined;
       try {
         let crashed = false;
-        await start((err: unknown) => {
+        consumer = await start((err: unknown) => {
           // kafkajs surfaces a dead consumer loop through its CRASH event,
           // not by rejecting the promise `run()` returned — so without this
           // hook a consumer that died after a successful start stayed
@@ -478,7 +486,23 @@ function superviseConsumer(
         while (!crashed) {
           await new Promise((resolve) => setTimeout(resolve, 5_000));
         }
+        // The replacement consumer below is a brand-new object; the crashed
+        // one still holds sockets and timers until it is disconnected. The
+        // soak measured 16 crash/reattach cycles over four days, which was
+        // 16 leaked consumer instances in one process. Best-effort: a
+        // consumer that crashed hard may refuse the handshake, and that
+        // must not block the retry loop.
+        if (consumer) {
+          await consumer.disconnect().catch((err: unknown) => {
+            log.warn({ err, name }, 'crashed consumer did not disconnect cleanly');
+          });
+          consumer = undefined;
+        }
       } catch (err) {
+        if (consumer) {
+          await consumer.disconnect().catch(() => undefined);
+          consumer = undefined;
+        }
         state.attached = false;
         state.lastError = err instanceof Error ? err.message : String(err);
         const delay = Math.min(
@@ -558,6 +582,8 @@ async function startKafkaConsumer(onCrash: (err: unknown) => void) {
       }
     },
   });
+
+  return consumer;
 }
 
 // --- Kafka consumer: bridge graph mutations to WebSocket clients (T1.4) ---
@@ -640,6 +666,8 @@ async function startGraphUpdateConsumer(onCrash: (err: unknown) => void) {
       }
     },
   });
+
+  return consumer;
 }
 
 // --- Web Push routes (Phase 4B mobile responder PWA) ---
