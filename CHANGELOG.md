@@ -46,6 +46,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (offset-manager `TypeError`, fetch timeouts) leaked a consumer's sockets
   and timers into the process for its lifetime.
 
+- **`sync_detection_rule` reaches the vendor it names, verifies by
+  read-back, and rolls back for real** (WS1.1 of the gap-closure program).
+  The Splunk adapter described creating a Splunk saved search while
+  delegating to an executor that only ever built an Elastic client — with
+  Splunk credentials the call could only simulate, and
+  `SplunkClient.create_or_update_correlation_search` had no caller. The
+  rollback logged "would disable rule" and returned True without acting,
+  and the contract declared no verification probe because no client could
+  read a stored definition back. Each vendor now has its own arm; both
+  clients gained the read half (`get_saved_search`,
+  `get_detection_rule`) plus deletes; the prior definition (or its
+  absence) is captured before every write; the write is verified by
+  comparing the stored definition with the normalized intended content —
+  a vendor that stored different content fails the action naming the
+  fields, because existence is the wrong check for this verb; rollback
+  restores the captured prior version, deletes a rule the action created,
+  and answers False on a vendor refusal; and the contract declares the
+  probe, now registered in the post-action verifier as an independent
+  read-back. Measured through the real builtins against mock vendor
+  servers (11 cases); the negative control reverts the Splunk arm and the
+  reach test fails with zero Splunk requests.
+
 ## [23.6.1] - 2026-11-22
 
 ### Security

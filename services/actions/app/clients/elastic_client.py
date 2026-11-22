@@ -32,12 +32,16 @@ class ElasticClient:
         username: str | None = None,
         password: str | None = None,
         kibana_url: str | None = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._es_url = es_url.rstrip("/")
         self._kibana_url = (kibana_url or es_url).rstrip("/")
         self._api_key = api_key
         self._username = username
         self._password = password
+        #: Test seam: a mock transport exercises the real URL construction,
+        #: headers and response handling without a live cluster.
+        self._transport = transport
 
     def _es_headers(self) -> dict[str, str]:
         if self._api_key:
@@ -60,7 +64,7 @@ class ElasticClient:
         limit: int = 500,
     ) -> list[dict[str, Any]]:
         """Execute an ES|QL query and return results as list of column-keyed dicts."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, transport=self._transport) as client:
             resp = await client.post(
                 f"{self._es_url}/_query",
                 headers=self._es_headers(),
@@ -82,7 +86,7 @@ class ElasticClient:
         size: int = 500,
     ) -> list[dict[str, Any]]:
         """Execute a DSL search query and return hits."""
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, transport=self._transport) as client:
             resp = await client.post(
                 f"{self._es_url}/{index}/_search",
                 headers=self._es_headers(),
@@ -138,7 +142,7 @@ class ElasticClient:
             "size": limit,
             "sort": [{"@timestamp": {"order": "asc"}}],
         }
-        async with httpx.AsyncClient(timeout=60.0) as client:
+        async with httpx.AsyncClient(timeout=60.0, transport=self._transport) as client:
             resp = await client.post(
                 f"{self._es_url}/{index}/_search",
                 headers=self._es_headers(),
@@ -160,7 +164,7 @@ class ElasticClient:
         Upsert is done via rule_id if present.
         """
         rule_id = rule_config.get("rule_id")
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, transport=self._transport) as client:
             if rule_id:
                 resp = await client.put(
                     f"{self._kibana_url}/api/detection_engine/rules",
@@ -189,6 +193,38 @@ class ElasticClient:
                 "rule_name": result.get("name"),
             }
 
+    async def get_detection_rule(self, rule_id: str) -> dict[str, Any] | None:
+        """The stored rule as Kibana returns it, or ``None`` if absent.
+
+        The read half `sync_detection_rule` never had: prior-state capture
+        before a write and read-back verification after one both need it.
+        ``rule_id`` is the stable caller-assigned id (not Kibana's internal
+        ``id``), matching the upsert's addressing.
+        """
+        async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
+            resp = await client.get(
+                f"{self._kibana_url}/api/detection_engine/rules",
+                headers=self._kibana_headers(),
+                auth=self._auth(),  # type: ignore[arg-type]
+                params={"rule_id": rule_id},
+            )
+            if resp.status_code == 404:
+                return None
+            resp.raise_for_status()
+            return dict(resp.json() or {})
+
+    async def delete_detection_rule(self, rule_id: str) -> None:
+        """Delete a rule; raises on a vendor refusal (rollback of a create)."""
+        async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
+            resp = await client.delete(
+                f"{self._kibana_url}/api/detection_engine/rules",
+                headers=self._kibana_headers(),
+                auth=self._auth(),  # type: ignore[arg-type]
+                params={"rule_id": rule_id},
+            )
+            resp.raise_for_status()
+            logger.info("elastic.detection_rule.deleted", rule_id=rule_id)
+
     async def enable_detection_rule(self, rule_id: str) -> dict[str, Any]:
         """Enable a detection rule by ID."""
         return await self._toggle_rule(rule_id, enabled=True)
@@ -198,7 +234,7 @@ class ElasticClient:
         return await self._toggle_rule(rule_id, enabled=False)
 
     async def _toggle_rule(self, rule_id: str, enabled: bool) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
             resp = await client.patch(
                 f"{self._kibana_url}/api/detection_engine/rules",
                 headers=self._kibana_headers(),
@@ -211,7 +247,7 @@ class ElasticClient:
 
     async def update_watcher(self, watcher_id: str, watcher_body: dict[str, Any]) -> dict[str, Any]:
         """Create or update an Elasticsearch Watcher alert."""
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, transport=self._transport) as client:
             resp = await client.put(
                 f"{self._es_url}/_watcher/watch/{watcher_id}",
                 headers=self._es_headers(),
@@ -224,7 +260,7 @@ class ElasticClient:
 
     async def activate_watcher(self, watcher_id: str) -> dict[str, Any]:
         """Activate an existing watcher."""
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
             resp = await client.put(
                 f"{self._es_url}/_watcher/watch/{watcher_id}/_activate",
                 headers=self._es_headers(),
@@ -236,7 +272,7 @@ class ElasticClient:
 
     async def deactivate_watcher(self, watcher_id: str) -> dict[str, Any]:
         """Deactivate an existing watcher."""
-        async with httpx.AsyncClient(timeout=20.0) as client:
+        async with httpx.AsyncClient(timeout=20.0, transport=self._transport) as client:
             resp = await client.put(
                 f"{self._es_url}/_watcher/watch/{watcher_id}/_deactivate",
                 headers=self._es_headers(),
@@ -260,7 +296,7 @@ class ElasticClient:
         (Kibana side) so the resulting state is visible in the
         Security app exactly as a manual UI ack would be.
         """
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, transport=self._transport) as client:
             resp = await client.post(
                 f"{self._kibana_url}/api/detection_engine/signals/status",
                 headers=self._kibana_headers(),
@@ -280,7 +316,7 @@ class ElasticClient:
         alert must be done in the Kibana UI to avoid racing the
         analyst.
         """
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, transport=self._transport) as client:
             resp = await client.post(
                 f"{self._kibana_url}/api/detection_engine/signals/status",
                 headers=self._kibana_headers(),

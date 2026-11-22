@@ -586,18 +586,18 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         reversal=Reversal.PLATFORM,
         reverse_capability="sync_detection_rule",
         required_permission=_CONTAIN,
-        has_verification_probe=False,
-        verification_gap=(
-            "The client writes correlation searches and watchers through "
-            "create-or-update calls and exposes no read of the saved "
-            "definition, so there is nothing to compare the intended content "
-            "against. Confirming the object merely exists would be the wrong "
-            "check anyway: this verb's failure mode is a rule that saved with "
-            "different content, not one that did not save."
-        ),
+        # Both arms read the stored definition back after the write and
+        # compare it with the normalized intended content — existence alone
+        # would be the wrong check, because this verb's failure mode is a
+        # rule that saved with *different* content. A mismatch fails the
+        # action naming the differing fields (WS1.1; the clients gained the
+        # read half: get_saved_search / get_detection_rule).
+        has_verification_probe=True,
         note=(
             "Changing detection content in the customer's SIEM can silence a "
-            "rule as easily as add one. Its own reverse: sync the prior version."
+            "rule as easily as add one. Its own reverse: sync the prior "
+            "version, which execute() captures into rollback_data before "
+            "every write (or deletes the rule when it created it)."
         ),
     ),
     "update_watcher": CapabilityContract(
