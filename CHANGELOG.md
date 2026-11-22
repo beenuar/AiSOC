@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Investigation runs are now readable only by the tenant that launched
+  them** (GHSA-mpxh-f6q6-6w8g). The agents service's investigation read
+  routes — the status poll, `report.md`, `report.html`, `report.pdf`, the
+  WebSocket stream and `GET /agent-runs/{run_id}` — authenticated the caller
+  but looked the run up in the process-wide store by `run_id` alone, so a
+  signed-in user of any tenant who learned another tenant's run id was
+  answered with that tenant's status, audit log, recon/forensic/responder
+  output and full incident report. Launch now records the owning tenant on
+  the run and every read route compares it against the caller's resolved
+  tenant, answering a foreign caller with the exact not-found response so
+  the routes cannot be used as a cross-tenant existence oracle; the
+  WebSocket treats a foreign run exactly like an unknown one. Mirrors the
+  check the triage poll already had. Reported by @benchmeister.
+
 ### Fixed
 
 - **Live vendor evidence is no longer described to the model as stale
@@ -23,7 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   holds every untrusted channel's note (vendor, knowledge base, MCP) to the
   full refusal tail, so per-channel wording can evolve without weakening the
   boundary. Reported by @swf1996120.
-
 
 ## [23.6.0] - 2026-11-20
 

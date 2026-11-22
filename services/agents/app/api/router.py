@@ -66,15 +66,20 @@ async def _run_investigation(run_id: str, state: InvestigationState) -> None:
     (issue #569), so manual and automated investigations share one
     orchestration implementation and both persist every step to the ledger.
     """
+    # These writes REPLACE the entry, so the owner recorded at launch must be
+    # carried through or the tenant check on the read route would start
+    # 404ing the owner's own completed runs (GHSA-mpxh-f6q6-6w8g).
+    tenant_id = _runs.get(run_id, {}).get("tenant_id") or str(state.tenant_id)
     try:
         result = await run_full_investigation(state)
         _runs[run_id] = {
+            "tenant_id": tenant_id,
             "status": "completed",
             "result": result.to_dict(),
             "completed_at": datetime.utcnow().isoformat(),
         }
     except Exception as exc:  # noqa: BLE001 — surface failure via the status cache
-        _runs[run_id] = {"status": "failed", "error": str(exc)}
+        _runs[run_id] = {"tenant_id": tenant_id, "status": "failed", "error": str(exc)}
 
 
 # `/agent-runs`, not `/investigations`. Both this module and
@@ -106,7 +111,12 @@ async def start_investigation(
         alert_summary=request.alert_summary,
         raw_alert=request.raw_alert,
     )
-    _runs[run_id] = {"status": "running", "started_at": datetime.utcnow().isoformat()}
+    # The owner, compared by the read route (GHSA-mpxh-f6q6-6w8g).
+    _runs[run_id] = {
+        "tenant_id": str(state.tenant_id),
+        "status": "running",
+        "started_at": datetime.utcnow().isoformat(),
+    }
     background_tasks.add_task(_run_investigation, run_id, state)
 
     return InvestigationResponse(
@@ -120,7 +130,10 @@ async def start_investigation(
 async def get_investigation(run_id: str, principal: ScopedPrincipal):
     """Get the status and results of an investigation run."""
     run = _runs.get(run_id)
-    if not run:
+    if not run or str(run.get("tenant_id")) != str(scoped_tenant_or_403(principal)):
+        # Same response shape for "wrong tenant" and "no such run" so a
+        # probing caller cannot use this route as an existence oracle
+        # (GHSA-mpxh-f6q6-6w8g).
         raise HTTPException(status_code=404, detail="Investigation run not found")
     return run
 
