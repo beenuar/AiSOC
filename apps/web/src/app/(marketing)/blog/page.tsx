@@ -115,12 +115,14 @@ export default function BlogIndexPage() {
               Want to write for the AiSOC blog?
             </h3>
             <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-300">
-              Send a one-paragraph pitch to{' '}
+              Share a one-paragraph pitch in{' '}
               <a
-                href="mailto:hello@tryaisoc.com"
+                href="https://github.com/beenuar/AiSOC/discussions"
+                target="_blank"
+                rel="noreferrer"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
               >
-                hello@tryaisoc.com
+                GitHub Discussions
               </a>{' '}
               or open an issue on{' '}
               <a

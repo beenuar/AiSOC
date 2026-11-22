@@ -37,9 +37,12 @@ describe('Hero', () => {
     render(<Hero />);
 
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/auditable AI SOC/i);
-    expect(screen.getByRole('link', { name: /open the demo/i })).toHaveAttribute(
+    // The primary CTA used to deep-link a hosted case at a host that now
+    // redirects every path to the repository front page; the quickstart's
+    // `make demo` is the live path to the same seeded investigation.
+    expect(screen.getByRole('link', { name: /run the demo locally/i })).toHaveAttribute(
       'href',
-      'https://tryaisoc.com/cases/INC-RT-001?tab=ledger',
+      'https://beenuar.github.io/AiSOC/docs/quickstart',
     );
     expect(screen.getByRole('link', { name: /open console/i })).toHaveAttribute('href', '/dashboard');
   });

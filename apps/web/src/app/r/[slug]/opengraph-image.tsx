@@ -52,7 +52,7 @@ export default async function Image({ params }: { params: Promise<{ slug: string
           <Stat value={String(s?.toolCallCount ?? 0)} label="tool calls" />
           <Stat value={String(s?.evidenceSourceCount ?? 0)} label="evidence" />
         </div>
-        <div style={{ fontSize: 22, color: "#6b7394", marginTop: 24 }}>tryaisoc.com · github.com/beenuar/AiSOC</div>
+        <div style={{ fontSize: 22, color: "#6b7394", marginTop: 24 }}>github.com/beenuar/AiSOC</div>
       </div>
     ),
     size,

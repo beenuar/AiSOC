@@ -110,7 +110,15 @@ const COLUMNS: ReadonlyArray<LinkColumn> = [
     heading: 'GitHub & community',
     links: [
       { label: 'GitHub repo', href: 'https://github.com/beenuar/AiSOC' },
-      { label: 'Discord', href: 'https://discord.gg/aisoc' },
+      // Discussions, not Discord: the old invite answered "Unknown Invite"
+      // from Discord's own API (checked 2026-11-22), and SUPPORT.md names
+      // GitHub Discussions as the project's community venue. Same rule as
+      // the status-page row above — no links to nowhere. Re-add a chat row
+      // only once a working invite exists.
+      {
+        label: 'Discussions',
+        href: 'https://github.com/beenuar/AiSOC/discussions',
+      },
       { label: 'Releases', href: 'https://github.com/beenuar/AiSOC/releases' },
     ],
   },
@@ -138,18 +146,14 @@ function FooterLink({ label, href }: LinkSpec) {
   );
 }
 
-function DiscordIcon(props: SVGProps<SVGSVGElement>) {
+function DiscussionsIcon(props: SVGProps<SVGSVGElement>) {
+  // Speech-bubble glyph (Octicons `comment-discussion`, MIT) — the socials
+  // row's Discord and X entries were removed on 2026-11-22 because both
+  // destinations were dead (the invite answers "Unknown Invite"; the X
+  // account 404s). GitHub Discussions is the venue SUPPORT.md names.
   return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M20.317 4.37a19.79 19.79 0 0 0-4.885-1.515.07.07 0 0 0-.07.035c-.21.378-.443.872-.608 1.26a18.27 18.27 0 0 0-5.487 0 12.51 12.51 0 0 0-.617-1.26.07.07 0 0 0-.07-.035 19.74 19.74 0 0 0-4.885 1.515.064.064 0 0 0-.03.027C.533 9.046-.32 13.58.099 18.057a.084.084 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.07.07 0 0 0 .076-.026 14.21 14.21 0 0 0 1.226-1.994.07.07 0 0 0-.038-.098 13.13 13.13 0 0 1-1.872-.892.07.07 0 0 1-.007-.116c.126-.094.252-.192.371-.291a.07.07 0 0 1 .073-.01c3.927 1.793 8.18 1.793 12.062 0a.07.07 0 0 1 .074.009c.12.099.246.198.372.292a.07.07 0 0 1-.006.116 12.32 12.32 0 0 1-1.873.891.07.07 0 0 0-.038.099c.36.698.772 1.362 1.225 1.993a.07.07 0 0 0 .076.027 19.84 19.84 0 0 0 6-3.03.07.07 0 0 0 .032-.056c.5-5.177-.838-9.674-3.548-13.66a.061.061 0 0 0-.03-.027ZM8.02 15.331c-1.182 0-2.157-1.085-2.157-2.419 0-1.333.956-2.418 2.157-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.956 2.419-2.157 2.419Zm7.974 0c-1.182 0-2.156-1.085-2.156-2.419 0-1.333.955-2.418 2.156-2.418 1.21 0 2.176 1.094 2.157 2.418 0 1.334-.946 2.419-2.157 2.419Z" />
-    </svg>
-  );
-}
-
-function XIcon(props: SVGProps<SVGSVGElement>) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" {...props}>
-      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231ZM17.083 19.77h1.833L7.084 4.126H5.117L17.083 19.77Z" />
+    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" {...props}>
+      <path d="M1.75 1h8.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 10.25 10H7.061l-2.574 2.573A1.458 1.458 0 0 1 2 11.543V10h-.25A1.75 1.75 0 0 1 0 8.25v-5.5C0 1.784.784 1 1.75 1ZM1.5 2.75v5.5c0 .138.112.25.25.25h1a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h3.5a.25.25 0 0 0 .25-.25v-5.5a.25.25 0 0 0-.25-.25h-8.5a.25.25 0 0 0-.25.25Zm13 2a.25.25 0 0 0-.25-.25h-.5a.75.75 0 0 1 0-1.5h.5c.966 0 1.75.784 1.75 1.75v5.5A1.75 1.75 0 0 1 14.25 12H14v1.543a1.458 1.458 0 0 1-2.487 1.03L9.22 12.28a.749.749 0 0 1 .326-1.275.749.749 0 0 1 .734.215l2.22 2.22v-2.19a.75.75 0 0 1 .75-.75h1a.25.25 0 0 0 .25-.25Z" />
     </svg>
   );
 }
@@ -160,8 +164,11 @@ const SOCIAL_LINKS: ReadonlyArray<{
   Icon: (props: SVGProps<SVGSVGElement>) => ReactElement;
 }> = [
   { label: 'GitHub', href: 'https://github.com/beenuar/AiSOC', Icon: GithubMark },
-  { label: 'Discord', href: 'https://discord.gg/aisoc', Icon: DiscordIcon },
-  { label: 'X (Twitter)', href: 'https://twitter.com/tryaisoc', Icon: XIcon },
+  {
+    label: 'Discussions',
+    href: 'https://github.com/beenuar/AiSOC/discussions',
+    Icon: DiscussionsIcon,
+  },
 ];
 
 export function Footer() {

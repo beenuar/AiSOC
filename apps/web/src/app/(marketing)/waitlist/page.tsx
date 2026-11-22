@@ -140,7 +140,7 @@ export default function WaitlistPage() {
         const detail = await response.text().catch(() => '');
         setError(
           `Could not submit (HTTP ${response.status}). ${
-            detail ? detail.slice(0, 240) : 'Please try again or email hello@tryaisoc.com.'
+            detail ? detail.slice(0, 240) : 'Please try again, or open a thread in GitHub Discussions.'
           }`,
         );
         return;
@@ -149,7 +149,7 @@ export default function WaitlistPage() {
       setSuccess(true);
     } catch (err) {
       setError(
-        `Network error: ${(err as Error).message}. Please try again or email hello@tryaisoc.com.`,
+        `Network error: ${(err as Error).message}. Please try again, or open a thread in GitHub Discussions.`,
       );
     } finally {
       setSubmitting(false);

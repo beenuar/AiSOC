@@ -101,7 +101,7 @@ const TIERS: ReadonlyArray<Tier> = [
     ],
     cta: {
       label: 'Talk to us',
-      href: 'mailto:hello@tryaisoc.com?subject=AiSOC%20enterprise%20enquiry',
+      href: 'https://github.com/beenuar/AiSOC/discussions',
     },
   },
 ];

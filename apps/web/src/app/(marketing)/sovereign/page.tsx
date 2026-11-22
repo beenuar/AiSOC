@@ -127,8 +127,8 @@ const DEPLOYMENT_MODES: DeploymentMode[] = [
     llm: 'Cloud APIs (default) · BYO',
     residency: 'EU · US · India',
     controlsAligned: 'SOC 2 (in progress) · GDPR (target)',
-    artefact: 'tryaisoc.com',
-    artefactHref: 'mailto:hello@tryaisoc.com?subject=AiSOC%20managed%20waitlist',
+    artefact: 'Managed waitlist',
+    artefactHref: '/waitlist',
   },
 ];
 
@@ -228,7 +228,9 @@ export default function SovereignPage() {
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="https://github.com/beenuar/AiSOC/discussions"
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
               Talk to us about sovereign deployment
@@ -563,10 +565,12 @@ export default function SovereignPage() {
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="https://github.com/beenuar/AiSOC/discussions"
+              target="_blank"
+              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
-              Email hello@tryaisoc.com
+              Start a Discussions thread
             </a>
             <Link
               href="/customers"
