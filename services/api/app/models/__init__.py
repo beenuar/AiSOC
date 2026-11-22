@@ -13,6 +13,7 @@ from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
 from app.models.branding import OrgBrandAsset, OrgBranding
 from app.models.case import Case, CaseTask, CaseTimeline
+from app.models.case_resolution import CaseResolutionFacts, CaseResolutionPolicy
 from app.models.case_root_cause import CaseRootCauseCitation, CaseRootCauseRecord
 from app.models.connector import Connector
 from app.models.detection_proposal import DetectionEvalBaseline, DetectionRuleProposal
@@ -73,6 +74,8 @@ __all__ = [
     "Asset",
     "AssetVulnerability",
     "Case",
+    "CaseResolutionFacts",
+    "CaseResolutionPolicy",
     "CaseRootCauseCitation",
     "CaseRootCauseRecord",
     "CaseTask",

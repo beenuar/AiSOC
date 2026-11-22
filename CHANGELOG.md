@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A case reaches `resolved` only through the tenant's resolution
+  contract** (WS7.2 of the gap-closure program). `resolved` was a free
+  transition: the PATCH gate checked only the status ladder, the war-room
+  chat decision and the inbound Jira/ServiceNow mirror checked nothing, and
+  the hourly sweep then auto-closed whatever arrived. One shared checker
+  (`case_resolution.resolution_gaps`, the way `case_status` is the one
+  vocabulary) now governs every writer: the PATCH gate refuses with a 422
+  naming each unmet requirement; the war-room resolve becomes a refusal
+  note without a status write; a vendor-side resolve that fails the
+  contract lands as `contained` with the gaps in the system note, because
+  a webhook cannot be 422'd but must not be the door that skips the
+  contract. The contract: containment verified by a named probe/action
+  reference or waived with a reason; eradication and recovery recorded;
+  root cause **determined or undetermined** (a hypothesis is an unverified
+  lead and is refused in those words — WS7.1's statuses doing their job);
+  at least one affected entity, derived from the case's own observable
+  graph and its alerts' affected-* arrays, never self-attested; customer
+  notified with channel and time together. **Off by default per tenant**
+  (migration 166; no policy row means no enforcement), with per-requirement
+  toggles behind `settings:write` — an analyst records facts, an admin
+  decides whether resolve is gated. The console pre-flights the Resolve
+  button through `GET /cases/{id}/resolution/gaps`, the same checker the
+  gate runs, so the answer cannot drift from the refusal; a customer-facing
+  resolution summary renders from persisted rows only (a hypothesis stays
+  labelled, an absent fact says "not recorded") and rides the evidence
+  bundle as its new optional `resolution` section (bundle schema 1.1).
+  Measured by 16 unit cases driving all three writers plus a live-Postgres
+  suite (opt-in default as the real absent-row state, unique-constraint
+  upserts, JSONB entity arithmetic, RLS under the NOBYPASSRLS role);
+  negative control forces the checker to answer no-gaps and watches two
+  cases fail.
+
+### Added
+
 - **A case's root cause is an evidence-backed record, not a prose field**
   (WS7.1 of the gap-closure program). The only root-cause artifact was
   `root_cause_hypothesis`, a free string on the forensic agent's run state,

@@ -46,6 +46,8 @@ import httpx
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import case_resolution
+
 logger = logging.getLogger("aisoc.war_room")
 
 PROVIDERS: tuple[str, ...] = ("slack", "teams")
@@ -391,6 +393,15 @@ async def apply_channel_decision(
         )
         changed["severity"] = "critical"
     elif decision == "resolve":
+        # WS7.2: the chat button consults the same resolution contract the
+        # PATCH gate enforces — a channel must not be the door that skips
+        # it. On gaps the decision becomes a refusal note; no status write.
+        gaps = await case_resolution.resolution_gaps(db, tenant_id, uuid.UUID(str(case_id)))
+        if gaps:
+            changed["refused"] = "resolution contract not satisfied"
+            changed["gaps"] = gaps
+            changed["note"] = ("Resolve refused — the tenant's resolution contract requires: " + "; ".join(gaps))[:400]
+            return changed
         # `resolved`, not `closed`. Closing is a terminal decision with SLA
         # and reporting consequences and belongs on an authenticated console
         # session; a chat button moves the case to the state a human then

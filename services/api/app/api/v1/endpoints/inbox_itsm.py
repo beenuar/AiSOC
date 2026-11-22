@@ -88,6 +88,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import DBSession
 from app.core.logging import safe_log_value
+from app.services import case_resolution
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +494,33 @@ async def _fetch_token_and_connector(
     return token_row, connector_row
 
 
+async def resolve_contract_target(
+    db: Any,
+    *,
+    tenant_id: Any,
+    case_id: Any,
+    vendor_status: str,
+) -> tuple[str, str | None]:
+    """What an inbound vendor `resolved`/`closed` may actually set (WS7.2).
+
+    A vendor webhook cannot be answered with a 422, so a vendor-side
+    resolution that fails the tenant's resolution contract lands as
+    ``contained`` with a note naming the gaps — never silently ``resolved``.
+    The checker is the same one the PATCH gate and the war-room decision
+    consult. Statuses outside the contract's scope pass through unchanged.
+    """
+    if vendor_status not in ("resolved", "closed"):
+        return vendor_status, None
+    gaps = await case_resolution.resolution_gaps(db, tenant_id, case_id)
+    if not gaps:
+        return vendor_status, None
+    return "contained", (
+        f"The vendor marked this {vendor_status}, but the tenant's resolution "
+        "contract is not satisfied: " + "; ".join(gaps) + ". AiSOC holds the case "
+        "at contained until the facts are recorded."
+    )
+
+
 async def _apply_status_to_case(
     db: Any,
     *,
@@ -819,12 +847,22 @@ async def inbound_itsm_webhook(
     # system comment.
     actor_label = f"itsm-webhook ({vendor})"
     try:
+        # WS7.2: a vendor-side resolve/close that fails the tenant's
+        # resolution contract is demoted to `contained` with the gaps in
+        # the system note — a webhook cannot be 422'd, but it must not be
+        # the door that skips the contract either.
+        contract_status, contract_note = await resolve_contract_target(
+            db,
+            tenant_id=token_row.tenant_id,
+            case_id=ref_row.id,
+            vendor_status=new_status,
+        )
         await _apply_status_to_case(
             db,
             case_row=ref_row,
             tenant_id=token_row.tenant_id,
-            new_status=new_status,
-            actor_label=actor_label,
+            new_status=contract_status,
+            actor_label=actor_label if contract_note is None else f"{actor_label} — {contract_note}",
             external_id=external_id,
             vendor=vendor,
         )

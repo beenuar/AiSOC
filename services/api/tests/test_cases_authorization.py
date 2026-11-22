@@ -60,7 +60,19 @@ WRITE_HANDLERS = [
     "reopen_case",
     # WS7.1: writing the root-cause record is case writing.
     "put_case_root_cause",
+    # WS7.2: recording resolution facts is case writing.
+    "put_case_resolution",
 ]
+
+#: Write routes in cases.py that deliberately take a permission OTHER than
+#: cases:write, each with the permission they must require instead. The
+#: whole-surface count covers WRITE_HANDLERS plus this map, so a new write
+#: route still cannot arrive unaccounted.
+ADMIN_WRITE_HANDLERS: dict[str, str] = {
+    # WS7.2: whether `resolved` is gated is an admin decision, not an
+    # analyst act — an analyst records facts, an admin turns the contract on.
+    "put_resolution_policy": "settings:write",
+}
 
 
 def _route_for(name: str) -> Any:
@@ -103,12 +115,20 @@ class TestEveryWriteRouteRequiresCasesWrite:
     def test_the_handler_requires_the_permission(self, name: str) -> None:
         assert "cases:write" in _permissions_on(_route_for(name)), f"{name} does not require cases:write, so a viewer token can call it"
 
+    @pytest.mark.parametrize(("name", "permission"), sorted(ADMIN_WRITE_HANDLERS.items()))
+    def test_the_admin_handler_requires_its_stronger_permission(self, name: str, permission: str) -> None:
+        assert permission in _permissions_on(_route_for(name)), (
+            f"{name} does not require {permission}, so a caller without the admin permission can call it"
+        )
+
     def test_the_list_is_the_whole_write_surface(self) -> None:
         """Guards against a tenth write route arriving unprotected."""
         routes = [r for r in cases.router.routes if set(getattr(r, "methods", set())) & {"POST", "PUT", "PATCH", "DELETE"}]
-        assert len(routes) == len(WRITE_HANDLERS), (
+        known = len(WRITE_HANDLERS) + len(ADMIN_WRITE_HANDLERS)
+        assert len(routes) == known, (
             f"cases.py has {len(routes)} write routes but this test knows about "
-            f"{len(WRITE_HANDLERS)}; add the new one here and give it cases:write"
+            f"{known}; add the new one to WRITE_HANDLERS (cases:write) or "
+            "ADMIN_WRITE_HANDLERS (a stronger permission, named)"
         )
 
 

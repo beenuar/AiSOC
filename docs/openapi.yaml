@@ -1456,6 +1456,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/resolution-policy:
+    get:
+      tags:
+      - cases
+      summary: This tenant's resolution-contract policy
+      operationId: get_resolution_policy_api_v1_cases_resolution_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Resolution Policy Api V1 Cases Resolution Policy
+                  Get
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - cases
+      summary: Set this tenant's resolution-contract policy
+      description: 'Enforcement is the tenant''s deliberate choice (off by default),
+        so
+
+        writing the policy takes settings:write rather than cases:write — an
+
+        analyst records facts; an admin decides whether resolve is gated.'
+      operationId: put_resolution_policy_api_v1_cases_resolution_policy_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionPolicy'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Put Resolution Policy Api V1 Cases Resolution Policy
+                  Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/cases/{case_id}:
     get:
       tags:
@@ -2104,6 +2157,141 @@ paths:
           content:
             application/json:
               schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/resolution:
+    get:
+      tags:
+      - cases
+      summary: The case's recorded resolution facts
+      operationId: get_case_resolution_api_v1_cases__case_id__resolution_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Case Resolution Api V1 Cases  Case Id  Resolution
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - cases
+      summary: Record the case's resolution facts
+      description: 'Facts with their conditional requirements enforced at write:
+
+        ''verified'' names its probe/action reference, ''not_required'' names its
+
+        reason, and a notification is channel-and-time together.'
+      operationId: put_case_resolution_api_v1_cases__case_id__resolution_put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolutionFactsIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Put Case Resolution Api V1 Cases  Case Id  Resolution
+                  Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/resolution/gaps:
+    get:
+      tags:
+      - cases
+      summary: What the resolution contract still requires (empty = may resolve)
+      description: 'The console''s pre-flight for the Resolve button: the same checker
+        the
+
+        PATCH gate runs, so the answer cannot drift from the refusal.'
+      operationId: get_case_resolution_gaps_api_v1_cases__case_id__resolution_gaps_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Case Resolution Gaps Api V1 Cases  Case Id  Resolution
+                  Gaps Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/resolution-summary:
+    get:
+      tags:
+      - cases
+      summary: The customer-facing resolution summary (markdown, from records only)
+      operationId: get_case_resolution_summary_api_v1_cases__case_id__resolution_summary_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
         '422':
           description: Validation Error
           content:
@@ -38929,6 +39117,82 @@ components:
       required:
       - reason
       title: ResetRequest
+    ResolutionFactsIn:
+      properties:
+        containment_state:
+          anyOf:
+          - type: string
+            enum:
+            - verified
+            - not_required
+          - type: 'null'
+          title: Containment State
+        containment_reference:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Containment Reference
+        containment_reason:
+          anyOf:
+          - type: string
+            maxLength: 2000
+          - type: 'null'
+          title: Containment Reason
+        eradication:
+          anyOf:
+          - type: string
+            maxLength: 8000
+          - type: 'null'
+          title: Eradication
+        recovery:
+          anyOf:
+          - type: string
+            maxLength: 8000
+          - type: 'null'
+          title: Recovery
+        customer_notified_channel:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Customer Notified Channel
+        customer_notified_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Customer Notified At
+      type: object
+      title: ResolutionFactsIn
+    ResolutionPolicy:
+      properties:
+        enforce:
+          type: boolean
+          title: Enforce
+          default: false
+        require_containment:
+          type: boolean
+          title: Require Containment
+          default: true
+        require_eradication_recovery:
+          type: boolean
+          title: Require Eradication Recovery
+          default: true
+        require_root_cause:
+          type: boolean
+          title: Require Root Cause
+          default: true
+        require_entities:
+          type: boolean
+          title: Require Entities
+          default: true
+        require_notification:
+          type: boolean
+          title: Require Notification
+          default: true
+      type: object
+      title: ResolutionPolicy
     ResolveRequest:
       properties:
         records:
