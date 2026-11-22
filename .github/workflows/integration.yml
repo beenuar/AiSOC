@@ -1194,7 +1194,7 @@ jobs:
           docker network create archive-net || true
           docker run -d --name archive-minio --network archive-net -p 59000:9000 \
             -e MINIO_ROOT_USER=archiveak -e MINIO_ROOT_PASSWORD=archivesk12345 \
-            quay.io/minio/minio server /data
+            minio/minio:latest server /data
           docker run -d --name archive-ch --network archive-net -p 59124:9000 \
             -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=lanebsecret -e CLICKHOUSE_DB=aisoc \
             clickhouse/clickhouse-server:23.8
