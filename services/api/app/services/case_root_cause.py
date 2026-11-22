@@ -86,17 +86,22 @@ async def count_resolving_ledger_entries(db: AsyncSession, citations: list[RootC
     """
     if not citations:
         return 0
-    pairs = {(str(c.run_id), int(c.seq)) for c in citations}
-    clauses = []
-    params: dict[str, Any] = {}
-    for i, (run_id, seq) in enumerate(sorted(pairs)):
-        clauses.append(f"(run_id = :run_{i} AND seq = :seq_{i})")
-        params[f"run_{i}"] = run_id
-        params[f"seq_{i}"] = seq
+    pairs = sorted({(str(c.run_id), int(c.seq)) for c in citations})
+    # One static statement, the cited pairs as parallel array binds — never a
+    # string-built WHERE (the Semgrep sqlalchemy-text rule exists for exactly
+    # that shape, and dynamic SQL earns its flag even with bound values).
     row = (
         await db.execute(
-            text("SELECT COUNT(*) AS n FROM investigation_events WHERE " + " OR ".join(clauses)),
-            params,
+            text(
+                """
+                SELECT COUNT(*) AS n
+                FROM investigation_events e
+                JOIN unnest(CAST(:run_ids AS uuid[]), CAST(:seqs AS int[]))
+                    AS cited(run_id, seq)
+                  ON e.run_id = cited.run_id AND e.seq = cited.seq
+                """
+            ),
+            {"run_ids": [p[0] for p in pairs], "seqs": [p[1] for p in pairs]},
         )
     ).fetchone()
     return int(row.n if row is not None else 0)
