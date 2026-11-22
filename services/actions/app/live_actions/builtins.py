@@ -34,6 +34,7 @@ Naming convention for ``vendor_id``:
 
 from __future__ import annotations
 
+import inspect
 from typing import Any
 from uuid import uuid4
 
@@ -79,13 +80,14 @@ from app.executors.siem import (
     AckAlertExecutor,
     BlockIOCExecutor,
     CreateNotableEventExecutor,
+    ElasticSyncDetectionRuleExecutor,
     SearchSIEMExecutor,
+    SplunkSyncDetectionRuleExecutor,
     SuppressAlertExecutor,
-    SyncDetectionRuleExecutor,
     UpdateAlertDispositionExecutor,
     UpdateWatcherExecutor,
 )
-from app.models.action import ActionRequest, ActionStatus, ActionType
+from app.models.action import ActionRequest, ActionResult, ActionStatus, ActionType, BlastRadius
 
 from . import registry
 from .ai_estate_arms import AI_ESTATE_EXECUTORS
@@ -216,15 +218,46 @@ class _LegacyExecutorAdapter(LiveActionExecutor):
         live_status = _to_live_status(legacy_result.status, legacy_result.output)
 
         summary = self._summarise(legacy_result.output, live_status)
+        details = dict(legacy_result.output)
+        if legacy_result.rollback_data:
+            # Captured prior state (never credentials): what a rollback needs
+            # to restore, carried on the result so the reverse dispatch can
+            # find it after the fact.
+            details["rollback_data"] = legacy_result.rollback_data
         return LiveActionResult(
             request_id=request.request_id,
             status=live_status,
             capability=self.capability,
             vendor_id=self.vendor_id,
             summary=summary,
-            details=dict(legacy_result.output),
+            details=details,
             error=legacy_result.error,
         )
+
+    async def rollback(self, result: LiveActionResult, params: dict[str, Any] | None = None) -> bool:
+        """Reverse through the wrapped executor, with caller-supplied credentials.
+
+        ``rollback_data`` travels on the result's details (prior state only,
+        never secrets); ``params`` carries the connection credentials the way
+        a reverse dispatch would. Executors predating the ``params`` argument
+        are called with the one-argument form.
+        """
+        legacy_result = ActionResult(
+            action_id=result.request_id,
+            status=ActionStatus.COMPLETED,
+            blast_radius=BlastRadius.MEDIUM,
+            output=dict(result.details),
+            rollback_data=dict(result.details.get("rollback_data") or {}),
+            completed_at=result.completed_at,
+        )
+        rollback_fn = self._legacy_executor.rollback
+        if "params" in inspect.signature(rollback_fn).parameters:
+            # The base signature is `(result)`; the vendor arms that need
+            # credentials to reverse widen it to `(result, params=None)`.
+            # The signature check above is what makes this call safe, and it
+            # is a runtime fact the checker cannot see.
+            return bool(await rollback_fn(legacy_result, params=params))  # type: ignore[call-arg]
+        return bool(await rollback_fn(legacy_result))
 
     def _summarise(self, output: dict[str, Any], status: LiveActionStatus) -> str:
         """Produce a one-line human-readable summary for the UI / audit log.
@@ -522,13 +555,29 @@ class SplunkCreateNotable(_LegacyExecutorAdapter):
 
 @apply_contract
 class SplunkSyncDetectionRule(_LegacyExecutorAdapter):
+    # This adapter described creating a Splunk saved search while delegating
+    # to an executor that only ever built an Elastic client — with Splunk
+    # credentials the call could only simulate (WS1.1). It now delegates to
+    # the Splunk arm, which captures the prior definition, verifies the
+    # write by read-back, and restores or deletes on rollback.
     vendor_id = "splunk"
     capability = "sync_detection_rule"
-    description = "Create or update a Splunk saved search from an AiSOC detection."
+    description = "Create or update a Splunk ES correlation search from an AiSOC detection."
     requires_credentials = True
-    _legacy_executor = SyncDetectionRuleExecutor()
+    _legacy_executor = SplunkSyncDetectionRuleExecutor()
     _legacy_action_type = ActionType.SYNC_DETECTION_RULE
     _credential_keys = _SPLUNK_KEYS
+
+
+@apply_contract
+class ElasticSyncDetectionRule(_LegacyExecutorAdapter):
+    vendor_id = "elastic"
+    capability = "sync_detection_rule"
+    description = "Create or update an Elastic Security detection rule from an AiSOC detection."
+    requires_credentials = True
+    _legacy_executor = ElasticSyncDetectionRuleExecutor()
+    _legacy_action_type = ActionType.SYNC_DETECTION_RULE
+    _credential_keys = _ELASTIC_KEYS
 
 
 @apply_contract
@@ -1204,6 +1253,7 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     ElasticSearchSIEM,
     SplunkCreateNotable,
     SplunkSyncDetectionRule,
+    ElasticSyncDetectionRule,
     ElasticUpdateWatcher,
     DefenderBlockIOC,
     # Two-way SIEM loop

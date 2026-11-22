@@ -18,6 +18,7 @@ Elastic credentials:
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 import structlog
 
@@ -345,12 +346,190 @@ class CreateNotableEventExecutor(BaseExecutor):
         return True
 
 
-class SyncDetectionRuleExecutor(BaseExecutor):
-    """Creates or updates a detection rule in Kibana Security (Elastic).
+def _normalized_spl(text: str) -> str:
+    """SPL compared as content: whitespace collapsed, never case-folded
+    (field names and quoted literals are case-sensitive in SPL)."""
+    return " ".join((text or "").split())
+
+
+class SplunkSyncDetectionRuleExecutor(BaseExecutor):
+    """Creates or updates a Splunk ES correlation (saved) search.
+
+    The arm `SplunkSyncDetectionRule` always described and never had: the
+    previous executor only ever built an Elastic client, so with Splunk
+    credentials the call could only simulate while
+    `SplunkClient.create_or_update_correlation_search` had no caller.
+
+    Requires: splunk_url + (splunk_token or splunk_username/splunk_password).
+    target: saved-search name. parameters: query/spl (SPL text), schedule
+    (cron), severity, app (defaults to the ES suite app).
+
+    Three properties the contract relies on:
+
+    * the **prior definition (or its absence) is captured before every
+      write** into ``rollback_data``, so the reverse is restoring a known
+      state rather than guessing;
+    * the write is **verified by read-back**: the stored definition is
+      compared with the normalized intended content, because this verb's
+      failure mode is a rule that saved with *different* content, not one
+      that did not save;
+    * ``rollback`` restores the captured prior version, deletes a rule the
+      action created, and returns ``False`` when the vendor refuses — the
+      predecessor logged "would disable rule" and returned ``True``.
+    """
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        name = request.target
+        spl = request.parameters.get("query") or request.parameters.get("spl") or ""
+        schedule = request.parameters.get("schedule", "*/5 * * * *")
+        severity = request.parameters.get("severity", "high")
+        app = request.parameters.get("app", "SplunkEnterpriseSecuritySuite")
+
+        splunk = _splunk_client(request.parameters)
+        if splunk is None:
+            logger.warning(
+                "sync_detection_rule.simulation",
+                reason="no Splunk credentials",
+                funnel="plugin-sdk",
+            )
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.COMPLETED,
+                blast_radius=BlastRadius.MEDIUM,
+                output={
+                    "action": "sync_detection_rule",
+                    "rule_name": name,
+                    "note": (
+                        "Simulation mode — provide splunk_url and splunk_token "
+                        "(or username/password) to enable live execution." + _SIM_FUNNEL_CTA
+                    ),
+                },
+                rollback_data={},
+                completed_at=datetime.utcnow(),
+            )
+
+        try:
+            prior = await splunk.get_saved_search(name, app=app)
+            await splunk.create_or_update_correlation_search(name=name, search=spl, schedule=schedule, severity=severity, app=app)
+            stored = await splunk.get_saved_search(name, app=app)
+        except Exception as exc:
+            logger.error("sync_detection_rule.splunk.failed", error=str(exc))
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.FAILED,
+                blast_radius=BlastRadius.MEDIUM,
+                error=str(exc),
+                completed_at=datetime.utcnow(),
+            )
+
+        mismatches: list[str] = []
+        if stored is None:
+            mismatches.append("read-back found no saved search at all")
+        else:
+            if _normalized_spl(stored.get("search", "")) != _normalized_spl(spl):
+                mismatches.append(f"search text differs (stored {_normalized_spl(stored.get('search', ''))!r})")
+            if (stored.get("cron_schedule") or "") != schedule:
+                mismatches.append(f"schedule differs (intended {schedule!r}, stored {stored.get('cron_schedule')!r})")
+        if mismatches:
+            detail = "read-back mismatch after upsert: " + "; ".join(mismatches)
+            logger.error("sync_detection_rule.splunk.verification_failed", name=name, detail=detail)
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.FAILED,
+                blast_radius=BlastRadius.MEDIUM,
+                error=detail,
+                rollback_data={"vendor": "splunk", "name": name, "app": app, "prior": prior},
+                completed_at=datetime.utcnow(),
+            )
+
+        return ActionResult(
+            action_id=request.id,
+            status=ActionStatus.COMPLETED,
+            blast_radius=BlastRadius.MEDIUM,
+            output={
+                "success": True,
+                "action": "sync_detection_rule",
+                "vendor": "splunk",
+                "rule_name": name,
+                "verified_by_readback": True,
+                "replaced_prior": prior is not None,
+            },
+            rollback_data={"vendor": "splunk", "name": name, "app": app, "prior": prior},
+            completed_at=datetime.utcnow(),
+        )
+
+    async def rollback(self, result: ActionResult, params: dict[str, Any] | None = None) -> bool:
+        """Restore the captured prior definition, or delete what we created.
+
+        ``params`` carries the connection credentials (they are never stored
+        in ``rollback_data``); without them there is nothing to connect with
+        and the only honest answer is ``False``.
+        """
+        data = result.rollback_data or {}
+        name = data.get("name")
+        if not name:
+            logger.warning("sync_detection_rule.rollback.no_state", detail="nothing was captured")
+            return False
+        splunk = _splunk_client(params or {})
+        if splunk is None:
+            logger.warning("sync_detection_rule.rollback.no_credentials", name=name)
+            return False
+        app = data.get("app", "SplunkEnterpriseSecuritySuite")
+        prior = data.get("prior")
+        try:
+            if prior is None:
+                await splunk.delete_saved_search(name, app=app)
+                logger.info("sync_detection_rule.rollback.deleted_created_rule", name=name)
+            else:
+                await splunk.create_or_update_correlation_search(
+                    name=name,
+                    search=prior.get("search", ""),
+                    schedule=prior.get("cron_schedule") or "*/5 * * * *",
+                    severity=prior.get("alert.severity") or "high",
+                    app=app,
+                )
+                logger.info("sync_detection_rule.rollback.restored_prior", name=name)
+            return True
+        except Exception as exc:
+            logger.error("sync_detection_rule.rollback.failed", name=name, error=str(exc))
+            return False
+
+
+#: The writable detection-rule fields restored on rollback. Kibana's read
+#: returns server-owned fields (`id`, `created_at`, `execution_summary`, ...)
+#: that its write API refuses; restoring means re-submitting the writable
+#: subset of the captured prior rule.
+_ELASTIC_RULE_WRITABLE_FIELDS: tuple[str, ...] = (
+    "rule_id",
+    "name",
+    "type",
+    "query",
+    "language",
+    "index",
+    "enabled",
+    "severity",
+    "risk_score",
+    "description",
+    "from",
+    "to",
+    "interval",
+    "tags",
+    "threat",
+)
+
+
+def _writable_rule_subset(rule: dict[str, Any]) -> dict[str, Any]:
+    return {k: rule[k] for k in _ELASTIC_RULE_WRITABLE_FIELDS if k in rule}
+
+
+class ElasticSyncDetectionRuleExecutor(BaseExecutor):
+    """Creates or updates a detection rule in Kibana Security (Elastic),
+    with prior-state capture, read-back verification and a real rollback —
+    the same three properties as the Splunk arm, documented there.
 
     Requires: elastic_url + elastic_api_key (or username/password), kibana_url.
-    parameters.rule_config: dict — full Elastic Security rule definition.
-    target: rule name or rule_id.
+    parameters.rule_config: dict — Elastic Security rule definition carrying a
+    stable ``rule_id`` (the upsert's addressing). target: rule name.
     """
 
     async def execute(self, request: ActionRequest) -> ActionResult:
@@ -369,49 +548,114 @@ class SyncDetectionRuleExecutor(BaseExecutor):
         logger.info("Executing sync_detection_rule", name=rule_config.get("name"))
 
         elastic = _elastic_client(request.parameters)
-        if elastic:
-            try:
-                result = await elastic.create_or_update_detection_rule(rule_config)
-                return ActionResult(
-                    action_id=request.id,
-                    status=ActionStatus.COMPLETED,
-                    blast_radius=BlastRadius.MEDIUM,
-                    output=result,
-                    rollback_data={"rule_id": result.get("rule_id")},
-                    completed_at=datetime.utcnow(),
+        if elastic is None:
+            logger.warning(
+                "sync_detection_rule.simulation",
+                reason="no Elastic credentials",
+                funnel="plugin-sdk",
+            )
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.COMPLETED,
+                blast_radius=BlastRadius.MEDIUM,
+                output={
+                    "action": "sync_detection_rule",
+                    "rule_name": rule_config.get("name"),
+                    "note": (
+                        "Simulation mode — provide elastic_url/elastic_api_key/kibana_url to enable live execution." + _SIM_FUNNEL_CTA
+                    ),
+                },
+                rollback_data={},
+                completed_at=datetime.utcnow(),
+            )
+
+        rule_id = rule_config.get("rule_id")
+        try:
+            prior = await elastic.get_detection_rule(rule_id) if rule_id else None
+            result = await elastic.create_or_update_detection_rule(rule_config)
+            stored = await elastic.get_detection_rule(rule_id) if rule_id else None
+        except Exception as exc:
+            logger.error("sync_detection_rule.elastic.failed", error=str(exc))
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.FAILED,
+                blast_radius=BlastRadius.MEDIUM,
+                error=str(exc),
+                completed_at=datetime.utcnow(),
+            )
+
+        rollback_data = {
+            "vendor": "elastic",
+            "rule_id": rule_id or result.get("rule_id"),
+            "prior": _writable_rule_subset(prior) if prior else None,
+        }
+
+        if rule_id:
+            mismatches: list[str] = []
+            if stored is None:
+                mismatches.append("read-back found no rule at all")
+            else:
+                for key in ("name", "query", "severity", "risk_score", "enabled", "type"):
+                    if key in rule_config and stored.get(key) != rule_config[key]:
+                        mismatches.append(f"{key} differs (intended {rule_config[key]!r}, stored {stored.get(key)!r})")
+            if mismatches:
+                detail = "read-back mismatch after upsert: " + "; ".join(mismatches)
+                logger.error(
+                    "sync_detection_rule.elastic.verification_failed",
+                    name=rule_config.get("name"),
+                    detail=detail,
                 )
-            except Exception as exc:
-                logger.error("sync_detection_rule.elastic.failed", error=str(exc))
                 return ActionResult(
                     action_id=request.id,
                     status=ActionStatus.FAILED,
                     blast_radius=BlastRadius.MEDIUM,
-                    error=str(exc),
+                    error=detail,
+                    rollback_data=rollback_data,
                     completed_at=datetime.utcnow(),
                 )
 
-        logger.warning(
-            "sync_detection_rule.simulation",
-            reason="no Elastic credentials",
-            funnel="plugin-sdk",
-        )
         return ActionResult(
             action_id=request.id,
             status=ActionStatus.COMPLETED,
             blast_radius=BlastRadius.MEDIUM,
             output={
-                "action": "sync_detection_rule",
-                "rule_name": rule_config.get("name"),
-                "note": ("Simulation mode — provide elastic_url/elastic_api_key/kibana_url to enable live execution." + _SIM_FUNNEL_CTA),
+                **result,
+                "verified_by_readback": bool(rule_id),
+                "replaced_prior": prior is not None,
             },
-            rollback_data={},
+            rollback_data=rollback_data,
             completed_at=datetime.utcnow(),
         )
 
-    async def rollback(self, result: ActionResult) -> bool:
-        rule_id = result.rollback_data.get("rule_id")
-        logger.info("sync_detection_rule rollback: would disable rule", rule_id=rule_id)
-        return True
+    async def rollback(self, result: ActionResult, params: dict[str, Any] | None = None) -> bool:
+        """Restore the captured prior rule, or delete the rule we created."""
+        data = result.rollback_data or {}
+        rule_id = data.get("rule_id")
+        if not rule_id:
+            logger.warning("sync_detection_rule.rollback.no_state")
+            return False
+        elastic = _elastic_client(params or {})
+        if elastic is None:
+            logger.warning("sync_detection_rule.rollback.no_credentials", rule_id=rule_id)
+            return False
+        prior = data.get("prior")
+        try:
+            if prior is None:
+                await elastic.delete_detection_rule(rule_id)
+                logger.info("sync_detection_rule.rollback.deleted_created_rule", rule_id=rule_id)
+            else:
+                await elastic.create_or_update_detection_rule(dict(prior))
+                logger.info("sync_detection_rule.rollback.restored_prior", rule_id=rule_id)
+            return True
+        except Exception as exc:
+            logger.error("sync_detection_rule.rollback.failed", rule_id=rule_id, error=str(exc))
+            return False
+
+
+class SyncDetectionRuleExecutor(ElasticSyncDetectionRuleExecutor):
+    """Backward-compatible alias: the pre-split name resolved to the Elastic
+    behaviour, so existing imports keep the arm they always had. New wiring
+    names the vendor arm explicitly."""
 
 
 class UpdateWatcherExecutor(BaseExecutor):

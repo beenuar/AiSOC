@@ -35,7 +35,7 @@ from app.clients.gmail_client import GmailClient
 from app.clients.m365_mail_client import RECOVERABLE_ITEMS
 from app.core.config import get_settings
 from app.executors.endpoint import AV_SCAN_ACTION, INVESTIGATION_PACKAGE_ACTION, _cs_client
-from app.executors.siem import _ack_vendor, _qradar_client, _splunk_client
+from app.executors.siem import _ack_vendor, _elastic_client, _normalized_spl, _qradar_client, _splunk_client
 from app.models.action import ActionType
 from app.services.disposition_writeback import WritebackAction, plan_writeback
 
@@ -563,6 +563,56 @@ async def _probe_unblock_sender(target: str, params: dict[str, Any]) -> bool | N
     return None if present is None else not present
 
 
+async def _probe_sync_detection_rule(target: str, params: dict[str, Any]) -> bool | None:
+    """The stored rule matches the intended content, by independent read-back.
+
+    Existence alone is the wrong check — this verb's failure mode is a rule
+    that saved with *different* content (the contract's own words). The probe
+    re-reads the saved definition through the same vendor client and compares
+    the content-bearing fields with what the request intended. ``None`` when
+    neither vendor's credentials or the intended content are present: an
+    unverifiable claim stays unverified rather than certified.
+    """
+    splunk = _splunk_client(params)
+    if splunk is not None:
+        intended = params.get("query") or params.get("spl") or ""
+        if not intended:
+            return None
+        try:
+            stored = await splunk.get_saved_search(target, app=params.get("app", "SplunkEnterpriseSecuritySuite"))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("verification.siem_rule_probe_error", target=target, error=str(exc)[:300])
+            return None
+        if stored is None:
+            return False
+        matches = _normalized_spl(stored.get("search", "")) == _normalized_spl(intended)
+        schedule = params.get("schedule")
+        if schedule is not None:
+            matches = matches and (stored.get("cron_schedule") or "") == schedule
+        return matches
+
+    elastic = _elastic_client(params)
+    if elastic is not None:
+        rule_config = params.get("rule_config") or {}
+        rule_id = rule_config.get("rule_id")
+        if not rule_id:
+            return None
+        try:
+            stored = await elastic.get_detection_rule(rule_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("verification.siem_rule_probe_error", target=target, error=str(exc)[:300])
+            return None
+        if stored is None:
+            return False
+        return all(
+            stored.get(key) == rule_config[key]
+            for key in ("name", "query", "severity", "risk_score", "enabled", "type")
+            if key in rule_config
+        )
+
+    return None
+
+
 _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.ISOLATE_HOST: _probe_isolate,
     ActionType.BLOCK_IP: _probe_block_ip,
@@ -586,6 +636,9 @@ _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.RESTORE_EMAIL: _probe_restore_email,
     ActionType.BLOCK_SENDER: _probe_block_sender,
     ActionType.UNBLOCK_SENDER: _probe_unblock_sender,
+    # WS1.1: the write is verified by content read-back, not by existence —
+    # a tampered or partially-applied save must fail verification.
+    ActionType.SYNC_DETECTION_RULE: _probe_sync_detection_rule,
 }
 
 

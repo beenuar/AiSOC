@@ -84,7 +84,9 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # exposure and nothing could act on it. Plus 2 from wave-2 8.2:
     # ExtraHop's two read-only NDR verbs, `lookup_network_flows` and
     # `lookup_network_device`.
-    assert count == 167
+    # Plus 1 from WS1.1: the Elastic `sync_detection_rule` arm, registered
+    # when the Splunk adapter stopped borrowing the Elastic executor.
+    assert count == 168
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -159,6 +161,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("defender", "update_alert_disposition"),
         ("elastic", "ack_alert"),
         ("elastic", "search_siem"),
+        ("elastic", "sync_detection_rule"),
         ("elastic", "suppress_alert"),
         ("elastic", "update_alert_disposition"),
         ("extrahop", "lookup_network_device"),
@@ -296,7 +299,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 167
+    assert count == 168
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:
