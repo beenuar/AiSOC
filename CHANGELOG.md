@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A malformed compressed frame can no longer panic the ingest receiver**
+  (GO-2026-6865 / CVE-2026-116591). `services/ingest` pinned
+  `github.com/klauspost/compress v1.20.1` (indirect), whose fse/huff0
+  decoders panic on crafted two-block frames — and govulncheck traced the
+  vulnerable calls as reachable from `otlp.Receiver.writeProto` through the
+  compressing response writer, on the one service that takes events off the
+  network. Bumped to the fixed v1.20.2: before the bump the scan reported
+  "affected by 24 vulnerabilities from 1 module and the Go standard
+  library"; after it, zero module findings remain (the stdlib entries track
+  the builder's Go patch level, which the image's floating `golang:1.26`
+  base picks up at build time). All 17 ingest test packages pass on the new
+  pin. Below the audit's high/critical fail threshold by policy, fixed
+  anyway because the path is attacker-reachable.
+
 ### Added
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it**
