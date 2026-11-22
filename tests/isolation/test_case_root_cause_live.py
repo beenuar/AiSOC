@@ -50,7 +50,7 @@ def _dsn(name: str) -> str:
     return os.environ[name].strip()
 
 
-@pytest_asyncio.fixture(loop_scope="module")
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def pools():
     import asyncpg
 
@@ -59,7 +59,13 @@ async def pools():
 
     # Fixtures as owner: scratch tenants, a case each, and a ledger run with
     # two events for tenant A — the rows the citations must resolve against.
-    for tenant, label in ((TENANT_A, "rc-live-a"), (TENANT_B, "rc-live-b")):
+    # Slugs carry a per-run suffix because tenants.slug is UNIQUE and prior
+    # runs' tenants stay behind by design: the Investigation Ledger is
+    # append-only (a trigger refuses DELETE), so a tenant that owns ledger
+    # rows can never be deleted — not by this teardown and not by cascade.
+    # The scratch database is per-job in CI and throwaway locally.
+    suffix = uuid.uuid4().hex[:8]
+    for tenant, label in ((TENANT_A, f"rc-live-a-{suffix}"), (TENANT_B, f"rc-live-b-{suffix}")):
         await admin.execute(
             "INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $2) ON CONFLICT (id) DO NOTHING",
             tenant,
@@ -78,43 +84,47 @@ async def pools():
         )
     await admin.execute(
         """
-        INSERT INTO investigation_runs (run_id, tenant_id, case_id, status)
-        VALUES ($1, $2, $3, 'completed') ON CONFLICT (run_id) DO NOTHING
+        INSERT INTO investigation_runs (id, tenant_id, case_id, status)
+        VALUES ($1, $2, $3, 'completed') ON CONFLICT (id) DO NOTHING
         """,
         RUN_A,
         TENANT_A,
         str(CASE_A),
     )
-    for seq, etype in ((0, "model_call"), (1, "triage_verdict")):
+    for seq, kind in ((0, "model_call"), (1, "triage_verdict")):
         await admin.execute(
             """
-            INSERT INTO investigation_events (id, run_id, seq, event_type, payload)
-            VALUES ($1, $2, $3, $4, '{}'::jsonb) ON CONFLICT (run_id, seq) DO NOTHING
+            INSERT INTO investigation_events (id, run_id, tenant_id, seq, kind, agent, summary, payload)
+            VALUES ($1, $2, $3, $4, $5, 'forensic', 'live fixture', '{}'::jsonb)
+            ON CONFLICT (run_id, seq) DO NOTHING
             """,
             uuid.uuid4(),
             RUN_A,
+            TENANT_A,
             seq,
-            etype,
+            kind,
         )
 
     yield admin, app
 
-    for table, col, values in (
-        ("case_root_cause_citations", "tenant_id", (TENANT_A, TENANT_B)),
-        ("case_root_cause_records", "tenant_id", (TENANT_A, TENANT_B)),
-        ("investigation_events", "run_id", (RUN_A,)),
-        ("investigation_runs", "run_id", (RUN_A,)),
-        ("aisoc_cases", "id", (CASE_A, CASE_B)),
-        ("tenants", "id", (TENANT_A, TENANT_B)),
-    ):
-        for v in values:
-            await admin.execute(f"DELETE FROM {table} WHERE {col} = $1", v)  # noqa: S608
+    # Ledger rows (and therefore their run and tenants) are append-only by
+    # design — the inv_events_immutable trigger refuses DELETE — so teardown
+    # removes only what can honestly be removed. Fresh uuids every run keep
+    # reruns collision-free.
+    for tenant in (TENANT_A, TENANT_B):
+        await admin.execute("DELETE FROM case_root_cause_citations WHERE tenant_id = $1", tenant)
+        await admin.execute("DELETE FROM case_root_cause_records WHERE tenant_id = $1", tenant)
+    for case_id in (CASE_A, CASE_B):
+        await admin.execute("DELETE FROM aisoc_cases WHERE id = $1", case_id)
     await admin.close()
     await app.close()
 
 
 async def _bind(conn, tenant: uuid.UUID) -> None:
-    await conn.execute(f"SET app.current_tenant_id = '{tenant}'")
+    # Parameterized set_config, the sibling suites' shape — SET takes no
+    # bind parameters, and an f-string here is the exact pattern the
+    # Semgrep sqli rule exists to flag.
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, false)", str(tenant))
 
 
 async def _upsert(conn, tenant: uuid.UUID, case_id: uuid.UUID, status: str, summary: str):
