@@ -75,7 +75,7 @@ FLOOR_FROM = ("info", "low")
 FLOOR_TO = "medium"
 
 #: Exfil-shaped event types, matched case-insensitively as substrings of
-#: `raw_events.event_type`. Deliberately a reviewable module-level constant:
+#: `raw_events.action`. Deliberately a reviewable module-level constant:
 #: the set is a heuristic, and a heuristic hidden inside SQL is one nobody
 #: audits. Counts are grouped per concrete event type so the analyst sees
 #: what actually matched, not only that "something" did.
@@ -317,14 +317,14 @@ async def clear_watchlist(db: AsyncSession, profile: UserRiskProfile) -> None:
 # ---------------------------------------------------------------------------
 
 _LOOKBACK_LAKE_SQL = """
-    SELECT event_type, connector_type, count() AS events,
+    SELECT action, connector_type, count() AS events,
            min(event_time) AS first_seen, max(event_time) AS last_seen
     FROM aisoc.raw_events
     WHERE tenant_id = %(tenant_id)s
       AND event_time >= %(window_start)s
       AND lower(user_name) = %(ref)s
-      AND multiSearchAnyCaseInsensitive(event_type, %(patterns)s)
-    GROUP BY event_type, connector_type
+      AND multiSearchAnyCaseInsensitive(action, %(patterns)s)
+    GROUP BY action, connector_type
     ORDER BY events DESC
     LIMIT %(limit)s
 """
