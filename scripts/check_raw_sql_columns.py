@@ -199,6 +199,12 @@ UNMIGRATED_TABLES: dict[str, str] = {
 #: called ``autonomy_grants`` that exists in no engine at all, and this gate
 #: passed over it for as long as it shipped.
 FOREIGN_ENGINE_TABLES: dict[str, str] = {
+    "FUNCTION": (
+        "Not a table: ClickHouse's `INSERT INTO FUNCTION s3(...)` — the lake's object-storage "
+        "table function (WS2 archive/export), sent through execute_lake_query to ClickHouse. "
+        "No Postgres migration can declare it; the archive live suite in integration.yml "
+        "exercises the real statements against a real ClickHouse + MinIO pair."
+    ),
     # ClickHouse. The lake's own database qualifies its tables, so the parser
     # sees the database name as the table.
     "aisoc": "ClickHouse: the event lake qualifies every table as `aisoc.<name>`, so the parser reads the database name here.",
@@ -291,6 +297,15 @@ KNOWN_MISSING_TABLES: dict[str, str] = {}
 #: Statements whose table or column list is assembled at runtime, and so
 #: cannot be compared against anything, with the reason.
 DYNAMIC_SQL: dict[tuple[str, str], str] = {
+    (
+        "services/api/app/services/lake_archive.py",
+        DYNAMIC,
+    ): (
+        "ClickHouse scratch-table statements whose identifier is machine-derived "
+        "(`aisoc.rehydrated_<id>`, regex-pinned beside every use) with every value a bound "
+        "parameter — the rehydration loader (WS2.2). Same store and same live gate as the "
+        "FUNCTION entry above."
+    ),
     (
         "services/api/app/db/lake_migrations.py",
         DYNAMIC,
