@@ -1946,7 +1946,9 @@ async def case_investigate(
         await _claim_case_for_run(db, tenant_id=user.tenant_id, case_id=cid, run_id=launched_run_id)
         await db.commit()
     except (ValueError, TypeError):
-        pass
+        # The agents service answered without a parseable run id — there is
+        # nothing to claim with, and the launch result is still the product.
+        logger.debug("investigate.launch.no_run_id_to_claim case_id=%s", cid)
     except Exception:  # noqa: BLE001 — ownership is bookkeeping, the launch is the product
         await db.rollback()
         logger.warning("investigate.launch.claim_failed case_id=%s", cid, exc_info=True)
