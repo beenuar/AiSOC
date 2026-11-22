@@ -2110,6 +2110,91 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/root-cause:
+    get:
+      tags:
+      - cases
+      summary: The case's root-cause record (determined / hypothesis / undetermined)
+      description: 'The record with its ledger citations, or an honest absence.
+
+
+        ``record: null`` means no root-cause record exists for this case — it is
+
+        never synthesized from the forensic agent''s free-prose hypothesis, which
+
+        stays what it is until someone promotes it into a record.'
+      operationId: get_case_root_cause_api_v1_cases__case_id__root_cause_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Case Root Cause Api V1 Cases  Case Id  Root Cause
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    put:
+      tags:
+      - cases
+      summary: Create or replace the case's root-cause record
+      description: "One record per case, held to the contract.\n\n* ``determined``\
+        \ requires at least one cited event, and **every citation\n  must resolve\
+        \ to an Investigation Ledger entry** by ``(run_id, seq)`` —\n  a citation\
+        \ that resolves to nothing is decoration, and the refusal\n  names how many\
+        \ resolved.\n* ``undetermined`` must name the missing telemetry.\n\nRefusals\
+        \ are 422 with the rule in ``detail``, which the console surfaces\nverbatim\
+        \ in its toast — written for the analyst reading it."
+      operationId: put_case_root_cause_api_v1_cases__case_id__root_cause_put
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          anyOf:
+          - type: string
+          - type: string
+            format: uuid
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RootCauseRecordIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Put Case Root Cause Api V1 Cases  Case Id  Root Cause
+                  Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases/{case_id}/postmortem:
     get:
       tags:
@@ -39255,6 +39340,73 @@ components:
         name — an actual rename is a 400 that says why. Edit `label` and
 
         `description` for the human-facing text.'
+    RootCauseCitationIn:
+      properties:
+        run_id:
+          type: string
+          format: uuid
+          title: Run Id
+        seq:
+          type: integer
+          minimum: 0.0
+          title: Seq
+        source:
+          type: string
+          enum:
+          - story_link
+          - graph
+          - lake
+          - ledger
+          title: Source
+          default: ledger
+        event_time:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Event Time
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Description
+      type: object
+      required:
+      - run_id
+      - seq
+      - description
+      title: RootCauseCitationIn
+    RootCauseRecordIn:
+      properties:
+        status:
+          type: string
+          enum:
+          - determined
+          - hypothesis
+          - undetermined
+          title: Status
+        summary:
+          type: string
+          maxLength: 8000
+          minLength: 1
+          title: Summary
+        missing_telemetry:
+          anyOf:
+          - type: string
+            maxLength: 4000
+          - type: 'null'
+          title: Missing Telemetry
+        citations:
+          items:
+            $ref: '#/components/schemas/RootCauseCitationIn'
+          type: array
+          maxItems: 50
+          title: Citations
+      type: object
+      required:
+      - status
+      - summary
+      title: RootCauseRecordIn
     RotateScimTokenRequest:
       properties:
         grace_hours:

@@ -55,7 +55,7 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
-from app.services import alert_status, case_orchestration, case_status, evidence_custody
+from app.services import alert_status, case_orchestration, case_root_cause, case_status, evidence_custody
 from app.services.audit import emit_audit
 from app.services.branding.resolver import resolve_branding
 from app.services.case_fanout import (
@@ -2289,6 +2289,95 @@ async def case_auto_summary(
         )
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Root cause (WS7.1): the evidence-backed record, not a prose field
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/{case_id}/root-cause",
+    summary="The case's root-cause record (determined / hypothesis / undetermined)",
+)
+async def get_case_root_cause(
+    case_id: str,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    """The record with its ledger citations, or an honest absence.
+
+    ``record: null`` means no root-cause record exists for this case — it is
+    never synthesized from the forensic agent's free-prose hypothesis, which
+    stays what it is until someone promotes it into a record.
+    """
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    record = await case_root_cause.fetch_record(db, tenant_id=user.tenant_id, case_id=cid)
+    return {"case_id": str(cid), "record": record}
+
+
+@router.put(
+    "/{case_id}/root-cause",
+    summary="Create or replace the case's root-cause record",
+)
+async def put_case_root_cause(
+    case_id: str | uuid.UUID,
+    body: case_root_cause.RootCauseRecordIn,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+) -> dict[str, Any]:
+    """One record per case, held to the contract.
+
+    * ``determined`` requires at least one cited event, and **every citation
+      must resolve to an Investigation Ledger entry** by ``(run_id, seq)`` —
+      a citation that resolves to nothing is decoration, and the refusal
+      names how many resolved.
+    * ``undetermined`` must name the missing telemetry.
+
+    Refusals are 422 with the rule in ``detail``, which the console surfaces
+    verbatim in its toast — written for the analyst reading it.
+    """
+    existing = (
+        await db.execute(
+            text("SELECT id, status FROM aisoc_cases WHERE id = :cid AND tenant_id = :tenant_id"),
+            {"cid": str(case_id), "tenant_id": str(user.tenant_id)},
+        )
+    ).fetchone()
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    try:
+        case_root_cause.validate_record(body)
+    except case_root_cause.RootCauseValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    if body.citations:
+        resolved = await case_root_cause.count_resolving_ledger_entries(db, body.citations)
+        wanted = len({(str(c.run_id), int(c.seq)) for c in body.citations})
+        if resolved < wanted:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"{resolved} of {wanted} citations resolve to Investigation Ledger "
+                    "entries; every citation must name an existing (run_id, seq). "
+                    "A citation that resolves to nothing is decoration, not evidence."
+                ),
+            )
+
+    record_id = await case_root_cause.upsert_record(
+        db,
+        tenant_id=user.tenant_id,
+        case_id=existing.id if isinstance(existing.id, uuid.UUID) else uuid.UUID(str(existing.id)),
+        record=body,
+        created_by=getattr(user, "email", None),
+    )
+    await db.commit()
+    return {
+        "case_id": str(existing.id),
+        "record_id": str(record_id),
+        "status": body.status,
+        "citations": len(body.citations),
+    }
 
 
 @router.get(

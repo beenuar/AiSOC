@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A case's root cause is an evidence-backed record, not a prose field**
+  (WS7.1 of the gap-closure program). The only root-cause artifact was
+  `root_cause_hypothesis`, a free string on the forensic agent's run state,
+  rendered as-is — a reader could not tell "we walked the chain back to the
+  09:02 delivery, here is the ledger entry" apart from "the model wrote a
+  plausible sentence". Migration 165 adds one record per case
+  (`case_root_cause_records` + `case_root_cause_citations`, RLS on both,
+  one-per-case by constraint) with a status that keeps the three answers
+  distinct: `determined` **requires at least one cited event**, every
+  citation names an Investigation Ledger entry by `(run_id, seq)` and must
+  resolve (a citation that resolves to nothing is decoration — refused
+  naming the shortfall); `hypothesis` is stored as the unverified lead it
+  is; `undetermined` must name the telemetry that was missing. New
+  `GET`/`PUT /cases/{id}/root-cause` routes enforce the contract with
+  analyst-readable 422s, and the post-mortem gains a root-cause section
+  that labels a hypothesis as a hypothesis and renders an honest "no
+  root-cause record" absence — never a synthesis from the agent's prose.
+  Measured by 11 unit cases through the real handlers plus a live-Postgres
+  isolation suite (upsert-replaces-not-duplicates, citations against real
+  ledger rows, DB CHECK vocabulary, RLS under the NOBYPASSRLS runtime
+  role); the negative control disables the determined-requires-citation
+  rule and watches two cases fail.
+
 ### Fixed
 
 - **A threat-intel sink that refuses documents no longer has them marked as

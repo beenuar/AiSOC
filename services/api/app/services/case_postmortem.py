@@ -41,6 +41,8 @@ from typing import Any
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services import case_root_cause
+
 # Reuse the case-summary input rows + DB fetchers so we don't duplicate the
 # row mappers. The post-mortem builder works off the same shape of inputs;
 # only the *output* differs.
@@ -166,6 +168,56 @@ class ActionItem(BaseModel):
     owner_role: str | None = None  # e.g. "detection engineering", "on-call lead"
 
 
+class RootCauseSection(BaseModel):
+    """The root-cause record rendered for the retrospective (WS7.1).
+
+    ``label`` is the load-bearing field: a hypothesis **says it is a
+    hypothesis**, a determined cause says what established it, and a missing
+    record says so — the renderer cannot blur the three, because the words
+    are chosen here and not in a template.
+    """
+
+    status: str  # determined | hypothesis | undetermined | no_record
+    label: str
+    summary: str | None = None
+    missing_telemetry: str | None = None
+    citations: list[dict[str, Any]] = Field(default_factory=list)
+
+
+def build_root_cause_section(record: dict[str, Any] | None) -> RootCauseSection:
+    """Render the persisted record, or an honest absence — never invent one.
+
+    The free-prose ``root_cause_hypothesis`` from the forensic agent is
+    deliberately NOT consulted here: a model's sentence enters the
+    post-mortem only once someone has promoted it into a record, where it is
+    labelled as the hypothesis it is.
+    """
+    if record is None:
+        return RootCauseSection(
+            status="no_record",
+            label=(
+                "No root-cause record exists for this case. The investigation may "
+                "have produced a hypothesis in its report, but nothing has been "
+                "recorded as the case's root cause."
+            ),
+        )
+    status = str(record.get("status", ""))
+    citations = list(record.get("citations") or [])
+    if status == "determined":
+        label = f"Root cause determined, backed by {len(citations)} cited ledger {'entry' if len(citations) == 1 else 'entries'}."
+    elif status == "hypothesis":
+        label = "Root-cause hypothesis — a plausible cause that nothing has verified. Treat it as a lead, not a finding."
+    else:
+        label = "Root cause undetermined; the missing telemetry is named below."
+    return RootCauseSection(
+        status=status,
+        label=label,
+        summary=record.get("summary"),
+        missing_telemetry=record.get("missing_telemetry"),
+        citations=citations,
+    )
+
+
 class CasePostmortem(BaseModel):
     """Top-level deterministic blameless retrospective for one case."""
 
@@ -176,6 +228,7 @@ class CasePostmortem(BaseModel):
     detection: DetectionTiming
     detection_gaps: list[DetectionGap] = Field(default_factory=list)
     response: ResponseEffectiveness
+    root_cause: RootCauseSection | None = None
     timeline: list[TimelineEntry] = Field(default_factory=list)
     went_well: list[WentWellItem] = Field(default_factory=list)
     fell_short: list[FellShortItem] = Field(default_factory=list)
@@ -896,7 +949,12 @@ async def build_case_postmortem(
     comments = await _fetch_comments(db, case_id, tenant_id)
     tasks = await _fetch_tasks(db, case_id, tenant_id)
     inputs = PostmortemInputs(case=case, comments=comments, tasks=tasks)
-    return build_postmortem_from_rows(inputs, now=now)
+    postmortem = build_postmortem_from_rows(inputs, now=now)
+    # WS7.1: the evidence-backed record, rendered with its status named —
+    # or an honest absence. Never synthesized from the agent's prose.
+    record = await case_root_cause.fetch_record(db, tenant_id=tenant_id, case_id=case_id)
+    postmortem.root_cause = build_root_cause_section(record)
+    return postmortem
 
 
 # Re-exported for callers who want to assemble inputs themselves (tests,

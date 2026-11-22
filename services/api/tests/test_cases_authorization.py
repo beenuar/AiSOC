@@ -58,6 +58,8 @@ WRITE_HANDLERS = [
     # Reopening is a write, and a privileged one: it moves a case out of a
     # terminal state, which the forward-only PATCH deliberately cannot do.
     "reopen_case",
+    # WS7.1: writing the root-cause record is case writing.
+    "put_case_root_cause",
 ]
 
 
