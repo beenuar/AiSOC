@@ -99,15 +99,6 @@ class _DriveVendor:
         return httpx.Response(404, json={"error": path})
 
 
-_FAKE_SA_KEY = {
-    "client_email": "svc@example.iam.gserviceaccount.com",
-    # An RSA key only the JWT signer reads; tests bypass the mint by faking
-    # the token endpoint, but the signer still signs — so ship a real
-    # throwaway key generated for this fixture.
-    "private_key": None,  # filled by fixture below
-}
-
-
 @pytest.fixture(scope="module")
 def sa_key() -> dict[str, Any]:
     from cryptography.hazmat.primitives import serialization
