@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-22T04:59:19Z",
+  "generated": "2026-11-22T16:35:53Z",
   "categories": [
     {
       "id": "playbooks",
@@ -255285,7 +255285,7 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/m365-audit/plugin.yaml",
-      "sha256": "ea68a64d4da29f71904de2452bff2d1e9d775f79938b24370bcd2f9a0c9a3722"
+      "sha256": "b8ec2a99a42973da4755938d7c92b80c796688d6d78099f3ca64451eaf086143"
     },
     {
       "id": "microsoft_intune",

@@ -53,6 +53,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cases and a live-Postgres suite (expiry exclusion is the SQL's own
   WHERE; the two upserts own one column each; RLS under the NOBYPASSRLS
   role; the HR door end to end).
+- **The M365 audit connector's `DLP.All` stream is a real per-instance
+  switch** (WS4.2 of the gap-closure program). The module docstring had
+  promised "DLP can be re-enabled per-instance later via `connector_config`"
+  while `_DEFAULT_CONTENT_TYPES` was hard-coded and the constructor accepted
+  no such setting — the aspirational-comment family. The schema now declares
+  `include_dlp` (boolean, default off, rendered by the wizard and persisted
+  on the instance row); coercion follows the house rule that a boolean from
+  the wizard and a string from a hand-written row mean the same thing and an
+  unparseable value means *off*, because a collector that defaults to on
+  when it cannot read its own switch is a poll the tenant did not ask for.
+  Proven at the wire: `test_m365_audit_dlp_toggle.py` (15 cases) drives the
+  real fetch path against a mock Management API and reads the content-type
+  selection off the HTTP requests — default polls exactly the four `Audit.*`
+  types, opt-in adds `DLP.All`. The connector docs page now states the
+  default honestly (it had claimed "subscribes to all five content types")
+  and names the stricter `ActivityFeed.ReadDlp` permission that
+  sensitive-data details require.
 
 - **Every open case has an accountable owner and a next-action clock**
   (WS7.4, completing WS7 of the gap-closure program). An owner is a person

@@ -16,9 +16,9 @@ The M365 connector pulls **unified audit log events** from the Office 365 Manage
 | `Audit.SharePoint` | File access, sharing-link create, anonymous-link |
 | `Audit.AzureActiveDirectory` | User sign-in, MFA disable, app consent |
 | `Audit.General` | Teams meeting events, DLP matches, eDiscovery |
-| `DLP.All` | Data loss prevention rule matches |
+| `DLP.All` | Data loss prevention rule matches (opt-in) |
 
-The connector subscribes to all five content types. Events are normalized with `source: m365` and `category` derived from the workload.
+The connector subscribes to the four `Audit.*` content types by default. `DLP.All` is a per-instance opt-in (the **Include DLP events** switch): the stream is high volume, and the Management API only includes sensitive-data details when the app registration also holds the stricter **`ActivityFeed.ReadDlp`** ("Read DLP policy events including sensitive details") permission — without it you still get the rule match and the affected file, just not the matched content excerpts. Events are normalized with `source: m365` and `category` derived from the workload.
 
 ## Prerequisites
 
@@ -124,6 +124,7 @@ The Management API does not provide severity, so AiSOC infers from `Operation`:
 | `certificate_pem` | Certificate PEM (private key) | secret | no | — | **encrypted at rest** · Recommended over a client secret. Paste a PEM containing the PRIVATE KEY (and optionally the CERTIFICATE) for the certificate whose public .cer you uploaded under Entra portal > App registrations > your app > Certificates & secrets. |
 | `certificate_thumbprint` | Certificate Thumbprint | string | no | — | SHA-1 thumbprint shown next to the certificate under App registrations > Certificates & secrets. Optional when the PEM above also contains the certificate. |
 | `private_key_password` | Private Key Password | secret | no | — | **encrypted at rest** · Only if the private key in the PEM is encrypted. |
+| `include_dlp` | Include DLP events (DLP.All) | boolean | no | `False` | Also subscribe to the DLP.All content type — Purview DLP rule matches across Exchange, SharePoint/OneDrive and endpoints. Off by default: the stream is high volume, and reading sensitive-data details requires the separate 'Read DLP policy events including sensitive details' permission on the app registration. |
 
 :::note Credential handling
 `client_secret`, `certificate_pem`, `private_key_password` are encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).

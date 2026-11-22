@@ -62,7 +62,7 @@
 | kubernetes_audit | cloud | 5 | 1 | 2 | ✅ | ✅ | ✅ |
 | lacework | cloud | 4 | 1 | 5 | ✅ | ✅ | ✅ |
 | llm_usage | saas | 4 | 1 | 2 | ✅ | ✅ | ✅ |
-| m365_audit | saas | 6 | 3 | 1 | ✅ | ✅ | ✅ |
+| m365_audit | saas | 7 | 3 | 1 | ✅ | ✅ | ✅ |
 | microsoft_intune | mdm | 3 | 1 | 1 | ✅ | ✅ | — |
 | microsoft_sentinel | siem | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | mimecast | saas | 3 | 1 | 4 | ✅ | ✅ | ✅ |

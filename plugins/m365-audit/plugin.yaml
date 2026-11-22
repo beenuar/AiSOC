@@ -28,3 +28,11 @@ config_schema:
       type: string
       description: "Client secret for the Azure AD app registration"
       secret: true
+    include_dlp:
+      type: boolean
+      description: >-
+        Also subscribe to the DLP.All content type (Purview DLP rule matches
+        across Exchange, SharePoint/OneDrive and endpoints). Off by default:
+        high volume, and sensitive-data details need the separate 'Read DLP
+        policy events including sensitive details' permission.
+      default: false
