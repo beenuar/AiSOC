@@ -1192,9 +1192,21 @@ jobs:
         run: |
           set -euo pipefail
           docker network create archive-net || true
+          # MinIO's image lives on quay with a hub mirror, and BOTH registries
+          # have answered transient denials on hosted runners (quay a 401 on
+          # the manifest HEAD, hub a rate-limit shaped "repository does not
+          # exist"). Try each, three times, before concluding anything.
+          MINIO_IMAGE=""
+          for img in quay.io/minio/minio:latest minio/minio:latest; do
+            for i in 1 2 3; do
+              if docker pull "$img" >/dev/null 2>&1; then MINIO_IMAGE="$img"; break 2; fi
+              sleep 10
+            done
+          done
+          [ -n "$MINIO_IMAGE" ] || { echo "::error::minio image unavailable from quay AND hub after 3 tries each"; exit 1; }
           docker run -d --name archive-minio --network archive-net -p 59000:9000 \
             -e MINIO_ROOT_USER=archiveak -e MINIO_ROOT_PASSWORD=archive_s3_ci_secret \
-            minio/minio:latest server /data
+            "$MINIO_IMAGE" server /data
           docker run -d --name archive-ch --network archive-net -p 59124:9000 \
             -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=clickhouse_ci_secret -e CLICKHOUSE_DB=aisoc \
             clickhouse/clickhouse-server:23.8
