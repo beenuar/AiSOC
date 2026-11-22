@@ -1177,29 +1177,29 @@ jobs:
           LAKE_ARCHIVE_LIVE_CH_HOST: localhost
           LAKE_ARCHIVE_LIVE_CH_PORT: '59124'
           LAKE_ARCHIVE_LIVE_CH_USER: aisoc
-          LAKE_ARCHIVE_LIVE_CH_PASSWORD: lanebsecret
+          LAKE_ARCHIVE_LIVE_CH_PASSWORD: clickhouse_ci_secret
           LAKE_ARCHIVE_LIVE_S3_ENDPOINT_FOR_CH: http://archive-minio:9000
           LAKE_ARCHIVE_LIVE_S3_ENDPOINT: http://localhost:59000
           LAKE_ARCHIVE_LIVE_S3_ACCESS: archiveak
-          LAKE_ARCHIVE_LIVE_S3_SECRET: archivesk12345
+          LAKE_ARCHIVE_LIVE_S3_SECRET: archive_s3_ci_secret
           # aisoc-db-role: owner — fixtures only. The suite seeds tenants, alerts and holds, which the DML-only runtime role cannot.
           LAKE_ARCHIVE_LIVE_PG_ADMIN_DSN: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
           CLICKHOUSE_HOST: localhost
           CLICKHOUSE_PORT: '59124'
           CLICKHOUSE_USER: aisoc
-          CLICKHOUSE_PASSWORD: lanebsecret
+          CLICKHOUSE_PASSWORD: clickhouse_ci_secret
           CLICKHOUSE_DATABASE: aisoc
         run: |
           set -euo pipefail
           docker network create archive-net || true
           docker run -d --name archive-minio --network archive-net -p 59000:9000 \
-            -e MINIO_ROOT_USER=archiveak -e MINIO_ROOT_PASSWORD=archivesk12345 \
+            -e MINIO_ROOT_USER=archiveak -e MINIO_ROOT_PASSWORD=archive_s3_ci_secret \
             minio/minio:latest server /data
           docker run -d --name archive-ch --network archive-net -p 59124:9000 \
-            -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=lanebsecret -e CLICKHOUSE_DB=aisoc \
+            -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=clickhouse_ci_secret -e CLICKHOUSE_DB=aisoc \
             clickhouse/clickhouse-server:23.8
           for i in $(seq 1 30); do
-            docker exec archive-ch clickhouse-client --user aisoc --password lanebsecret -q 'SELECT 1' >/dev/null 2>&1 && break
+            docker exec archive-ch clickhouse-client --user aisoc --password clickhouse_ci_secret -q 'SELECT 1' >/dev/null 2>&1 && break
             sleep 2
             [ "$i" = 30 ] && { echo '::error::clickhouse never came up'; docker logs --tail 40 archive-ch; exit 1; }
           done
@@ -1208,10 +1208,10 @@ jobs:
             sleep 2
             [ "$i" = 30 ] && { echo '::error::minio never came up'; docker logs --tail 40 archive-minio; exit 1; }
           done
-          docker exec -i archive-ch clickhouse-client --user aisoc --password lanebsecret --multiquery < ../../services/api/clickhouse/001_init.sql
+          docker exec -i archive-ch clickhouse-client --user aisoc --password clickhouse_ci_secret --multiquery < ../../services/api/clickhouse/001_init.sql
           for b in tenant-archive tenant-export; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --aws-sigv4 'aws:amz:us-east-1:s3' \
-              --user archiveak:archivesk12345 -X PUT "http://localhost:59000/$b")
+              --user "$LAKE_ARCHIVE_LIVE_S3_ACCESS:$LAKE_ARCHIVE_LIVE_S3_SECRET" -X PUT "http://localhost:59000/$b")
             [ "$code" = 200 ] || { echo "::error::bucket $b creation failed ($code)"; exit 1; }
           done
           pip install --quiet duckdb
