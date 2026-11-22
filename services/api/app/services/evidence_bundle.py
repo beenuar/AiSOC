@@ -93,7 +93,10 @@ __all__ = [
 
 #: This format's own version, independent of OCSF's. Bumped when the
 #: payload shape changes in a way a reader must notice.
-BUNDLE_SCHEMA_VERSION = "1.0"
+# 1.1: optional `resolution` section (WS7.2) — the customer-facing summary
+# built from the persisted resolution facts and the WS7.1 root-cause record,
+# present only when the run's case carries them.
+BUNDLE_SCHEMA_VERSION = "1.1"
 
 #: The first OCSF version containing every object this bundle uses. See
 #: the module docstring for why it is not the 1.1.0 the ingest spine
@@ -263,6 +266,7 @@ def build_bundle(
     events: list[dict[str, Any]],
     artifacts: list[dict[str, Any]] | None = None,
     approvals: list[dict[str, Any]] | None = None,
+    resolution_summary: str | None = None,
     signing_key: str,
 ) -> dict[str, Any]:
     """Assemble and sign one investigation's bundle.
@@ -341,6 +345,11 @@ def build_bundle(
             key=lambda a: a["id"],
         ),
     }
+    if resolution_summary is not None:
+        # WS7.2: present only when the run's case carries resolution facts /
+        # a root-cause record — an absent section is the honest state, never
+        # an empty scaffold pretending something was recorded.
+        payload["resolution"] = {"summary_markdown": resolution_summary}
     payload["ocsf"] = _ocsf_block(run, agent_names)
 
     return {

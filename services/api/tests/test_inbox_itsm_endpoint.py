@@ -701,10 +701,15 @@ def _build_db_for_endpoint(
     r = MagicMock()
     r.fetchone = MagicMock(return_value=ref_row)
     results.append(r)
-    # last_used_at update + any subsequent UPDATEs all just return a
-    # noop result; we don't .fetchone() on them.
-    for _ in range(8):
-        results.append(MagicMock())
+    # last_used_at update + any subsequent statements. Writes never call
+    # .fetchone(); the one read in this tail is WS7.2's resolution-policy
+    # fetch, whose honest no-policy state is fetchone() -> None — a bare
+    # MagicMock there would read as a truthy policy row made of mocks and
+    # drag the contract into suites that model a tenant who never opted in.
+    for _ in range(9):
+        r = MagicMock()
+        r.fetchone = MagicMock(return_value=None)
+        results.append(r)
 
     db = MagicMock()
     db.execute = AsyncMock(side_effect=results)

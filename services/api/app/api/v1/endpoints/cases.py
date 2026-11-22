@@ -55,7 +55,14 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
-from app.services import alert_status, case_orchestration, case_root_cause, case_status, evidence_custody
+from app.services import (
+    alert_status,
+    case_orchestration,
+    case_resolution,
+    case_root_cause,
+    case_status,
+    evidence_custody,
+)
 from app.services.audit import emit_audit
 from app.services.branding.resolver import resolve_branding
 from app.services.case_fanout import (
@@ -662,6 +669,35 @@ async def create_case(
     return response
 
 
+# Registered BEFORE the parameterized /{case_id} routes on purpose:
+# Starlette matches in registration order, so a literal segment placed
+# after /{case_id} is swallowed as a case id and 404s.
+@router.get("/resolution-policy", summary="This tenant's resolution-contract policy")
+async def get_resolution_policy(
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    policy = await case_resolution.fetch_policy(db, user.tenant_id)
+    return {
+        "configured": policy is not None,
+        "policy": (policy or case_resolution.ResolutionPolicy()).model_dump(),
+    }
+
+
+@router.put("/resolution-policy", summary="Set this tenant's resolution-contract policy")
+async def put_resolution_policy(
+    body: case_resolution.ResolutionPolicy,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> dict[str, Any]:
+    """Enforcement is the tenant's deliberate choice (off by default), so
+    writing the policy takes settings:write rather than cases:write — an
+    analyst records facts; an admin decides whether resolve is gated."""
+    await case_resolution.upsert_policy(db, user.tenant_id, body)
+    await db.commit()
+    return {"recorded": True, "policy": body.model_dump()}
+
+
 @router.get("/{case_id}", response_model=CaseResponse, summary="Get case")
 async def get_case(case_id: str, db: DBSession, user: CaseReader) -> CaseResponse:
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
@@ -800,6 +836,30 @@ async def reopen_case(
     return _row_to_case(row)
 
 
+async def _enforce_resolution_contract(*, db: DBSession, user: Any, existing: Any, target_status: str) -> None:
+    """The WS7.2 gate: `resolved` must satisfy the tenant's contract.
+
+    One shared checker (`case_resolution.resolution_gaps`) — the war-room
+    decision and the inbound ITSM mirror consult the same one, so there is
+    no writer the contract does not govern. Off by default per tenant; the
+    422 lists every unmet requirement, written for the analyst who reads it
+    in the console toast.
+    """
+    if target_status != case_status.RESOLVED:
+        return
+    gaps = await case_resolution.resolution_gaps(db, user.tenant_id, existing.id)
+    if gaps:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This tenant's resolution contract is not satisfied: "
+                + "; ".join(gaps)
+                + ". Record the missing facts on the case's Resolution panel, "
+                "or an admin can adjust the policy."
+            ),
+        )
+
+
 @router.patch("/{case_id}", response_model=CaseResponse, summary="Update case")
 async def update_case(
     case_id: str, body: UpdateCaseRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("cases:write"))]
@@ -827,6 +887,10 @@ async def update_case(
                     "backwards moves require POST /cases/{id}/reopen."
                 ),
             )
+        # WS7.2: the ladder says the move is shaped right; the resolution
+        # contract says `resolved` is earned. Same checker as the war-room
+        # decision and the ITSM mirror.
+        await _enforce_resolution_contract(db=db, user=user, existing=existing, target_status=_normalize_status(body.status))
 
     now = datetime.now(UTC)
     sets = ["updated_at = :now"]
@@ -2289,6 +2353,87 @@ async def case_auto_summary(
         )
 
     return summary
+
+
+# ---------------------------------------------------------------------------
+# Resolution contract (WS7.2): facts, gaps, policy, summary
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{case_id}/resolution", summary="The case's recorded resolution facts")
+async def get_case_resolution(
+    case_id: str,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    facts = await case_resolution.fetch_facts(db, user.tenant_id, cid)
+    return {"case_id": str(cid), "facts": facts.model_dump() if facts else None}
+
+
+@router.put("/{case_id}/resolution", summary="Record the case's resolution facts")
+async def put_case_resolution(
+    case_id: str,
+    body: case_resolution.ResolutionFactsIn,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+) -> dict[str, Any]:
+    """Facts with their conditional requirements enforced at write:
+    'verified' names its probe/action reference, 'not_required' names its
+    reason, and a notification is channel-and-time together."""
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    try:
+        case_resolution.validate_facts(body)
+    except case_resolution.ResolutionValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    await case_resolution.upsert_facts(db, tenant_id=user.tenant_id, case_id=cid, facts=body, updated_by=getattr(user, "email", None))
+    await db.commit()
+    return {"case_id": str(cid), "recorded": True}
+
+
+@router.get(
+    "/{case_id}/resolution/gaps",
+    summary="What the resolution contract still requires (empty = may resolve)",
+)
+async def get_case_resolution_gaps(
+    case_id: str,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    """The console's pre-flight for the Resolve button: the same checker the
+    PATCH gate runs, so the answer cannot drift from the refusal."""
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    gaps = await case_resolution.resolution_gaps(db, user.tenant_id, cid)
+    policy = await case_resolution.fetch_policy(db, user.tenant_id)
+    return {
+        "case_id": str(cid),
+        "enforced": bool(policy and policy.enforce),
+        "gaps": gaps,
+    }
+
+
+@router.get(
+    "/{case_id}/resolution-summary",
+    summary="The customer-facing resolution summary (markdown, from records only)",
+    response_class=PlainTextResponse,
+)
+async def get_case_resolution_summary(
+    case_id: str,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> str:
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    row = (
+        await db.execute(
+            text("SELECT title FROM aisoc_cases WHERE id = :cid AND tenant_id = :tenant_id"),
+            {"cid": str(cid), "tenant_id": str(user.tenant_id)},
+        )
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+    facts = await case_resolution.fetch_facts(db, user.tenant_id, cid)
+    root_cause = await case_root_cause.fetch_record(db, tenant_id=user.tenant_id, case_id=cid)
+    return case_resolution.build_resolution_summary(case_title=str(row.title), facts=facts, root_cause=root_cause)
 
 
 # ---------------------------------------------------------------------------

@@ -49,6 +49,7 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
+from app.services import case_resolution, case_root_cause
 from app.services.branding.resolver import DEFAULT_BRANDING, Branding, resolve_branding
 from app.services.evidence_bundle import build_bundle, bundle_filename, serialize_bundle
 
@@ -1181,6 +1182,28 @@ async def export_evidence_bundle(
     )
     artifacts = (await db.execute(select(InvestigationArtifact).where(InvestigationArtifact.run_id == run_id))).scalars().all()
 
+    # WS7.2: when the run is tied to a case that carries resolution facts or
+    # a root-cause record, the customer-facing summary rides in the bundle.
+    resolution_summary = None
+    try:
+        case_uuid = uuid.UUID(str(run.case_id or ""))
+    except (ValueError, AttributeError, TypeError):
+        case_uuid = None
+    if case_uuid is not None:
+        case_row = (
+            await db.execute(
+                text("SELECT title FROM aisoc_cases WHERE id = :cid AND tenant_id = :tid"),
+                {"cid": str(case_uuid), "tid": str(current_user.tenant_id)},
+            )
+        ).fetchone()
+        if case_row is not None:
+            facts = await case_resolution.fetch_facts(db, current_user.tenant_id, case_uuid)
+            record = await case_root_cause.fetch_record(db, tenant_id=current_user.tenant_id, case_id=case_uuid)
+            if facts is not None or record is not None:
+                resolution_summary = case_resolution.build_resolution_summary(
+                    case_title=str(case_row.title), facts=facts, root_cause=record
+                )
+
     bundle = build_bundle(
         run={c.name: getattr(run, c.name, None) for c in run.__table__.columns},
         events=[{c.name: getattr(e, c.name, None) for c in e.__table__.columns} for e in events],
@@ -1190,6 +1213,7 @@ async def export_evidence_bundle(
         # different statement from "none were required" and is why the
         # field is present and empty rather than omitted.
         approvals=[],
+        resolution_summary=resolution_summary,
         signing_key=settings.SECRET_KEY,
     )
 
