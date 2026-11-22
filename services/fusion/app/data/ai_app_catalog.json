@@ -1,0 +1,30 @@
+{
+  "_provenance": "Each row is a vendor's own published product domain — the address the vendor documents for its AI product. No row is inferred from traffic, guessed, or scraped from a third-party list; adding one requires the vendor's own documentation naming the domain. Version bumps whenever a row changes.",
+  "_limitation": "Network telemetry sees the DOMAIN, never the prompt. Sightings produced from this catalog say so explicitly (cannot_see_prompts), and a matched domain is evidence of use, not of content.",
+  "version": 1,
+  "apps": [
+    {"domain": "chat.openai.com", "app": "ChatGPT", "category": "assistant", "provenance": "OpenAI's documented product domain"},
+    {"domain": "chatgpt.com", "app": "ChatGPT", "category": "assistant", "provenance": "OpenAI's documented product domain"},
+    {"domain": "api.openai.com", "app": "OpenAI API", "category": "api", "provenance": "OpenAI's documented API endpoint"},
+    {"domain": "claude.ai", "app": "Claude", "category": "assistant", "provenance": "Anthropic's documented product domain"},
+    {"domain": "api.anthropic.com", "app": "Anthropic API", "category": "api", "provenance": "Anthropic's documented API endpoint"},
+    {"domain": "gemini.google.com", "app": "Gemini", "category": "assistant", "provenance": "Google's documented product domain"},
+    {"domain": "generativelanguage.googleapis.com", "app": "Gemini API", "category": "api", "provenance": "Google's documented API endpoint"},
+    {"domain": "copilot.microsoft.com", "app": "Microsoft Copilot", "category": "assistant", "provenance": "Microsoft's documented product domain"},
+    {"domain": "perplexity.ai", "app": "Perplexity", "category": "assistant", "provenance": "Perplexity's documented product domain"},
+    {"domain": "poe.com", "app": "Poe", "category": "assistant", "provenance": "Quora's documented product domain"},
+    {"domain": "huggingface.co", "app": "Hugging Face", "category": "platform", "provenance": "Hugging Face's documented product domain"},
+    {"domain": "midjourney.com", "app": "Midjourney", "category": "image", "provenance": "Midjourney's documented product domain"},
+    {"domain": "mistral.ai", "app": "Mistral", "category": "api", "provenance": "Mistral's documented product domain"},
+    {"domain": "api.mistral.ai", "app": "Mistral API", "category": "api", "provenance": "Mistral's documented API endpoint"},
+    {"domain": "deepseek.com", "app": "DeepSeek", "category": "assistant", "provenance": "DeepSeek's documented product domain"},
+    {"domain": "api.deepseek.com", "app": "DeepSeek API", "category": "api", "provenance": "DeepSeek's documented API endpoint"},
+    {"domain": "x.ai", "app": "Grok", "category": "assistant", "provenance": "xAI's documented product domain"},
+    {"domain": "api.x.ai", "app": "Grok API", "category": "api", "provenance": "xAI's documented API endpoint"},
+    {"domain": "character.ai", "app": "Character.AI", "category": "assistant", "provenance": "Character.AI's documented product domain"},
+    {"domain": "cohere.com", "app": "Cohere", "category": "api", "provenance": "Cohere's documented product domain"},
+    {"domain": "api.cohere.com", "app": "Cohere API", "category": "api", "provenance": "Cohere's documented API endpoint"},
+    {"domain": "replicate.com", "app": "Replicate", "category": "platform", "provenance": "Replicate's documented product domain"},
+    {"domain": "openrouter.ai", "app": "OpenRouter", "category": "api", "provenance": "OpenRouter's documented product domain"}
+  ]
+}

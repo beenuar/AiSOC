@@ -50,6 +50,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
+from aisoc_ai.classes import classify_text
+from aisoc_ai.manifest import mcp_manifest_event
 from aisoc_ai.redaction import CaptureMode, redact, secret_kinds
 
 logger = logging.getLogger("aisoc_ai")
@@ -95,6 +97,12 @@ class AiSocAiClient:
     agent_name: str | None = None
     capture: CaptureMode = CaptureMode.HASHED
     enabled: bool = True
+    #: WS5.6 — opt-in local sensitive-class counting for prompts. Off by
+    #: default; when on, `model_call` attaches `prompt_class_counts`, a
+    #: {class: match_count} dict computed by plain local regex
+    #: (`classes.py`). Counts only — the standing claim that prompt content
+    #: never leaves the process by default stays exactly true.
+    classify_prompt_classes: bool = False
     #: Per-request deadline for a batch POST. Configurable because the default
     #: is tuned for an AiSOC reachable on a local network, and instrumentation
     #: inside an agent that already holds a request open cannot assume that.
@@ -192,11 +200,34 @@ class AiSocAiClient:
             "severity": severity,
             "on_behalf_of": on_behalf_of,
         }
+        if self.classify_prompt_classes and prompt:
+            counts = classify_text(prompt)
+            if counts:
+                payload["prompt_class_counts"] = counts
         if redacted_prompt.content is not None:
             payload["prompt"] = redacted_prompt.content
         if redacted_response.content is not None:
             payload["response"] = redacted_response.content
         return self._emit(self.endpoint, payload)
+
+    def mcp_manifest(
+        self,
+        server_name: str,
+        tools: list[dict[str, Any]],
+        *,
+        session_id: str | None = None,
+    ) -> bool:
+        """Record an MCP server's manifest — hashes and flags, never the text.
+
+        Call on connect and on any re-read of the tool list. The platform
+        versions manifests per (tenant, server) and alerts on drift: a
+        description hash that moved on a sanctioned server, a newly added
+        state-changing tool, or instruction-shaped text in a description
+        (WS5.4). Tool descriptions are hashed HERE, in this process; at most
+        one 80-character snippet travels, and only for a description that
+        already tripped an instruction pattern.
+        """
+        return self._emit(self.endpoint, mcp_manifest_event(server_name=server_name, tools=tools, session_id=session_id))
 
     def finding(
         self,

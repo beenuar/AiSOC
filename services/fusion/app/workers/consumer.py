@@ -10,6 +10,7 @@ import json
 import random
 import time
 from typing import Any
+from uuid import UUID
 
 import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer, TopicPartition
@@ -25,7 +26,7 @@ from aiokafka.errors import (
 
 from app.core.config import settings
 from app.core.kafka_security import kafka_client_kwargs
-from app.models.alert import FusionDecision, RawAlert
+from app.models.alert import AlertSeverity, FusionDecision, RawAlert
 from app.services.ai_asset_recorder import AiAssetRecorder
 from app.services.alert_outbox import AlertNotificationOutbox, NotificationRelay
 from app.services.alert_sink import AlertSink, PersistOutcome, PersistResult
@@ -623,6 +624,8 @@ class FusionWorker:
                     await self._lake.flush_if_stale()
                 if self._ai_assets is not None:
                     await self._ai_assets.flush_if_stale()
+                    await self._raise_refused_asset_alerts()
+                    await self._raise_mcp_drift_alerts()
                 if self._sessions is None:
                     continue
                 now = time.monotonic()
@@ -1273,6 +1276,103 @@ class FusionWorker:
                 continue
             _METRICS["detected"] += 1
             await self._fuse_and_persist(alert, source_event_id=source_event_id, session=session)
+
+    async def _raise_refused_asset_alerts(self) -> None:
+        """WS5.3 — a refused AI asset observed again becomes a triage alert.
+
+        The recorder's flush reports sightings that landed on a
+        ``sanctioned = FALSE`` row (`drain_refused`). Before this, the only
+        consequence of a refused agent continuing to run was an inventory
+        score nobody is paged for; now each re-observation raises a
+        high-severity alert through the ordinary fusion path, citing the
+        sanction decision — and fusion's own dedup keeps a chatty agent
+        from paging once per flush. Containment stays a governed, previewed
+        playbook step; this is the doorbell, not the response.
+        """
+        if self._ai_assets is None:
+            return
+        for notice in self._ai_assets.drain_refused():
+            try:
+                alert = RawAlert(
+                    tenant_id=UUID(notice["tenant_id"]),
+                    source="ai_inventory",
+                    title=f"Refused AI asset observed again: {notice['display_name']}",
+                    description=(
+                        f"The {notice['kind'].replace('_', ' ')} {notice['display_name']!r} "
+                        f"(vendor {notice['vendor'] or 'unknown'}, id {notice['external_id']}) was "
+                        "reviewed and REFUSED in the AI inventory, and has just been observed "
+                        f"running again via {notice['discovery_source']}. The sanction decision is "
+                        "recorded on the asset row (Settings → AI estate); containment is a "
+                        "governed playbook step, not an automatic consequence of this alert."
+                    ),
+                    severity=AlertSeverity.HIGH,
+                    raw_event={"ai_asset": dict(notice), "sanctioned": False},
+                )
+            except Exception as exc:  # noqa: BLE001 — a malformed notice must not stop the sweep
+                logger.warning("refused_asset_alert.build_failed", error=str(exc)[:200])
+                continue
+            try:
+                await self._fuse_and_persist(
+                    alert,
+                    source_event_id=f"ai-refused:{notice['tenant_id']}:{notice['external_id']}",
+                )
+                _METRICS["refused_asset_alerts"] = _METRICS.get("refused_asset_alerts", 0) + 1
+            except Exception as exc:  # noqa: BLE001 — next sweep retries; the notice is logged
+                logger.warning(
+                    "refused_asset_alert.persist_failed",
+                    external_id=notice.get("external_id"),
+                    error=str(exc)[:200],
+                )
+
+    async def _raise_mcp_drift_alerts(self) -> None:
+        """WS5.4 — manifest drift becomes a triage alert naming what moved.
+
+        Severity by what the drift IS: instruction-shaped text in a tool
+        description is HIGH (that is the poisoning shape itself); a changed
+        description or a new state-changing tool on a server somebody may
+        have sanctioned is MEDIUM — drift is a question, instructions are an
+        answer.
+        """
+        if self._ai_assets is None:
+            return
+        for notice in self._ai_assets.drain_mcp_drift():
+            findings = notice.get("findings") or []
+            kinds = {f.get("kind") for f in findings}
+            severity = AlertSeverity.HIGH if "instruction_shaped_description" in kinds else AlertSeverity.MEDIUM
+            lines = []
+            for f in findings[:10]:
+                if f["kind"] == "instruction_shaped_description":
+                    lines.append(
+                        f'- tool {f["tool"]!r}: instruction-shaped text ({", ".join(f.get("patterns") or [])}): "{f.get("snippet", "")}"'
+                    )
+                elif f["kind"] == "new_state_changing_tool":
+                    lines.append(f"- new state-changing tool appeared: {f['tool']!r}")
+                else:
+                    lines.append(f"- {f['kind'].replace('_', ' ')}: {f['tool']!r}")
+            try:
+                alert = RawAlert(
+                    tenant_id=UUID(notice["tenant_id"]),
+                    source="ai_inventory",
+                    title=f"MCP manifest drift: {notice['server_name']} (v{notice['version']})",
+                    description=(
+                        f"The MCP server {notice['server_name']!r} published a manifest that "
+                        "differs from the stored version. Hashes and flagged snippets only — "
+                        "tool description text never leaves the customer's process.\n" + "\n".join(lines)
+                    ),
+                    severity=severity,
+                    raw_event={"mcp_manifest_drift": notice},
+                )
+                await self._fuse_and_persist(
+                    alert,
+                    source_event_id=(f"mcp-drift:{notice['tenant_id']}:{notice['server_name']}:{notice['version']}"),
+                )
+                _METRICS["mcp_drift_alerts"] = _METRICS.get("mcp_drift_alerts", 0) + 1
+            except Exception as exc:  # noqa: BLE001 — next flush retries a fresh manifest
+                logger.warning(
+                    "mcp_drift_alert.failed",
+                    server=notice.get("server_name"),
+                    error=str(exc)[:200],
+                )
 
     async def _fuse_and_persist(self, alert: RawAlert, *, source_event_id: str | None = None, session: SessionRef | None = None) -> None:
         """Run one RawAlert through fusion, persist it, then publish it.
