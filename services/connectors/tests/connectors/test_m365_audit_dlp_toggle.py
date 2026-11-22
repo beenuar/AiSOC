@@ -31,6 +31,7 @@ from typing import Any
 
 import httpx
 import pytest
+from app.connectors import m365_audit
 from app.connectors.m365_audit import M365AuditConnector
 
 
@@ -79,9 +80,7 @@ class TestSchema:
         assert fields["include_dlp"].default in (False, "false", None)
 
     def test_the_docstring_no_longer_promises_later(self) -> None:
-        import app.connectors.m365_audit as module
-
-        assert "later" not in (module.__doc__ or ""), (
+        assert "later" not in (m365_audit.__doc__ or ""), (
             "the docstring promised the switch 'later'; now that it exists, say what is true instead"
         )
 
