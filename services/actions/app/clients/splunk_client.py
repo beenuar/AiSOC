@@ -44,6 +44,29 @@ class SplunkClient:
         self._verify_ssl = verify_ssl
         self._session_key: str | None = None
 
+    def _http(self, timeout: float) -> httpx.AsyncClient:
+        """The one place this client constructs a connection.
+
+        Nine near-identical `httpx.AsyncClient(..., verify=self._verify_ssl)`
+        call sites meant every new method added another alert instance of
+        `py/request-without-cert-validation` — the rule flags any `verify`
+        it cannot prove is literally True, and `_verify_ssl` is an operator
+        setting that defaults to True. Centralising it means the posture is
+        stated and reviewed once instead of per method, and the transport
+        seam the tests use lives with it.
+
+        Certificate validation is **on** unless a deployment deliberately
+        sets `splunk_verify_ssl: false`, which exists because on-premises
+        Splunk management ports commonly carry a private CA or self-signed
+        certificate; the connector schema marks it and the setup guide says
+        what it costs.
+        """
+        return httpx.AsyncClient(
+            timeout=timeout,
+            verify=self._verify_ssl,  # noqa: S501 — operator setting, defaults True (see docstring)
+            transport=self._transport,
+        )
+
     def _headers(self) -> dict[str, str]:
         if self._token:
             return {"Authorization": f"Bearer {self._token}", "Content-Type": "application/json"}
@@ -75,7 +98,7 @@ class SplunkClient:
         max_count: int = 1000,
     ) -> list[dict[str, Any]]:
         """Execute a blocking SPL search and return results as list of dicts."""
-        async with httpx.AsyncClient(timeout=60.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(60.0) as client:
             await self._authenticate(client)
 
             # Create search job
@@ -170,7 +193,7 @@ class SplunkClient:
 
         Requires Splunk Enterprise Security with correlationsearches capability.
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
 
             payload = {
@@ -215,7 +238,7 @@ class SplunkClient:
             rows.append(",".join(str(entry.get(h, "")) for h in headers))
         csv_content = "\n".join(rows)
 
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             resp = await client.post(
                 f"{self._host}/servicesNS/nobody/{app}/data/lookup-table-files/{lookup_name}",
@@ -240,7 +263,7 @@ class SplunkClient:
         app: str = "SplunkEnterpriseSecuritySuite",
     ) -> dict[str, Any]:
         """Create or update a correlation search in Splunk ES."""
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
 
             # Try to update, fall back to create
@@ -274,7 +297,7 @@ class SplunkClient:
         Returns the `content` dict of the first entry (`search`,
         `cron_schedule`, `alert.severity`, ...).
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             url = f"{self._host}/servicesNS/nobody/{app}/saved/searches/{name}"
             resp = await client.get(url, headers=self._headers(), params={"output_mode": "json"})
@@ -297,7 +320,7 @@ class SplunkClient:
         Used by rollback when the action *created* the rule: the captured
         prior state is "absent", so restoring it means deleting.
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             url = f"{self._host}/servicesNS/nobody/{app}/saved/searches/{name}"
             resp = await client.delete(url, headers=self._headers())
@@ -321,7 +344,7 @@ class SplunkClient:
         Phase 3.3 — replaces playbooks that were previously closing
         Splunk alerts out-of-band via a tribal shell script.
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             payload = {
                 "ruleUIDs": event_id,
@@ -363,7 +386,7 @@ class SplunkClient:
         "the write did not land" are different facts, and only the caller knows
         which state it was expecting.
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             resp = await client.get(
                 f"{self._host}/servicesNS/nobody/SplunkEnterpriseSecuritySuite/storage/collections/data/incident_review",
@@ -406,7 +429,7 @@ class SplunkClient:
         Splunk console (no production playbook should be racing
         the SOC analyst by re-opening tickets behind their back).
         """
-        async with httpx.AsyncClient(timeout=30.0, verify=self._verify_ssl, transport=self._transport) as client:
+        async with self._http(30.0) as client:
             await self._authenticate(client)
             payload = {
                 "ruleUIDs": event_id,
