@@ -139,7 +139,7 @@ class OpenSearchStore:
         samples: list[str] = []
         for item in errors or []:
             # Each item is {"<op>": {"_id": ..., "status": ..., "error": {...}}}
-            detail = next(iter(item.values()), {}) if isinstance(item, dict) else {}
+            detail: dict[str, Any] = next(iter(item.values()), {}) if isinstance(item, dict) else {}
             doc_id = str(detail.get("_id", ""))
             if doc_id:
                 rejected_ids.add(doc_id)
