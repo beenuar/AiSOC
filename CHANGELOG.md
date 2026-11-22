@@ -7,10 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [23.6.1] - 2026-11-22
+
 ### Security
 
 - **Investigation runs are now readable only by the tenant that launched
-  them** (GHSA-mpxh-f6q6-6w8g). The agents service's investigation read
+  them** (GHSA-mpxh-f6q6-6w8g, #1993). The agents service's investigation read
   routes — the status poll, `report.md`, `report.html`, `report.pdf`, the
   WebSocket stream and `GET /agent-runs/{run_id}` — authenticated the caller
   but looked the run up in the process-wide store by `run_id` alone, so a
