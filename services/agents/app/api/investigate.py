@@ -379,6 +379,12 @@ async def launch_investigation(
     _runs[run_id] = {
         "run_id": run_id,
         "case_id": case_id,
+        # The owner. Every read route compares this against the caller's
+        # resolved tenant (GHSA-mpxh-f6q6-6w8g): the store is process-wide
+        # and keyed by run_id alone, so without the comparison any
+        # authenticated tenant could read another tenant's run — status,
+        # audit log, recon/forensic/responder output and the full report.
+        "tenant_id": body.tenant_id,
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
     }
@@ -392,12 +398,25 @@ async def launch_investigation(
     )
 
 
+def _run_for_principal(run_id: str, principal: Any, *, detail: str) -> dict[str, Any]:
+    """The caller's run — or the same 404 whether it is absent or another tenant's.
+
+    Mirrors the triage poll's check (GHSA-mpxh-f6q6-6w8g): the store is
+    process-wide and keyed by run_id alone, so every read route must compare
+    the run's owner with the caller's resolved tenant. The wrong-tenant branch
+    answers with the exact shape of the not-found branch so a probing caller
+    cannot distinguish "wrong tenant" from "no such run".
+    """
+    run = _runs.get(run_id)
+    if not run or str(run.get("tenant_id")) != str(scoped_tenant_or_403(principal)):
+        raise HTTPException(status_code=404, detail=detail)
+    return run
+
+
 @router.get("/investigations/{run_id}")
 async def get_investigation(run_id: str, principal: ScopedPrincipal):
     """Poll investigation status and results."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Investigation run not found")
+    run = _run_for_principal(run_id, principal, detail="Investigation run not found")
     # Strip large fields from polling response — use dedicated endpoints instead
     slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html")}
     return slim
@@ -406,9 +425,7 @@ async def get_investigation(run_id: str, principal: ScopedPrincipal):
 @router.get("/investigations/{run_id}/report.md", response_class=PlainTextResponse)
 async def get_report_md(run_id: str, principal: ScopedPrincipal):
     """Download the Markdown incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _run_for_principal(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_md", "")
@@ -417,9 +434,7 @@ async def get_report_md(run_id: str, principal: ScopedPrincipal):
 @router.get("/investigations/{run_id}/report.html", response_class=HTMLResponse)
 async def get_report_html(run_id: str, principal: ScopedPrincipal):
     """Download the HTML incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _run_for_principal(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_html", "<html><body>No report yet.</body></html>")
@@ -430,9 +445,7 @@ async def get_report_pdf(run_id: str, principal: ScopedPrincipal):
     """Download the PDF incident report (rendered from HTML via weasyprint)."""
     from fastapi.responses import Response as FastAPIResponse
 
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _run_for_principal(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
 
@@ -487,8 +500,13 @@ async def stream_investigation(ws: WebSocket, run_id: str):
 
     await ws.accept()
     try:
-        # If a background run exists, tail it via polling
-        if run_id in _runs:
+        # If a background run exists AND belongs to this caller's tenant, tail
+        # it. A run owned by another tenant behaves exactly like no run at all
+        # (GHSA-mpxh-f6q6-6w8g): the caller falls through to the ad-hoc branch,
+        # which investigates under their own tenant — indistinguishable from
+        # the unknown-run case, so the socket is not an existence oracle.
+        _ws_run = _runs.get(run_id)
+        if _ws_run is not None and str(_ws_run.get("tenant_id")) == tenant_id:
             seen = 0
             while True:
                 run = _runs.get(run_id, {})
