@@ -381,7 +381,7 @@ async def run_lookback(
                     "tenant_id": str(tenant_id),
                     "window_start": window_start,
                     "ref": ref,
-                    "patterns": list(p.strip("%") for p in EXFIL_EVENT_PATTERNS),
+                    "patterns": [p.strip("%") for p in EXFIL_EVENT_PATTERNS],
                     "limit": _LOOKBACK_ROW_LIMIT,
                 },
             )
