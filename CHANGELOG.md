@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Five investigator strategies for the reference-service surfaces**
+  (WS7.3 of the gap-closure program): `ai-agent-misuse` (the confused-deputy
+  chase — session timeline, the agent identity's grants and calls, egress
+  matched to tool calls), `data-handling` (business-context triage of DLP
+  hits: the user's own history for this data class and destination, role
+  and HR context, prior dispositions as precedent, "blocked means
+  attempted"), `bec-payment-fraud` (mailbox rules and delegations,
+  session-vs-owner, counterpart and lookalike search — BEC rarely drops a
+  payload, so the mailbox is the crime scene), `saas-oauth-abuse` (the
+  grant that survives the password reset: scopes, consenting accounts,
+  what the app actually did), and `cloud-exposure` (who changed it, what
+  reached it while open, whether it is one of a series). Each declares the
+  pivots the depth gate grades it on (15 strategies, every pivot resolving
+  to a real tool in both directions) and has its own selection row;
+  technique match still outranks keywords. Keywords chosen not to collide
+  with the existing ten (verified by the full selection matrix).
+
+### Added
+
 - **A case reaches `resolved` only through the tenant's resolution
   contract** (WS7.2 of the gap-closure program). `resolved` was a free
   transition: the PATCH gate checked only the status ladder, the war-room
