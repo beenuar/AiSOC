@@ -2344,6 +2344,14 @@
         "name": "private_key_password",
         "required": false,
         "type": "secret"
+      },
+      {
+        "default": false,
+        "help_text": "Also subscribe to the DLP.All content type \u2014 Purview DLP rule matches across Exchange, SharePoint/OneDrive and endpoints. Off by default: the stream is high volume, and reading sensitive-data details requires the separate 'Read DLP policy events including sensitive details' permission on the app registration.",
+        "label": "Include DLP events (DLP.All)",
+        "name": "include_dlp",
+        "required": false,
+        "type": "boolean"
       }
     ],
     "oauth": {

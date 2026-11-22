@@ -17,9 +17,12 @@ fetch each blob URL to materialise the events. We cover (1) and (2) in
 ``test_connection`` / ``fetch_alerts``, and inline the blob fetch so the
 connector contract still returns flat events.
 
-Scope: we deliberately limit to Audit.* content types and skip DLP.All by
-default. DLP can be re-enabled per-instance later via ``connector_config``
-once the analyst opt-in path lands.
+Scope: the four Audit.* content types are polled by default; the noisy
+``DLP.All`` stream is a per-instance opt-in (the ``include_dlp`` schema
+field, default off) — a boolean from the wizard and a string from a
+hand-written instance row mean the same thing, and an unparseable value
+means off, because a collector that defaults to on when it cannot read its
+own switch is a poll the tenant did not ask for.
 """
 
 from __future__ import annotations
@@ -35,11 +38,21 @@ from app.connectors.ms_cert_auth import build_credential, cert_schema_fields, to
 
 logger = structlog.get_logger()
 
+
+def _truthy(value: Any) -> bool:
+    """Config toggles arrive as booleans from the wizard and as strings from
+    a hand-written instance row. Both have to mean the same thing, and an
+    unparseable value has to mean *off*."""
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 _TOKEN_URL = "https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
 _BASE = "https://manage.office.com/api/v1.0/{tenant_id}/activity/feed"
 
-# Content types we pull by default. Audit.General captures Power BI, Teams,
-# Dynamics, etc.; the noisy DLP.All stream is left off to keep volumes sane.
+# Content types pulled by default. Audit.General captures Power BI, Teams,
+# Dynamics, etc. DLP.All joins them only when the instance opts in.
 _DEFAULT_CONTENT_TYPES = (
     "Audit.AzureActiveDirectory",
     "Audit.Exchange",
@@ -84,6 +97,21 @@ class M365AuditConnector(BaseConnector):
                     help_text="Leave empty when using a certificate (recommended). Exactly one of secret or certificate is required.",
                 ),
                 *cert_schema_fields(Field),
+                Field(
+                    "include_dlp",
+                    "boolean",
+                    "Include DLP events (DLP.All)",
+                    required=False,
+                    default=False,
+                    help_text=(
+                        "Also subscribe to the DLP.All content type — Purview "
+                        "DLP rule matches across Exchange, SharePoint/OneDrive "
+                        "and endpoints. Off by default: the stream is high "
+                        "volume, and reading sensitive-data details requires "
+                        "the separate 'Read DLP policy events including "
+                        "sensitive details' permission on the app registration."
+                    ),
+                ),
             ],
             oauth=OAuthHints(
                 supported_in_hosted=True,
@@ -110,18 +138,30 @@ class M365AuditConnector(BaseConnector):
         certificate_pem: str = "",
         certificate_thumbprint: str = "",
         private_key_password: str = "",
+        include_dlp: Any = False,
+        transport: httpx.AsyncBaseTransport | None = None,
     ):
         self._tenant_id = tenant_id
         self._client_id = client_id
         self._client_secret = client_secret
         self._cert = build_credential(client_secret, certificate_pem, certificate_thumbprint, private_key_password)
         self._access_token: str | None = None
+        self._include_dlp = _truthy(include_dlp)
+        #: Test seam: a mock transport exercises the real URL construction
+        #: and content-type selection without a live tenant.
+        self._transport = transport
+
+    def content_types(self) -> tuple[str, ...]:
+        """The content types this instance polls — the switch made real."""
+        if self._include_dlp:
+            return (*_DEFAULT_CONTENT_TYPES, "DLP.All")
+        return _DEFAULT_CONTENT_TYPES
 
     # --------------------------- auth ---------------------------
 
     async def _authenticate(self) -> str:
         token_url = _TOKEN_URL.format(tenant_id=self._tenant_id)
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=15.0, transport=self._transport) as client:
             resp = await client.post(
                 token_url,
                 data={
@@ -157,7 +197,7 @@ class M365AuditConnector(BaseConnector):
             # wired up correctly" probe — it returns 200 + JSON list even
             # when zero subscriptions exist, and 403 if ActivityFeed.Read
             # admin consent is missing.
-            async with httpx.AsyncClient(timeout=15.0) as client:
+            async with httpx.AsyncClient(timeout=15.0, transport=self._transport) as client:
                 resp = await client.get(
                     f"{self._base()}/subscriptions/list",
                     headers=self._headers(),
@@ -184,7 +224,7 @@ class M365AuditConnector(BaseConnector):
         returns 200 if the subscription was created, 400 if it was already
         active. We treat both as success.
         """
-        for content_type in _DEFAULT_CONTENT_TYPES:
+        for content_type in self.content_types():
             try:
                 resp = await client.post(
                     f"{self._base()}/subscriptions/start",
@@ -224,13 +264,13 @@ class M365AuditConnector(BaseConnector):
         }
 
         events: list[dict[str, Any]] = []
-        async with httpx.AsyncClient(timeout=30.0) as client:
+        async with httpx.AsyncClient(timeout=30.0, transport=self._transport) as client:
             await self._ensure_subscriptions(client)
 
             # For each content type, list available content blobs in the
             # window then fetch each blob URI. The blob URIs are short-lived
             # (~24h) signed URLs hosted on the same management API.
-            for content_type in _DEFAULT_CONTENT_TYPES:
+            for content_type in self.content_types():
                 resp = await client.get(
                     f"{self._base()}/subscriptions/content",
                     headers=self._headers(),
