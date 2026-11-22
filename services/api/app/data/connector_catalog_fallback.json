@@ -4192,7 +4192,7 @@
     "category": "network",
     "connector_id": "zscaler",
     "connector_name": "Zscaler Internet Access",
-    "description": "Zscaler Internet Access web security logs via the ZIA API.",
+    "description": "Zscaler Internet Access admin audit logs \u2014 policy changes, portal sign-ins and API calls \u2014 via the ZIA audit log report API.",
     "docs_url": "/docs/connectors/zscaler",
     "fields": [
       {

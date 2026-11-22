@@ -21,7 +21,7 @@ import structlog
 
 from app.storage.bloom import RedisBloomFilter
 from app.storage.neo4j import Neo4jStore
-from app.storage.opensearch import OpenSearchStore
+from app.storage.opensearch import BulkIndexOutcome, OpenSearchStore, _stable_id
 from app.storage.qdrant import QdrantStore
 
 logger = structlog.get_logger(__name__)
@@ -115,11 +115,38 @@ class ThreatIntelPipeline:
                 sinks[name] = None
                 logger.warning("IOC sink write failed", sink=name, source=source, error=str(exc))
                 continue
-            for ioc in pending:
+
+            # A sink can also *refuse documents without raising* — OpenSearch
+            # reports per-item rejections (a mapping conflict, a disk
+            # flood-stage cluster block answering 429) by returning them, so
+            # the no-exception path is not "the sink accepted the batch".
+            # Marking refused documents as stored is what made a cluster
+            # block permanent: the next poll read them as duplicates and the
+            # index stayed empty after the block cleared. Only documents the
+            # sink actually accepted are recorded; refused ones are
+            # re-offered on the next poll (writes are idempotent upserts).
+            rejected_ids: frozenset[str] = frozenset()
+            if isinstance(count, BulkIndexOutcome):
+                rejected_ids = count.rejected_ids
+                accepted_count: int | None = count.accepted
+            else:
+                accepted_count = count if isinstance(count, int) else len(pending)
+
+            accepted_iocs = [
+                ioc for ioc in pending if _stable_id(ioc.get("type", ""), ioc.get("value", ""), ioc.get("source", "")) not in rejected_ids
+            ]
+            for ioc in accepted_iocs:
                 await self._bloom.add(_key(name, ioc))
                 stored_iocs.setdefault(f"{ioc.get('type', '?')}:{ioc.get('value', '?')}", ioc)
-            # OpenSearch returns its bulk count; the others return None on success.
-            sinks[name] = count if isinstance(count, int) else len(pending)
+            sinks[name] = accepted_count
+            if rejected_ids:
+                logger.warning(
+                    "IOC sink rejected documents; they will be re-offered next poll",
+                    sink=name,
+                    source=source,
+                    rejected=len(rejected_ids),
+                    reasons=list(count.error_sample) if isinstance(count, BulkIndexOutcome) else None,
+                )
 
         new_count = len(stored_iocs)
         duplicates = len(iocs) - new_count

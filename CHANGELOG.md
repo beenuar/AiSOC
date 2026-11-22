@@ -7,7 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Fixed
+
+- **A threat-intel sink that refuses documents no longer has them marked as
+  stored** (found on a live stack whose OpenSearch sat behind a disk
+  flood-stage block). `bulk_index_iocs` used `async_bulk(raise_on_error=False)`,
+  which reports per-item rejections by *returning* them — so a cluster-block
+  429 came back through the no-exception path, the pipeline recorded its
+  per-sink dedup keys for documents the sink had refused, and every later
+  poll read them as duplicates: the KEV corpus lived in Qdrant and Neo4j
+  while `threatintel-iocs` held zero documents, permanently — the index
+  `match_ioc_values` (actor attribution) reads. The writer now returns the
+  rejected document ids and the vendor's reasons (the warning log used to
+  say only "4 bulk errors", hiding the one string an operator needed), and
+  the pipeline withholds exactly the refused documents from its dedup record
+  so they are re-offered on the next poll once the sink recovers — writes
+  are idempotent upserts, so the backfill costs re-requests, never
+  duplicates.
+- **The Zscaler connector reads a feed ZIA actually serves.** It POSTed
+  `startTime/endTime/pageSize` to `/api/v1/webApplicationRules` — in
+  Zscaler's published API that path is Cloud App Control **policy** CRUD
+  (the only POST creates a rule), so the request matched no route and the
+  stream had never returned an event on any deployment; independently, its
+  key obfuscation skipped half of Zscaler's published algorithm, so even
+  authentication could never have succeeded. ZIA publishes no pull API for
+  web transaction logs (NSS push only); the one documented pull feed is the
+  **admin audit log report**, and the connector now drives it end to end —
+  create the report for the window, poll `statusId` to `COMPLETE`, download
+  and parse the CSV (preamble rows, admin-timezone timestamps, id-less rows
+  given a stable digest id) — with an event-time cursor plus one-interval
+  overlap (#1970/#1971), continuation across the vendor's 1,000-record
+  report cap with the cap announced when the page bound binds, and no
+  invented severity (audit entries publish none). The connector-paging debt
+  ceiling falls 48 → 47.
+- **A crashed realtime Kafka consumer is disconnected before it is
+  replaced.** The supervisor reattached correctly (16/16 over a four-day
+  soak) but never tore the crashed instance down, so each kafkajs crash
+  (offset-manager `TypeError`, fetch timeouts) leaked a consumer's sockets
+  and timers into the process for its lifetime.
 
 ## [23.6.1] - 2026-11-22
 
