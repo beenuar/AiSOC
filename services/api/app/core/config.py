@@ -513,9 +513,7 @@ class Settings(BaseSettings):
     # enforces is a promise the product breaks silently.
     INSIDER_WATCHLIST_SWEEP_ENABLED: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "INSIDER_WATCHLIST_SWEEP_ENABLED", "AISOC_INSIDER_WATCHLIST_SWEEP_ENABLED"
-        ),
+        validation_alias=AliasChoices("INSIDER_WATCHLIST_SWEEP_ENABLED", "AISOC_INSIDER_WATCHLIST_SWEEP_ENABLED"),
     )
     INSIDER_WATCHLIST_SWEEP_INTERVAL_SECONDS: int = 900  # 15m
 
