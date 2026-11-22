@@ -78,10 +78,13 @@ def validate_record(record: RootCauseRecordIn) -> None:
         )
 
 
-async def count_resolving_ledger_entries(db: AsyncSession, citations: list[RootCauseCitationIn]) -> int:
+async def count_resolving_ledger_entries(db: AsyncSession, tenant_id: uuid.UUID, citations: list[RootCauseCitationIn]) -> int:
     """How many of the cited ``(run_id, seq)`` pairs exist in the ledger.
 
-    One query over ``investigation_events``; the caller compares against
+    One query over ``investigation_events``, **bound to the caller's
+    tenant**: without the predicate a record could "verify" by citing
+    another tenant's ledger entries — and the check itself would be an
+    existence oracle over foreign run ids. The caller compares against
     ``len(citations)`` and refuses on any shortfall, naming the gap.
     """
     if not citations:
@@ -99,9 +102,14 @@ async def count_resolving_ledger_entries(db: AsyncSession, citations: list[RootC
                 JOIN unnest(CAST(:run_ids AS uuid[]), CAST(:seqs AS int[]))
                     AS cited(run_id, seq)
                   ON e.run_id = cited.run_id AND e.seq = cited.seq
+                WHERE e.tenant_id = :tenant_id
                 """
             ),
-            {"run_ids": [p[0] for p in pairs], "seqs": [p[1] for p in pairs]},
+            {
+                "tenant_id": str(tenant_id),
+                "run_ids": [p[0] for p in pairs],
+                "seqs": [p[1] for p in pairs],
+            },
         )
     ).fetchone()
     return int(row.n if row is not None else 0)

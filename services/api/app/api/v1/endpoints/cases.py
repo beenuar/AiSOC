@@ -2352,7 +2352,7 @@ async def put_case_root_cause(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     if body.citations:
-        resolved = await case_root_cause.count_resolving_ledger_entries(db, body.citations)
+        resolved = await case_root_cause.count_resolving_ledger_entries(db, user.tenant_id, body.citations)
         wanted = len({(str(c.run_id), int(c.seq)) for c in body.citations})
         if resolved < wanted:
             raise HTTPException(
