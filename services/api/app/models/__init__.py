@@ -33,6 +33,12 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
+from app.models.lake_archive import (
+    LakeArchivePartition,
+    LakeArchivePolicy,
+    LakePortabilityExport,
+    LakeRehydration,
+)
 from app.models.llm_credential import TenantLlmCredential
 from app.models.mcp_server import McpServer
 from app.models.mssp import (
@@ -93,7 +99,14 @@ __all__ = [
     "IdentityNode",
     "InsiderIndicator",
     "InsiderPeerGroup",
+<<<<<<< HEAD
     "InsiderWatchlistPolicy",
+=======
+    "LakeArchivePartition",
+    "LakeArchivePolicy",
+    "LakePortabilityExport",
+    "LakeRehydration",
+>>>>>>> 2f5fc6ecb (feat(lake): archive tier, rehydration, portability and scoped legal holds (WS2))
     "InstitutionalMemory",
     "InvestigationRun",
     "InvestigationEvent",

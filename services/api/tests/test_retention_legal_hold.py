@@ -99,9 +99,11 @@ class _LakeRecorder:
     def __init__(self, counts: Mapping[uuid.UUID, int]):
         self._counts = counts
         self.queries: list[str] = []
+        self.params_seen: list[dict[str, Any]] = []
 
     async def __call__(self, sql: str, *_args: Any, **_kwargs: Any) -> Any:
         self.queries.append(sql)
+        self.params_seen.append(dict(_kwargs.get("params") or {}))
         if sql.startswith("SELECT count()"):
             for tenant, count in self._counts.items():
                 if str(tenant) in sql:
@@ -120,7 +122,9 @@ class _LakeResult:
 
 
 def _hold(subject_kind: str = "tenant", subject_value: str = str(TENANT), matter: str = "LIT-2026-11") -> tuple:
-    return (uuid.uuid4(), subject_kind, subject_value, matter)
+    # Mirrors the 6-column SELECT in `alerts_under_legal_hold` (migration 172
+    # added the covers_from/covers_until window; None/None = all time).
+    return (uuid.uuid4(), subject_kind, subject_value, matter, None, None)
 
 
 @pytest.fixture
@@ -169,10 +173,14 @@ class TestAHoldOutranksThePurge:
         assert run.tenants_held == 1
 
     @pytest.mark.asyncio
-    async def test_a_hold_on_a_user_still_stops_the_bulk_purge(self, patched) -> None:
-        """A bulk statement cannot evaluate a per-subject predicate row by
-        row, so the conservative reading is the only safe one: anything held
-        stops the sweep for that tenant. Over-retaining is recoverable."""
+    async def test_a_hold_on_a_user_narrows_the_purge_to_exempt_its_rows(self, patched) -> None:
+        """Deliberately supersedes the whole-tenant freeze this test used to
+        pin (WS2.4, migration 172). The old rationale — "a bulk statement
+        cannot evaluate a per-subject predicate row by row" — stopped being
+        true when the purge statements gained per-hold exemption clauses:
+        a user/host/ip hold now subtracts exactly its own rows (within its
+        window) and the REST of the tenant purges on schedule. A tenant-wide
+        hold still freezes everything, pinned by the test above this one."""
         session, lake = patched(
             holds={TENANT: [_hold(subject_kind="user", subject_value="svc-backup", matter="LIT-9")]},
             lake={TENANT: 10},
@@ -181,8 +189,15 @@ class TestAHoldOutranksThePurge:
 
         run = await retention_purge.run_once(db=session, dry_run=False)
 
-        assert lake.deletes == []
-        assert run.held_lake_rows == 10
+        # The purge RAN — the hold no longer freezes the tenant...
+        assert run.tenants[0].hold_refs == []
+        assert len(lake.deletes) == 1
+        # ...and the mutation carries the exemption for exactly the held user.
+        assert "AND NOT ((lower(user_name) = lower(%(hold_v_0)s)))" in lake.deletes[0]
+        assert lake.params_seen and lake.params_seen[-1].get("hold_v_0") == "svc-backup"
+        # The run reports the purge as a purge, not as a freeze.
+        assert run.held_lake_rows == 0
+        assert run.tenants[0].lake_rows == 10
 
     @pytest.mark.asyncio
     async def test_unreadable_hold_evidence_withholds_rather_than_proceeds(self, patched, monkeypatch) -> None:

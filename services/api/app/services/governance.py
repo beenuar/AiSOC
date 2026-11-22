@@ -42,6 +42,13 @@ __all__ = [
 ]
 
 
+#: Subject kinds whose rows the purge can exempt individually (WS2.4):
+#: these map onto columns the purge statements can test per row. Any other
+#: kind — `tenant` above all — keeps the fail-closed whole-tenant freeze,
+#: because that is what such a hold means.
+NARROWABLE_HOLD_KINDS: frozenset[str] = frozenset({"user", "host", "ip"})
+
+
 @dataclass(frozen=True)
 class LegalHold:
     id: str
@@ -49,21 +56,42 @@ class LegalHold:
     subject_value: str
     matter_ref: str | None = None
     released_at: datetime | None = None
+    #: WS2.4 (migration 172): the hold covers records whose event time is
+    #: inside this window. Null bounds mean open-ended in that direction —
+    #: a hold with neither covers all time, which is what every hold meant
+    #: before the columns existed.
+    covers_from: datetime | None = None
+    covers_until: datetime | None = None
 
     def live(self) -> bool:
         return self.released_at is None
 
-    def covers(self, subjects: dict[str, str]) -> bool:
+    def narrows_purge(self) -> bool:
+        """Whether the purge can exempt exactly this hold's rows instead of
+        freezing the whole tenant."""
+        return self.subject_kind in NARROWABLE_HOLD_KINDS
+
+    def covers(self, subjects: dict[str, str], *, at: datetime | None = None) -> bool:
         """Whether this hold covers a record with these subjects.
 
         Case-insensitive on the value: `SVC-Backup` and `svc-backup`
         are one account, and a hold that missed one spelling would
-        preserve half the evidence.
+        preserve half the evidence. When the record's own time is known,
+        the hold's window applies; a caller that cannot date the record
+        passes ``at=None`` and gets the time-unbounded answer — the
+        over-retaining direction, which is the recoverable one.
         """
         actual = subjects.get(self.subject_kind)
         if actual is None:
             return False
-        return str(actual).strip().lower() == self.subject_value.strip().lower()
+        if str(actual).strip().lower() != self.subject_value.strip().lower():
+            return False
+        if at is not None:
+            if self.covers_from is not None and at < self.covers_from:
+                return False
+            if self.covers_until is not None and at > self.covers_until:
+                return False
+        return True
 
 
 @dataclass

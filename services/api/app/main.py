@@ -42,6 +42,7 @@ from app.workers.autonomy_drift import run_forever as run_autonomy_drift
 from app.workers.case_auto_close import run_forever as run_case_auto_close
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.insider_watchlist_sweep import run_forever as run_insider_watchlist_sweep
+from app.workers.lake_archive_sweep import run_forever as run_lake_archive_sweep
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
 from app.workers.phishing_report_intake import run_forever as run_phishing_report_intake
@@ -80,6 +81,7 @@ _PHISHING_INTAKE_LOCK_TTL_SECONDS = 300
 # un-expired for far longer than the work takes.
 _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
 _INSIDER_WATCHLIST_LOCK_TTL_SECONDS = 900
+_LAKE_ARCHIVE_LOCK_TTL_SECONDS = 3600
 
 _CASE_AUTO_CLOSE_LOCK_TTL_SECONDS = 1800
 # Comfortably past one pass. The scheduler's own poll is 300s and a pass
@@ -577,6 +579,25 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.info(
             "insider_watchlist_sweep disabled; expired watchlist rows will keep elevating "
             "and the HR door will not run. Set INSIDER_WATCHLIST_SWEEP_ENABLED=true to sweep"
+    # WS2 — the archive-tier sweep (per-tenant policy rows gate the exports).
+    lake_archive_task: asyncio.Task | None = None
+    if settings.LAKE_ARCHIVE_SWEEP_ENABLED:
+        try:
+            lake_archive_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="lake_archive_sweep",
+                    ttl_seconds=_LAKE_ARCHIVE_LOCK_TTL_SECONDS,
+                    worker=run_lake_archive_sweep,
+                ),
+                name="lake_archive_sweep_worker",
+            )
+            logger.info("lake_archive_sweep worker started")
+        except Exception as exc:
+            logger.warning("lake_archive_sweep worker failed to start", error=str(exc))
+    else:
+        logger.info(
+            "lake_archive_sweep disabled; no months export, no partitions verify, "
+            "and expired rehydration tables are not dropped. Set LAKE_ARCHIVE_SWEEP_ENABLED=true"
         )
 
     case_auto_close_task: asyncio.Task | None = None
@@ -780,6 +801,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("insider_watchlist_sweep worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("insider_watchlist_sweep worker shutdown error", error=type(exc).__name__)
+    if lake_archive_task is not None and not lake_archive_task.done():
+        lake_archive_task.cancel()
+        try:
+            await lake_archive_task
+        except asyncio.CancelledError:
+            logger.debug("lake_archive_sweep worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("lake_archive_sweep worker shutdown error", error=type(exc).__name__)
 
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()

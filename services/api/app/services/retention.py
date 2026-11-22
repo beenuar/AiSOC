@@ -89,12 +89,22 @@ async def alerts_under_legal_hold(db: Any, tenant_id: uuid.UUID) -> list[governa
     """
     rows = await db.execute(
         text("""
-            SELECT id, subject_kind, subject_value, matter_ref
+            SELECT id, subject_kind, subject_value, matter_ref, covers_from, covers_until
               FROM legal_holds
              WHERE tenant_id = CAST(:t AS uuid) AND released_at IS NULL
         """).bindparams(t=str(tenant_id))
     )
-    return [governance.LegalHold(id=str(r[0]), subject_kind=str(r[1]), subject_value=str(r[2]), matter_ref=r[3]) for r in rows.all()]
+    return [
+        governance.LegalHold(
+            id=str(r[0]),
+            subject_kind=str(r[1]),
+            subject_value=str(r[2]),
+            matter_ref=r[3],
+            covers_from=r[4],
+            covers_until=r[5],
+        )
+        for r in rows.all()
+    ]
 
 
 def may_purge(

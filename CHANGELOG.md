@@ -182,6 +182,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ownership; a dry run strips credentials so the vendor sees zero
   requests; nothing-matched is a failure, not a silent success. Executor
   arms 168 → 172.
+- **The archive tier: long-term retention in an open format** (WS2 of the
+  gap-closure program; migrations 170–172). The lake's 400-day TTL is a
+  hard ceiling nothing exempts, so everything older exists only if it was
+  exported first — and now it can be, trustworthily. **Archive** (WS2.1):
+  closed `(tenant, month)` partitions export to the tenant's own
+  S3-compatible bucket as Parquet with a signed manifest (row count,
+  event-time bounds, schema + OCSF version, per-file SHA-256), written and
+  verified **inside ClickHouse** (`s3()` Parquet / RawBLOB) so there is no
+  second data path; "exported" is a claim, "verified" means the bucket was
+  read back and matched — a corrupted object fails by name, including the
+  sharp case a count check cannot see (same rows, different bytes: the
+  checksum leg alone catches it, proven live). Per-tenant policy, default
+  off; credentials vault-encrypted; WORM reported as *declared by
+  operator, not verified*. **Rehydration** (WS2.2): estimate first (bytes,
+  files, months from manifests; retrieval cost **null unless a price is
+  configured**), then an audited load — requester and reason required —
+  into an expiring scratch table the lake explorer queries under the same
+  tenant predicate `raw_events` gets, with foreign-tenant rows evicted
+  after landing because a bucket is not a tenancy boundary.
+  **Portability** (WS2.3): Parquet + signed manifest + schema document to
+  a bucket the tenant names, readable with no AiSOC code — the CI gate
+  opens it with DuckDB. **Scoped legal holds** (WS2.4): holds gain a time
+  window, and a `user`/`host`/`ip` hold now **exempts exactly its own
+  rows** from the retention purge (Postgres via the affected-* arrays,
+  ClickHouse via user/hostname/IP columns, every value a bind) while the
+  rest of the tenant purges on schedule — superseding the recorded
+  whole-tenant freeze, which a tenant-wide hold still gets because that is
+  what it means. A per-tenant retention **attestation** reports each tier
+  from its own store, "not measured" where a store cannot answer. A new
+  hourly sweep worker exports, verifies and expires; 9 live cases against
+  real ClickHouse + MinIO + Postgres wired into `integration.yml`.
 
 - **Every open case has an accountable owner and a next-action clock**
   (completing the resolution-not-escalation workstream). An owner is a person

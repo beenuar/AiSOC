@@ -22346,6 +22346,252 @@ paths:
                 $ref: '#/components/schemas/LakeSchemaResponse'
       security:
       - HTTPBearer: []
+  /api/v1/lake/archive-policy:
+    get:
+      tags:
+      - lake
+      summary: Get Archive Policy
+      description: 'The tenant''s archive policy; an absent row is the honest default
+        (off).
+
+        Credentials are reported as present/absent, never echoed.'
+      operationId: get_archive_policy_api_v1_lake_archive_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivePolicyOut'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - lake
+      summary: Put Archive Policy
+      description: 'Upsert the policy. Credentials are vault-encrypted before the
+        row is
+
+        written; omitting them on an update keeps the stored ones.'
+      operationId: put_archive_policy_api_v1_lake_archive_policy_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchivePolicyBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivePolicyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/lake/archive-partitions:
+    get:
+      tags:
+      - lake
+      summary: List Archive Partitions
+      operationId: list_archive_partitions_api_v1_lake_archive_partitions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ArchivePartitionOut'
+                type: array
+                title: Response List Archive Partitions Api V1 Lake Archive Partitions
+                  Get
+      security:
+      - HTTPBearer: []
+  /api/v1/lake/archive-partitions/run:
+    post:
+      tags:
+      - lake
+      summary: Run Archive Export
+      description: 'Export one closed month now (the sweep worker does this on schedule;
+
+        this is the operator''s explicit trigger). Refuses an open month and a
+
+        tenant without an enabled policy — with the reason, not a 500.'
+      operationId: run_archive_export_api_v1_lake_archive_partitions_run_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ArchiveRunBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivePartitionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/lake/archive-partitions/{partition_id}/verify:
+    post:
+      tags:
+      - lake
+      summary: Verify Archive Partition
+      description: 'Re-read the bucket and compare with the manifest. ''exported''
+        is a
+
+        claim; this is what makes it ''verified'' — or ''failed'', naming what
+
+        differed.'
+      operationId: verify_archive_partition_api_v1_lake_archive_partitions__partition_id__verify_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: partition_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Partition Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ArchivePartitionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/lake/rehydrations:
+    get:
+      tags:
+      - lake
+      summary: List Rehydrations
+      operationId: list_rehydrations_api_v1_lake_rehydrations_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RehydrationOut'
+                type: array
+                title: Response List Rehydrations Api V1 Lake Rehydrations Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - lake
+      summary: Create Rehydration
+      description: 'Estimate first; load only on ``confirm=true``.
+
+
+        The estimate is computed from the covering manifests — bytes, files,
+
+        months are real numbers; retrieval cost is null unless the deployment
+
+        configured a price. Every rehydration records requester and reason.'
+      operationId: create_rehydration_api_v1_lake_rehydrations_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RehydrationBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RehydrationOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/lake/portability-exports:
+    post:
+      tags:
+      - lake
+      summary: Create Portability Export
+      description: 'Export a range to a bucket the TENANT names: Parquet + signed
+        manifest
+
+        + a schema document, readable with no AiSOC code (the gate proves it
+
+        with DuckDB). Request credentials are used for the job, never persisted.'
+      operationId: create_portability_export_api_v1_lake_portability_exports_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PortabilityBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Create Portability Export Api V1 Lake Portability
+                  Exports Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/lake/retention-attestation:
+    get:
+      tags:
+      - lake
+      summary: Get Retention Attestation
+      description: 'What is retained per tier, oldest row per tier, manifests verified,
+
+        holds active — each figure from its own store, ''not measured'' where a
+
+        store cannot answer (WS2.4).'
+      operationId: get_retention_attestation_api_v1_lake_retention_attestation_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Retention Attestation Api V1 Lake Retention Attestation
+                  Get
+      security:
+      - HTTPBearer: []
   /api/v1/waitlist/signup:
     post:
       tags:
@@ -25852,6 +26098,127 @@ components:
       - created_at
       - updated_at
       title: ApprovalResponse
+    ArchivePartitionOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        month:
+          type: string
+          title: Month
+        status:
+          type: string
+          title: Status
+        row_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Row Count
+        verified_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Verified At
+        failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Reason
+      type: object
+      required:
+      - id
+      - month
+      - status
+      title: ArchivePartitionOut
+    ArchivePolicyBody:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        archive_years:
+          type: integer
+          maximum: 30.0
+          minimum: 1.0
+          title: Archive Years
+          default: 7
+        s3_endpoint:
+          type: string
+          title: S3 Endpoint
+          default: ''
+        s3_bucket:
+          type: string
+          title: S3 Bucket
+          default: ''
+        s3_region:
+          type: string
+          title: S3 Region
+          default: ''
+        s3_access_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: S3 Access Key
+        s3_secret_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: S3 Secret Key
+        worm_declared:
+          type: boolean
+          title: Worm Declared
+          default: false
+      type: object
+      title: ArchivePolicyBody
+    ArchivePolicyOut:
+      properties:
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        archive_years:
+          type: integer
+          title: Archive Years
+          default: 7
+        s3_endpoint:
+          type: string
+          title: S3 Endpoint
+          default: ''
+        s3_bucket:
+          type: string
+          title: S3 Bucket
+          default: ''
+        s3_region:
+          type: string
+          title: S3 Region
+          default: ''
+        credentials_present:
+          type: boolean
+          title: Credentials Present
+          default: false
+        worm_declared:
+          type: boolean
+          title: Worm Declared
+          default: false
+      type: object
+      required:
+      - tenant_id
+      title: ArchivePolicyOut
+    ArchiveRunBody:
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          title: Month
+      type: object
+      required:
+      - month
+      title: ArchiveRunBody
     ArtefactOut:
       properties:
         id:
@@ -37566,6 +37933,42 @@ components:
       - loaded_at
       - error
       title: PluginOut
+    PortabilityBody:
+      properties:
+        range_start:
+          type: string
+          format: date-time
+          title: Range Start
+        range_end:
+          type: string
+          format: date-time
+          title: Range End
+        s3_endpoint:
+          type: string
+          title: S3 Endpoint
+        s3_bucket:
+          type: string
+          title: S3 Bucket
+        s3_access_key:
+          type: string
+          title: S3 Access Key
+        s3_secret_key:
+          type: string
+          title: S3 Secret Key
+        reason:
+          type: string
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - range_start
+      - range_end
+      - s3_endpoint
+      - s3_bucket
+      - s3_access_key
+      - s3_secret_key
+      - reason
+      title: PortabilityBody
     PortfolioAlertOut:
       properties:
         alert_id:
@@ -39120,6 +39523,79 @@ components:
           default: My phone
       type: object
       title: RegisterBeginRequest
+    RehydrationBody:
+      properties:
+        range_start:
+          type: string
+          format: date-time
+          title: Range Start
+        range_end:
+          type: string
+          format: date-time
+          title: Range End
+        connector_type:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Connector Type
+        reason:
+          type: string
+          minLength: 3
+          title: Reason
+        confirm:
+          type: boolean
+          title: Confirm
+          default: false
+        expiry_days:
+          type: integer
+          maximum: 30.0
+          minimum: 1.0
+          title: Expiry Days
+          default: 7
+      type: object
+      required:
+      - range_start
+      - range_end
+      - reason
+      title: RehydrationBody
+    RehydrationOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        status:
+          type: string
+          title: Status
+        estimate:
+          additionalProperties: true
+          type: object
+          title: Estimate
+        table_name:
+          type: string
+          title: Table Name
+          default: ''
+        rows_loaded:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Rows Loaded
+        expires_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Expires At
+        failure_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Failure Reason
+      type: object
+      required:
+      - id
+      - status
+      - estimate
+      title: RehydrationOut
     RelatedCase:
       properties:
         id:

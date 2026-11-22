@@ -210,7 +210,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 ## What AiSOC is not
 
-- **Not a drop-in SIEM replacement.** It correlates and investigates; it does not replace long-term log retention and compliance search.
+- **Not a drop-in SIEM replacement.** It correlates and investigates. The event lake holds up to 400 days hot, and an opt-in archive tier exports closed months to your own S3-compatible bucket as signed, verified Parquet — rehydratable for investigation, exportable for portability (readable with any Parquet reader; the gate proves it with DuckDB). Compliance search over decades of archives remains SIEM territory.
 - **Not able to see telemetry you have not connected.** There is no discovery.
 - **Not autonomous by default.** Response requires explicit policy authorization and a human approver.
 - **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate self-consistency measures, not live agent accuracy — labelled as such wherever published.
