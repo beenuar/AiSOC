@@ -46,6 +46,15 @@ pattern = '\bIntezer\b'
 neutral = "an automated malware-analysis vendor"
 
 [[competitors]]
+name = "Daylight Security"
+# The brand is two common words. Banned as the brand pair ("Daylight
+# Security" / "Daylight AI", any capitalisation the \b pair allows) and as
+# the domain; the plain English word "daylight" stays usable — scheduler
+# docs legitimately say "daylight saving".
+pattern = '\bDaylight\s+(?:Security|AI)\b|\bdaylight\.ai\b'
+neutral = "the reference managed agentic-security service"
+
+[[competitors]]
 name = "Microsoft Security Copilot"
 # Two patterns, deliberately split on case. "Microsoft Security Copilot" is the
 # product and is banned however it is capitalised. Bare "Security Copilot" is
