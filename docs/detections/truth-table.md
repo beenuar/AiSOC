@@ -23,7 +23,7 @@ lever that reaches the engine is adding a spec and re-running
 | **executable (loaded by the engine)** | **2966** |
 | non-executable (provenance/coverage only) | 4442 |
 | — of which: enabled, but no compiled spec | 0 |
-| windowed rules in `windowed_ruleset.json` | 76 |
+| windowed rules in `windowed_ruleset.json` | 79 |
 
 The windowed figure is its own row rather than part of the headline because
 a windowed rule is a different kind of thing: it counts events or distinct
