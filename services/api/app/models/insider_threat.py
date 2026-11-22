@@ -32,6 +32,10 @@ class UserRiskProfile(Base):
     watchlist_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     watchlisted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     watchlisted_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    # WS4.4 (migration 168): a watchlist row is never indefinite, and it
+    # records which door listed it ('manual' | 'hr_sync').
+    watchlist_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    watchlist_source: Mapped[str] = mapped_column(String(20), default="manual")
     # timestamps
     last_evaluated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
@@ -72,3 +76,27 @@ class InsiderPeerGroup(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     criteria: Mapped[dict] = mapped_column(JSONB, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+
+
+class InsiderWatchlistPolicy(Base):
+    """Per-tenant insider-watchlist policy (WS4.4, migration 168).
+
+    One row per tenant; an absent row means every automation is off. The
+    HR door (`hr_sync_enabled`) watches `workforce_members` for departing
+    members and auto-watchlists them — automation a tenant opts into.
+    """
+
+    __tablename__ = "insider_watchlist_policies"
+
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), primary_key=True)
+    hr_sync_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    default_expiry_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    hr_grace_days: Mapped[int] = mapped_column(Integer, default=14, nullable=False)
+    lookback_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
+        onupdate=lambda: datetime.now(UTC),
+    )

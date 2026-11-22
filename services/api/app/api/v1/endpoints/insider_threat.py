@@ -18,7 +18,7 @@ not tenant configuration.
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -29,7 +29,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
-from app.models.insider_threat import InsiderIndicator, InsiderPeerGroup, UserRiskProfile
+from app.models.insider_threat import (
+    InsiderIndicator,
+    InsiderPeerGroup,
+    InsiderWatchlistPolicy,
+    UserRiskProfile,
+)
+from app.services import insider_watchlist
 
 router = APIRouter(prefix="/insider-threat", tags=["insider-threat"])
 
@@ -53,6 +59,8 @@ class RiskProfileOut(BaseModel):
     privilege_delta: int
     is_watchlisted: bool
     watchlist_reason: str | None
+    watchlist_expires_at: datetime | None = None
+    watchlist_source: str = "manual"
     last_evaluated_at: str
     updated_at: str
 
@@ -62,6 +70,38 @@ class RiskProfileOut(BaseModel):
 class WatchlistUpdate(BaseModel):
     is_watchlisted: bool
     watchlist_reason: str | None = None
+    #: Required when watchlisting — a watchlist row is never indefinite.
+    #: Omitted, the tenant's `default_expiry_days` (or 30) is applied.
+    watchlist_expires_at: datetime | None = None
+
+
+class WatchlistResult(RiskProfileOut):
+    """The PATCH response: the profile plus what watchlisting actually did.
+
+    `elevation_active` says whether a managed business-context rule now
+    matches this identity; when it cannot (`external_user_ref` is empty),
+    `elevation_gap` names the missing piece rather than implying elevation
+    silently. `lookback_case_id` is the departure-review case the
+    transition opened, when it opened one.
+    """
+
+    elevation_active: bool = False
+    elevation_gap: str | None = None
+    lookback_case_id: uuid.UUID | None = None
+
+
+class WatchlistPolicyBody(BaseModel):
+    hr_sync_enabled: bool = False
+    default_expiry_days: int = Field(30, ge=1, le=365)
+    hr_grace_days: int = Field(14, ge=1, le=90)
+    lookback_days: int = Field(30, ge=1, le=90)
+
+
+class WatchlistPolicyOut(WatchlistPolicyBody):
+    tenant_id: uuid.UUID
+    updated_at: datetime | None = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class IndicatorOut(BaseModel):
@@ -139,24 +179,96 @@ async def get_profile(
     return profile
 
 
-@router.patch("/profiles/{profile_id}/watchlist", response_model=RiskProfileOut)
+@router.patch("/profiles/{profile_id}/watchlist", response_model=WatchlistResult)
 async def update_watchlist(
     profile_id: uuid.UUID,
     body: WatchlistUpdate,
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[CurrentUser, Depends(require_permission("cases:write"))],
-) -> UserRiskProfile:
+) -> WatchlistResult:
+    """Watchlist (or clear) a profile — the switch that now does something.
+
+    Watchlisting requires a reason and an expiry (422 names the one that is
+    missing; an omitted expiry falls back to the tenant's policy default so
+    the console's one-click path still works). The transition onto the list
+    rebuilds the tenant's managed business-context rules and opens the
+    departure-review lookback case; clearing withdraws the managed rules.
+    """
     profile = await db.get(UserRiskProfile, profile_id)
     if not profile or profile.tenant_id != current_user.tenant_id:
         raise HTTPException(status_code=404, detail="Profile not found")
-    profile.is_watchlisted = body.is_watchlisted  # type: ignore[assignment]
-    profile.watchlist_reason = body.watchlist_reason  # type: ignore[assignment]
+
+    policy = await db.get(InsiderWatchlistPolicy, current_user.tenant_id)
+    lookback_days = int(policy.lookback_days) if policy else 30
+    default_days = int(policy.default_expiry_days) if policy else 30
+
+    outcome: insider_watchlist.WatchlistOutcome | None = None
     if body.is_watchlisted:
-        profile.watchlisted_at = datetime.now(UTC)  # type: ignore[assignment]
-        profile.watchlisted_by = current_user.user_id  # type: ignore[assignment]
+        expires_at = body.watchlist_expires_at or (datetime.now(UTC) + timedelta(days=default_days))
+        try:
+            outcome = await insider_watchlist.apply_watchlist(
+                db,
+                profile,
+                reason=(body.watchlist_reason or "").strip(),
+                expires_at=expires_at,
+                source="manual",
+                actor_id=current_user.user_id,
+                lookback_days=lookback_days,
+            )
+        except insider_watchlist.WatchlistValidationError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    else:
+        profile.watchlist_reason = body.watchlist_reason  # type: ignore[assignment]
+        await insider_watchlist.clear_watchlist(db, profile)
+
     await db.commit()
     await db.refresh(profile)
-    return profile
+    result = WatchlistResult.model_validate(profile)
+    if outcome is not None:
+        result.elevation_active = outcome.elevation_active
+        result.elevation_gap = outcome.elevation_gap
+        result.lookback_case_id = outcome.lookback_case_id
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Watchlist policy (the HR door's switch — tenant configuration)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/watchlist-policy", response_model=WatchlistPolicyOut)
+async def get_watchlist_policy(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> WatchlistPolicyOut:
+    """The tenant's policy; an absent row is the honest default (all off)."""
+    policy = await db.get(InsiderWatchlistPolicy, current_user.tenant_id)
+    if policy is None:
+        return WatchlistPolicyOut(tenant_id=current_user.tenant_id)
+    return WatchlistPolicyOut.model_validate(policy)
+
+
+@router.put("/watchlist-policy", response_model=WatchlistPolicyOut)
+async def put_watchlist_policy(
+    body: WatchlistPolicyBody,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: Annotated[CurrentUser, Depends(require_permission("settings:write"))],
+) -> WatchlistPolicyOut:
+    """Upsert the policy. `settings:write`, not `cases:write`: switching on
+    an automated door that watches the HR store is tenant configuration,
+    unlike watchlisting one subject, which is investigative work."""
+    policy = await db.get(InsiderWatchlistPolicy, current_user.tenant_id)
+    if policy is None:
+        policy = InsiderWatchlistPolicy(tenant_id=current_user.tenant_id)
+        db.add(policy)
+    policy.hr_sync_enabled = body.hr_sync_enabled
+    policy.default_expiry_days = body.default_expiry_days
+    policy.hr_grace_days = body.hr_grace_days
+    policy.lookback_days = body.lookback_days
+    policy.updated_by = current_user.user_id
+    await db.commit()
+    await db.refresh(policy)
+    return WatchlistPolicyOut.model_validate(policy)
 
 
 # ---------------------------------------------------------------------------

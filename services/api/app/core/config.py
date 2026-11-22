@@ -507,6 +507,18 @@ class Settings(BaseSettings):
     )
     APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
 
+    # WS4.4 — insider-watchlist sweep: expiry hygiene (all tenants) + the
+    # HR door (only tenants whose policy row opted in). On by default for
+    # the same reason approval expiry is: a recorded deadline that nothing
+    # enforces is a promise the product breaks silently.
+    INSIDER_WATCHLIST_SWEEP_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices(
+            "INSIDER_WATCHLIST_SWEEP_ENABLED", "AISOC_INSIDER_WATCHLIST_SWEEP_ENABLED"
+        ),
+    )
+    INSIDER_WATCHLIST_SWEEP_INTERVAL_SECONDS: int = 900  # 15m
+
     # Resolved->closed auto-close sweep. A human moves a case to `resolved`;
     # the system closes it after it has stayed resolved for this many days.
     #

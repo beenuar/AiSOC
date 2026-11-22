@@ -29,6 +29,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corrupts one enforcement mapping and watches two fail.
 
 ### Added
+- **The insider watchlist is a control, not a checkbox** (WS4.4 of the
+  gap-closure program). `user_risk_profiles.is_watchlisted` existed since
+  migration 014 and the console wrote it — and nothing consumed it: no
+  elevation, no expiry, no review. Now (migration 168): a watchlist row is
+  **never indefinite** (reason + future expiry required; a sweep worker
+  flips expired rows); a watchlisted identity's alerts are tagged
+  `insider-watchlist` and floored `info`/`low` → `medium` **through the
+  existing business-context path** — a machine-owned `managed_yaml`
+  document beside the analyst's verbatim `yaml_text` on the same row, same
+  engine, same auto-triage application point, parsed independently so a
+  syntax error in either document never withdraws the other's rules, and
+  guarded so the floor can never downgrade `high`/`critical`; the
+  transition onto the list opens a **departure-review case** counting
+  exfil-shaped lake activity per event type (an unreachable lake reads
+  "unknown, not zero", never 0) beside the identity's recent alerts; and
+  the **HR door** — per-tenant opt-in, default off — watches
+  `workforce_members` for terminated/last-day members and lists them with
+  the HR fact as the reason and last-day-plus-grace as the expiry,
+  idempotently, never shortening a manual row. The two grammar
+  implementations (console loader, agents worker) are held together by a
+  golden fixture both suites parse. Proven by 21 API cases, 8 agents
+  cases and a live-Postgres suite (expiry exclusion is the SQL's own
+  WHERE; the two upserts own one column each; RLS under the NOBYPASSRLS
+  role; the HR door end to end).
 
 - **Every open case has an accountable owner and a next-action clock**
   (WS7.4, completing WS7 of the gap-closure program). An owner is a person

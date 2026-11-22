@@ -21,7 +21,12 @@ from app.models.detection_rule import DetectionRule
 from app.models.easm import ExternalAsset, ExternalAssetDrift
 from app.models.identity_graph import AlertIdentityLink, IdentityEdge, IdentityNode
 from app.models.inbox import TenantInboxToken
-from app.models.insider_threat import InsiderIndicator, InsiderPeerGroup, UserRiskProfile
+from app.models.insider_threat import (
+    InsiderIndicator,
+    InsiderPeerGroup,
+    InsiderWatchlistPolicy,
+    UserRiskProfile,
+)
 from app.models.institutional_memory import InstitutionalMemory
 from app.models.investigation import (
     InvestigationArtifact,
@@ -88,6 +93,7 @@ __all__ = [
     "IdentityNode",
     "InsiderIndicator",
     "InsiderPeerGroup",
+    "InsiderWatchlistPolicy",
     "InstitutionalMemory",
     "InvestigationRun",
     "InvestigationEvent",

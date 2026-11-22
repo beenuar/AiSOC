@@ -15776,6 +15776,18 @@ paths:
       tags:
       - insider-threat
       summary: Update Watchlist
+      description: 'Watchlist (or clear) a profile — the switch that now does something.
+
+
+        Watchlisting requires a reason and an expiry (422 names the one that is
+
+        missing; an omitted expiry falls back to the tenant''s policy default so
+
+        the console''s one-click path still works). The transition onto the list
+
+        rebuilds the tenant''s managed business-context rules and opens the
+
+        departure-review lookback case; clearing withdraws the managed rules.'
       operationId: update_watchlist_api_v1_insider_threat_profiles__profile_id__watchlist_patch
       security:
       - HTTPBearer: []
@@ -15799,13 +15811,61 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RiskProfileOut'
+                $ref: '#/components/schemas/WatchlistResult'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/insider-threat/watchlist-policy:
+    get:
+      tags:
+      - insider-threat
+      summary: Get Watchlist Policy
+      description: The tenant's policy; an absent row is the honest default (all off).
+      operationId: get_watchlist_policy_api_v1_insider_threat_watchlist_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistPolicyOut'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - insider-threat
+      summary: Put Watchlist Policy
+      description: 'Upsert the policy. `settings:write`, not `cases:write`: switching
+        on
+
+        an automated door that watches the HR store is tenant configuration,
+
+        unlike watchlisting one subject, which is investigative work.'
+      operationId: put_watchlist_policy_api_v1_insider_threat_watchlist_policy_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WatchlistPolicyBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WatchlistPolicyOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/insider-threat/indicators:
     get:
       tags:
@@ -16942,6 +17002,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/business-context/managed-rules:
+    get:
+      tags:
+      - business-context
+      summary: Get Managed Rules
+      operationId: get_managed_rules_api_v1_business_context_managed_rules_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ManagedRulesOut'
+      security:
+      - HTTPBearer: []
   /api/v1/business-context/rules:
     get:
       tags:
@@ -34596,6 +34671,32 @@ components:
       required:
       - sha256
       title: LookupRequest
+    ManagedRulesOut:
+      properties:
+        managed_yaml:
+          type: string
+          title: Managed Yaml
+        note:
+          type: string
+          title: Note
+          default: Managed by the insider watchlist; regenerated on every watchlist
+            change. Edit the watchlist, not this document.
+      type: object
+      required:
+      - managed_yaml
+      title: ManagedRulesOut
+      description: 'The machine-owned half of the rule set, read-only (WS4.4).
+
+
+        `managed_yaml` is regenerated whole by the insider watchlist and applied
+
+        by the triage worker beside the authored rules. It is exposed so an
+
+        analyst can *see* why an alert was elevated — and deliberately has no
+
+        write route: the console save path owns `yaml_text` only, and the two
+
+        documents never clobber each other.'
     MarketplaceItemSummary:
       properties:
         id:
@@ -39483,6 +39584,16 @@ components:
           - type: string
           - type: 'null'
           title: Watchlist Reason
+        watchlist_expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Watchlist Expires At
+        watchlist_source:
+          type: string
+          title: Watchlist Source
+          default: manual
         last_evaluated_at:
           type: string
           title: Last Evaluated At
@@ -45038,6 +45149,182 @@ components:
       - last_synced_at
       - last_error
       title: WarRoomModel
+    WatchlistPolicyBody:
+      properties:
+        hr_sync_enabled:
+          type: boolean
+          title: Hr Sync Enabled
+          default: false
+        default_expiry_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Default Expiry Days
+          default: 30
+        hr_grace_days:
+          type: integer
+          maximum: 90.0
+          minimum: 1.0
+          title: Hr Grace Days
+          default: 14
+        lookback_days:
+          type: integer
+          maximum: 90.0
+          minimum: 1.0
+          title: Lookback Days
+          default: 30
+      type: object
+      title: WatchlistPolicyBody
+    WatchlistPolicyOut:
+      properties:
+        hr_sync_enabled:
+          type: boolean
+          title: Hr Sync Enabled
+          default: false
+        default_expiry_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Default Expiry Days
+          default: 30
+        hr_grace_days:
+          type: integer
+          maximum: 90.0
+          minimum: 1.0
+          title: Hr Grace Days
+          default: 14
+        lookback_days:
+          type: integer
+          maximum: 90.0
+          minimum: 1.0
+          title: Lookback Days
+          default: 30
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - tenant_id
+      title: WatchlistPolicyOut
+    WatchlistResult:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        tenant_id:
+          type: string
+          format: uuid
+          title: Tenant Id
+        user_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: User Id
+        external_user_ref:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: External User Ref
+        risk_score:
+          type: number
+          title: Risk Score
+        risk_tier:
+          type: string
+          title: Risk Tier
+        failed_auth_24h:
+          type: integer
+          title: Failed Auth 24H
+        off_hours_events_7d:
+          type: integer
+          title: Off Hours Events 7D
+        data_staging_score:
+          type: number
+          title: Data Staging Score
+        peer_anomaly_score:
+          type: number
+          title: Peer Anomaly Score
+        privilege_delta:
+          type: integer
+          title: Privilege Delta
+        is_watchlisted:
+          type: boolean
+          title: Is Watchlisted
+        watchlist_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Watchlist Reason
+        watchlist_expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Watchlist Expires At
+        watchlist_source:
+          type: string
+          title: Watchlist Source
+          default: manual
+        last_evaluated_at:
+          type: string
+          title: Last Evaluated At
+        updated_at:
+          type: string
+          title: Updated At
+        elevation_active:
+          type: boolean
+          title: Elevation Active
+          default: false
+        elevation_gap:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Elevation Gap
+        lookback_case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Lookback Case Id
+      type: object
+      required:
+      - id
+      - tenant_id
+      - user_id
+      - external_user_ref
+      - risk_score
+      - risk_tier
+      - failed_auth_24h
+      - off_hours_events_7d
+      - data_staging_score
+      - peer_anomaly_score
+      - privilege_delta
+      - is_watchlisted
+      - watchlist_reason
+      - last_evaluated_at
+      - updated_at
+      title: WatchlistResult
+      description: 'The PATCH response: the profile plus what watchlisting actually
+        did.
+
+
+        `elevation_active` says whether a managed business-context rule now
+
+        matches this identity; when it cannot (`external_user_ref` is empty),
+
+        `elevation_gap` names the missing piece rather than implying elevation
+
+        silently. `lookback_case_id` is the departure-review case the
+
+        transition opened, when it opened one.'
     WatchlistUpdate:
       properties:
         is_watchlisted:
@@ -45048,6 +45335,12 @@ components:
           - type: string
           - type: 'null'
           title: Watchlist Reason
+        watchlist_expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Watchlist Expires At
       type: object
       required:
       - is_watchlisted

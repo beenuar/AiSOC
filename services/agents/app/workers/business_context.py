@@ -345,6 +345,33 @@ def apply_rules(alert: dict[str, Any], rules: list[BusinessContextRule]) -> Busi
 _TENANT_CACHE_TTL_SECONDS = 30.0
 
 
+def _rules_from_row(yaml_text: str, managed_yaml: str, *, tenant_id: str = "?") -> list[BusinessContextRule]:
+    """Parse a rule-set row's two documents and return their union.
+
+    ``yaml_text`` is the analyst's verbatim artifact; ``managed_yaml`` is the
+    machine-owned half (insider-watchlist elevation, migration 168). They are
+    parsed **independently** so a syntax error in one never takes the other
+    down: the analyst breaking their draft must not withdraw watchlist
+    elevation, and a managed-rule bug must not disable the tenant's
+    suppressions. Authored rules come first; the engine orders by ``priority``
+    anyway, so concatenation order only breaks ties.
+    """
+    rules: list[BusinessContextRule] = []
+    for label, doc in (("authored", yaml_text), ("managed", managed_yaml)):
+        if not doc:
+            continue
+        try:
+            rules.extend(load_rules_from_yaml(doc))
+        except Exception as exc:  # noqa: BLE001 — a bad document applies none of ITS rules
+            logger.warning(
+                "business_context.tenant_parse_failed",
+                tenant_id=tenant_id,
+                document=label,
+                error=str(exc),
+            )
+    return rules
+
+
 class BusinessContextApplier:
     """Applies business-context rules from Postgres, and from a YAML file.
 
@@ -393,9 +420,16 @@ class BusinessContextApplier:
 
             conn = await asyncpg.connect(dsn, timeout=5.0)
             try:
+                # `managed_yaml` arrived with migration 168 (insider-watchlist
+                # elevation). COALESCE over a missing column would be nicer but
+                # Postgres has no such form; a deployment running new code
+                # against the old schema raises here and lands in the fail-soft
+                # arm below — authored rules degrade too, briefly, which the
+                # upgrade path (`make upgrade` migrates before starting) makes
+                # a non-event.
                 row = await conn.fetchrow(
                     """
-                    SELECT yaml_text, enabled
+                    SELECT yaml_text, managed_yaml, enabled
                     FROM aisoc_business_context_rule_sets
                     WHERE tenant_id = $1
                     """,
@@ -414,16 +448,12 @@ class BusinessContextApplier:
             return cached[1] if cached else []
 
         rules: list[BusinessContextRule] = []
-        if row is not None and row["enabled"] and row["yaml_text"]:
-            try:
-                rules = load_rules_from_yaml(row["yaml_text"])
-            except Exception as exc:  # noqa: BLE001 — a bad rule set applies none
-                logger.warning(
-                    "business_context.tenant_parse_failed",
-                    tenant_id=tenant_id,
-                    error=str(exc),
-                )
-                rules = []
+        if row is not None and row["enabled"]:
+            rules = _rules_from_row(
+                row["yaml_text"] or "",
+                row["managed_yaml"] or "",
+                tenant_id=tenant_id,
+            )
 
         self._tenant_rules[tenant_id] = (now, rules)
         return rules

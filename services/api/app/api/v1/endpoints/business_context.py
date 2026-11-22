@@ -447,6 +447,40 @@ async def _fetch_sample_alerts(
 # ---------------------------------------------------------------------------
 
 
+class ManagedRulesOut(BaseModel):
+    """The machine-owned half of the rule set, read-only (WS4.4).
+
+    `managed_yaml` is regenerated whole by the insider watchlist and applied
+    by the triage worker beside the authored rules. It is exposed so an
+    analyst can *see* why an alert was elevated — and deliberately has no
+    write route: the console save path owns `yaml_text` only, and the two
+    documents never clobber each other.
+    """
+
+    managed_yaml: str
+    note: str = "Managed by the insider watchlist; regenerated on every watchlist change. Edit the watchlist, not this document."
+
+
+@router.get("/managed-rules", response_model=ManagedRulesOut)
+async def get_managed_rules(
+    user: AuthUser,
+    db: DBSession,
+) -> ManagedRulesOut:
+    await user.require_permission_db("settings:read", db)
+    row = (
+        await db.execute(
+            text(
+                """
+                SELECT managed_yaml FROM aisoc_business_context_rule_sets
+                WHERE tenant_id = :tenant_id
+                """
+            ),
+            {"tenant_id": str(user.tenant_id)},
+        )
+    ).first()
+    return ManagedRulesOut(managed_yaml=(row[0] if row else "") or "")
+
+
 @router.get("/rules", response_model=RulesEnvelope)
 async def get_rules(
     user: AuthUser,
