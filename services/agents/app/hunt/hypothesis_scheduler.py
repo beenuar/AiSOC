@@ -60,8 +60,11 @@ WHERE enabled = TRUE
 
 _MARK_RUN_SQL = "UPDATE hunt_campaign_policies SET last_run_at = NOW() WHERE tenant_id = $1"
 
+#: The report table stores provenance (url, digest, counts, approval) and
+#: deliberately NOT the body; the hypothesis is composed from those facts.
 _APPROVED_UNCAMPAIGNED_SQL = """
-SELECT id, hypothesis FROM hunt_source_reports
+SELECT id, url, content_sha256, indicator_count, technique_count
+FROM hunt_source_reports
 WHERE tenant_id = $1 AND approved_at IS NOT NULL AND campaigned_at IS NULL
 ORDER BY approved_at
 LIMIT $2
@@ -113,11 +116,17 @@ async def select_for_tenant(conn: Any, tenant_id: str, limit: int) -> list[Selec
     selections: list[Selection] = []
     rows = await conn.fetch(_APPROVED_UNCAMPAIGNED_SQL, uuid.UUID(tenant_id), limit)
     for row in rows:
+        hypothesis = (
+            f"Hunt for activity matching the indicators and techniques of the approved "
+            f"third-party report at {row['url']} "
+            f"(report {str(row['content_sha256'])[:12]}, {row['indicator_count']} indicator(s), "
+            f"{row['technique_count']} technique(s) extracted at review time)."
+        )
         selections.append(
             Selection(
                 tenant_id=tenant_id,
-                hypothesis=str(row["hypothesis"]),
-                reason="an analyst approved this hunt request and no campaign has run it",
+                hypothesis=hypothesis,
+                reason="an analyst approved this report-sourced hunt request and no campaign has run it",
                 source="approved_request",
                 request_id=str(row["id"]),
             )

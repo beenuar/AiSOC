@@ -62,9 +62,13 @@ def _policy(max_per_tick: int = 2) -> dict[str, Any]:
 
 
 def _request(approved: bool = True, campaigned: bool = False) -> dict[str, Any]:
+    # The real table's columns: provenance, never the report body.
     return {
         "id": REQUEST_ID,
-        "hypothesis": "did anyone run certutil to fetch a payload?",
+        "url": "https://vendor.example/report/certutil-campaign",
+        "content_sha256": "a" * 64,
+        "indicator_count": 7,
+        "technique_count": 3,
         "approved_at": "2026-11-20" if approved else None,
         "campaigned_at": "done" if campaigned else None,
     }
@@ -100,7 +104,10 @@ async def test_an_approved_request_runs_once_with_its_reason_recorded(
     # The reason was recorded BEFORE the campaign ran.
     recorded = sched.ledger_module.record_event.await_args_list[0].kwargs  # type: ignore[attr-defined]  # the autouse fixture installed an AsyncMock
     assert recorded["kind"] == "campaign_selected"
-    assert "approved this hunt request" in recorded["payload"]["reason"]
+    assert "approved this report-sourced hunt request" in recorded["payload"]["reason"]
+    assert "vendor.example/report" in recorded["payload"]["hypothesis"], (
+        "the hypothesis is composed from the report row's own provenance columns"
+    )
     # The request was marked, so the next tick selects nothing.
     second = await sched.run_once(connect=_connect)
     assert second.campaigns_run == 0
