@@ -352,33 +352,29 @@ async def load_rehydration(
             # predicate into a tenant-keyed path); the mutation below is
             # the belt-and-braces that refuses to TRUST that, because a
             # bucket is not a tenancy boundary.
-            await execute_lake_query(
-                # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
-                f"INSERT INTO {table} SELECT * FROM s3(%(url)s, %(ak)s, %(sk)s, 'Parquet')",  # noqa: S608 — table name is machine-derived and regex-pinned
+            await execute_lake_query(  # nosemgrep — regex-pinned identifier; values are bound params
+                f"INSERT INTO {table} SELECT * FROM s3(%(url)s, %(ak)s, %(sk)s, 'Parquet')",  # noqa: S608 — machine-derived, regex-pinned identifier # nosemgrep
                 params={"url": dest.url(key), "ak": dest.access_key, "sk": dest.secret_key},
                 timeout_seconds=600.0,
             )
     # Evict anything that is not this tenant's, and anything outside the
     # requested connector filter — after landing, where the columns carry
     # the table's own types and no pushdown is involved.
-    await execute_lake_query(
-        # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
-        f"ALTER TABLE {table} DELETE WHERE tenant_id != toUUID(%(tenant_id)s)",  # noqa: S608
+    await execute_lake_query(  # nosemgrep — regex-pinned identifier; values are bound params
+        f"ALTER TABLE {table} DELETE WHERE tenant_id != toUUID(%(tenant_id)s)",  # noqa: S608 — machine-derived, regex-pinned identifier # nosemgrep
         params={"tenant_id": str(tenant_id)},
         extra_settings={"mutations_sync": 2},
         timeout_seconds=600.0,
     )
     if connector_type:
-        await execute_lake_query(
-            # nosemgrep — the identifier cannot be a bind; it is machine-derived and regex-pinned above
-            f"ALTER TABLE {table} DELETE WHERE connector_type != %(connector_type)s",  # noqa: S608
+        await execute_lake_query(  # nosemgrep — regex-pinned identifier; values are bound params
+            f"ALTER TABLE {table} DELETE WHERE connector_type != %(connector_type)s",  # noqa: S608 — machine-derived, regex-pinned identifier # nosemgrep
             params={"connector_type": connector_type},
             extra_settings={"mutations_sync": 2},
             timeout_seconds=600.0,
         )
-    count = await execute_lake_query(
-        # nosemgrep — regex-pinned scratch table identifier
-        f"SELECT count() FROM {table}",  # noqa: S608 — regex-pinned scratch table
+    count = await execute_lake_query(  # nosemgrep — regex-pinned identifier; values are bound params
+        f"SELECT count() FROM {table}",  # noqa: S608 — regex-pinned scratch table # nosemgrep
         timeout_seconds=60.0,
     )
     total = int(count.rows[0][0]) if count.rows else 0

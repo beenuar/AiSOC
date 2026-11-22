@@ -522,9 +522,7 @@ class Settings(BaseSettings):
     # disabled means nothing exports); the worker is hygiene, on by default.
     LAKE_ARCHIVE_SWEEP_ENABLED: bool = Field(
         default=True,
-        validation_alias=AliasChoices(
-            "LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"
-        ),
+        validation_alias=AliasChoices("LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"),
     )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
 
