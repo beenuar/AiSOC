@@ -5910,6 +5910,37 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/agent-tools/hunt-plan/propose-detection:
+    post:
+      tags:
+      - agent-tools
+      summary: Open a DRAFT detection proposal from a productive hunting campaign
+      operationId: propose_detection_from_campaign_api_v1_agent_tools_hunt_plan_propose_detection_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProposeDetectionRequest'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Propose Detection From Campaign Api V1 Agent Tools
+                  Hunt Plan Propose Detection Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/agent-tools/hunt-plan/execute:
     post:
       tags:
@@ -27124,6 +27155,36 @@ components:
         among analyst-dispositioned alerts whose ai_score landed in that bucket
 
         — i.e., the empirical hit-rate the model claimed.'
+    CampaignLead:
+      properties:
+        question:
+          type: string
+          maxLength: 500
+          title: Question
+        findings:
+          type: integer
+          minimum: 1.0
+          title: Findings
+      type: object
+      required:
+      - question
+      - findings
+      title: CampaignLead
+    CampaignStepRef:
+      properties:
+        question:
+          type: string
+          maxLength: 500
+          title: Question
+        plan:
+          additionalProperties: true
+          type: object
+          title: Plan
+      type: object
+      required:
+      - question
+      - plan
+      title: CampaignStepRef
     CapabilitiesResponse:
       properties:
         connectors:
@@ -38188,6 +38249,35 @@ components:
       - created_at
       - updated_at
       title: ProposalResponse
+    ProposeDetectionRequest:
+      properties:
+        hypothesis:
+          type: string
+          maxLength: 1000
+          minLength: 3
+          title: Hypothesis
+        coverage:
+          additionalProperties: true
+          type: object
+          title: Coverage
+        leads:
+          items:
+            $ref: '#/components/schemas/CampaignLead'
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Leads
+        steps:
+          items:
+            $ref: '#/components/schemas/CampaignStepRef'
+          type: array
+          maxItems: 8
+          title: Steps
+      type: object
+      required:
+      - hypothesis
+      - leads
+      title: ProposeDetectionRequest
     ProviderInfo:
       properties:
         name:

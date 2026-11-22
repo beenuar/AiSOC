@@ -776,6 +776,11 @@ RATCHET: dict[str, str] = {
         "COUNT(DISTINCT tenant_id) of tenants in shadow mode — a fleet-wide gauge for one log "
         "line. It returns a number, never a tenant's rows"
     ),
+    "services/agents/app/hunt/hypothesis_scheduler.py::<module>::hunt_campaign_policies": (
+        "the hypothesis scheduler's policy enumeration (WS6.2): SELECT every enabled, due "
+        "policy row, after which every selection, campaign and marking is bound to that "
+        "row's own tenant_id — the enumeration-then-scoped-work shape"
+    ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
         "This is the UPDATE beside the no-deadline count already recorded above for "
@@ -949,7 +954,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 82
+MAX_RATCHET = 83
 
 
 # ---------------------------------------------------------------------------
