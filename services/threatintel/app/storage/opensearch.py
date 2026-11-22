@@ -135,9 +135,12 @@ class OpenSearchStore:
             )
 
         success, errors = await helpers.async_bulk(self._os, actions, raise_on_error=False)
+        # With stats_only unset the helper returns the error *items*; the
+        # stubs type the slot as ``int | list`` for the stats_only form.
+        error_items: list[Any] = errors if isinstance(errors, list) else []
         rejected_ids: set[str] = set()
         samples: list[str] = []
-        for item in errors or []:
+        for item in error_items:
             # Each item is {"<op>": {"_id": ..., "status": ..., "error": {...}}}
             detail: dict[str, Any] = next(iter(item.values()), {}) if isinstance(item, dict) else {}
             doc_id = str(detail.get("_id", ""))
@@ -147,10 +150,10 @@ class OpenSearchStore:
                 err = detail.get("error")
                 reason = f"{err.get('type', 'unknown')}: {err.get('reason', '')}" if isinstance(err, dict) else str(err)
                 samples.append(f"status={detail.get('status', '?')} {reason}"[:300])
-        if errors:
+        if error_items:
             logger.warning(
                 "OpenSearch bulk errors",
-                count=len(errors),
+                count=len(error_items),
                 sample=samples,
             )
         return BulkIndexOutcome(
