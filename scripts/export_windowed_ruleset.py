@@ -429,6 +429,83 @@ WINDOWED_RULES: list[dict] = [
         # the proxy for already recorded. A threshold rule cannot express it
         # — that is the whole reason 3.2's ordered sequences exist.
     },
+    # ── WS5: AI-session rules ────────────────────────────────────────────
+    # Natively authored (AI-runtime telemetry is none of the four published
+    # product groups); the template-coupling pin in
+    # services/fusion/tests/test_ai_session_rules.py holds every field these
+    # read to the ai ingest templates' field_map, so a template rename fails
+    # by name rather than as a rule that silently never fires again.
+    {
+        "id": "wd-ai-session-untrusted-then-secret-then-egress",
+        "name": "AI session: untrusted content, then a secret-bearing prompt, then an egress-capable tool",
+        "category": "application",
+        "severity": "high",
+        "mitre": ["T1566", "T1041"],
+        "group_by": "session_id",
+        "ordered": True,
+        "window_seconds": 3600,
+        "sequence": [
+            {
+                "finding_type_in": [
+                    "prompt_injection",
+                    "untrusted_content",
+                    "guardrail_violation",
+                    "excessive_agency",
+                ]
+            },
+            {
+                "prompt_secret_kinds_has_any": [
+                    "aws_access_key",
+                    "github_token",
+                    "openai_key",
+                    "slack_token",
+                    "private_key",
+                    "jwt",
+                ]
+            },
+            {
+                "tool_name_contains_any": [
+                    "send",
+                    "post",
+                    "upload",
+                    "http",
+                    "fetch",
+                    "mail",
+                    "publish",
+                    "webhook",
+                    "slack",
+                ]
+            },
+        ],
+        # The session is the claim: the same three events across two
+        # sessions must NOT fire, and the negative fixture pins that.
+    },
+    {
+        "id": "wd-ai-session-tool-call-flood",
+        "name": "AI session: tool calls far above any human-driven rate",
+        "category": "application",
+        "severity": "medium",
+        "mitre": ["T1078"],
+        "match_when": {"source_type": "ai-runtime", "tool_name_neq": None},
+        "group_by": "session_id",
+        "threshold": 120,
+        "window_seconds": 300,
+    },
+    {
+        "id": "wd-ai-identical-prompt-repetition",
+        "name": "The same prompt repeated at machine rate (any session - the hash is the identity)",
+        "category": "application",
+        "severity": "medium",
+        "mitre": ["T1078"],
+        "match_when": {"source_type": "ai-runtime", "prompt_sha256_neq": None},
+        "group_by": "prompt_sha256",
+        "threshold": 50,
+        "window_seconds": 600,
+        # Grouped by the hash itself: redaction.py emits it "precisely so
+        # detection can ask: the same prompt fifty times?" — cross-session
+        # repetition of one prompt IS the signal, and the name says the
+        # scoping out loud.
+    },
 ]
 
 
