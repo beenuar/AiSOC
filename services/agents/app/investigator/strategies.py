@@ -19,7 +19,10 @@ Encoding that as data rather than prose has three consequences that matter:
 * **It is reviewable.** A strategy is a dataclass with a rationale. Adding one
   is a reviewable change rather than a prompt edit nobody can diff.
 
-Ten strategies here, covering the kill chains the corpus actually fires on.
+Fifteen strategies here, covering the kill chains the corpus actually fires
+on plus the reference-service surfaces (WS7.3): AI-agent misuse, data
+handling against business context, BEC payment fraud, SaaS OAuth abuse and
+cloud exposure.
 The registry is designed for many more; each is ~20 lines and needs its own
 selection test.
 """
@@ -362,6 +365,219 @@ STRATEGIES: tuple[Strategy, ...] = (
         min_pivots=2,
         techniques=("T1053", "T1543", "T1547", "T1546"),
         keywords=("persistence", "scheduled task", "cron", "service", "run key", "startup", "launchd"),
+    ),
+    Strategy(
+        id="ai-agent-misuse",
+        name="AI agent misuse or hijack",
+        applies_when=(
+            "An AI-runtime alert names an agent, a session, an MCP tool or a prompt: "
+            "injection findings, guardrail denials, runaway tool use, unsanctioned assets."
+        ),
+        rationale=(
+            "An agent that read attacker-influenced content and then touched something "
+            "sensitive is the modern confused deputy. The deciding evidence is what the "
+            "agent's identity did next — the grants it holds, the calls it placed, and "
+            "whether anything outside the session moved in step with it."
+        ),
+        plan=(
+            "Build the timeline of the agent's session and its service identity around the alert.",
+            "Check the OAuth grants and tokens the agent's identity holds and whether any were created or widened recently.",
+            "Pull the identity's activity from the customer's identity provider — an agent acts as the credential it carries.",
+            "Check outbound connections around the session for egress that matches the suspect tool calls.",
+            "Search the customer's SIEM for the session id, the tool names and any indicators the prompt carried.",
+            "Map what fired against the technique activity view to see whether this is one session or a pattern.",
+        ),
+        expected_pivots=(
+            "entity_timeline",
+            "oauth_grants",
+            "identity_user_activity",
+            "network_connections",
+            "siem_indicator_search",
+            "technique_activity",
+        ),
+        min_pivots=2,
+        techniques=(),
+        keywords=(
+            "ai agent",
+            "prompt injection",
+            "mcp",
+            "llm",
+            "copilot",
+            "agent session",
+            "tool call",
+            "guardrail",
+            "runaway",
+        ),
+    ),
+    Strategy(
+        id="data-handling",
+        name="Data handling against business context",
+        applies_when=(
+            "A DLP or collaboration alert names a user moving classified or labelled data: "
+            "external shares, removable media, personal destinations, departing employees."
+        ),
+        rationale=(
+            "Most DLP hits are people doing their jobs. The judgement is business context: "
+            "whether this user, in this role, moving this class of data, to this "
+            "destination, is ordinary for them and their peers — and what the DLP product "
+            "already did about it. Blocked means attempted, not leaked."
+        ),
+        plan=(
+            "Pull the user's own activity history for this data class and destination — their normal is the baseline that matters.",
+            "Check the identity provider for role, department and recent HR-relevant changes on the account.",
+            "Build the user's timeline around the event to see what else moved with it.",
+            "Check the account's authentication events for session anomalies that would turn an insider question into a takeover question.",
+            "Pull the cloud audit trail for the repository or storage the data left.",
+            "Search the customer's SIEM for prior events on the same file, destination or policy, "
+            "and read any prior dispositions as precedent.",
+            "Check the mailbox for forwarding or sharing that accompanied the movement.",
+        ),
+        expected_pivots=(
+            "identity_user_activity",
+            "entity_timeline",
+            "authentication_events",
+            "cloud_audit_lookup",
+            "siem_indicator_search",
+            "mailbox_activity",
+        ),
+        min_pivots=2,
+        techniques=("T1213", "T1052"),
+        keywords=(
+            "sensitivity label",
+            "classification",
+            "classified",
+            "insider",
+            "departing",
+            "business justification",
+            "removable media",
+            "sharepoint",
+            "onedrive",
+            "external share",
+        ),
+    ),
+    Strategy(
+        id="bec-payment-fraud",
+        name="Business email compromise and payment fraud",
+        applies_when=(
+            "An email alert names an invoice, a payment change, a vendor or an executive "
+            "impersonation — money is being redirected by words alone."
+        ),
+        rationale=(
+            "BEC rarely drops a payload, so endpoint evidence is usually silence. The "
+            "deciding evidence is the mailbox itself: who the sender really is to this "
+            "organisation, what rules and delegations appeared, and whether the account "
+            "that sent or received the money mail is still its owner's."
+        ),
+        plan=(
+            "Pull the mailbox activity for the accounts involved: new rules, delegations, unusual sends — the standard BEC footprint.",
+            "Check the account's authentication events around the mail flow for sessions that do not belong.",
+            "Check OAuth grants on the mailbox — persistent read access is the quiet form of compromise.",
+            "Build the account timeline to place the payment thread against everything else the account did.",
+            "Ask the identity provider for the account's recent sign-ins and risk assessment.",
+            "Search the customer's SIEM for the counterpart addresses, display names and any lookalike domains in the thread.",
+        ),
+        expected_pivots=(
+            "mailbox_activity",
+            "authentication_events",
+            "oauth_grants",
+            "entity_timeline",
+            "identity_user_activity",
+            "siem_indicator_search",
+        ),
+        min_pivots=2,
+        techniques=("T1534", "T1114", "T1585.002"),
+        keywords=(
+            "invoice",
+            "payment",
+            "wire transfer",
+            "bank account",
+            "bec",
+            "vendor fraud",
+            "payroll",
+            "gift card",
+            "wire fraud",
+        ),
+    ),
+    Strategy(
+        id="saas-oauth-abuse",
+        name="SaaS OAuth application abuse",
+        applies_when=(
+            "An identity or SaaS alert names an OAuth application: a new consent, a "
+            "widened scope, an unfamiliar third-party app acting on accounts."
+        ),
+        rationale=(
+            "A malicious OAuth grant is a credential theft that survives the password "
+            "reset. The deciding evidence is the grant's scope and age, which accounts "
+            "consented, and what the application actually did with the access."
+        ),
+        plan=(
+            "Enumerate the OAuth grants involved: application, scopes, consent time, and every account that granted it.",
+            "Pull the identity provider's view of the application and the consenting accounts.",
+            "Check the consenting accounts' authentication events around the consent.",
+            "Check mailbox activity for the consenting accounts — mail read scopes are the most common target.",
+            "Pull the cloud audit trail for API calls the application placed.",
+            "Build the timeline across the consenting accounts to see whether the app acted immediately or is lying dormant.",
+        ),
+        expected_pivots=(
+            "oauth_grants",
+            "identity_user_activity",
+            "authentication_events",
+            "mailbox_activity",
+            "cloud_audit_lookup",
+            "entity_timeline",
+        ),
+        min_pivots=2,
+        techniques=("T1528",),
+        keywords=(
+            "oauth",
+            "consent",
+            "app registration",
+            "third-party app",
+            "scope",
+            "refresh token",
+            "application permission",
+        ),
+    ),
+    Strategy(
+        id="cloud-exposure",
+        name="Cloud resource exposure",
+        applies_when=(
+            "A cloud-posture or audit alert names a resource made reachable: a public "
+            "bucket, an open security group, anonymous access on a store."
+        ),
+        rationale=(
+            "Exposure is a race between the change and its discovery. The deciding "
+            "evidence is who changed it, whether anything reached it while it was open, "
+            "and whether the change is one of a series."
+        ),
+        plan=(
+            "Pull the cloud audit trail for the change itself: who, from where, with which credential.",
+            "Check the changing identity's other recent activity — one exposure is often several.",
+            "Search the customer's SIEM for access to the resource while it was exposed.",
+            "Check network connections involving the resource's addresses for reads that followed the change.",
+            "Build the timeline around the change to catch staging before it and collection after it.",
+            "Map against technique activity to see whether exposure events cluster.",
+        ),
+        expected_pivots=(
+            "cloud_audit_lookup",
+            "identity_user_activity",
+            "siem_indicator_search",
+            "network_connections",
+            "entity_timeline",
+            "technique_activity",
+        ),
+        min_pivots=2,
+        techniques=("T1530", "T1190"),
+        keywords=(
+            "public bucket",
+            "publicly accessible",
+            "exposed",
+            "security group",
+            "misconfig*",
+            "anonymous access",
+            "storage account",
+            "world-readable",
+        ),
     ),
     Strategy(
         id="generic-triage",
