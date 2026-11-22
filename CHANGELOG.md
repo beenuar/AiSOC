@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Every open case has an accountable owner and a next-action clock**
+  (WS7.4, completing WS7 of the gap-closure program). An owner is a person
+  (`assigned_to_id`) or an agent run (`owner_agent_run_id`, migration 167):
+  launching an investigation claims an unowned case for the run — and never
+  steals one a person already holds, pinned by a negative control that
+  removes the two predicates and watches the test fail. `next_action_due_at`
+  is PATCHable (null clears it), and `GET /cases/attention` feeds the
+  operations dashboard — and WS8.1's shift handoff next — with open cases
+  that are unowned or overdue, each row naming its `owner_kind` and carrying
+  `overdue_seconds` as null until the due time passes, because "not due
+  yet" and "due exactly now" are different facts and a confident zero would
+  blur them.
+
+### Added
+
 - **Five investigator strategies for the reference-service surfaces**
   (WS7.3 of the gap-closure program): `ai-agent-misuse` (the confused-deputy
   chase — session timeline, the agent identity's grants and calls, egress

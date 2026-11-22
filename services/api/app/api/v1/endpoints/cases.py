@@ -241,6 +241,10 @@ class UpdateCaseRequest(BaseModel):
     compliance_frameworks: list[str] | None = None
     tags: dict[str, str] | None = None
     sla_due_at: datetime | None = None
+    #: WS7.4: the next-action clock (null clears it) and the agent-run
+    #: owner (null releases it). A person owner stays `assignee`.
+    next_action_due_at: datetime | None = None
+    owner_agent_run_id: uuid.UUID | None = None
     #: Final summary / root cause / remediation. The column has existed since
     #: migration 046 (083 on the consolidated table) and the console has
     #: always rendered a Resolution panel, but nothing could write it: this
@@ -669,6 +673,90 @@ async def create_case(
     return response
 
 
+@router.get(
+    "/attention",
+    summary="Open cases that are unowned or past their next-action time",
+)
+async def get_cases_attention(
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+) -> dict[str, Any]:
+    """The operations dashboard's attention feed (WS7.4), and what the shift
+    handoff consumes. ``owner_kind`` is person / agent_run / none;
+    ``overdue_seconds`` is null until the due time has passed — null, never
+    a confident zero, because "not due yet" and "due exactly now" are
+    different facts."""
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT id, case_number, title, status, severity,
+                       assigned_to_id, owner_agent_run_id,
+                       next_action_due_at, updated_at
+                FROM aisoc_cases
+                WHERE tenant_id = :tenant_id
+                  AND status != 'closed'
+                  AND (
+                        (assigned_to_id IS NULL AND owner_agent_run_id IS NULL)
+                        OR next_action_due_at < now()
+                      )
+                ORDER BY next_action_due_at ASC NULLS LAST, updated_at ASC
+                LIMIT 200
+                """
+            ),
+            {"tenant_id": str(user.tenant_id)},
+        )
+    ).fetchall()
+    now = datetime.now(UTC)
+    cases_out: list[dict[str, Any]] = []
+    for row in rows:
+        if row.assigned_to_id is not None:
+            owner_kind = "person"
+        elif row.owner_agent_run_id is not None:
+            owner_kind = "agent_run"
+        else:
+            owner_kind = "none"
+        due = row.next_action_due_at
+        overdue_seconds = None
+        if due is not None and due < now:
+            overdue_seconds = int((now - due).total_seconds())
+        cases_out.append(
+            {
+                "case_id": str(row.id),
+                "case_number": row.case_number,
+                "title": row.title,
+                "status": row.status,
+                "severity": row.severity,
+                "owner_kind": owner_kind,
+                "owner_agent_run_id": str(row.owner_agent_run_id) if row.owner_agent_run_id else None,
+                "next_action_due_at": due.isoformat() if due else None,
+                "overdue_seconds": overdue_seconds,
+            }
+        )
+    return {"cases": cases_out, "count": len(cases_out)}
+
+
+async def _claim_case_for_run(db: DBSession, *, tenant_id: uuid.UUID, case_id: uuid.UUID, run_id: uuid.UUID) -> None:
+    """Claim an UNOWNED case for an investigation run (WS7.4).
+
+    Both ownership columns are in the predicate: an agent must never steal
+    a case a person already holds, and a second run must not displace the
+    first. A claim that matches nothing is a no-op, not an error.
+    """
+    await db.execute(
+        text(
+            """
+            UPDATE aisoc_cases
+            SET owner_agent_run_id = :run_id, updated_at = now()
+            WHERE id = :case_id AND tenant_id = :tenant_id
+              AND assigned_to_id IS NULL
+              AND owner_agent_run_id IS NULL
+            """
+        ),
+        {"run_id": str(run_id), "case_id": str(case_id), "tenant_id": str(tenant_id)},
+    )
+
+
 # Registered BEFORE the parameterized /{case_id} routes on purpose:
 # Starlette matches in registration order, so a literal segment placed
 # after /{case_id} is swallowed as a case id and 404s.
@@ -909,6 +997,12 @@ async def update_case(
     if body.severity is not None:
         sets.append("severity = :severity")
         params["severity"] = body.severity
+    if "next_action_due_at" in body.model_fields_set:
+        sets.append("next_action_due_at = :next_action_due_at")
+        params["next_action_due_at"] = body.next_action_due_at
+    if "owner_agent_run_id" in body.model_fields_set:
+        sets.append("owner_agent_run_id = :owner_agent_run_id")
+        params["owner_agent_run_id"] = str(body.owner_agent_run_id) if body.owner_agent_run_id else None
     if body.assignee is not None:
         sets.append("assignee = :assignee")
         params["assignee"] = body.assignee
@@ -1841,7 +1935,22 @@ async def case_investigate(
     )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    return resp.json()
+    launch = resp.json()
+
+    # WS7.4: the run becomes the case's owner when nobody holds it — a case
+    # under agent investigation has an accountable party, and the attention
+    # feed stops listing it as unowned. Claim-if-unowned only: an agent
+    # never steals a case a person already holds. Never blocks the launch.
+    try:
+        launched_run_id = uuid.UUID(str(launch.get("run_id", "")))
+        await _claim_case_for_run(db, tenant_id=user.tenant_id, case_id=cid, run_id=launched_run_id)
+        await db.commit()
+    except (ValueError, TypeError):
+        pass
+    except Exception:  # noqa: BLE001 — ownership is bookkeeping, the launch is the product
+        await db.rollback()
+        logger.warning("investigate.launch.claim_failed case_id=%s", cid, exc_info=True)
+    return launch
 
 
 @router.get("/{case_id}/investigations", summary="List investigation runs for a case")

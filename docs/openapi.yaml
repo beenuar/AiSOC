@@ -1456,6 +1456,33 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/attention:
+    get:
+      tags:
+      - cases
+      summary: Open cases that are unowned or past their next-action time
+      description: 'The operations dashboard''s attention feed (WS7.4), and what the
+        shift
+
+        handoff consumes. ``owner_kind`` is person / agent_run / none;
+
+        ``overdue_seconds`` is null until the due time has passed — null, never
+
+        a confident zero, because "not due yet" and "due exactly now" are
+
+        different facts.'
+      operationId: get_cases_attention_api_v1_cases_attention_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Cases Attention Api V1 Cases Attention Get
+      security:
+      - HTTPBearer: []
   /api/v1/cases/resolution-policy:
     get:
       tags:
@@ -43958,6 +43985,18 @@ components:
             format: date-time
           - type: 'null'
           title: Sla Due At
+        next_action_due_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Next Action Due At
+        owner_agent_run_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Owner Agent Run Id
         resolution:
           anyOf:
           - type: string
