@@ -70,6 +70,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default honestly (it had claimed "subscribes to all five content types")
   and names the stricter `ActivityFeed.ReadDlp` permission that
   sensitive-data details require.
+- **`revoke_file_share`: a leaked document's sharing grants are now a
+  governed action across all four file-sharing estates** (WS4.5 of the
+  gap-closure program) — Google Drive, OneDrive/SharePoint (Microsoft
+  Graph), Box and Dropbox, as four arms of one capability. The contract's
+  three properties, proven per vendor against stateful mock servers
+  (`test_revoke_file_share_vendor_arms.py`, 14 cases): prior grants are
+  **captured before every write** (none of these APIs has a permissions
+  recycle bin — the pre-write listing is the only record of what to
+  restore); the write is **verified by read-back**, so a vendor answering
+  2xx on the DELETE while still listing the grant fails the action naming
+  what it still sees; and **rollback restores the captured grants**
+  through each vendor's own re-grant shape (Graph invite without mail,
+  Box collaboration, Dropbox quiet add, Drive exact permission) —
+  returning False when the vendor refuses, and stating the one honest
+  limit instead of papering over it: Graph, Box and Dropbox mint a *new
+  URL* when a sharing link is re-created, so a link rollback restores
+  access shape, never the circulating URL (Drive's `anyone` grant is an
+  ordinary permission and restores exactly). ANALYST approval on both
+  governance doors; `grantee`/`links`/`all` scoping always spares
+  ownership; a dry run strips credentials so the vendor sees zero
+  requests; nothing-matched is a failure, not a silent success. Executor
+  arms 168 → 172.
 
 - **Every open case has an accountable owner and a next-action clock**
   (WS7.4, completing WS7 of the gap-closure program). An owner is a person
