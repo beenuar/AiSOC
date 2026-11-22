@@ -10,12 +10,13 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import String as SAString
-from sqlalchemy import and_, cast, func, or_, select, update
+from sqlalchemy import and_, cast, func, or_, select, text, update
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
+from app.services import dlp_finding as dlp_finding_svc
 from app.services.alert_bulk_close import (
     DEFAULT_MAX_COUNT,
     MAX_BULK_CLOSE_LIMIT,
@@ -1042,6 +1043,32 @@ async def get_alert_queue(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/{alert_id}/dlp-finding", summary="The alert's normalized DLP finding, if it is one")
+async def get_alert_dlp_finding(
+    alert_id: uuid.UUID,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
+) -> dict[str, Any]:
+    """One vocabulary over Netskope, Purview-via-Defender and the M365 audit
+    trail (WS4.1): policy, rule, data classes, file, channel, destination and
+    its class, what the DLP product itself did, user and device.
+
+    ``finding: null`` is the honest answer for an alert that is not a DLP
+    event or whose source has no profile — a finding is never synthesized.
+    """
+    row = (
+        await db.execute(
+            text("SELECT connector_type, raw_event FROM alerts WHERE id = :alert_id AND tenant_id = :tenant_id"),
+            {"alert_id": str(alert_id), "tenant_id": str(current_user.tenant_id)},
+        )
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    raw = row.raw_event if isinstance(row.raw_event, dict) else {}
+    finding = dlp_finding_svc.normalise(str(row.connector_type or ""), raw)
+    return {"alert_id": str(alert_id), "finding": finding.as_dict() if finding else None}
 
 
 @router.get("/{alert_id}", response_model=AlertDetailResponse)
