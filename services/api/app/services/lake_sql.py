@@ -38,6 +38,7 @@ green and ideally extend them.
 
 from __future__ import annotations
 
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Final
@@ -58,6 +59,14 @@ ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
         "aisoc.ioc_enrichments",
     }
 )
+
+# Rehydrated archive ranges (WS2.2). A rehydration loads archived months
+# into a scratch table named by the job id — `aisoc.rehydrated_<8 hex>` —
+# with the lake's own schema, so the explorer can query it under exactly
+# the predicate regime raw_events gets: same tenant injection, same row
+# cap. The shape is pinned (hex only, fixed length) so this arm can never
+# widen into "any table whose name starts with rehydrated".
+REHYDRATED_TABLE_RE: Final[re.Pattern[str]] = re.compile(r"^aisoc\.rehydrated_[0-9a-f]{8}$")
 
 # Default schema (ClickHouse database) we resolve unqualified ``FROM <name>``
 # references against. Lets agents write ``FROM raw_events`` for terseness.
@@ -313,7 +322,7 @@ def _validate_and_rewrite_select(
             continue
 
         full = _qualified_name(table)
-        if full not in ALLOWED_TABLES:
+        if full not in ALLOWED_TABLES and not REHYDRATED_TABLE_RE.match(full):
             raise LakeSqlForbiddenError(f"table '{full}' is not in the lake allowlist")
 
         # Backfill the schema on unqualified references so the rewritten

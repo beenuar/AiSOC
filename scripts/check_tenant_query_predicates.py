@@ -799,6 +799,23 @@ RATCHET: dict[str, str] = {
         "under that tenant's own id — the same enumeration-then-scoped-work shape as "
         "fusion sessions.py's DISTINCT tenant_id entry"
     ),
+    "services/api/app/workers/lake_archive_sweep.py::<module>::lake_archive_policies": (
+        "the archive sweep's tenant enumeration (WS2.1): SELECT the tenants whose policy row "
+        "opted in, after which each tenant's months export under that tenant's own id and "
+        "credentials — the enumeration-then-scoped-work shape"
+    ),
+    "services/api/app/workers/lake_archive_sweep.py::<module>::lake_archive_partitions": (
+        "two statements: the per-tenant exported-months read is bound to the tenant being "
+        "swept (its WHERE carries :tenant_id; recorded here because the gate attributes "
+        "module-level text() constants to <module>), and the unverified-partitions claim is "
+        "the outbox shape — a bounded cross-tenant LIMIT :cap read whose every row carries the "
+        "tenant it is verified under, joined to that tenant's own policy row for credentials"
+    ),
+    "services/api/app/workers/lake_archive_sweep.py::<module>::lake_rehydrations": (
+        "two statements: the expiry claim (status='ready' AND expires_at <= now()) across "
+        "tenants — a scratch table outliving its job is retention nobody chose, whoever's it "
+        "is — and the per-row UPDATE that marks it expired by primary key"
+    ),
     "services/fusion/app/services/sessions.py::<module>::sessions": (
         "SELECT DISTINCT tenant_id of sessions due for expiry — the enumeration that drives the "
         "sweep, which then closes each tenant's sessions under its own id"
@@ -954,7 +971,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 83
+MAX_RATCHET = 86
 
 
 # ---------------------------------------------------------------------------

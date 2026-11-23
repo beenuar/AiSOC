@@ -33,6 +33,12 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
+from app.models.lake_archive import (
+    LakeArchivePartition,
+    LakeArchivePolicy,
+    LakePortabilityExport,
+    LakeRehydration,
+)
 from app.models.llm_credential import TenantLlmCredential
 from app.models.mcp_server import McpServer
 from app.models.mssp import (
@@ -94,6 +100,10 @@ __all__ = [
     "InsiderIndicator",
     "InsiderPeerGroup",
     "InsiderWatchlistPolicy",
+    "LakeArchivePartition",
+    "LakeArchivePolicy",
+    "LakePortabilityExport",
+    "LakeRehydration",
     "InstitutionalMemory",
     "InvestigationRun",
     "InvestigationEvent",

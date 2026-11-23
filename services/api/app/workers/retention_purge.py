@@ -48,6 +48,7 @@ import asyncio
 import logging
 import uuid
 from dataclasses import dataclass, field
+from dataclasses import field as dataclass_field
 from datetime import UTC, datetime
 
 from sqlalchemy import text
@@ -57,6 +58,7 @@ from app.core.config import settings
 from app.db.clickhouse import execute_lake_query
 from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
+from app.services import governance
 from app.services.retention import (
     _clamp,
     alerts_under_legal_hold,
@@ -194,59 +196,164 @@ async def _load_policies(db: AsyncSession) -> list[tuple[uuid.UUID, dict[str, in
     return out
 
 
-async def _tenant_is_held(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
-    """Matter references for every live hold covering this tenant, or [].
+@dataclass
+class HoldPosture:
+    """How this tenant's live holds bear on the sweep (WS2.4).
+
+    ``freeze_refs`` — matter refs of holds that stop the WHOLE tenant's
+    purge: tenant-wide holds (that is what they mean) and any subject kind
+    the purge statements cannot test per row. ``narrow_holds`` — holds on
+    ``user`` / ``host`` / ``ip`` subjects, whose rows the purge statements
+    exempt individually (within each hold's `covers_from`/`covers_until`
+    window) while everything else purges on schedule.
+    """
+
+    freeze_refs: list[str] = dataclass_field(default_factory=list)
+    narrow_holds: list[governance.LegalHold] = dataclass_field(default_factory=list)
+
+
+async def _hold_posture(db: AsyncSession, tenant_id: uuid.UUID) -> HoldPosture:
+    """Classify this tenant's live holds into freeze vs narrow.
 
     Read before every sweep rather than cached: a hold placed between two
     runs has to take effect on the next one, and a cache measured in hours
     is a cache that deletes evidence placed under hold this morning.
 
-    **Why any hold stops the whole tenant.** Both purges here are bulk
-    statements — one ClickHouse mutation over a tenant's aged events, one
-    `DELETE` over its aged alerts — and neither can evaluate a per-subject
-    predicate row by row without first enumerating which rows belong to the
-    held user, host or case. So the conservative reading is the only safe
-    one: if anything is held, nothing in that tenant is purged this sweep.
-    That over-retains, which is recoverable; the alternative under-retains,
-    which is not. Narrowing a hold to its own subjects is recorded as
-    follow-up in DEPTH_PROGRESS.md rather than approximated here.
+    **What narrowed, and what still freezes.** The purges used to stop the
+    whole tenant on ANY live hold, because neither bulk statement could
+    test a per-subject predicate row by row. They now can, for the subject
+    kinds that map onto row columns (`NARROWABLE_HOLD_KINDS`: user, host,
+    ip): the alerts DELETE subtracts rows matched through the affected-*
+    arrays, and the lake mutation subtracts rows matched on
+    user_name/hostname/IP — each within the hold's own time window. A
+    tenant-wide hold, or any kind outside that set, keeps the fail-closed
+    whole-tenant freeze; over-retaining is the recoverable direction.
 
-    The decision itself goes through ``may_purge`` so there is exactly one
-    place in the tree where a hold beats a purge, and it returns a decision
-    object rather than a boolean so a caller cannot read "held" as "not
-    expired".
+    The freeze decision still goes through ``may_purge`` so there is
+    exactly one place in the tree where a hold beats a purge.
     """
     holds = await alerts_under_legal_hold(db, tenant_id)
+    posture = HoldPosture()
     if not holds:
-        return []
-    decision = may_purge(
-        expired=True,
-        # The subject of a bulk tenant purge is the tenant. Every live hold
-        # in this tenant matches it, which is the fail-closed reading
-        # described above.
-        subjects={hold.subject_kind: hold.subject_value for hold in holds},
-        holds=holds,
-    )
-    if decision.may_purge:
-        return []
-    return sorted({hold.matter_ref or hold.id for hold in holds})
+        return posture
+    posture.narrow_holds = [h for h in holds if h.narrows_purge()]
+    freezing = [h for h in holds if not h.narrows_purge()]
+    if freezing:
+        decision = may_purge(
+            expired=True,
+            subjects={hold.subject_kind: hold.subject_value for hold in freezing},
+            holds=freezing,
+        )
+        if not decision.may_purge:
+            posture.freeze_refs = sorted({hold.matter_ref or hold.id for hold in freezing})
+    return posture
 
 
-async def _purge_lake(tenant_id: uuid.UUID, days: int, *, dry_run: bool) -> int:
+#: One exemption arm per narrowable subject kind, ANDed with the hold's
+#: window. Static SQL fragments with numbered binds; the composer only
+#: chooses which fragments appear, never their text.
+_ALERT_HOLD_ARMS: dict[str, str] = {
+    "user": (
+        "EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(alerts.affected_users, '[]'::jsonb)) "
+        "AS held_u(name) WHERE lower(held_u.name) = lower(:hold_v_{n}))"
+    ),
+    "host": (
+        "EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(alerts.affected_hosts, '[]'::jsonb)) "
+        "AS held_h(name) WHERE lower(held_h.name) = lower(:hold_v_{n}))"
+    ),
+    "ip": (
+        "EXISTS (SELECT 1 FROM jsonb_array_elements_text(coalesce(alerts.affected_ips, '[]'::jsonb)) "
+        "AS held_i(name) WHERE lower(held_i.name) = lower(:hold_v_{n}))"
+    ),
+}
+
+
+def build_alert_hold_exemption(
+    holds: list[governance.LegalHold],
+) -> tuple[str, dict[str, object]]:
+    """The ``AND NOT (...)`` clause exempting held alert rows, plus binds.
+
+    Empty holds → empty clause. Every value is a bind parameter; the only
+    composition is which static arm appears for which hold.
+    """
+    terms: list[str] = []
+    params: dict[str, object] = {}
+    for n, hold in enumerate(h for h in holds if h.narrows_purge()):
+        arm = _ALERT_HOLD_ARMS[hold.subject_kind].format(n=n)
+        window: list[str] = []
+        params[f"hold_v_{n}"] = hold.subject_value
+        if hold.covers_from is not None:
+            window.append(f"alerts.created_at >= :hold_from_{n}")
+            params[f"hold_from_{n}"] = hold.covers_from
+        if hold.covers_until is not None:
+            window.append(f"alerts.created_at <= :hold_until_{n}")
+            params[f"hold_until_{n}"] = hold.covers_until
+        terms.append("(" + " AND ".join([arm, *window]) + ")")
+    if not terms:
+        return "", {}
+    return " AND NOT (" + " OR ".join(terms) + ")", params
+
+
+_LAKE_HOLD_ARMS: dict[str, str] = {
+    "user": "lower(user_name) = lower(%(hold_v_{n})s)",
+    "host": "(lower(src_hostname) = lower(%(hold_v_{n})s) OR lower(dst_hostname) = lower(%(hold_v_{n})s))",
+    # IPv6 columns: compare as addresses, so '1.2.3.4' matches its mapped form.
+    "ip": "(source_ip = toIPv6OrDefault(%(hold_v_{n})s) OR dest_ip = toIPv6OrDefault(%(hold_v_{n})s))",
+}
+
+
+def build_lake_hold_exemption(
+    holds: list[governance.LegalHold],
+) -> tuple[str, dict[str, object]]:
+    """The ClickHouse ``AND NOT (...)`` clause exempting held lake rows."""
+    terms: list[str] = []
+    params: dict[str, object] = {}
+    for n, hold in enumerate(h for h in holds if h.narrows_purge()):
+        arm = _LAKE_HOLD_ARMS[hold.subject_kind].format(n=n)
+        window: list[str] = []
+        params[f"hold_v_{n}"] = hold.subject_value
+        if hold.covers_from is not None:
+            window.append(f"event_time >= %(hold_from_{n})s")
+            params[f"hold_from_{n}"] = hold.covers_from
+        if hold.covers_until is not None:
+            window.append(f"event_time <= %(hold_until_{n})s")
+            params[f"hold_until_{n}"] = hold.covers_until
+        terms.append("(" + " AND ".join([arm, *window]) + ")")
+    if not terms:
+        return "", {}
+    return " AND NOT (" + " OR ".join(terms) + ")", params
+
+
+async def _purge_lake(
+    tenant_id: uuid.UUID,
+    days: int,
+    *,
+    dry_run: bool,
+    narrow_holds: list[governance.LegalHold] | None = None,
+) -> int:
     """Delete (or count) lake events past the window. Returns the row count.
 
     ClickHouse ``ALTER TABLE … DELETE`` does not report affected rows, so even
     on the live path we count first. That costs one scan and buys an accurate
     number in the audit trail — worth it for an operation whose whole risk is
     deleting more than intended.
+
+    ``narrow_holds`` (WS2.4) subtracts each hold's rows — matched on
+    user_name / hostnames / IPs within the hold's window — from both the
+    count and the mutation, so a scoped hold protects exactly its own rows
+    while the rest of the tenant purges on schedule. The lake TTL ceiling
+    is untouched and untouchable; a hold older than `MAX_LAKE_DAYS` is only
+    satisfiable through the archive tier, which the attestation states.
     """
-    count_result = await execute_lake_query(build_lake_count_sql(tenant_id, days))
+    exempt_sql, exempt_params = build_lake_hold_exemption(narrow_holds or [])
+    count_result = await execute_lake_query(build_lake_count_sql(tenant_id, days) + exempt_sql, params=exempt_params or None)
     doomed = int(count_result.rows[0][0]) if count_result.rows else 0
     if doomed == 0 or dry_run:
         return doomed
 
     await execute_lake_query(
-        build_lake_purge_sql(tenant_id, days),
+        build_lake_purge_sql(tenant_id, days) + exempt_sql,
+        params=exempt_params or None,
         extra_settings=_MUTATIONS_SYNC,
     )
     return doomed
@@ -292,7 +399,14 @@ async def _purge_audit(db: AsyncSession, tenant_id: uuid.UUID, days: int, *, dry
     return int(removed or 0)
 
 
-async def _purge_alerts(db: AsyncSession, tenant_id: uuid.UUID, days: int, *, dry_run: bool) -> int:
+async def _purge_alerts(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    days: int,
+    *,
+    dry_run: bool,
+    narrow_holds: list[governance.LegalHold] | None = None,
+) -> int:
     """Delete (or count) alerts past the window for one tenant.
 
     ``build_alert_purge_sql`` relies on RLS for the tenant scope, which is
@@ -301,16 +415,23 @@ async def _purge_alerts(db: AsyncSession, tenant_id: uuid.UUID, days: int, *, dr
     therefore bound explicitly, as a parameter. Without this the statement
     would delete every tenant's aged alerts under the first tenant's window.
     """
+    exempt_sql, exempt_params = build_alert_hold_exemption(narrow_holds or [])
     count_sql, params = build_alert_count_sql(days)
-    count_sql += " AND tenant_id = :tenant_id"
-    params_with_tenant: dict[str, object] = {**params, "tenant_id": str(tenant_id)}
+    count_sql += " AND tenant_id = :tenant_id" + exempt_sql
+    params_with_tenant: dict[str, object] = {**params, "tenant_id": str(tenant_id), **exempt_params}
 
-    doomed = int((await db.execute(text(count_sql), params_with_tenant)).scalar_one())
+    # count_sql is machine-composed from fixed fragments; every value
+    # (tenant, days, hold subjects, windows) is a bound parameter.
+    doomed = int((await db.execute(text(count_sql), params_with_tenant)).scalar_one())  # nosemgrep
     if doomed == 0 or dry_run:
         return doomed
 
     await db.execute(
-        text("DELETE FROM alerts WHERE tenant_id = :tenant_id AND created_at < now() - make_interval(days => :days)"),
+        # exempt_sql comes from build_alert_hold_exemption: fixed fragments,
+        # every hold subject and window bound as :hold_* parameters.
+        text(  # nosemgrep
+            "DELETE FROM alerts WHERE tenant_id = :tenant_id AND created_at < now() - make_interval(days => :days)" + exempt_sql
+        ),
         params_with_tenant,
     )
     return doomed
@@ -346,8 +467,11 @@ async def run_once(
                 audit_days=int(config.get("audit_days") or 0),
             )
 
+            narrow_holds: list[governance.LegalHold] = []
             try:
-                result.hold_refs = await _tenant_is_held(db, tenant_id)
+                posture = await _hold_posture(db, tenant_id)
+                result.hold_refs = posture.freeze_refs
+                narrow_holds = posture.narrow_holds
             except Exception as exc:
                 # Unreadable hold evidence withholds the purge. The opposite
                 # default deletes evidence under litigation because a query
@@ -362,7 +486,7 @@ async def run_once(
             # a tenant with nothing to purge.
             held = result.held
             try:
-                purged = await _purge_lake(tenant_id, policy.raw_events_days, dry_run=dry_run or held)
+                purged = await _purge_lake(tenant_id, policy.raw_events_days, dry_run=dry_run or held, narrow_holds=narrow_holds)
                 if held:
                     result.held_lake_rows = purged
                 else:
@@ -378,7 +502,7 @@ async def run_once(
                 )
 
             try:
-                purged = await _purge_alerts(db, tenant_id, policy.alerts_days, dry_run=dry_run or held)
+                purged = await _purge_alerts(db, tenant_id, policy.alerts_days, dry_run=dry_run or held, narrow_holds=narrow_holds)
                 if held:
                     result.held_alert_rows = purged
                 else:

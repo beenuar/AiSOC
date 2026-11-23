@@ -33,14 +33,16 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy import text as sa_text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.config import settings as app_settings
 from app.core.logging import safe_log_value
 from app.db.clickhouse import (
     LakeQueryError,
@@ -49,7 +51,15 @@ from app.db.clickhouse import (
     execute_lake_query,
     fetch_lake_schema,
 )
+from app.models.lake_archive import (
+    LakeArchivePartition,
+    LakeArchivePolicy,
+    LakePortabilityExport,
+    LakeRehydration,
+)
 from app.models.lake_query_job import LakeQueryJob
+from app.security.credential_vault import get_vault
+from app.services import lake_archive as archive_svc
 from app.services.audit import emit_audit
 from app.services.lake_cold_query import ColdEstimateUnavailable, ScanEstimate, estimate_scan
 from app.services.lake_query_runner import cancel_job, claim_job, new_query_id, read_progress, run_job
@@ -62,6 +72,7 @@ from app.services.lake_sql import (
     LakeSqlSyntaxError,
     rewrite_for_tenant,
 )
+from app.services.retention import MAX_LAKE_DAYS, resolve_policy
 
 logger = logging.getLogger(__name__)
 
@@ -880,3 +891,537 @@ async def _audit_query_attempt(
             outcome,
             exc,
         )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Archive tier (WS2): policy, partitions, rehydration, portability,
+# attestation. Literal subpaths registered after the /query-jobs/{job_id}
+# family above — distinct first segments, no shadowing; within the archive
+# family, /archive-partitions/run registers before /{partition_id}/verify.
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class ArchivePolicyBody(BaseModel):
+    enabled: bool = False
+    archive_years: int = Field(7, ge=1, le=30)
+    s3_endpoint: str = ""
+    s3_bucket: str = ""
+    s3_region: str = ""
+    #: Write-only: accepted here, vault-encrypted at rest, never echoed back.
+    s3_access_key: str | None = None
+    s3_secret_key: str | None = None
+    worm_declared: bool = False
+
+
+class ArchivePolicyOut(BaseModel):
+    tenant_id: uuid.UUID
+    enabled: bool = False
+    archive_years: int = 7
+    s3_endpoint: str = ""
+    s3_bucket: str = ""
+    s3_region: str = ""
+    credentials_present: bool = False
+    worm_declared: bool = False
+
+
+class ArchivePartitionOut(BaseModel):
+    id: uuid.UUID
+    month: str
+    status: str
+    row_count: int | None = None
+    verified_at: str | None = None
+    failure_reason: str | None = None
+
+
+class RehydrationBody(BaseModel):
+    range_start: datetime
+    range_end: datetime
+    #: Closed vocabulary; compiled into the loader's SELECT, never caller SQL.
+    connector_type: str | None = None
+    reason: str = Field(..., min_length=3)
+    #: False: estimate only (the default — nothing moves). True: load.
+    confirm: bool = False
+    expiry_days: int = Field(7, ge=1, le=30)
+
+
+class RehydrationOut(BaseModel):
+    id: uuid.UUID
+    status: str
+    estimate: dict[str, Any]
+    table_name: str = ""
+    rows_loaded: int | None = None
+    expires_at: str | None = None
+    failure_reason: str | None = None
+
+
+class PortabilityBody(BaseModel):
+    range_start: datetime
+    range_end: datetime
+    s3_endpoint: str
+    s3_bucket: str
+    #: Per-request credentials for the tenant's own bucket. Used for the
+    #: job; never persisted.
+    s3_access_key: str
+    s3_secret_key: str
+    reason: str = Field(..., min_length=3)
+
+
+@router.get("/archive-policy", response_model=ArchivePolicyOut)
+async def get_archive_policy(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:read"))],
+) -> ArchivePolicyOut:
+    """The tenant's archive policy; an absent row is the honest default (off).
+    Credentials are reported as present/absent, never echoed."""
+
+    policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+    if policy is None:
+        return ArchivePolicyOut(tenant_id=current_user.tenant_id)
+    return ArchivePolicyOut(
+        tenant_id=policy.tenant_id,
+        enabled=policy.enabled,
+        archive_years=policy.archive_years,
+        s3_endpoint=policy.s3_endpoint,
+        s3_bucket=policy.s3_bucket,
+        s3_region=policy.s3_region,
+        credentials_present=bool(policy.s3_access_key_enc and policy.s3_secret_key_enc),
+        worm_declared=policy.worm_declared,
+    )
+
+
+@router.put("/archive-policy", response_model=ArchivePolicyOut)
+async def put_archive_policy(
+    body: ArchivePolicyBody,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> ArchivePolicyOut:
+    """Upsert the policy. Credentials are vault-encrypted before the row is
+    written; omitting them on an update keeps the stored ones."""
+
+    if body.enabled:
+        try:
+            archive_svc.validate_destination(body.s3_endpoint, body.s3_bucket)
+        except archive_svc.ArchiveConfigError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+    if policy is None:
+        policy = LakeArchivePolicy(tenant_id=current_user.tenant_id)
+        db.add(policy)
+    policy.enabled = body.enabled
+    policy.archive_years = body.archive_years
+    policy.s3_endpoint = body.s3_endpoint
+    policy.s3_bucket = body.s3_bucket
+    policy.s3_region = body.s3_region
+    policy.worm_declared = body.worm_declared
+    policy.updated_by = current_user.user_id
+    if body.s3_access_key is not None and body.s3_secret_key is not None:
+        vault = get_vault()
+        policy.s3_access_key_enc = vault.encrypt(body.s3_access_key)
+        policy.s3_secret_key_enc = vault.encrypt(body.s3_secret_key)
+    elif body.enabled and not policy.s3_access_key_enc:
+        raise HTTPException(
+            status_code=422,
+            detail="enabling the archive requires s3_access_key and s3_secret_key",
+        )
+    await db.commit()
+    await db.refresh(policy)
+    return ArchivePolicyOut(
+        tenant_id=policy.tenant_id,
+        enabled=policy.enabled,
+        archive_years=policy.archive_years,
+        s3_endpoint=policy.s3_endpoint,
+        s3_bucket=policy.s3_bucket,
+        s3_region=policy.s3_region,
+        credentials_present=bool(policy.s3_access_key_enc),
+        worm_declared=policy.worm_declared,
+    )
+
+
+@router.get("/archive-partitions", response_model=list[ArchivePartitionOut])
+async def list_archive_partitions(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> list[ArchivePartitionOut]:
+
+    rows = (
+        await db.execute(
+            select(LakeArchivePartition)
+            .where(LakeArchivePartition.tenant_id == current_user.tenant_id)
+            .order_by(LakeArchivePartition.month.desc())
+        )
+    ).scalars()
+    return [
+        ArchivePartitionOut(
+            id=p.id,
+            month=f"{p.month:%Y-%m}",
+            status=p.status,
+            row_count=(p.manifest or {}).get("row_count"),  # type: ignore[arg-type]  # JSONB int by construction
+            verified_at=p.verified_at.isoformat() if p.verified_at else None,
+            failure_reason=p.failure_reason,
+        )
+        for p in rows
+    ]
+
+
+class ArchiveRunBody(BaseModel):
+    #: "YYYY-MM"; the month must be strictly in the past (closed).
+    month: str = Field(..., pattern=r"^\d{4}-\d{2}$")
+
+
+@router.post("/archive-partitions/run", response_model=ArchivePartitionOut)
+async def run_archive_export(
+    body: ArchiveRunBody,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> ArchivePartitionOut:
+    """Export one closed month now (the sweep worker does this on schedule;
+    this is the operator's explicit trigger). Refuses an open month and a
+    tenant without an enabled policy — with the reason, not a 500."""
+
+    policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+    if policy is None or not policy.enabled:
+        raise HTTPException(status_code=422, detail="the archive policy is not enabled for this tenant")
+    month = datetime.strptime(body.month + "-01", "%Y-%m-%d").replace(tzinfo=UTC).date()
+    try:
+        dest = archive_svc.destination_from_policy(
+            {
+                "s3_endpoint": policy.s3_endpoint,
+                "s3_bucket": policy.s3_bucket,
+                "s3_access_key_enc": policy.s3_access_key_enc,
+                "s3_secret_key_enc": policy.s3_secret_key_enc,
+            }
+        )
+        manifest = await archive_svc.export_month(current_user.tenant_id, month, dest, signing_key=app_settings.SECRET_KEY)
+    except archive_svc.ArchiveConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 — the lake or the bucket refused; name it
+        logger.error("lake.archive.export_failed tenant=%s err=%s", current_user.tenant_id, exc)
+        raise HTTPException(status_code=502, detail=f"export failed: {type(exc).__name__}") from exc
+
+    existing = (
+        await db.execute(
+            select(LakeArchivePartition).where(
+                LakeArchivePartition.tenant_id == current_user.tenant_id,
+                LakeArchivePartition.month == month,
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is None:
+        existing = LakeArchivePartition(tenant_id=current_user.tenant_id, month=month)
+        db.add(existing)
+    existing.manifest = manifest
+    existing.status = "exported"
+    existing.failure_reason = None
+    existing.exported_at = datetime.now(UTC)
+    existing.verified_at = None
+    await db.commit()
+    await db.refresh(existing)
+    await emit_audit(
+        db=db,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+        action="lake.archive.export",
+        resource="lake_archive_partition",
+        resource_id=str(existing.id),
+        changes={"month": body.month, "rows": manifest.get("row_count")},
+    )
+    return ArchivePartitionOut(
+        id=existing.id,
+        month=body.month,
+        status=existing.status,
+        row_count=int(str(manifest.get("row_count", 0))) or None,
+        verified_at=None,
+        failure_reason=None,
+    )
+
+
+@router.post("/archive-partitions/{partition_id}/verify", response_model=ArchivePartitionOut)
+async def verify_archive_partition(
+    partition_id: uuid.UUID,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> ArchivePartitionOut:
+    """Re-read the bucket and compare with the manifest. 'exported' is a
+    claim; this is what makes it 'verified' — or 'failed', naming what
+    differed."""
+
+    partition = await db.get(LakeArchivePartition, partition_id)
+    if partition is None or partition.tenant_id != current_user.tenant_id:
+        raise HTTPException(status_code=404, detail="partition not found")
+    policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+    if policy is None:
+        raise HTTPException(status_code=422, detail="no archive policy row; cannot resolve the bucket")
+    dest = archive_svc.destination_from_policy(
+        {
+            "s3_endpoint": policy.s3_endpoint,
+            "s3_bucket": policy.s3_bucket,
+            "s3_access_key_enc": policy.s3_access_key_enc,
+            "s3_secret_key_enc": policy.s3_secret_key_enc,
+        }
+    )
+    problems = await archive_svc.verify_partition(dict(partition.manifest or {}), dest)
+    if problems:
+        partition.status = "failed"
+        partition.failure_reason = "; ".join(problems)
+        partition.verified_at = None
+    else:
+        partition.status = "verified"
+        partition.failure_reason = None
+        partition.verified_at = datetime.now(UTC)
+    await db.commit()
+    await db.refresh(partition)
+    return ArchivePartitionOut(
+        id=partition.id,
+        month=f"{partition.month:%Y-%m}",
+        status=partition.status,
+        row_count=(partition.manifest or {}).get("row_count"),  # type: ignore[arg-type]  # JSONB int by construction
+        verified_at=partition.verified_at.isoformat() if partition.verified_at else None,
+        failure_reason=partition.failure_reason,
+    )
+
+
+@router.post("/rehydrations", response_model=RehydrationOut)
+async def create_rehydration(
+    body: RehydrationBody,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> RehydrationOut:
+    """Estimate first; load only on ``confirm=true``.
+
+    The estimate is computed from the covering manifests — bytes, files,
+    months are real numbers; retrieval cost is null unless the deployment
+    configured a price. Every rehydration records requester and reason.
+    """
+
+    start = body.range_start.date()
+    end = body.range_end.date()
+    if start > end:
+        raise HTTPException(status_code=422, detail="range_start must be on or before range_end")
+
+    months = archive_svc.months_in_range(start, end)
+    partitions = (
+        (
+            await db.execute(
+                select(LakeArchivePartition).where(
+                    LakeArchivePartition.tenant_id == current_user.tenant_id,
+                    LakeArchivePartition.month.in_(months),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not partitions:
+        raise HTTPException(
+            status_code=422,
+            detail=f"no archived partitions cover {start}..{end}; nothing to rehydrate",
+        )
+    manifests = [dict(p.manifest or {}) for p in partitions]
+    estimate = archive_svc.estimate_from_manifests(manifests)
+
+    row = LakeRehydration(
+        tenant_id=current_user.tenant_id,
+        range_start=start,
+        range_end=end,
+        filters={"connector_type": body.connector_type} if body.connector_type else {},
+        estimate=estimate,
+        status="estimated",
+        requested_by=current_user.user_id,
+        reason=body.reason,
+        expires_at=archive_svc.rehydration_expiry(body.expiry_days),
+    )
+    db.add(row)
+    await db.flush()
+
+    if body.confirm:
+        policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+        if policy is None or not policy.s3_access_key_enc:
+            raise HTTPException(status_code=422, detail="no archive credentials to read the bucket with")
+        dest = archive_svc.destination_from_policy(
+            {
+                "s3_endpoint": policy.s3_endpoint,
+                "s3_bucket": policy.s3_bucket,
+                "s3_access_key_enc": policy.s3_access_key_enc,
+                "s3_secret_key_enc": policy.s3_secret_key_enc,
+            }
+        )
+        row.status = "loading"
+        await db.flush()
+        try:
+            table, loaded = await archive_svc.load_rehydration(
+                row.id,
+                current_user.tenant_id,
+                manifests,
+                dest,
+                connector_type=body.connector_type,
+            )
+            row.table_name = table
+            row.rows_loaded = loaded
+            row.status = "ready"
+        except Exception as exc:  # noqa: BLE001 — a failed load is a named failure
+            row.status = "failed"
+            row.failure_reason = f"{type(exc).__name__}: {exc}"[:500]
+
+    await db.commit()
+    await db.refresh(row)
+    await emit_audit(
+        db=db,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+        action="lake.rehydration." + ("load" if body.confirm else "estimate"),
+        resource="lake_rehydration",
+        resource_id=str(row.id),
+        changes={"range": f"{start}..{end}", "reason": body.reason, "status": row.status},
+    )
+    return RehydrationOut(
+        id=row.id,
+        status=row.status,
+        estimate=dict(row.estimate),
+        table_name=row.table_name,
+        rows_loaded=row.rows_loaded,
+        expires_at=row.expires_at.isoformat(),
+        failure_reason=row.failure_reason,
+    )
+
+
+@router.get("/rehydrations", response_model=list[RehydrationOut])
+async def list_rehydrations(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> list[RehydrationOut]:
+
+    rows = (
+        await db.execute(
+            select(LakeRehydration)
+            .where(LakeRehydration.tenant_id == current_user.tenant_id)
+            .order_by(LakeRehydration.created_at.desc())
+            .limit(100)
+        )
+    ).scalars()
+    return [
+        RehydrationOut(
+            id=r.id,
+            status=r.status,
+            estimate=dict(r.estimate or {}),
+            table_name=r.table_name,
+            rows_loaded=r.rows_loaded,
+            expires_at=r.expires_at.isoformat() if r.expires_at else None,
+            failure_reason=r.failure_reason,
+        )
+        for r in rows
+    ]
+
+
+@router.post("/portability-exports", response_model=dict)
+async def create_portability_export(
+    body: PortabilityBody,
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> dict:
+    """Export a range to a bucket the TENANT names: Parquet + signed manifest
+    + a schema document, readable with no AiSOC code (the gate proves it
+    with DuckDB). Request credentials are used for the job, never persisted."""
+
+    start = body.range_start.date()
+    end = body.range_end.date()
+    if start > end:
+        raise HTTPException(status_code=422, detail="range_start must be on or before range_end")
+    try:
+        archive_svc.validate_destination(body.s3_endpoint, body.s3_bucket)
+    except archive_svc.ArchiveConfigError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    job = LakePortabilityExport(
+        tenant_id=current_user.tenant_id,
+        range_start=start,
+        range_end=end,
+        s3_endpoint=body.s3_endpoint,
+        s3_bucket=body.s3_bucket,
+        requested_by=current_user.user_id,
+        reason=body.reason,
+    )
+    db.add(job)
+    await db.flush()
+
+    dest = archive_svc.Destination(
+        endpoint=body.s3_endpoint,
+        bucket=body.s3_bucket,
+        access_key=body.s3_access_key,
+        secret_key=body.s3_secret_key,
+    )
+    month_manifests: list[dict[str, Any]] = []
+    failure: str | None = None
+    for month in archive_svc.months_in_range(start, end):
+        try:
+            manifest = await archive_svc.export_month(
+                current_user.tenant_id,
+                month,
+                dest,
+                signing_key=app_settings.SECRET_KEY,
+                prefix="aisoc-portability",
+            )
+            month_manifests.append(manifest)
+        except archive_svc.ArchiveConfigError as exc:
+            # An empty or open month inside the range is recorded, not fatal.
+            month_manifests.append({"month": f"{month:%Y-%m}", "skipped": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            failure = f"{month:%Y-%m}: {type(exc).__name__}"
+            break
+
+    if failure:
+        job.status = "failed"
+        job.failure_reason = failure
+    else:
+        schema_doc = {
+            "schema_version": archive_svc.ARCHIVE_SCHEMA_VERSION,
+            "ocsf_version": archive_svc.OCSF_VERSION,
+            "format": "parquet",
+            "note": "Each month is one Parquet object; read with any Parquet reader.",
+            "months": month_manifests,
+        }
+        job.manifest = {**schema_doc, "signature": archive_svc.sign_envelope(schema_doc, signing_key=app_settings.SECRET_KEY)}
+        job.status = "complete"
+        job.completed_at = datetime.now(UTC)
+    await db.commit()
+    await emit_audit(
+        db=db,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+        action="lake.portability.export",
+        resource="lake_portability_export",
+        resource_id=str(job.id),
+        changes={"range": f"{start}..{end}", "bucket": body.s3_bucket, "status": job.status},
+    )
+    return {"id": str(job.id), "status": job.status, "manifest": job.manifest, "failure_reason": job.failure_reason}
+
+
+@router.get("/retention-attestation", response_model=dict)
+async def get_retention_attestation(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("lake:query"))],
+) -> dict:
+    """What is retained per tier, oldest row per tier, manifests verified,
+    holds active — each figure from its own store, 'not measured' where a
+    store cannot answer (WS2.4)."""
+
+    policy_row = await db.execute(
+        sa_text("SELECT raw_events_days FROM retention_policies WHERE tenant_id = :t"),
+        {"t": str(current_user.tenant_id)},
+    )
+    stored = policy_row.scalar_one_or_none()
+    lake_days = int(stored) if stored else resolve_policy(None).raw_events_days
+    lake_days = min(lake_days, MAX_LAKE_DAYS)
+    archive_policy = await db.get(LakeArchivePolicy, current_user.tenant_id)
+    return await archive_svc.retention_attestation(
+        db,
+        current_user.tenant_id,
+        lake_days=lake_days,
+        worm_declared=bool(archive_policy and archive_policy.worm_declared),
+    )

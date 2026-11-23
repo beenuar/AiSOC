@@ -516,6 +516,15 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("INSIDER_WATCHLIST_SWEEP_ENABLED", "AISOC_INSIDER_WATCHLIST_SWEEP_ENABLED"),
     )
     INSIDER_WATCHLIST_SWEEP_INTERVAL_SECONDS: int = 900  # 15m
+    # WS2 — archive-tier sweep: export closed lake months for opted-in
+    # tenants, verify exported partitions by read-back, expire rehydration
+    # scratch tables. Per-tenant policy rows do the real gating (absent or
+    # disabled means nothing exports); the worker is hygiene, on by default.
+    LAKE_ARCHIVE_SWEEP_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"),
+    )
+    LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
 
     # Resolved->closed auto-close sweep. A human moves a case to `resolved`;
     # the system closes it after it has stayed resolved for this many days.
