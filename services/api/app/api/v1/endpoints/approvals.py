@@ -37,11 +37,13 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
+from app.services import action_undo
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
 from app.services.approval_delivery import deliver_approval
 from app.services.branding.resolver import resolve_branding
@@ -118,6 +120,12 @@ class ApprovalDecisionRequest(BaseModel):
 #: free-text label — it is caller-supplied, and separation of duties
 #: evaluated against it would be forgeable from the body.
 _REQUESTER_KEY = "requester_principal"
+
+#: ``action.kind`` for an approval that gates the *reversal* of a completed
+#: action rather than a forward execution. Dispatching one re-drives the undo
+#: with the deciding identity bound as approver; it never reaches
+#: ``submit_action``, which would run the forward verb a second time.
+_UNDO_KIND = "action_undo"
 
 #: Dispatch states recorded on the approval row.
 #:
@@ -491,7 +499,7 @@ async def decide_approval(
     }
     await db.commit()
 
-    dispatch = await _dispatch_decision(row, user, approve=body.decision == "approve")
+    dispatch = await _dispatch_decision(row, user, approve=body.decision == "approve", db=db)
     row.action = {**(row.action or {}), "dispatch": dispatch}
 
     await db.commit()
@@ -531,6 +539,7 @@ async def _dispatch_decision(
     user: AuthUser,
     *,
     approve: bool,
+    db: AsyncSession | None = None,
 ) -> dict[str, Any]:
     """Carry a decision through to ``services/actions``.
 
@@ -549,8 +558,14 @@ async def _dispatch_decision(
                         processed; the actions service claims an execution
                         durably before contacting a vendor, so the answer
                         exists upstream and must be read rather than guessed.
+
+    ``db`` is needed only for an undo approval, whose dispatch resolves the
+    tenant's connector credentials freshly at decide time — nothing secret
+    waits in the queue.
     """
     action = row.action or {}
+    if action.get("kind") == _UNDO_KIND:
+        return await _dispatch_undo_decision(db, row, user, approve=approve)
     action_type = action.get("action_type") or action.get("type")
     target = action.get("target")
     if not isinstance(action_type, str) or not action_type.strip():
@@ -644,6 +659,135 @@ async def _dispatch_decision(
         "action_status": result.get("status"),
         "blast_radius": result.get("blast_radius"),
     }
+
+
+async def _dispatch_undo_decision(
+    db: AsyncSession | None,
+    row: AgentApproval,
+    user: AuthUser,
+    *,
+    approve: bool,
+) -> dict[str, Any]:
+    """Carry a decision on a queued reversal through to the actions service.
+
+    A denial executes nothing and has nothing upstream to reject — unlike a
+    forward action, no pending record exists in the actions service; this row
+    *is* the queue. An approval re-drives the undo with the deciding
+    principal bound as approver and the stamped requester kept separate, so
+    separation of duties upstream compares two real identities; the actions
+    service re-grades the reverse capability and claims the reversal durably,
+    which is also what makes a double-decide safe.
+    """
+    action = row.action or {}
+    undo_of = str(action.get("undo_of") or "")
+    if not undo_of:
+        return {"state": _DISPATCH_NOT_EXECUTABLE, "reason": "approval names no action to undo"}
+    if not approve:
+        return {"state": _DISPATCH_DECLINED, "undo_of": undo_of}
+    if db is None:
+        # Without a session there is no vault read and no connector row, so
+        # nothing could be dispatched honestly.
+        return {"state": _DISPATCH_FAILED, "stage": "undo", "undo_of": undo_of, "detail": "no database session to resolve credentials with"}
+
+    principal = {
+        "user_id": str(user.user_id),
+        "tenant_id": str(user.tenant_id),
+        "email": getattr(user, "email", None),
+        "roles": [user.role] if user.role else [],
+        "permissions": user.effective_permissions(),
+    }
+    requester = action.get(_REQUESTER_KEY)
+    if not isinstance(requester, dict) or not requester.get("user_id"):
+        requester = None
+
+    raw_confidence = action.get("confidence")
+    confidence = float(raw_confidence) if isinstance(raw_confidence, (int, float)) else None
+
+    try:
+        report = await action_undo.drive_undo(
+            db,
+            tenant_id=row.tenant_id,
+            action_id=undo_of,
+            principal=principal,
+            approver=principal,
+            requester=requester,
+            confidence=confidence,
+            requested_by=str(action.get("requested_by_label") or row.requested_by or "aisoc-api"),
+        )
+    except action_undo.UndoNotPossible as exc:
+        logger.warning(
+            "Undo approval dispatch refused",
+            extra={"approval_id": str(row.id), "undo_of": undo_of, "status": exc.status_code, "detail": exc.detail},
+        )
+        state = _DISPATCH_UNKNOWN if exc.indeterminate else _DISPATCH_FAILED
+        return {"state": state, "stage": "undo", "undo_of": undo_of, "detail": exc.detail}
+
+    if report.status == "rolled_back":
+        return {
+            "state": _DISPATCH_EXECUTED,
+            "undo_of": undo_of,
+            "action_status": "rolled_back",
+            "vendor_id": report.vendor_id,
+        }
+    return {
+        "state": _DISPATCH_FAILED,
+        "stage": "undo",
+        "undo_of": undo_of,
+        "detail": report.error or report.reason or f"the reversal answered {report.status!r}",
+    }
+
+
+async def create_undo_approval(
+    db: AsyncSession,
+    user: AuthUser,
+    *,
+    undo_of: str,
+    action_type: str,
+    target: str,
+    vendor_id: str,
+    confidence: float | None,
+    requirement: str,
+    reason: str,
+    requested_by: str,
+) -> AgentApproval:
+    """Queue a reversal the reverse capability's grading held for a human.
+
+    The forward flow's own shape: the durable queue for a decision is this
+    table, the decision arrives through ``/{id}/decide``, and the dispatch is
+    re-driven at decide time with the deciding identity bound — which is also
+    when credentials are freshly resolved, so nothing secret ever waits in a
+    queue. The requester is stamped from authenticated context exactly as
+    :func:`create_approval` stamps it, which is what lets separation of
+    duties refuse the asker approving their own undo.
+    """
+    row = AgentApproval(
+        tenant_id=user.tenant_id,
+        requested_by=requested_by[:120],
+        title=f"Undo {action_type} on {target}"[:200],
+        summary=reason or f"Reversing '{action_type}' on {target} requires {requirement} approval.",
+        risk_level="high" if requirement == "mandatory_human" else "medium",
+        action={
+            "kind": _UNDO_KIND,
+            "undo_of": undo_of,
+            "action_type": action_type,
+            "target": target,
+            "vendor_id": vendor_id,
+            "confidence": confidence,
+            "requested_by_label": requested_by,
+            _REQUESTER_KEY: _requester_principal(user),
+        },
+        status="pending",
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+
+    await _notify_realtime(row, event="approval_request")
+    delivery = await deliver_approval(row, await resolve_branding(db, user.tenant_id))
+    row.action = {**(row.action or {}), "delivery": delivery.as_dict()}
+    await db.commit()
+    await db.refresh(row)
+    return row
 
 
 async def _notify_realtime(row: AgentApproval, *, event: str) -> None:

@@ -69,6 +69,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answer. 15 cases over the vendors' own shapes; the negative control
   corrupts one enforcement mapping and watches two fail.
 
+- **A completed response action can now actually be undone.** Every
+  destructive executor captured `rollback_data` and every platform-reversible
+  verb's contract named a `reverse_capability`, but no route or worker ever
+  invoked an executor's `rollback()` — the reversal the docs promised was
+  reachable only from tests. `POST /api/v1/actions/{action_id}/undo`
+  (session-authenticated, `actions:execute`) resolves the tenant's stored
+  integration server-side — the request body cannot carry credentials, since
+  unknown fields are refused — and drives the actions service's new
+  `POST /actions/{action_id}/rollback`, which grades the undo against the
+  **reverse** capability's own contract through the same approval matrix as
+  forward dispatch: an analyst-tier reversal queues in the approvals inbox
+  and is re-driven at decide time with the deciding identity bound as
+  approver (the requester cannot approve their own undo), a prohibited one
+  never runs. The reversal is claimed with one conditional UPDATE
+  (`completed → rolling_back`) before any vendor is contacted, so two undo
+  requests elect one executor; an action that never executed or was already
+  rolled back is refused with the reason. The outcome is honest: only a
+  reversal the executor confirms moves the record to `rolled_back` (stamping
+  `rolled_back_at`/`rolled_back_by` and the vendor outcome); a vendor
+  refusal is a **failed undo** that leaves the action `completed` — in
+  force and retryable — never a success. Proven end to end against a mock
+  Splunk management API: a `sync_detection_rule` executed through the real
+  vendor arm, then restored to its captured prior definition through the
+  route, with the credential-incapable legacy reversals refused up front
+  rather than simulated.
+
 ### Added
 - **The insider watchlist is a control, not a checkbox.**
   `user_risk_profiles.is_watchlisted` existed since

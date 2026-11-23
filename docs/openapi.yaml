@@ -12854,6 +12854,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/actions/{action_id}/undo:
+    post:
+      tags:
+      - actions
+      summary: Reverse a completed response action
+      description: 'Reverse one completed action through its executor''s own rollback.
+
+
+        The reversal is graded against the reverse capability''s contract before
+
+        anything runs. The answer is always 200 with a status naming what
+
+        happened — ``rolled_back``, ``undo_failed`` (the vendor refused; the
+
+        action is still in force), ``pending_approval`` (queued in the approvals
+
+        inbox, ``approval_id`` included) or ``refused`` (the contract prohibits
+
+        the reversal). 4xx is reserved for requests that cannot be served at
+
+        all: an action that never executed or was already rolled back (409), a
+
+        verb the platform cannot reverse or a missing integration (422), an
+
+        action this tenant does not own (404).'
+      operationId: undo_action_api_v1_actions__action_id__undo_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: action_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Action Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+              - $ref: '#/components/schemas/ActionUndoRequest'
+              - type: 'null'
+              title: Body
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Undo Action Api V1 Actions  Action Id  Undo Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/costs/dashboard:
     get:
       tags:
@@ -23995,6 +24055,31 @@ components:
       - effective_tier
       - effective_reason
       title: ActionPolicy
+    ActionUndoRequest:
+      properties:
+        confidence:
+          anyOf:
+          - type: number
+            maximum: 1.0
+            minimum: 0.0
+          - type: 'null'
+          title: Confidence
+      additionalProperties: false
+      type: object
+      title: ActionUndoRequest
+      description: 'What a caller may say about an undo: how sure they are, and nothing
+        else.
+
+
+        ``extra="forbid"`` is the control, not a nicety. The reversal''s
+
+        credentials come from the tenant''s stored integration through the vault,
+
+        and the vendor comes from the action record itself — a body that could
+
+        carry either would let a caller steer a reversal somewhere it was never
+
+        aimed, so a request naming any other field is refused outright.'
     AddAlertsRequest:
       properties:
         alert_ids:

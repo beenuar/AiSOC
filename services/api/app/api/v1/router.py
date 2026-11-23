@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     access_conditions,
     access_review,
+    action_undo,
     admin_users,
     agent_tools,
     agents,
@@ -253,7 +254,14 @@ api_router.include_router(effective_permissions.router)
 # credential. `app/services/email_approval.py` had minted URLs pointing at
 # /v1/actions/email-decide, which no router served, so every approve and deny
 # button in a rendered email linked to a 404.
+#
+# Registered before the undo route so the literal /actions/email-decide
+# segment is matched ahead of /actions/{action_id}/... parameters.
 api_router.include_router(email_approval.router)
+
+# Reversal of a completed response action: resolves the tenant's stored
+# integration server-side and drives the actions service's governed rollback.
+api_router.include_router(action_undo.router)
 
 # Cost dashboard — WS-H1 (buyer-value plan).
 # Aggregates LLM spend / token volume from aisoc_run_costs joined with
