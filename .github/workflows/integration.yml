@@ -1178,7 +1178,7 @@ jobs:
           LAKE_ARCHIVE_LIVE_CH_PORT: '59124'
           LAKE_ARCHIVE_LIVE_CH_USER: aisoc
           LAKE_ARCHIVE_LIVE_CH_PASSWORD: clickhouse_ci_secret
-          LAKE_ARCHIVE_LIVE_S3_ENDPOINT_FOR_CH: http://archive-minio:9000
+          LAKE_ARCHIVE_LIVE_S3_ENDPOINT_FOR_CH: http://archive-s3:4566
           LAKE_ARCHIVE_LIVE_S3_ENDPOINT: http://localhost:59000
           LAKE_ARCHIVE_LIVE_S3_ACCESS: archiveak
           LAKE_ARCHIVE_LIVE_S3_SECRET: archive_s3_ci_secret
@@ -1196,17 +1196,13 @@ jobs:
           # have answered transient denials on hosted runners (quay a 401 on
           # the manifest HEAD, hub a rate-limit shaped "repository does not
           # exist"). Try each, three times, before concluding anything.
-          MINIO_IMAGE=""
-          for img in quay.io/minio/minio:latest minio/minio:latest; do
-            for i in 1 2 3; do
-              if docker pull "$img" >/dev/null 2>&1; then MINIO_IMAGE="$img"; break 2; fi
-              sleep 10
-            done
-          done
-          [ -n "$MINIO_IMAGE" ] || { echo "::error::minio image unavailable from quay AND hub after 3 tries each"; exit 1; }
-          docker run -d --name archive-minio --network archive-net -p 59000:9000 \
-            -e MINIO_ROOT_USER=archiveak -e MINIO_ROOT_PASSWORD=archive_s3_ci_secret \
-            "$MINIO_IMAGE" server /data
+          # The S3 store is LocalStack from AWS's own public ECR: MinIO's
+          # public images vanished from quay (401) and hub (not-found) in the
+          # same week, and public.ecr.aws is the registry hosted runners pull
+          # without rate limits — the same reasoning the postgres steps use.
+          docker run -d --name archive-s3 --network archive-net -p 59000:4566 \
+            -e SERVICES=s3 -e EAGER_SERVICE_LOADING=1 \
+            public.ecr.aws/localstack/localstack:3
           docker run -d --name archive-ch --network archive-net -p 59124:9000 \
             -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=clickhouse_ci_secret -e CLICKHOUSE_DB=aisoc \
             clickhouse/clickhouse-server:23.8
@@ -1215,16 +1211,16 @@ jobs:
             sleep 2
             [ "$i" = 30 ] && { echo '::error::clickhouse never came up'; docker logs --tail 40 archive-ch; exit 1; }
           done
-          for i in $(seq 1 30); do
-            curl -sf http://localhost:59000/minio/health/live >/dev/null && break
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:59000/_localstack/health | grep -q '"s3": *"\(running\|available\)"' && break
             sleep 2
-            [ "$i" = 30 ] && { echo '::error::minio never came up'; docker logs --tail 40 archive-minio; exit 1; }
+            [ "$i" = 60 ] && { echo '::error::the S3 store never came up'; docker logs --tail 40 archive-s3; exit 1; }
           done
           docker exec -i archive-ch clickhouse-client --user aisoc --password clickhouse_ci_secret --multiquery < ../../services/api/clickhouse/001_init.sql
           for b in tenant-archive tenant-export; do
             code=$(curl -s -o /dev/null -w '%{http_code}' --aws-sigv4 'aws:amz:us-east-1:s3' \
               --user "$LAKE_ARCHIVE_LIVE_S3_ACCESS:$LAKE_ARCHIVE_LIVE_S3_SECRET" -X PUT "http://localhost:59000/$b")
-            [ "$code" = 200 ] || { echo "::error::bucket $b creation failed ($code)"; exit 1; }
+            case "$code" in 200|409) : ;; *) echo "::error::bucket $b creation failed ($code)"; exit 1;; esac
           done
           pip install --quiet duckdb
           python -m pytest ../../tests/isolation/test_lake_archive_live.py -v --tb=short -rs | tee /tmp/lake-archive.log
