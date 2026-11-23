@@ -134,6 +134,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("hunt.scheduler.start_failed", error=str(exc))
 
+    # WS6.2 — the hypothesis scheduler: per-tenant, opt-in campaign
+    # selection (hunt_campaign_policies gates everything; an absent row is
+    # off). The loop itself is hygiene and follows the corpus scheduler's
+    # env gate so dev/CI can silence background jobs the same way.
+    app.state.hypothesis_scheduler_task = None
+    if os.getenv("AISOC_HUNT_SCHEDULER_DISABLE", "").strip() not in ("1", "true", "yes"):
+        from app.hunt import hypothesis_scheduler as _hypo
+
+        async def _hypothesis_loop() -> None:
+            interval = max(int(os.getenv("AISOC_HYPOTHESIS_SCHEDULER_INTERVAL", "900")), 300)
+            while True:
+                try:
+                    await _hypo.run_once()
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:  # noqa: BLE001 — next tick retries
+                    logger.warning("hypothesis_scheduler.tick_failed", error=str(exc)[:200])
+                await asyncio.sleep(interval)
+
+        try:
+            app.state.hypothesis_scheduler_task = asyncio.create_task(_hypothesis_loop(), name="hypothesis_scheduler")
+            logger.info("hypothesis_scheduler.started")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("hypothesis_scheduler.start_failed", error=str(exc))
+
     # Phase B1 — auto-triage every fused alert off the Kafka stream (copilot:
     # read-only triage, no response dispatch). Off unless KAFKA_BOOTSTRAP_SERVERS
     # is set; degrades to deterministic triage without an LLM key.
@@ -212,6 +237,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if getattr(app.state, "investigation_reaper_task", None) is not None:
         app.state.investigation_reaper_task.cancel()
+
+    hypo_task: asyncio.Task | None = getattr(app.state, "hypothesis_scheduler_task", None)
+    if hypo_task is not None and not hypo_task.done():
+        hypo_task.cancel()
+        try:
+            await hypo_task
+        except (asyncio.CancelledError, Exception):  # noqa: BLE001
+            pass
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.

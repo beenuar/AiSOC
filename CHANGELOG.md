@@ -52,6 +52,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it.**
   Netskope's DLP alerts, Purview DLP and
+- **Bounded hunting campaigns with governed selection** (WS6 of the
+  gap-closure program; migration 179). A campaign is a sequence of
+  distinct closed-schema plans — the model still never writes query text —
+  each derived from a scrubbed summary of the previous step (counts and
+  pseudonymized top values; a hosted model never sees rows), with budgets
+  for steps, rows, model calls and wall clock checked BEFORE each step.
+  It is not a retry loop: the one-correction rule holds, a repeated
+  question stops the campaign, an identical plan under new words stops it
+  too. Outcomes stay apart: ranked leads; a no-finding carrying a coverage
+  statement naming the sources, fields and time range actually searched;
+  or could-not-check. The hypothesis scheduler selects campaigns per
+  tenant — opt-in, cadenced, budgeted, every selection recorded with its
+  reason before the campaign starts — from approved hunt requests (an
+  unapproved request is never selected; one request launches one
+  campaign). Leads are verified by the investigation agent under their own
+  runs, capped, and a productive campaign opens a DRAFT detection proposal
+  through the governed path — the wiring that finally assigns the
+  long-declared, never-assigned `proposal_id` (`source: hunt-campaign`;
+  nothing auto-promotes). 14 unit cases; the closed-schema boundary gate
+  unchanged and green.
+
+- **A DLP alert normalizes into one finding, whatever vendor raised it**
+  (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
   insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit
   trail's `DlpRuleMatch` events each arrived as their vendor shaped them,
   readable only through `raw_event`. `app/services/dlp_finding.py` derives

@@ -37,11 +37,15 @@ is this service's closest analogue and is the narrower of the two.
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime
 from typing import Annotated, Any
+from uuid import uuid4
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
+from sqlalchemy import text as sa_text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.clickhouse import (
@@ -260,6 +264,76 @@ class HuntPlanExecuteRequest(BaseModel):
     clauses: list[HuntPlanClause] = Field(..., min_length=1, max_length=7)
     lookback_hours: int = Field(default=168, ge=1, le=2160)
     limit: int = Field(default=hunt_plan_sql.MAX_ROWS, ge=1, le=hunt_plan_sql.MAX_ROWS)
+
+
+class CampaignLead(BaseModel):
+    question: str = Field(..., max_length=500)
+    findings: int = Field(..., ge=1)
+
+
+class CampaignStepRef(BaseModel):
+    question: str = Field(..., max_length=500)
+    plan: dict[str, Any]
+
+
+class ProposeDetectionRequest(BaseModel):
+    hypothesis: str = Field(..., min_length=3, max_length=1000)
+    coverage: dict[str, Any] = Field(default_factory=dict)
+    leads: list[CampaignLead] = Field(..., min_length=1, max_length=5)
+    steps: list[CampaignStepRef] = Field(default_factory=list, max_length=8)
+
+
+@router.post(
+    "/hunt-plan/propose-detection",
+    status_code=201,
+    summary="Open a DRAFT detection proposal from a productive hunting campaign",
+)
+async def propose_detection_from_campaign(
+    request: ProposeDetectionRequest,
+    # `rules:write` — the same permission the operator-facing proposal route
+    # requires, because this writes the same table. The proposal lands as a
+    # DRAFT on the governed propose -> review -> promote path; nothing here
+    # touches a live rule, and the reviewer reads the campaign that produced
+    # it rather than a bare suggestion (WS6.4 — the wiring that finally
+    # assigns the long-declared, never-assigned proposal id).
+    user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
+    db: DBSession,
+) -> dict[str, str]:
+    scaffold_lines = [
+        "# Draft detection proposed from a hunting CAMPAIGN.",
+        f"# Hypothesis: {request.hypothesis}",
+        f"# Coverage: {json.dumps(request.coverage, default=str)[:500]}",
+        "# Leads (question -> finding count):",
+        *(f"#   {lead.question} -> {lead.findings}" for lead in request.leads),
+        "# Campaign plans (closed-schema; the model never wrote query text):",
+        *(f"#   {step.question}: {json.dumps(step.plan, default=str)[:300]}" for step in request.steps),
+        "# TODO(analyst): convert into Sigma detection logic and attach",
+        "#   positive/negative fixtures before promotion.",
+    ]
+    proposal_id = uuid4()
+    await db.execute(
+        sa_text(
+            """
+            INSERT INTO detection_rule_proposals
+              (id, tenant_id, base_rule_id, name, description,
+               rule_language, rule_body, category, severity, confidence,
+               status, source, created_at, updated_at)
+            VALUES
+              (:id, :tid, NULL, :name, :desc,
+               'sigma', :body, 'hunt', 'medium', 60,
+               'draft', 'hunt-campaign', :now, :now)
+            """
+        ).bindparams(
+            id=proposal_id,
+            tid=user.tenant_id,
+            name=f"campaign: {request.hypothesis}"[:200],
+            desc=(f"Auto-proposed from a hunting campaign ({len(request.leads)} lead(s)). {request.hypothesis}")[:2000],
+            body="\n".join(scaffold_lines),
+            now=datetime.now(UTC),
+        )
+    )
+    await db.commit()
+    return {"id": str(proposal_id), "status": "draft", "source": "hunt-campaign"}
 
 
 @router.post("/hunt-plan/execute", summary="Run a hunting agent's structured plan against the event lake")
