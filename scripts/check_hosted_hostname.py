@@ -141,31 +141,25 @@ ALLOWED: dict[str, tuple[int, str]] = {
     ".github/ISSUE_TEMPLATE/benchmark_submission.yml": (2, _MANAGED_DEPLOY),
     "apps/web/e2e/demo/screencast.spec.ts": (1, _MANAGED_DEPLOY),
     # --- marketing surface, served from the hosted site --------------------
-    "apps/web/src/app/(marketing)/about/page.tsx": (5, _MARKETING),
-    "apps/web/src/app/(marketing)/sovereign/page.tsx": (5, _MARKETING),
-    "apps/web/src/app/(marketing)/waitlist/page.tsx": (5, _MARKETING),
-    "apps/web/src/app/(marketing)/privacy/page.tsx": (6, _MARKETING),
-    "apps/web/src/app/(marketing)/contact/page.tsx": (4, _MARKETING),
-    "apps/web/src/app/(marketing)/terms/page.tsx": (3, _MARKETING),
-    "apps/web/src/app/(marketing)/blog/page.tsx": (2, _MARKETING),
-    "apps/web/src/app/(marketing)/customers/page.tsx": (2, _MARKETING),
-    "apps/web/src/app/(marketing)/press/page.tsx": (2, _MARKETING),
-    "apps/web/src/app/(marketing)/pricing/page.tsx": (2, _MARKETING),
-    "apps/web/src/app/(marketing)/blog/[slug]/page.tsx": (1, _MARKETING),
-    "apps/web/src/app/(marketing)/customers/[slug]/page.tsx": (1, _MARKETING),
-    "apps/web/src/app/(marketing)/mesh/page.tsx": (1, _MARKETING),
-    "apps/web/src/app/why-open-source/page.tsx": (1, _MARKETING),
+    # 2026-11-22 QA: every *actionable* occurrence — mailtos at the domain
+    # (which publishes no MX record, so all of them bounced), deep links
+    # into paths the host now 301s to the repo front page, and the dead
+    # mesh-hub default — was replaced with a live venue (GitHub Discussions,
+    # the published quickstart, SECURITY.md's private reporting flow).
+    # tests/test_dead_destination_links.py pins the dead destinations out.
+    # What remains below is prose that *describes* the managed offering,
+    # kept deliberately.
+    "apps/web/src/app/(marketing)/waitlist/page.tsx": (3, _MARKETING),
+    "apps/web/src/app/(marketing)/privacy/page.tsx": (2, _MARKETING),
+    "apps/web/src/app/(marketing)/terms/page.tsx": (1, _MARKETING),
+    "apps/web/src/app/(marketing)/pricing/page.tsx": (1, _MARKETING),
     # `apps/web/src/app/page.tsx` used to sit here for one occurrence: the
     # landing page's Open Graph description ended "join the managed waitlist
     # at tryaisoc.com". An OG description is what a crawler quotes when the
     # open-source project is shared, so that one reached far further than a
     # marketing paragraph. It was removed rather than exempted.
     "apps/web/src/app/not-found.tsx": (1, _MARKETING),
-    "apps/web/src/app/r/[slug]/opengraph-image.tsx": (1, _MARKETING),
-    "apps/web/src/app/api/badge/[kind]/route.ts": (1, _MARKETING),
     "apps/web/src/app/api/badge/[kind]/route.test.ts": (4, _MARKETING),
-    "apps/web/src/components/landing/Hero.tsx": (2, _MARKETING),
-    "apps/web/src/components/landing/Hero.test.tsx": (1, _MARKETING),
     "apps/web/src/components/landing/sections/Footer.tsx": (2, _MARKETING),
     "apps/web/src/components/landing/sections/DeployOptions.tsx": (1, _MARKETING),
     "apps/web/src/components/landing/sections/PricingTeaser.tsx": (1, _MARKETING),
@@ -221,7 +215,9 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "services/api/app/services/tenant_provision/__init__.py": (1, _MANAGED_FEATURE),
     "services/api/app/services/waitlist/__init__.py": (1, _MANAGED_FEATURE),
     "services/api/app/services/waitlist/rate_limit.py": (1, _MANAGED_FEATURE),
-    "services/mesh/app/main.py": (1, _MANAGED_FEATURE),
+    # services/mesh/app/main.py left here in 2026-11-22's QA sweep: its
+    # docstring claimed a community hub "runs at" a host that is NXDOMAIN;
+    # it now describes the hub as self-run with no default endpoint.
     # --- uuid5 namespace seeds: compatibility constants, not URLs ----------
     "services/agents/app/orchestrator/router.py": (2, _UUID_SEED),
     "services/agents/app/workers/fused_alert_consumer.py": (1, _UUID_SEED),
@@ -235,7 +231,8 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "docs/operations/live-demo-runbook.md": (7, _DOCS),
     "docs/design/landing-page-brief.md": (3, _DOCS),
     "docs/design/landing-page-content.md": (3, _DOCS),
-    "docs/architecture/mesh.md": (1, _DOCS),
+    # docs/architecture/mesh.md left here in the same sweep, for the same
+    # reason as services/mesh/app/main.py above.
     "docs/design/README.md": (1, _DOCS),
     "docs/managed-mode.md": (1, _DOCS),
     "docs/press/README.md": (1, _DOCS),
@@ -260,6 +257,11 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "plans/cyble-aisoc/platform/backend/app/marketplace/catalog.py": (16, _PLAN),
     # --- the regression assertion itself -----------------------------------
     "services/api/tests/test_tenant_provision.py": (1, _GATE_FIXTURE),
+    # The 2026-11-22 dead-destination test: its needle table and docstring
+    # necessarily *name* the dead destinations it pins out of the shipped
+    # web sources (dead mailto addresses, the 301-swallowed case deep-link,
+    # the NXDOMAIN mesh hub).
+    "tests/test_dead_destination_links.py": (9, _GATE_FIXTURE),
 }
 
 

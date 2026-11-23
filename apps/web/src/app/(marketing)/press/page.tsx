@@ -65,12 +65,17 @@ export default function PressPage() {
             We do not ship a downloadable press kit — every artefact a
             journalist, analyst, or organiser typically asks for is
             either in the public repo or in this page. If you need a
-            quote, a podcast guest, or a conference talk, write to{' '}
+            quote, a podcast guest, or a conference talk, start a thread in{' '}
+            {/* Was a mailto at a domain that publishes no MX record, so the
+                address bounced. Discussions is the contact channel
+                SUPPORT.md names. */}
             <a
-              href="mailto:press@tryaisoc.com"
+              href="https://github.com/beenuar/AiSOC/discussions"
+              target="_blank"
+              rel="noreferrer"
               className="text-brand-300 underline decoration-brand-500/40 underline-offset-2"
             >
-              press@tryaisoc.com
+              GitHub Discussions
             </a>
             .
           </p>

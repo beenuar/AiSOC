@@ -17,7 +17,7 @@ import { CONNECTOR_COUNT } from '@/data/connectorCount';
 export const metadata: Metadata = {
   title: 'About — AiSOC',
   description:
-    'AiSOC is an MIT-licensed open-source AI Security Operations Center maintained by an independent community. Self-host the full stack or sign up for the managed waitlist at tryaisoc.com.',
+    'AiSOC is an MIT-licensed open-source AI Security Operations Center maintained by an independent community. Self-host the full stack or join the managed waitlist.',
   alternates: { canonical: '/about' },
   openGraph: {
     title: 'About AiSOC — open-source AI SOC',
@@ -41,7 +41,9 @@ const FACTS: Array<{ label: string; value: string; href?: string }> = [
   },
   {
     label: 'Security disclosures',
-    value: 'security@tryaisoc.com',
+    // Was an inbox at a domain with no MX record; SECURITY.md's actual
+    // channel is GitHub private vulnerability reporting.
+    value: 'Private vulnerability reporting',
     href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
   },
   {
@@ -89,15 +91,17 @@ export default function AboutPage() {
               href="/waitlist"
               className="text-brand-300 underline decoration-brand-500/40 underline-offset-2"
             >
-              tryaisoc.com/waitlist
+              the managed waitlist
             </Link>
             . Sovereign and air-gapped deployments are quoted
             individually —{' '}
             <a
-              href="mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment"
+              href="https://github.com/beenuar/AiSOC/discussions"
+              target="_blank"
+              rel="noreferrer"
               className="text-brand-300 underline decoration-brand-500/40 underline-offset-2"
             >
-              hello@tryaisoc.com
+              start a Discussions thread
             </a>
             .
           </p>

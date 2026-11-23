@@ -41,7 +41,7 @@ const SECTIONS: Array<{ heading: string; body: string[] }> = [
   {
     heading: 'Managed waitlist',
     body: [
-      'Joining the managed waitlist does not constitute a binding offer of service. We open managed-tier seats in waves and contact waitlist members in the order they signed up, modulo regional capacity. You can withdraw at any time by emailing privacy@tryaisoc.com.',
+      'Joining the managed waitlist does not constitute a binding offer of service. We open managed-tier seats in waves and contact waitlist members in the order they signed up, modulo regional capacity. You can withdraw at any time by opening a thread in GitHub Discussions (github.com/beenuar/AiSOC/discussions) mentioning that you want your waitlist record removed.',
     ],
   },
   {
@@ -59,7 +59,7 @@ const SECTIONS: Array<{ heading: string; body: string[] }> = [
   {
     heading: 'Disputes',
     body: [
-      'Disputes about the open-source distribution: governed by the MIT licence text. Disputes about the marketing site and the managed waitlist: governed by Singapore law; contact legal@tryaisoc.com first, before any formal action.',
+      'Disputes about the open-source distribution: governed by the MIT licence text. Disputes about the marketing site and the managed waitlist: governed by Singapore law; raise the matter with the maintainers first — GitHub Discussions, or private vulnerability reporting for anything sensitive — before any formal action.',
     ],
   },
 ];

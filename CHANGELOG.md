@@ -22,6 +22,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   base picks up at build time). All 17 ingest test packages pass on the new
   pin. Below the audit's high/critical fail threshold by policy, fixed
   anyway because the path is attacker-reachable.
+### Fixed
+
+- **Every actionable destination the marketing site shipped now exists**
+  (2026-11-22 QA pass). Fetching every link the web app publishes found
+  four classes of dead destination, each verified against the authority
+  that owns it: the footer's Discord invite answered "Unknown Invite" from
+  Discord's own API (the invite page serves HTTP 200, which is why a
+  status-code check never caught it); the footer's X link named an account
+  x.com answers 404 for; seventeen `mailto:` links across ten marketing
+  pages (hello@, press@, privacy@, security@, legal@) lived at a domain
+  that publishes no MX record, so every enquiry — including the privacy
+  page's deletion-request route and a "security disclosures" contact that
+  contradicted SECURITY.md's actual private-reporting flow — bounced; and
+  the hero's and why-open-source page's "Open the demo" buttons deep-linked
+  a hosted case at a host that now redirects every path to the repository
+  front page. Each surface now points at a venue verified live: GitHub
+  Discussions (the channel SUPPORT.md names), the published quickstart for
+  the seeded demo, and SECURITY.md's private vulnerability reporting. The
+  mesh page also stops defaulting its hub to a host that is NXDOMAIN (no
+  `MESH_HUB_URL` now means no doomed fetch, same honest placeholders), and
+  the mesh doc and service docstring stop claiming a community hub "runs
+  at" that host. `tests/test_dead_destination_links.py` pins the dead
+  destinations out of the shipped sources, and the hosted-hostname gate's
+  allow-list was ratcheted down to match (15 entries dropped, 4 lowered) so
+  a re-add is a deliberate decision against the recorded evidence.
 
 ### Added
 

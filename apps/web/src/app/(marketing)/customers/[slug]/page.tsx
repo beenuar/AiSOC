@@ -289,8 +289,13 @@ function RelatedFeatures({ study }: { study: CustomerStudy }) {
           >
             More customer stories
           </Link>
+          {/* Was a mailto at a domain that publishes no MX record, so the
+              address bounced. Discussions is the contact channel SUPPORT.md
+              names. */}
           <a
-            href="mailto:hello@tryaisoc.com"
+            href="https://github.com/beenuar/AiSOC/discussions"
+            target="_blank"
+            rel="noreferrer"
             className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
           >
             Talk to us

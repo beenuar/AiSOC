@@ -421,19 +421,23 @@ export default function WhyOpenSourcePage() {
             Verify it directly
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-gray-400">
-            Three artefacts, each reproducible in under a minute: a
-            pre-seeded investigation with the ledger visible, the eval
-            harness on a local machine, and the agent source on GitHub.
-            None require a signup.
+            Three artefacts, each reproducible on your own machine: a
+            seeded demo stack with the ledger visible, the eval harness,
+            and the agent source on GitHub. None require a signup.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
+            {/* This button pointed at a hosted case deep-link whose host now
+                redirects every path to the repository front page, so the
+                "pre-seeded investigation" promise broke. The quickstart is
+                the live path to the same artefact: `make demo` seeds the
+                investigation this card describes. */}
             <a
-              href="https://tryaisoc.com/cases/INC-RT-001?tab=ledger"
+              href="https://beenuar.github.io/AiSOC/docs/quickstart"
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-md bg-brand-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-400"
             >
-              Open the demo
+              Run the demo locally
               <svg
                 viewBox="0 0 20 20"
                 className="h-3.5 w-3.5"

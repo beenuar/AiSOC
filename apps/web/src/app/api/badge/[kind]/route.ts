@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 /**
  * shields.io-compatible endpoint badges (v8 W3.4).
  *
- * Embed anywhere shields renders, e.g. in a README:
- *   ![AiSOC](https://img.shields.io/endpoint?url=https://tryaisoc.com/api/badge/triaged)
+ * Embed anywhere shields renders, substituting your deployment's console
+ * origin, e.g. in a README:
+ *   ![AiSOC](https://img.shields.io/endpoint?url=https://<your-console-host>/api/badge/triaged)
  *
  * Badges are backlinks that live in other people's READMEs. The GitHub Action
  * (W4) links its "triaged" badge here with a per-run `?message=` override; the

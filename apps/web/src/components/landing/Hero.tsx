@@ -38,17 +38,22 @@ export function Hero() {
             detection drift tracking, and a knowledge-base RAG over your runbooks — all
             gated by a 200-incident eval harness on every PR to{' '}
             <code className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-base">main</code>.
-            MIT-licensed and self-hostable — tryaisoc.com is the always-on demo.
+            MIT-licensed and self-hostable — one command seeds a full demo
+            investigation on your own machine.
           </p>
 
           <div className="mt-8 flex flex-wrap items-center gap-3">
+            {/* The primary CTA pointed at a hosted case deep-link whose host
+                now redirects every path to the repository front page; there
+                is no hosted always-on demo. The quickstart's `make demo` is
+                the live path to the investigation this button promised. */}
             <a
-              href="https://tryaisoc.com/cases/INC-RT-001?tab=ledger"
+              href="https://beenuar.github.io/AiSOC/docs/quickstart"
               target="_blank"
               rel="noreferrer"
               className="group inline-flex items-center gap-2 rounded-lg bg-velvet-emerald px-5 py-3 text-sm font-semibold text-velvet-content-primary transition hover:bg-velvet-emerald-mint"
             >
-              Open the demo
+              Run the demo locally
               <svg viewBox="0 0 20 20" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" fill="currentColor" aria-hidden="true">
                 <path d="M7.05 4.05a1 1 0 011.41 0l5 5a1 1 0 010 1.41l-5 5a1 1 0 11-1.41-1.41L11.09 10 7.05 5.46a1 1 0 010-1.41z" />
               </svg>

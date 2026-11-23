@@ -42,14 +42,16 @@ const CHANNELS: ContactChannel[] = [
     body:
       'You want AiSOC inside your VPC, an air-gapped network, or a sovereign-cloud region with custom data-residency requirements. We quote these individually.',
     cta: {
-      label: 'hello@tryaisoc.com',
-      href: 'mailto:hello@tryaisoc.com?subject=AiSOC%20sovereign%20deployment',
+      // Was a mailto at a domain that publishes no MX record, so every
+      // enquiry bounced. Discussions is the contact channel SUPPORT.md names.
+      label: 'Start a Discussions thread',
+      href: 'https://github.com/beenuar/AiSOC/discussions',
     },
   },
   {
     heading: 'Security disclosure',
     body:
-      'You found a vulnerability. SECURITY.md spells out PGP keys and the disclosure window we commit to. Please do not file a public issue first.',
+      'You found a vulnerability. SECURITY.md spells out the private reporting flow and the disclosure window we commit to. Please do not file a public issue first.',
     cta: {
       label: 'Read SECURITY.md',
       href: 'https://github.com/beenuar/AiSOC/blob/main/SECURITY.md',
@@ -68,7 +70,12 @@ const CHANNELS: ContactChannel[] = [
     heading: 'Press + speaking',
     body:
       'You want a quote, a podcast guest, or a conference talk. We are happy to help — just give us a few days of notice.',
-    cta: { label: 'press@tryaisoc.com', href: 'mailto:press@tryaisoc.com' },
+    // Was a mailto at a domain that publishes no MX record, so the address
+    // bounced. Discussions is the contact channel SUPPORT.md names.
+    cta: {
+      label: 'Start a Discussions thread',
+      href: 'https://github.com/beenuar/AiSOC/discussions',
+    },
   },
 ];
 

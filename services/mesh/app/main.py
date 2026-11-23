@@ -1,7 +1,8 @@
 """Mesh hub — FastAPI application (v8 P1, port 8010).
 
-The hub is itself open-source and can be self-run (the community hub runs at
-mesh.tryaisoc.com). It only ever sees hashed IOCs and aggregate verdict
+The hub is itself open-source and is self-run: deployments that want a mesh
+agree on a hub URL and one of them hosts this service (there is currently no
+community-operated hub). It only ever sees hashed IOCs and aggregate verdict
 signatures, and enforces k-anonymity + Ed25519 verification before revealing
 any consensus.
 """

@@ -1,9 +1,11 @@
 # Federated Threat Intel Mesh — threat model & design (v8 P1)
 
 The mesh is opt-in gossip between self-hosted AiSOC instances via a lightweight,
-open-source hub (the community hub runs at `mesh.tryaisoc.com`; you can run your
-own). Its promise: **every install makes every other install smarter** — without
-any instance revealing its data.
+open-source hub. The hub ships in this repository (`services/mesh/`) and every
+deployment runs its own — there is currently no community-operated hub, so a
+mesh is whatever set of instances agree on a hub URL. Its promise: **every
+install makes every other install smarter** — without any instance revealing
+its data.
 
 This is the one feature class a closed SaaS vendor structurally cannot copy
 credibly, because trusting it requires reading the code. So the code is the

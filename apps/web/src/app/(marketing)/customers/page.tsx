@@ -154,12 +154,17 @@ export default function CustomersIndexPage() {
               >
                 GitHub
               </a>{' '}
-              or reach out to{' '}
+              or start a thread in{' '}
+              {/* Was a mailto at a domain that publishes no MX record, so
+                  the address bounced. Discussions is the contact channel
+                  SUPPORT.md names. */}
               <a
-                href="mailto:hello@tryaisoc.com"
+                href="https://github.com/beenuar/AiSOC/discussions"
+                target="_blank"
+                rel="noreferrer"
                 className="text-brand-300 underline underline-offset-2 hover:text-brand-200"
               >
-                hello@tryaisoc.com
+                GitHub Discussions
               </a>
               .
             </p>

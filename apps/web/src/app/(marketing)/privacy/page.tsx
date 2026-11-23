@@ -37,7 +37,7 @@ const SECTIONS: Array<{ heading: string; body: string[] }> = [
     heading: 'Marketing site (tryaisoc.com)',
     body: [
       'Like every static site, our hosting provider records standard HTTP access logs (IP, user-agent, requested path, referrer, timestamp). We retain these for up to 30 days for abuse mitigation and then discard them. We do not run third-party ad networks, do not embed cross-site trackers, and do not sell or share access logs.',
-      'When you sign the managed waitlist we collect the fields you submit (work email, name, company, optional notes) and store them for the explicit purpose of contacting you about onboarding. We do not enrich, resell, or share that data. To delete your waitlist record, email privacy@tryaisoc.com from the address you signed up with and we will remove it within 14 days.',
+      'When you sign the managed waitlist we collect the fields you submit (work email, name, company, optional notes) and store them for the explicit purpose of contacting you about onboarding. We do not enrich, resell, or share that data. To delete your waitlist record, open a thread in GitHub Discussions (github.com/beenuar/AiSOC/discussions) mentioning the address you signed up with — without pasting it publicly — and a maintainer will confirm removal within 14 days.',
     ],
   },
   {
@@ -55,7 +55,10 @@ const SECTIONS: Array<{ heading: string; body: string[] }> = [
   {
     heading: 'Contact',
     body: [
-      'Privacy questions and deletion requests: privacy@tryaisoc.com. Security disclosures: security@tryaisoc.com (see SECURITY.md for PGP keys and the disclosure window). General contact: hello@tryaisoc.com.',
+      // The three addresses this named lived at a domain that publishes no
+      // MX record, so every request bounced — and SECURITY.md's actual
+      // channel is GitHub private vulnerability reporting, not an inbox.
+      'Privacy questions and deletion requests: open a thread in GitHub Discussions (github.com/beenuar/AiSOC/discussions); for a self-hosted deployment, your operator is the data controller. Security disclosures: use GitHub private vulnerability reporting as described in SECURITY.md — please do not file a public issue.',
     ],
   },
 ];

@@ -19,7 +19,13 @@ interface MeshStats {
 }
 
 async function fetchStats(): Promise<MeshStats | null> {
-  const base = (process.env.MESH_HUB_URL || "https://mesh.tryaisoc.com").replace(/\/$/, "");
+  // No default hub: the old fallback pointed at a host that no longer
+  // resolves, so every unconfigured deployment paid a doomed network
+  // round-trip and rendered the same "—" placeholders this early return
+  // produces. A deployment that runs its own hub sets MESH_HUB_URL.
+  const configured = (process.env.MESH_HUB_URL || "").trim();
+  if (!configured) return null;
+  const base = configured.replace(/\/$/, "");
   try {
     const res = await fetch(`${base}/v1/stats`, { next: { revalidate: 300 } });
     if (!res.ok) return null;
