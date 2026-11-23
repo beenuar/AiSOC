@@ -467,6 +467,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 - GATED: 407
 - Total: 416
 - GATED: 407
+<<<<<<< HEAD
 - Total: 416
 - GATED: 407
 - Total: 416
@@ -529,6 +530,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 - GATED: 405
 - Total: 414
 - GATED: 405
+=======
+>>>>>>> 78be2b4da (chore: tally recount after the rebase union)
 - PARTIAL: 9
 - NO GATE: 0
 
