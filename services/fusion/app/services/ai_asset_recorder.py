@@ -55,6 +55,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import structlog
@@ -293,9 +294,23 @@ ON CONFLICT ON CONSTRAINT aisoc_ai_assets_identity DO UPDATE SET
     -- when there is one and the older value when there is not.
     principal         = COALESCE(EXCLUDED.principal, aisoc_ai_assets.principal),
     attributes        = aisoc_ai_assets.attributes || EXCLUDED.attributes,
-    risk_score        = EXCLUDED.risk_score,
-    risk_reasons      = EXCLUDED.risk_reasons,
+    -- WS5.3. A judged asset's score is OWNED by the sanction route:
+    -- `_score()` is sanction-blind by design ("a newly observed asset is by
+    -- definition one nobody has judged yet"), so letting it overwrite a
+    -- judged row silently erased ai_inventory's +30 "Reviewed and refused,
+    -- and still running" and replaced the reason with the factually false
+    -- "Not declared" on every re-observation. The flush refreshes an
+    -- UNJUDGED asset's score (the recorder's is the only one there is) and
+    -- leaves a judged one — refused and approved alike — to the route that
+    -- judged it, which recomputes when the judgement changes.
+    risk_score        = CASE WHEN aisoc_ai_assets.sanctioned IS NOT NULL
+                             THEN aisoc_ai_assets.risk_score
+                             ELSE EXCLUDED.risk_score END,
+    risk_reasons      = CASE WHEN aisoc_ai_assets.sanctioned IS NOT NULL
+                             THEN aisoc_ai_assets.risk_reasons
+                             ELSE EXCLUDED.risk_reasons END,
     updated_at        = NOW()
+RETURNING aisoc_ai_assets.sanctioned
 """
 
 
@@ -359,6 +374,153 @@ def _basename(path: str) -> str:
     return stem[:-4] if stem.endswith(".exe") else stem
 
 
+#: WS5.5 — the shadow-AI catalog: a vendor's own documented product domain
+#: per row, shipped as data with per-row provenance (`ai_app_catalog.json`).
+#: Suffix-matched so `eu.api.openai.com` still matches `api.openai.com`'s
+#: vendor; a miss is a miss — nothing is inferred.
+_CATALOG_PATH = Path(__file__).resolve().parents[1] / "data" / "ai_app_catalog.json"
+
+#: Connector types whose events are network-telemetry sightings: the SWG /
+#: DNS / zero-trust connectors. A sighting from these sources can see the
+#: DOMAIN and never the prompt, and says so.
+_NETWORK_SOURCES = frozenset({"zscaler", "netskope", "cisco_umbrella", "cloudflare_zt"})
+
+
+def _load_catalog() -> tuple[int, dict[str, dict[str, str]]]:
+    try:
+        doc = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+        return int(doc.get("version") or 0), {
+            str(row["domain"]).lower(): {"app": str(row["app"]), "category": str(row["category"])} for row in doc.get("apps") or []
+        }
+    except (OSError, ValueError, KeyError, TypeError) as exc:  # pragma: no cover — a broken data file
+        logger.warning("ai_asset_recorder.catalog_load_failed", error=str(exc)[:200])
+        return 0, {}
+
+
+_CATALOG_VERSION, _CATALOG = _load_catalog()
+
+# ── WS5.4: MCP manifests — versioned, drift-detected ────────────────────────
+
+_MANIFEST_LATEST_SQL = """
+SELECT version, tools FROM aisoc_ai_mcp_manifests
+WHERE tenant_id = $1 AND server_name = $2
+ORDER BY version DESC LIMIT 1
+"""
+
+_MANIFEST_TOUCH_SQL = """
+UPDATE aisoc_ai_mcp_manifests SET last_seen = NOW()
+WHERE tenant_id = $1 AND server_name = $2 AND version = $3
+"""
+
+_MANIFEST_INSERT_SQL = """
+INSERT INTO aisoc_ai_mcp_manifests (tenant_id, server_name, version, tools)
+VALUES ($1, $2, $3, $4::jsonb)
+ON CONFLICT ON CONSTRAINT aisoc_ai_mcp_manifests_version DO NOTHING
+"""
+
+#: A newly added tool whose NAME says it changes state. Heuristic and
+#: reviewable — the point is that a read-only server growing a `delete_repo`
+#: tool between manifests is exactly the poisoning shape.
+_STATE_CHANGING_RE = re.compile(
+    r"(?:^|_|-)(?:write|delete|remove|create|update|exec|execute|run|send|post|deploy|drop|kill|push)(?:$|_|-)",
+    re.I,
+)
+
+
+def _manifest_drift(previous: list[dict[str, Any]], current: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """What changed between two manifests, as named findings.
+
+    Three shapes, each the brief's own: a description hash that moved on an
+    existing tool, a newly added state-changing tool, and instruction-shaped
+    text flagged in the current manifest (the SDK flags it client-side; the
+    platform repeats it as a finding so it reaches triage even when nothing
+    else drifted).
+    """
+    findings: list[dict[str, Any]] = []
+    prev_by_name = {str(t.get("name")): t for t in previous}
+    for tool in current:
+        name = str(tool.get("name"))
+        before = prev_by_name.get(name)
+        if before is None:
+            if _STATE_CHANGING_RE.search(name):
+                findings.append({"kind": "new_state_changing_tool", "tool": name})
+            continue
+        if str(before.get("description_sha256")) != str(tool.get("description_sha256")):
+            findings.append({"kind": "description_drift", "tool": name})
+        if dict(before.get("annotations") or {}) != dict(tool.get("annotations") or {}):
+            findings.append({"kind": "annotation_drift", "tool": name})
+    for tool in current:
+        if tool.get("flagged"):
+            findings.append(
+                {
+                    "kind": "instruction_shaped_description",
+                    "tool": str(tool.get("name")),
+                    "patterns": list(tool.get("flagged") or []),
+                    "snippet": str(tool.get("snippet") or "")[:80],
+                }
+            )
+    return findings
+
+
+def _catalog_match(domain: str) -> tuple[str, dict[str, str]] | None:
+    """The catalog row whose domain the observed one equals or ends with."""
+    d = domain.strip().lower().rstrip(".")
+    if not d:
+        return None
+    if d in _CATALOG:
+        return d, _CATALOG[d]
+    for catalog_domain, row in _CATALOG.items():
+        if d.endswith("." + catalog_domain):
+            return catalog_domain, row
+    return None
+
+
+def _from_network(tenant_id: str, ocsf: dict[str, Any], now: float) -> list[_Sighting]:
+    """AI-app sightings from SWG/DNS telemetry (WS5.5).
+
+    The source can see the DOMAIN and never the prompt; the sighting's
+    attributes state that limitation outright, because a reader of the AI
+    estate must be able to tell "we observed traffic to this product" apart
+    from "we observed what was pasted into it".
+    """
+    fields = _connector_fields(ocsf)
+    source = _text(fields.get("source") or fields.get("connector_type")) or ""
+    if source not in _NETWORK_SOURCES:
+        return []
+    domain = _first(fields, ("domain", "url", "dest_domain", "host_name", "hostname"))
+    if not domain:
+        return []
+    # A URL arrives as a URL; the catalog speaks domains.
+    bare = domain.split("//", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+    match = _catalog_match(bare)
+    if match is None:
+        return []
+    catalog_domain, row = match
+    principal = _text(fields.get("user") or fields.get("username") or fields.get("principal"))
+    return [
+        _Sighting(
+            tenant_id=tenant_id,
+            kind=KIND_AI_APP,
+            external_id=catalog_domain,
+            display_name=row["app"],
+            vendor=row["app"],
+            discovery_source="network",
+            principal=principal,
+            device=_text(fields.get("host") or fields.get("device")),
+            attributes={
+                "matched_domain": bare,
+                "category": row["category"],
+                "catalog_version": _CATALOG_VERSION,
+                "cannot_see_prompts": True,
+                "telemetry": source,
+            },
+            first_seen=now,
+            last_seen=now,
+            count=1,
+        )
+    ]
+
+
 def classify(message: dict[str, Any]) -> list[_Sighting]:
     """Turn one normalized event into zero or more AI-asset sightings.
 
@@ -383,6 +545,11 @@ def classify(message: dict[str, Any]) -> list[_Sighting]:
         out.extend(_from_provider_audit(tenant_id, ocsf, now))
     elif ocsf.get("class_uid") == 1007:
         out.extend(_from_endpoint(tenant_id, ocsf, now))
+    else:
+        # WS5.5 — SWG/DNS events become AI-app sightings when the domain
+        # matches the shipped catalog. Deliberately the fallthrough arm: the
+        # AI-native sources above already know what they are looking at.
+        out.extend(_from_network(tenant_id, ocsf, now))
 
     return out
 
@@ -769,14 +936,112 @@ class AiAssetRecorder:
         self._max_age = max_age_seconds
         self._pending: dict[tuple[str, str, str, str], _Sighting] = {}
         self._last_flush = time.monotonic()
-        self._metrics = {"observed": 0, "written": 0, "dropped": 0}
+        self._metrics = {"observed": 0, "written": 0, "dropped": 0, "refused_seen": 0}
+        #: WS5.3 — sightings whose upsert landed on a `sanctioned = FALSE`
+        #: row. The consumer drains these and raises a triage alert citing
+        #: the sanction decision; a refused asset that keeps running should
+        #: interrupt somebody, not only nudge an inventory score.
+        self._refused: list[dict[str, str]] = []
+        #: WS5.4 — buffered MCP manifests, latest per (tenant, server), and
+        #: the drift findings the flush computed against the stored version.
+        self._manifests: dict[tuple[str, str], dict[str, Any]] = {}
+        self._mcp_drift: list[dict[str, Any]] = []
 
     @property
     def metrics(self) -> dict[str, int]:
         return dict(self._metrics)
 
+    def _buffer_manifest(self, message: dict[str, Any]) -> None:
+        """WS5.4 — recognise and buffer an SDK manifest event.
+
+        The marker is the reserved tool name `mcp:manifest` riding the
+        ai-runtime mapping; the payload is `mcp_tools`, hashes and flags
+        only. Latest-per-server wins within one flush window.
+        """
+        ocsf = message.get("ocsf_event")
+        if not isinstance(ocsf, dict):
+            return
+        fields = _connector_fields(ocsf)
+        if _text(fields.get("tool_name")) != "mcp:manifest":
+            return
+        tenant_id = _text(message.get("tenant_id") or ocsf.get("tenant_uid"))
+        server = _text(fields.get("server_name"))
+        tools = fields.get("mcp_tools")
+        if not tenant_id or not server or not isinstance(tools, list):
+            return
+        self._manifests[(tenant_id, server)] = {
+            "tenant_id": tenant_id,
+            "server_name": server,
+            "tools": [dict(t) for t in tools if isinstance(t, dict)],
+        }
+
+    async def _flush_manifests(self, conn: Any) -> None:
+        """Version each buffered manifest; drift against the stored one."""
+        batch = list(self._manifests.values())
+        self._manifests.clear()
+        for manifest in batch:
+            normalized = sorted(manifest["tools"], key=lambda t: str(t.get("name", "")))
+            row = await conn.fetchrow(_MANIFEST_LATEST_SQL, manifest["tenant_id"], manifest["server_name"])
+            previous: list[dict[str, Any]] = []
+            version = 1
+            if row is not None:
+                stored = row["tools"]
+                previous = json.loads(stored) if isinstance(stored, str) else list(stored or [])
+                same = [(str(t.get("name")), str(t.get("description_sha256"))) for t in previous] == [
+                    (str(t.get("name")), str(t.get("description_sha256"))) for t in normalized
+                ]
+                if same:
+                    await conn.execute(
+                        _MANIFEST_TOUCH_SQL,
+                        manifest["tenant_id"],
+                        manifest["server_name"],
+                        row["version"],
+                    )
+                    continue
+                version = int(row["version"]) + 1
+            await conn.execute(
+                _MANIFEST_INSERT_SQL,
+                manifest["tenant_id"],
+                manifest["server_name"],
+                version,
+                _json(normalized),
+            )
+            findings = _manifest_drift(previous, normalized)
+            # A first manifest (version 1) drifts from nothing; only its
+            # flagged descriptions are findings.
+            if version == 1:
+                findings = [f for f in findings if f["kind"] == "instruction_shaped_description"]
+            if findings:
+                self._mcp_drift.append(
+                    {
+                        "tenant_id": manifest["tenant_id"],
+                        "server_name": manifest["server_name"],
+                        "version": version,
+                        "findings": findings,
+                    }
+                )
+
+    def drain_mcp_drift(self) -> list[dict[str, Any]]:
+        """Manifest drift findings since the last drain — the consumer's
+        input for WS5.4's alerts. Draining empties the buffer."""
+        out = self._mcp_drift
+        self._mcp_drift = []
+        return out
+
+    def drain_refused(self) -> list[dict[str, str]]:
+        """Sightings that landed on a refused asset since the last drain.
+
+        The consumer turns each into a triage alert citing the sanction
+        decision (WS5.3). Draining empties the buffer, so one flush reports
+        a refused re-observation exactly once.
+        """
+        out = self._refused
+        self._refused = []
+        return out
+
     async def observe(self, message: dict[str, Any]) -> int:
         """Buffer any AI assets this event evidences. Returns how many."""
+        self._buffer_manifest(message)
         sightings = classify(message)
         for sighting in sightings:
             existing = self._pending.get(sighting.identity)
@@ -795,7 +1060,7 @@ class AiAssetRecorder:
 
     async def flush(self) -> int:
         """Write everything buffered. Never raises into the consumer."""
-        if not self._pending:
+        if not self._pending and not self._manifests:
             self._last_flush = time.monotonic()
             return 0
         batch = list(self._pending.values())
@@ -815,9 +1080,10 @@ class AiAssetRecorder:
         written = 0
         try:
             async with pool.acquire() as conn:
+                await self._flush_manifests(conn)
                 for sighting in batch:
                     score, reasons = _score(sighting)
-                    await conn.execute(
+                    sanctioned = await conn.fetchval(
                         _UPSERT_SQL,
                         sighting.tenant_id,
                         sighting.kind,
@@ -835,6 +1101,18 @@ class AiAssetRecorder:
                         sighting.count,
                     )
                     written += 1
+                    if sanctioned is False:
+                        self._metrics["refused_seen"] += 1
+                        self._refused.append(
+                            {
+                                "tenant_id": sighting.tenant_id,
+                                "kind": sighting.kind,
+                                "external_id": sighting.external_id,
+                                "display_name": sighting.display_name or sighting.external_id,
+                                "vendor": sighting.vendor or "",
+                                "discovery_source": sighting.discovery_source,
+                            }
+                        )
         except Exception as exc:  # noqa: BLE001 — an inventory must never wedge promotion
             self._metrics["dropped"] += len(batch) - written
             logger.warning("ai_asset_recorder.flush_failed", error=str(exc)[:300], dropped=len(batch) - written)

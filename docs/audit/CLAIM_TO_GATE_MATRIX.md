@@ -10,6 +10,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 |---|---|---|---|---|---|
 | A hunting campaign is a **sequence of distinct closed-schema plans**, each derived from a scrubbed SUMMARY of the previous step (row counts and pseudonymized top values — a hosted model never sees rows), with budgets for steps, rows, model calls and wall clock **checked before each step** so an exhausted budget prevents the step rather than truncating it; it is NOT a retry loop — the single hunt's one-correction rule holds, a repeated question stops the campaign, and an identical plan under new words stops it too; outcomes are kept apart as ranked leads, a **no-finding carrying a coverage statement** naming the sources, fields and time range actually searched, or could-not-check — and the model still never writes query text | `services/agents/app/hunt/campaign.py` | `ci.yml :: Python — Tests` (agents `test_hunt_campaign.py`, 9 cases through the real plan validator: the two-step hand-off carries `row_count` and scrubbed values while the raw hostname is asserted ABSENT from the second prompt; an exhausted step budget prevents step two from executing at all; repeated-question and identical-plan stops; the one-correction rule across steps; the coverage statement on a no-finding; could-not-check on a failed first step; counts survive scrubbing) + `scripts/check_hunt_agent_boundary.py` (the closed-schema gate, unchanged and still green) | core | GATED | - |
 | Campaigns are **selected per tenant, on a cadence and a budget, off by default** (`hunt_campaign_policies`, migration 179): an APPROVED hunt request launches exactly one campaign (`campaigned_at` marks it; **an unapproved request is never selected** — the WS6.3 approval gate carried into campaigns), every selection is recorded in the Investigation Ledger WITH its reason before the campaign starts, a per-tick cap bounds launches, and a productive campaign's leads are **verified by the investigation agent under their own runs** (capped) before a DRAFT detection proposal opens through the governed path — the wiring that finally assigns the long-declared, never-assigned proposal id (`source: hunt-campaign`, nothing auto-promotes) | `services/agents/app/hunt/hypothesis_scheduler.py`; migration 179; `POST /agent-tools/hunt-plan/propose-detection` | `ci.yml :: Python — Tests` (agents `test_hypothesis_scheduler.py`, 5 cases: an approved request runs once with its reason recorded BEFORE the campaign and is never re-selected; an unapproved request is never selected and the runner is never awaited; the per-tick cap holds at 2 of 5; leads flow verify-then-propose in that order; `verify_leads` caps the investigator at 3 and labels each lead HUNT LEAD) | core | GATED | Coverage-gap, KEV-exposure and new-intel selection sources are recorded follow-ups named in the PR; the selection machinery they plug into is what this row gates |
+| Inside ONE AI session, untrusted content → a secret-bearing prompt → an egress-capable tool is **one high finding** (`wd-ai-session-untrusted-then-secret-then-egress`), and runaway sessions are detected per session (tool-call flood) and per prompt hash (**the SDK hashes every prompt precisely so detection can ask "the same prompt fifty times?" — `redaction.py`'s own stated purpose, consumed for the first time** by `wd-ai-identical-prompt-repetition`); session duration/token burn stays with the existing spend-anomaly baselines rather than growing a second answer | `services/fusion/app/data/windowed_ruleset.json` (3 rules); `packages/aisoc-ai-sdk/aisoc_ai/redaction.py` | `ci.yml :: Python — Tests` (fusion `test_ai_session_rules.py`, 8 cases through the REAL loader and engine: the in-session chain fires; **the same three events across two sessions do NOT** — the session is the claim; out-of-order does not; the flood is per session and two calm sessions do not sum; fifty identical hashes fire and sixty distinct ones do not; and `TestTemplateCoupling` reads the committed ai templates and fails BY NAME on any rule field the templates stop mapping — the aspirational-rule defect's drift gate) + `scripts/check_windowed_translation.py` | core | GATED | - |
+| Re-observing a REFUSED AI asset **no longer silently downgrades its judged score** — the recorder's upsert preserved-by-CASE what the sanction route wrote (the defect was the SQL: `_score()` is sanction-blind by design and `EXCLUDED.risk_score` overwrote the +30 "Reviewed and refused, and still running" with "Not declared" on every flush) — and it now **raises a high-severity triage alert citing the sanction decision**, once per flush, through the ordinary fusion path; containment stays a governed playbook step | `services/fusion/app/services/ai_asset_recorder.py`; `services/fusion/app/workers/consumer.py` | `integration.yml :: The AI recorder preserves judgements and versions MCP manifests (live Postgres)` (the judged score survives re-observation for refused AND approved — a judgement is a judgement — while an unjudged score is refreshed; the refused notice surfaces exactly once per flush; fails on the pre-change tree where the overwrite was the upsert's behaviour) + `ci.yml :: Python — Tests` (fusion `test_refused_asset_alerts.py`: each notice becomes one HIGH alert with the decision cited, a malformed notice is skipped not wedging) | core | GATED | Negative control recorded in the PR: the pre-fix SQL fails the judgement-survival cases |
+| MCP manifests are **versioned per (tenant, server) from hashes computed in the customer's process** — the SDK ships tool name + description SHA-256 + annotations, never description text, with at most one ≤80-char snippet and only for a description that already tripped an instruction pattern — and drift is a triage alert naming what moved: a hash that changed on an existing tool, a newly added state-changing tool, instruction-shaped text (HIGH — that is the poisoning shape itself); **shadow AI** is sighted from SWG/DNS telemetry against a shipped catalog whose every row is a vendor's own documented product domain with per-row provenance, and the sighting states `cannot_see_prompts` outright; **prompt sensitive-class counts** are opt-in, local regex, counts only — off by default means the field is ABSENT, and the standing prompt-content-never-leaves claim stays exactly true | `packages/aisoc-ai-sdk/aisoc_ai/{manifest,classes}.py`; migration 176; `services/fusion/app/data/ai_app_catalog.json` | `integration.yml :: The AI recorder preserves judgements and versions MCP manifests (live Postgres)` (same manifest touches not duplicates, changed manifest versions with `description_drift` and `new_state_changing_tool` named, a first manifest's flagged description IS a finding) + `ci.yml :: Python — Tests` (sdk `test_ai_sdk.py`: descriptions hashed never shipped, bounded snippet only-when-tripped, counts-only classifier, off-by-default means absent; fusion `test_ai_session_rules.py`'s template pin covers the new `mcp_tools`/`prompt_class_counts` mappings; the catalog's non-member domain produces no sighting) | core | GATED | Negative control recorded in the PR: disabling the hash comparison fails the live drift case |
 | A DLP alert normalizes into one finding whatever vendor raised it — policy, rule, data classes, file name/hash/size, channel, destination and its class, the enforcement the DLP product itself applied (`blocked` / `warned` / `allowed` / `audited`), user and device — with per-source profiles mapping only vendor-documented fields: an absent fact stays empty, a destination class is derived only from explicit vendor facts, an unstated enforcement stays null, and a source without a profile yields no finding rather than a best-effort parse | `services/api/app/services/dlp_finding.py`; `GET /alerts/{id}/dlp-finding` | `ci.yml :: Python — Tests` (api, `test_dlp_finding.py`, 15 cases over the vendors' own published shapes — Netskope's DLP alert export sample, the O365 Management Activity DLP schema with its 1–5 EnforcementMode ladder, Graph `alerts_v2` evidence objects — including absent-stays-empty, the managed_app-only destination-class rule, and the honest `finding: null` route answer) | core | GATED | Negative control recorded in the PR: corrupting one enforcement mapping fails two cases |
 | The insider watchlist is a control, not a checkbox: a watchlist row is never indefinite (reason + future expiry required, expired rows stop elevating), a watchlisted identity's alerts are tagged and floored `info`/`low` → `medium` **through the existing business-context path** (a machine-owned `managed_yaml` document beside the analyst's verbatim `yaml_text`, same engine, same triage-worker application point, never a downgrade of `high`/`critical`), the transition onto the list opens a departure-review case whose lake half reports *could not check* rather than zero when unreachable, and the HR door (`workforce_members` status/last-day, per-tenant opt-in, default off) lists departing members idempotently without ever shortening a manual row | `services/api/app/services/insider_watchlist.py`; migration 168; `services/api/app/workers/insider_watchlist_sweep.py` | `ci.yml :: Python — Tests` (api `test_insider_watchlist.py` 21 cases: the generated document parses with the console's own loader and evaluated by the real engine floors low and never touches high/critical, adversarial reasons stay data, validation names each unmet requirement, the lookback renders per-event-type counts and an unreachable lake as unknown-not-zero, the HR door never overwrites an existing row; agents `test_business_context_managed_rules.py` 8 cases: the **agents service's independent grammar implementation** parses the same golden fixture bytes and applies the same floor, and a parse error in either document never withdraws the other's rules) + `integration.yml :: The insider watchlist expires, elevates and reviews for real (live Postgres)` (expiry exclusion is the rebuild SELECT's own WHERE; the console save and the watchlist upsert own one column each and must not clobber the other; `watchlist_source` is a DB CHECK; policy RLS judged under the NOBYPASSRLS role including the unbound sweep arm; the HR door end to end — workforce row → watchlist row + managed rule + review case — idempotent on the second sweep; fails at setup on the pre-change tree) | core | GATED | Negative controls recorded in the PR: removing the expiry exclusion fails the live rebuild test; removing the severity guard makes the floor a downgrade and fails two never-downgrade cases |
 | The M365 audit connector's `DLP.All` stream is a real per-instance switch, not a promise: the `include_dlp` schema field (default off) reaches the wire — the subscription and content-listing calls name `DLP.All` only when the instance opted in — and an unparseable value means off, because a collector that defaults to on when it cannot read its own switch is a poll the tenant did not ask for | `services/connectors/app/connectors/m365_audit.py`; `apps/docs/docs/connectors/m365-audit.md` | `ci.yml :: Python — Tests` (connectors, `test_m365_audit_dlp_toggle.py`, 15 cases: the schema declares the field defaulting off, the module docstring no longer promises the switch "later", default polls exactly the four `Audit.*` types, five truthy spellings enable `DLP.All` and six garbage/falsy values mean off, and the fetch path is observed against a mock vendor — the content-type selection is read off the real HTTP requests, not off a constant) | core | GATED | Negative control recorded in the PR: forcing the coercion to always-off fails the four enable cases |
@@ -427,69 +430,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
-- Total: 416
-- GATED: 407
+- Total: 419
+- GATED: 410
 - PARTIAL: 9
 - NO GATE: 0
 

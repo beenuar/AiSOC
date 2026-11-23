@@ -227,7 +227,7 @@ Read more: https://beenuar.github.io/AiSOC/docs/connectors
 - **Rule files on disk: 7408.** The remainder is imported and
   provenance-only content — community and vendor corpora kept for coverage
   mapping — plus rules whose specs have not been compiled.
-- **Windowed rules: 76**, in a separate engine. Most count events or
+- **Windowed rules: 79**, in a separate engine. Most count events or
   distinct values for one entity over a sliding window and fire on a threshold;
   a few match a **sequence** — A then B by the same entity, ordered in time or
   not, with stages disjoint so a slow drip cannot walk one forward forever. Some

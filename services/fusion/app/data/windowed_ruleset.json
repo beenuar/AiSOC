@@ -1,5 +1,5 @@
 {
-  "count": 76,
+  "count": 79,
   "rules": [
     {
       "category": "application",
@@ -360,6 +360,84 @@
       ],
       "severity": "critical",
       "window_seconds": 1800
+    },
+    {
+      "category": "application",
+      "group_by": "session_id",
+      "id": "wd-ai-session-untrusted-then-secret-then-egress",
+      "mitre": [
+        "T1566",
+        "T1041"
+      ],
+      "name": "AI session: untrusted content, then a secret-bearing prompt, then an egress-capable tool",
+      "ordered": true,
+      "sequence": [
+        {
+          "finding_type_in": [
+            "prompt_injection",
+            "untrusted_content",
+            "guardrail_violation",
+            "excessive_agency"
+          ]
+        },
+        {
+          "prompt_secret_kinds_has_any": [
+            "aws_access_key",
+            "github_token",
+            "openai_key",
+            "slack_token",
+            "private_key",
+            "jwt"
+          ]
+        },
+        {
+          "tool_name_contains_any": [
+            "send",
+            "post",
+            "upload",
+            "http",
+            "fetch",
+            "mail",
+            "publish",
+            "webhook",
+            "slack"
+          ]
+        }
+      ],
+      "severity": "high",
+      "window_seconds": 3600
+    },
+    {
+      "category": "application",
+      "group_by": "session_id",
+      "id": "wd-ai-session-tool-call-flood",
+      "match_when": {
+        "source_type": "ai-runtime",
+        "tool_name_neq": null
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "AI session: tool calls far above any human-driven rate",
+      "severity": "medium",
+      "threshold": 120,
+      "window_seconds": 300
+    },
+    {
+      "category": "application",
+      "group_by": "prompt_sha256",
+      "id": "wd-ai-identical-prompt-repetition",
+      "match_when": {
+        "prompt_sha256_neq": null,
+        "source_type": "ai-runtime"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "The same prompt repeated at machine rate (any session - the hash is the identity)",
+      "severity": "medium",
+      "threshold": 50,
+      "window_seconds": 600
     },
     {
       "category": "application",

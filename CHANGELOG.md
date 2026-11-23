@@ -72,6 +72,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   long-declared, never-assigned `proposal_id` (`source: hunt-campaign`;
   nothing auto-promotes). 14 unit cases; the closed-schema boundary gate
   unchanged and green.
+- **AI security at runtime: session sequences, runaway sessions, refused
+  assets, MCP drift, shadow AI, prompt classes** (WS5 of the gap-closure
+  program; migration 176). **Session-scoped sequences** (WS5.1): inside one
+  AI session, an injection/guardrail finding, then a secret-bearing prompt,
+  then an egress-capable tool is one high finding — through the real
+  windowed engine, with the negative fixture (same events, two sessions)
+  refusing to fire because the session is the claim, and a template-
+  coupling pin that fails by name if the ai ingest templates stop mapping
+  any field a rule reads. **Runaway sessions** (WS5.2): per-session
+  tool-call flood, and the SDK's prompt hash — emitted "precisely so
+  detection can ask: the same prompt fifty times?" and never consumed —
+  consumed: fifty identical hashes fire, sixty distinct ones do not.
+  **Refused assets** (WS5.3): the recorder's flush no longer overwrites a
+  sanction-judged risk score with its sanction-blind one (the defect was
+  the upsert's own `EXCLUDED.risk_score`; the fix is the SQL's CASE,
+  proven live both ways), and a refused asset observed again now raises a
+  high-severity triage alert citing the sanction decision — once per
+  flush, through the ordinary fusion path. **MCP manifest drift** (WS5.4):
+  the SDK ships tool names + description SHA-256s hashed in the customer's
+  process (one ≤80-char snippet, only for a description that already
+  tripped an instruction pattern); the recorder versions manifests per
+  (tenant, server) and drift — a moved hash, a new state-changing tool,
+  instruction-shaped text — is a triage alert naming what moved. **Shadow
+  AI** (WS5.5): SWG/DNS events become AI-estate sightings against a
+  shipped catalog whose every row is a vendor's own documented product
+  domain with per-row provenance; the sighting states `cannot_see_prompts`
+  outright. **Prompt classes** (WS5.6): an opt-in, local, counts-only
+  classifier (personal/health/payment/source-code); off by default means
+  the field is absent, and the standing prompt-content-never-leaves claim
+  stays exactly true. 8 + 2 + 27 unit cases, 5 live-Postgres cases in
+  `integration.yml`, negative controls on the judged-score guard and the
+  drift hash comparison.
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it**
   (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
