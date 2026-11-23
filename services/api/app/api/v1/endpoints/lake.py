@@ -894,7 +894,7 @@ async def _audit_query_attempt(
 
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Archive tier (WS2): policy, partitions, rehydration, portability,
+# Archive tier policy, partitions, rehydration, portability,
 # attestation. Literal subpaths registered after the /query-jobs/{job_id}
 # family above — distinct first segments, no shadowing; within the archive
 # family, /archive-partitions/run registers before /{partition_id}/verify.
@@ -1409,7 +1409,7 @@ async def get_retention_attestation(
 ) -> dict:
     """What is retained per tier, oldest row per tier, manifests verified,
     holds active — each figure from its own store, 'not measured' where a
-    store cannot answer (WS2.4)."""
+    store cannot answer."""
 
     policy_row = await db.execute(
         sa_text("SELECT raw_events_days FROM retention_policies WHERE tenant_id = :t"),

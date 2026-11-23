@@ -42,7 +42,7 @@ __all__ = [
 ]
 
 
-#: Subject kinds whose rows the purge can exempt individually (WS2.4):
+#: Subject kinds whose rows the purge can exempt individually:
 #: these map onto columns the purge statements can test per row. Any other
 #: kind — `tenant` above all — keeps the fail-closed whole-tenant freeze,
 #: because that is what such a hold means.
@@ -56,7 +56,7 @@ class LegalHold:
     subject_value: str
     matter_ref: str | None = None
     released_at: datetime | None = None
-    #: WS2.4 (migration 172): the hold covers records whose event time is
+    #: Scoped holds (migration 172): the hold covers records whose event time is
     #: inside this window. Null bounds mean open-ended in that direction —
     #: a hold with neither covers all time, which is what every hold meant
     #: before the columns existed.

@@ -1,4 +1,4 @@
-"""Outbound rendering under the roundtrip contract (WS1.5).
+"""Outbound rendering under the roundtrip contract.
 
 The load-bearing suite is the ROUNDTRIP class: for every fixture rule,
 ``render()`` to each inbound-parseable dialect and feed the output through

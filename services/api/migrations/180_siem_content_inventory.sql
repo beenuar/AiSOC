@@ -1,4 +1,4 @@
--- WS1.2 — the per-tenant SIEM content inventory.
+-- the per-tenant SIEM content inventory.
 --
 -- The rule-health and proposal machinery exists for AiSOC-native rules and
 -- lacks a SIEM-facing counterpart; the first missing piece is knowing WHAT
@@ -9,7 +9,7 @@
 -- keeps `previous_hash`, which is what the health view cites when a rule's
 -- behaviour changes after an edit.
 
--- lane allocation: migration 180 (WS1)
+-- lane allocation: migration 180
 
 CREATE TABLE IF NOT EXISTS siem_content_rules (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS siem_content_rules (
 );
 
 COMMENT ON TABLE siem_content_rules IS
-    'What detection content the tenant''s SIEM runs (WS1.2): one row per '
+    'What detection content the tenant''s SIEM runs: one row per '
     'vendor rule, content-hashed so drift is a fact. Read-only inventory; '
     'writes to the SIEM go through the governed sync_detection_rule verb.';
 

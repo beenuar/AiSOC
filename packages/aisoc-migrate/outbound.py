@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Render AiSOC native rules out to SPL, KQL, EQL and AQL (WS1.5).
+"""Render AiSOC native rules out to SPL, KQL, EQL and AQL.
 
 The mirror of :mod:`inbound`, bound by one contract that decides every
 design choice here: **outbound then inbound must reproduce the same rule.**

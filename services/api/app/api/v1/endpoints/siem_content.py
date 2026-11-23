@@ -1,10 +1,10 @@
-"""SIEM content: inventory, health and the governed tuning arm (WS1.2–1.6).
+"""SIEM content: inventory, health and the governed tuning arm.
 
 Read-only inventory over migration 180, health with denominators, and a
 tuning-proposal arm that lands on the SAME governed detection-proposal
 path native rules use — author is not approver there, and dispatch to the
 vendor rides the fixed per-vendor ``sync_detection_rule`` verb with its
-content read-back verification (WS1.1). Nothing here writes to a SIEM.
+content read-back verification. Nothing here writes to a SIEM.
 """
 
 from __future__ import annotations
@@ -126,12 +126,12 @@ async def create_tuning_proposal(
     db: DBSession,
     user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
 ) -> dict[str, str]:
-    """WS1.6 — the tuning loop's intake. The proposal lands as a DRAFT on
+    """The tuning loop's intake. The proposal lands as a DRAFT on
     the same ``detection_rule_proposals`` path native rules use: the
     reviewer there cannot be its author (that path's own separation rule),
     and APPLYING an approved change to the vendor rides the fixed
     per-vendor ``sync_detection_rule`` capability, whose write is verified
-    by content read-back (WS1.1) and rolled back from the prior content its
+    by content read-back and rolled back from the prior content its
     rollback_data carries. Backtesting over history through federated
     search is the recorded follow-up on this arm."""
     row = (

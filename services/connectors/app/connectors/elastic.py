@@ -119,7 +119,7 @@ class ElasticConnector(BaseConnector):
 
     async def list_detection_content(self) -> list[dict[str, Any]]:
         """Elastic Security detection rules via the documented
-        ``/api/detection_engine/rules/_find`` (Kibana) endpoint (WS1.2).
+        ``/api/detection_engine/rules/_find`` (Kibana) endpoint.
 
         Read-only, paged, bounded. The threat field carries the rule's own
         ATT&CK mapping where the author set one; absent stays empty.

@@ -13294,8 +13294,7 @@ paths:
       tags:
       - siem-content
       summary: Propose a change to a SIEM rule, on the governed proposal path
-      description: 'WS1.6 — the tuning loop''s intake. The proposal lands as a DRAFT
-        on
+      description: 'The tuning loop''s intake. The proposal lands as a DRAFT on
 
         the same ``detection_rule_proposals`` path native rules use: the
 
@@ -13305,7 +13304,7 @@ paths:
 
         per-vendor ``sync_detection_rule`` capability, whose write is verified
 
-        by content read-back (WS1.1) and rolled back from the prior content its
+        by content read-back and rolled back from the prior content its
 
         rollback_data carries. Backtesting over history through federated
 
@@ -22704,7 +22703,7 @@ paths:
 
         holds active — each figure from its own store, ''not measured'' where a
 
-        store cannot answer (WS2.4).'
+        store cannot answer.'
       operationId: get_retention_attestation_api_v1_lake_retention_attestation_get
       responses:
         '200':

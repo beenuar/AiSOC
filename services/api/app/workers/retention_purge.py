@@ -198,7 +198,7 @@ async def _load_policies(db: AsyncSession) -> list[tuple[uuid.UUID, dict[str, in
 
 @dataclass
 class HoldPosture:
-    """How this tenant's live holds bear on the sweep (WS2.4).
+    """How this tenant's live holds bear on the sweep.
 
     ``freeze_refs`` — matter refs of holds that stop the WHOLE tenant's
     purge: tenant-wide holds (that is what they mean) and any subject kind
@@ -338,7 +338,7 @@ async def _purge_lake(
     number in the audit trail — worth it for an operation whose whole risk is
     deleting more than intended.
 
-    ``narrow_holds`` (WS2.4) subtracts each hold's rows — matched on
+    ``narrow_holds`` subtracts each hold's rows — matched on
     user_name / hostnames / IPs within the hold's window — from both the
     count and the mutation, so a scoped hold protects exactly its own rows
     while the rest of the tenant purges on schedule. The lake TTL ceiling

@@ -1,4 +1,4 @@
-"""The /content inventory legs against mock vendors (WS1.2).
+"""The /content inventory legs against mock vendors.
 
 Each case drives the REAL connector method over a mocked HTTP transport
 shaped from the vendor's published response schema — the house mock-vendor

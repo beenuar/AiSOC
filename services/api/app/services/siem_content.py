@@ -1,4 +1,4 @@
-"""The SIEM content inventory and rule health from outcomes (WS1.2–1.3).
+"""The SIEM content inventory and rule health from outcomes.
 
 Two halves over migration 180:
 

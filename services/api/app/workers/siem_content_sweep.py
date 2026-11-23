@@ -1,4 +1,4 @@
-"""Scheduled refresh of the SIEM content inventory (WS1.2).
+"""Scheduled refresh of the SIEM content inventory.
 
 One tick: every tenant with an enabled content-capable SIEM connector gets
 its inventory refreshed through `siem_content.sweep_tenant` — the same

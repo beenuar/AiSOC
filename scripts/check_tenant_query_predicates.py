@@ -774,12 +774,12 @@ RATCHET: dict[str, str] = {
         "line. It returns a number, never a tenant's rows"
     ),
     "services/agents/app/hunt/hypothesis_scheduler.py::<module>::hunt_campaign_policies": (
-        "the hypothesis scheduler's policy enumeration (WS6.2): SELECT every enabled, due "
+        "the hypothesis scheduler's policy enumeration: SELECT every enabled, due "
         "policy row, after which every selection, campaign and marking is bound to that "
         "row's own tenant_id — the enumeration-then-scoped-work shape"
     ),
     "services/api/app/workers/siem_content_sweep.py::run_once::Connector": (
-        "WS1.2's inventory sweep: enumerate every enabled content-capable SIEM connector "
+        "The SIEM-content inventory sweep: enumerate every enabled content-capable SIEM connector "
         "across tenants, after which sweep_tenant binds every read and write to that "
         "connector's own tenant_id — the enumeration-then-scoped-work shape"
     ),
@@ -805,7 +805,7 @@ RATCHET: dict[str, str] = {
         "fusion sessions.py's DISTINCT tenant_id entry"
     ),
     "services/api/app/workers/lake_archive_sweep.py::<module>::lake_archive_policies": (
-        "the archive sweep's tenant enumeration (WS2.1): SELECT the tenants whose policy row "
+        "the archive sweep's tenant enumeration: SELECT the tenants whose policy row "
         "opted in, after which each tenant's months export under that tenant's own id and "
         "credentials — the enumeration-then-scoped-work shape"
     ),

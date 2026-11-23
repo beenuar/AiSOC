@@ -516,7 +516,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("INSIDER_WATCHLIST_SWEEP_ENABLED", "AISOC_INSIDER_WATCHLIST_SWEEP_ENABLED"),
     )
     INSIDER_WATCHLIST_SWEEP_INTERVAL_SECONDS: int = 900  # 15m
-    # WS2 — archive-tier sweep: export closed lake months for opted-in
+    # archive-tier sweep: export closed lake months for opted-in
     # tenants, verify exported partitions by read-back, expire rehydration
     # scratch tables. Per-tenant policy rows do the real gating (absent or
     # disabled means nothing exports); the worker is hygiene, on by default.
@@ -526,7 +526,7 @@ class Settings(BaseSettings):
     )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
 
-    # WS1.2 — the SIEM content inventory sweep (hours, not minutes: the
+    # the SIEM content inventory sweep (hours, not minutes: the
     # vendor admin APIs it reads are rate-limited surfaces).
     SIEM_CONTENT_SWEEP_ENABLED: bool = True
     SIEM_CONTENT_SWEEP_INTERVAL_SECONDS: int = 21600  # 6h

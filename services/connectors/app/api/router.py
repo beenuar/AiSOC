@@ -659,7 +659,7 @@ async def list_detection_content(
     payload: ContentInventoryRequest,
     principal: TenantPrincipal = Depends(require_console_or_service_auth),
 ):
-    """List the SIEM's own detection content, read-only (WS1.2).
+    """List the SIEM's own detection content, read-only.
 
     501 for connectors that have not opted in (`supports_content_inventory`),
     mirroring federated search's refusal shape so the API layer renders

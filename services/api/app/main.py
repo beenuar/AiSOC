@@ -445,7 +445,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Retention purge. Default off: retention policies were storable (and
     # documented as enforced) long before anything deleted, so switching this
     # on by default would turn an upgrade into unannounced data loss.
-    # WS1.2 — the SIEM content inventory sweep. Hygiene, on by default;
+    # the SIEM content inventory sweep. Hygiene, on by default;
     # a tenant with no content-capable SIEM connector contributes nothing.
     siem_content_task: asyncio.Task | None = None
     if getattr(settings, "SIEM_CONTENT_SWEEP_ENABLED", True):
@@ -599,7 +599,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "and the HR door will not run. Set INSIDER_WATCHLIST_SWEEP_ENABLED=true to sweep"
         )
 
-    # WS2 — the archive-tier sweep (per-tenant policy rows gate the exports).
+    # the archive-tier sweep (per-tenant policy rows gate the exports).
     lake_archive_task: asyncio.Task | None = None
     if settings.LAKE_ARCHIVE_SWEEP_ENABLED:
         try:

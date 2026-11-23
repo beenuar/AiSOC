@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * The SIEM content tab (WS1.2–1.3): what detection content the tenant's
+ * The SIEM content tab: what detection content the tenant's
  * SIEM runs, and how each rule behaves in outcomes this platform
  * attributed. Honest states throughout: an unreachable API shows the
  * error, an empty inventory explains the refresh path, a rate with no

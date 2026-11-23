@@ -1,4 +1,4 @@
-"""The SIEM content inventory's Postgres truths (WS1.2–1.3).
+"""The SIEM content inventory's Postgres truths.
 
 Why live: the versioning rule is the upsert's own CASE (unchanged hash
 advances ``last_seen``; changed hash bumps ``version`` and keeps

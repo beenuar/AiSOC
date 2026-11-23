@@ -166,7 +166,7 @@ class SplunkConnector(BaseConnector):
 
     async def list_detection_content(self) -> list[dict[str, Any]]:
         """Scheduled and correlation saved searches, from the documented
-        ``/services/saved/searches`` REST collection (WS1.2).
+        ``/services/saved/searches`` REST collection.
 
         Read-only. Only the vendor's published entry fields are read;
         the inventory keeps `search` (the SPL text) because the content
