@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate marketplace plugin.yaml manifests for the WS3 P0 connector batch.
+"""Generate marketplace plugin.yaml manifests for the P0 connector batch.
 
 Walks each P0 connector's `schema()` and emits a `plugins/<dash-id>/plugin.yaml`
 that mirrors the live schema fields. Idempotent — re-running overwrites

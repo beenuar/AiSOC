@@ -393,7 +393,7 @@ async def apply_channel_decision(
         )
         changed["severity"] = "critical"
     elif decision == "resolve":
-        # WS7.2: the chat button consults the same resolution contract the
+        # The chat button consults the same resolution contract the
         # PATCH gate enforces — a channel must not be the door that skips
         # it. On gaps the decision becomes a refusal note; no status write.
         gaps = await case_resolution.resolution_gaps(db, tenant_id, uuid.UUID(str(case_id)))

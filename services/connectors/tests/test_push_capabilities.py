@@ -691,7 +691,7 @@ def test_jira_capabilities_advertise_push() -> None:
     caps = JiraConnector.capabilities()
     assert Capability.PUSH_CASE in caps
     assert Capability.PUSH_STATUS in caps
-    assert Capability.PULL_ALERTS in caps  # pre-WS8 capability still intact
+    assert Capability.PULL_ALERTS in caps  # the original pull capability still intact
 
 
 def test_servicenow_capabilities_advertise_push() -> None:

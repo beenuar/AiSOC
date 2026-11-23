@@ -173,7 +173,7 @@ class FederatedQueryRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# WS8: bidirectional ITSM push.
+# Bidirectional ITSM push.
 # ---------------------------------------------------------------------------
 #
 # These two payloads carry the AiSOC case (already serialized to a dict by

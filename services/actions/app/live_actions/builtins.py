@@ -558,7 +558,7 @@ class SplunkCreateNotable(_LegacyExecutorAdapter):
 class SplunkSyncDetectionRule(_LegacyExecutorAdapter):
     # This adapter described creating a Splunk saved search while delegating
     # to an executor that only ever built an Elastic client — with Splunk
-    # credentials the call could only simulate (WS1.1). It now delegates to
+    # credentials the call could only simulate. It now delegates to
     # the Splunk arm, which captures the prior definition, verifies the
     # write by read-back, and restores or deletes on rollback.
     vendor_id = "splunk"

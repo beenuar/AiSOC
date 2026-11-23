@@ -783,13 +783,13 @@ RATCHET: dict[str, str] = {
         "closes: it was credited by `RETURNING id, tenant_id`, a clause that constrains nothing"
     ),
     "services/api/app/services/insider_watchlist.py::<module>::user_risk_profiles": (
-        "the watchlist-expiry sweep (WS4.4): flips every tenant's expired rows in one statement, "
+        "the watchlist-expiry sweep: flips every tenant's expired rows in one statement, "
         "bounded by `watchlist_expires_at <= :now` — the same shape and the same reason as "
         "approval_expiry's UPDATE two entries above. Its RETURNING tenant_id drives the per-tenant "
         "managed-rule rebuild and constrains nothing"
     ),
     "services/api/app/services/insider_watchlist.py::<module>::insider_watchlist_policies": (
-        "the HR-door sweep's tenant enumeration (WS4.4): SELECT the tenants whose policy row "
+        "the HR-door sweep's tenant enumeration: SELECT the tenants whose policy row "
         "opted in (`hr_sync_enabled = TRUE`), after which each tenant's workforce rows are read "
         "under that tenant's own id — the same enumeration-then-scoped-work shape as "
         "fusion sessions.py's DISTINCT tenant_id entry"

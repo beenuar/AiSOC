@@ -86,7 +86,7 @@ class TestStrategySelection:
             ("large upload to an external host", ["T1041"], "data-exfiltration"),
             ("user added to domain admins", ["T1098"], "privilege-escalation"),
             ("new scheduled task created", ["T1053"], "persistence-established"),
-            # WS7.3: the five reference-service strategies.
+            # The five reference-service strategies.
             ("prompt injection attempt against the support copilot", [], "ai-agent-misuse"),
             ("dlp flagged a sensitivity-labelled file shared externally", ["T1213"], "data-handling"),
             ("vendor invoice redirected to a new bank account", ["T1534"], "bec-payment-fraud"),

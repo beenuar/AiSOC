@@ -1,4 +1,4 @@
-"""The resolution contract: what `resolved` has to mean (WS7.2).
+"""The resolution contract: what `resolved` has to mean.
 
 `resolved` was a free transition — the PATCH gate checked only the status
 ladder, the war-room chat decision and the inbound ITSM mirror checked
@@ -13,14 +13,14 @@ The contract, when a tenant's policy enforces it:
 * **containment** — verified by a named probe/action reference, or waived
   with a written reason;
 * **eradication and recovery** — both recorded;
-* **root cause** — the WS7.1 record exists with status ``determined`` or
+* **root cause** — the case root-cause record exists with status ``determined`` or
   ``undetermined`` (whose missing-telemetry reason its own contract already
   requires). A ``hypothesis`` does not satisfy: that status exists precisely
   to say "nothing verified this";
 * **affected entities** — at least one recorded on the case or its alerts;
 * **customer notified** — channel and time.
 
-**Off by default, per tenant** (rule 14: new enforcement is opt-in). No
+**Off by default, per tenant** — new enforcement is opt-in. No
 policy row, or ``enforce = false``, means no gaps — a deployment keeps its
 workflow until the tenant turns the contract on. When the policy row cannot
 be read at decision time the transition is refused naming the read failure:
@@ -320,8 +320,8 @@ async def fetch_root_cause_status(db: AsyncSession, tenant_id: uuid.UUID, case_i
 async def resolution_gaps(db: AsyncSession, tenant_id: uuid.UUID, case_id: uuid.UUID) -> list[str]:
     """The shared checker every `resolved` writer consults.
 
-    Loads the tenant policy, the case facts, the WS7.1 root-cause status and
-    the derived entity count, and hands them to :func:`compute_gaps`. No
+    Loads the tenant policy, the case facts, the root-cause record's status
+    and the derived entity count, and hands them to :func:`compute_gaps`. No
     policy row means no enforcement (opt-in); a policy read that *fails*
     propagates — refusing on an unreadable policy is the caller's job, and
     waving the transition through is the one wrong answer.
@@ -344,8 +344,8 @@ def build_resolution_summary(
     """The customer-facing summary, from persisted rows only.
 
     Renders what is recorded and says plainly what is not — never invents a
-    step, and labels a hypothesis as a hypothesis (the WS7.1 rule carried
-    into prose).
+    step, and labels a hypothesis as a hypothesis (the root-cause record's
+    own discipline carried into prose).
     """
     lines: list[str] = [f"# Resolution summary — {case_title}", ""]
 

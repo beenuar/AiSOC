@@ -507,7 +507,7 @@ class Settings(BaseSettings):
     )
     APPROVAL_EXPIRY_INTERVAL_SECONDS: int = 300  # 5m
 
-    # WS4.4 — insider-watchlist sweep: expiry hygiene (all tenants) + the
+    # Insider-watchlist sweep: expiry hygiene (all tenants) + the
     # HR door (only tenants whose policy row opted in). On by default for
     # the same reason approval expiry is: a recorded deadline that nothing
     # enforces is a promise the product breaks silently.

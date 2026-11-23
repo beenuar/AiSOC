@@ -169,7 +169,7 @@ class ActionItem(BaseModel):
 
 
 class RootCauseSection(BaseModel):
-    """The root-cause record rendered for the retrospective (WS7.1).
+    """The root-cause record rendered for the retrospective.
 
     ``label`` is the load-bearing field: a hypothesis **says it is a
     hypothesis**, a determined cause says what established it, and a missing
@@ -950,7 +950,7 @@ async def build_case_postmortem(
     tasks = await _fetch_tasks(db, case_id, tenant_id)
     inputs = PostmortemInputs(case=case, comments=comments, tasks=tasks)
     postmortem = build_postmortem_from_rows(inputs, now=now)
-    # WS7.1: the evidence-backed record, rendered with its status named —
+    # The evidence-backed root-cause record, rendered with its status named —
     # or an honest absence. Never synthesized from the agent's prose.
     record = await case_root_cause.fetch_record(db, tenant_id=tenant_id, case_id=case_id)
     postmortem.root_cause = build_root_cause_section(record)

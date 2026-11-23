@@ -1,4 +1,4 @@
-"""The managed rule document applies on the live triage path (WS4.4).
+"""The managed rule document applies on the live triage path.
 
 Two implementations of one grammar
 ----------------------------------

@@ -1,5 +1,4 @@
--- 165: the evidence-backed root-cause record (WS7.1 of the gap-closure
--- program).
+-- 165: the evidence-backed root-cause record.
 --
 -- The only root-cause artifact before this was `root_cause_hypothesis`, a
 -- free string on the forensic agent's run state — no case-level record, no

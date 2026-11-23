@@ -1097,7 +1097,7 @@ jobs:
           ! grep -qE 'skipped' /tmp/rootcause.log \
             || { echo "::error::the root-cause live suite skipped a test; its DSNs must both be set"; exit 1; }
 
-      # WS7.1. The case root-cause record's Postgres truths: one record per
+      # The case root-cause record's Postgres truths: one record per
       # case is the ON CONFLICT (tenant_id, case_id) constraint's behaviour
       # (a second upsert replaces, never duplicates); citations resolve
       # against investigation_events' real UNIQUE (run_id, seq) rows; the
@@ -1120,7 +1120,7 @@ jobs:
           ! grep -qE 'skipped' /tmp/case-rootcause.log \
             || { echo "::error::the case root-cause live suite skipped a test; its DSNs must both be set"; exit 1; }
 
-      # WS7.2. The resolution contract's Postgres truths: the opt-in default
+      # The resolution contract's Postgres truths: the opt-in default
       # is the real absent-row state, the one-per-tenant policy and
       # one-per-case facts upserts are unique-constraint behaviour, the
       # derived entity count is JSONB arithmetic over the real schema, and
@@ -1139,7 +1139,7 @@ jobs:
             || { echo "::error::the case resolution live suite did not report any passing test"; exit 1; }
           ! grep -qE 'skipped' /tmp/case-resolution.log \
             || { echo "::error::the case resolution live suite skipped a test; its DSNs must both be set"; exit 1; }
-      # WS4.4. The insider watchlist's Postgres truths: expiry exclusion is
+      # The insider watchlist's Postgres truths: expiry exclusion is
       # the rebuild SELECT's own WHERE clause (a stub always gets it right by
       # construction); the console save and the watchlist upsert own one
       # column each of the same row and must not clobber the other; the

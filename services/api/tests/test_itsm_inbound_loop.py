@@ -119,7 +119,7 @@ def _db(*, current_status: str = "investigating", case_found: bool = True) -> Ma
             result.fetchone.return_value = connector
             return result
         if "case_resolution_policies" in text:
-            # WS7.2: no policy row — the resolution contract is opt-in, and
+            # No policy row — the resolution contract is opt-in, and
             # these suites model a tenant that has not opted in, which is
             # exactly the fetchone()-returns-None state production has.
             result.fetchone.return_value = None

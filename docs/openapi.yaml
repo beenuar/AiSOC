@@ -1012,7 +1012,7 @@ paths:
       description: 'One vocabulary over Netskope, Purview-via-Defender and the M365
         audit
 
-        trail (WS4.1): policy, rule, data classes, file, channel, destination and
+        trail: policy, rule, data classes, file, channel, destination and
 
         its class, what the DLP product itself did, user and device.
 
@@ -1504,8 +1504,7 @@ paths:
       tags:
       - cases
       summary: Open cases that are unowned or past their next-action time
-      description: 'The operations dashboard''s attention feed (WS7.4), and what the
-        shift
+      description: 'The operations dashboard''s attention feed, and what the shift
 
         handoff consumes. ``owner_kind`` is person / agent_run / none;
 
@@ -34685,7 +34684,7 @@ components:
       required:
       - managed_yaml
       title: ManagedRulesOut
-      description: 'The machine-owned half of the rule set, read-only (WS4.4).
+      description: 'The machine-owned half of the rule set, read-only.
 
 
         `managed_yaml` is regenerated whole by the insider watchlist and applied

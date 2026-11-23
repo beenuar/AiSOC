@@ -20,7 +20,7 @@ Encoding that as data rather than prose has three consequences that matter:
   is a reviewable change rather than a prompt edit nobody can diff.
 
 Fifteen strategies here, covering the kill chains the corpus actually fires
-on plus the reference-service surfaces (WS7.3): AI-agent misuse, data
+on plus the reference-service surfaces: AI-agent misuse, data
 handling against business context, BEC payment fraud, SaaS OAuth abuse and
 cloud exposure.
 The registry is designed for many more; each is ~20 lines and needs its own

@@ -35,8 +35,8 @@ Status ladder
 The 2x multiplier matches the plan's posture of "tolerate one missed
 poll cycle before paging the operator". Operators can tune cadence
 overrides per-instance via ``connector_config.expected_cadence_seconds``
-(WS5 follow-up); the override path lands in the resolver below so the
-default table stays the floor.
+(a planned wizard follow-up); the override path lands in the resolver
+below so the default table stays the floor.
 """
 
 from __future__ import annotations
@@ -138,7 +138,7 @@ def expected_cadence_seconds(
 
     Operators can override the default per-instance via
     ``connector_config.expected_cadence_seconds`` once that knob is
-    surfaced in the wizard (WS5 follow-up). Until then the override is
+    surfaced in the wizard (a planned follow-up). Until then the override is
     ``None`` and we always return the table value. Negative or zero
     overrides are silently rejected — they would force the SLO into
     permanent red and almost certainly mean a typo.

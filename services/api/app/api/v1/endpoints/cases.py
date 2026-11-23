@@ -241,7 +241,7 @@ class UpdateCaseRequest(BaseModel):
     compliance_frameworks: list[str] | None = None
     tags: dict[str, str] | None = None
     sla_due_at: datetime | None = None
-    #: WS7.4: the next-action clock (null clears it) and the agent-run
+    #: The next-action clock (null clears it) and the agent-run
     #: owner (null releases it). A person owner stays `assignee`.
     next_action_due_at: datetime | None = None
     owner_agent_run_id: uuid.UUID | None = None
@@ -681,7 +681,7 @@ async def get_cases_attention(
     db: DBSession,
     user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
 ) -> dict[str, Any]:
-    """The operations dashboard's attention feed (WS7.4), and what the shift
+    """The operations dashboard's attention feed, and what the shift
     handoff consumes. ``owner_kind`` is person / agent_run / none;
     ``overdue_seconds`` is null until the due time has passed — null, never
     a confident zero, because "not due yet" and "due exactly now" are
@@ -737,7 +737,7 @@ async def get_cases_attention(
 
 
 async def _claim_case_for_run(db: DBSession, *, tenant_id: uuid.UUID, case_id: uuid.UUID, run_id: uuid.UUID) -> None:
-    """Claim an UNOWNED case for an investigation run (WS7.4).
+    """Claim an UNOWNED case for an investigation run.
 
     Both ownership columns are in the predicate: an agent must never steal
     a case a person already holds, and a second run must not displace the
@@ -925,7 +925,7 @@ async def reopen_case(
 
 
 async def _enforce_resolution_contract(*, db: DBSession, user: Any, existing: Any, target_status: str) -> None:
-    """The WS7.2 gate: `resolved` must satisfy the tenant's contract.
+    """The resolution-contract gate: `resolved` must satisfy the tenant's contract.
 
     One shared checker (`case_resolution.resolution_gaps`) — the war-room
     decision and the inbound ITSM mirror consult the same one, so there is
@@ -975,7 +975,7 @@ async def update_case(
                     "backwards moves require POST /cases/{id}/reopen."
                 ),
             )
-        # WS7.2: the ladder says the move is shaped right; the resolution
+        # The ladder says the move is shaped right; the resolution
         # contract says `resolved` is earned. Same checker as the war-room
         # decision and the ITSM mirror.
         await _enforce_resolution_contract(db=db, user=user, existing=existing, target_status=_normalize_status(body.status))
@@ -1937,7 +1937,7 @@ async def case_investigate(
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     launch = resp.json()
 
-    # WS7.4: the run becomes the case's owner when nobody holds it — a case
+    # The run becomes the case's owner when nobody holds it — a case
     # under agent investigation has an accountable party, and the attention
     # feed stops listing it as unowned. Claim-if-unowned only: an agent
     # never steals a case a person already holds. Never blocks the launch.
@@ -2467,7 +2467,7 @@ async def case_auto_summary(
 
 
 # ---------------------------------------------------------------------------
-# Resolution contract (WS7.2): facts, gaps, policy, summary
+# Resolution contract: facts, gaps, policy, summary
 # ---------------------------------------------------------------------------
 
 
@@ -2548,7 +2548,7 @@ async def get_case_resolution_summary(
 
 
 # ---------------------------------------------------------------------------
-# Root cause (WS7.1): the evidence-backed record, not a prose field
+# Root cause: the evidence-backed record, not a prose field
 # ---------------------------------------------------------------------------
 
 

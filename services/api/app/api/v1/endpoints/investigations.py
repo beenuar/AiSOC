@@ -1182,7 +1182,7 @@ async def export_evidence_bundle(
     )
     artifacts = (await db.execute(select(InvestigationArtifact).where(InvestigationArtifact.run_id == run_id))).scalars().all()
 
-    # WS7.2: when the run is tied to a case that carries resolution facts or
+    # When the run is tied to a case that carries resolution facts or
     # a root-cause record, the customer-facing summary rides in the bundle.
     resolution_summary = None
     try:

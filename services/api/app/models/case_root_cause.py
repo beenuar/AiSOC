@@ -1,4 +1,4 @@
-"""ORM mirrors of migration 165's root-cause tables (WS7.1).
+"""ORM mirrors of migration 165's root-cause tables.
 
 The api service applies the SQL chain (``make upgrade`` / fresh install), so
 the migration is the load-bearing definition; these models keep the ORM

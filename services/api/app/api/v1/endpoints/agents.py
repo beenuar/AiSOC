@@ -320,9 +320,9 @@ async def list_agent_tools(
                     description=declared_descriptions[cap],
                     # input_schema left as the empty-object default for
                     # now. Per-capability argument schemas land with the
-                    # subsequent workstreams that flesh out concrete
-                    # call surfaces (e.g. WS5 for self-healing actions,
-                    # WS8 for ITSM push verbs). Doing it here would
+                    # work that fleshes out concrete call surfaces
+                    # (e.g. self-healing actions and the ITSM push
+                    # verbs). Doing it here would
                     # require touching every connector class twice —
                     # once now for the surface, once later for the
                     # logic — and the agent layer is already happy

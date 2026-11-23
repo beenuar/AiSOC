@@ -1,7 +1,7 @@
 """`sync_detection_rule` reaches the vendor it names, verifies, and rolls back.
 
-What was wrong (WS1.1 of the gap-closure program)
--------------------------------------------------
+What was wrong
+--------------
 `SplunkSyncDetectionRule` in `live_actions/builtins.py` described creating a
 Splunk saved search, but delegated to `SyncDetectionRuleExecutor`, which only
 ever built an **Elastic** client from `elastic_url` — with Splunk credentials

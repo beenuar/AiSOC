@@ -1199,7 +1199,7 @@ class BaseConnector(ABC):
     # about the case (e.g. inbound webhook flow).
     #
     # Both methods are *gated* by ``Capability.PUSH_CASE`` /
-    # ``Capability.PUSH_STATUS`` from WS4. Connectors that don't declare those
+    # ``Capability.PUSH_STATUS``. Connectors that don't declare those
     # capabilities raise ``NotImplementedError`` from the defaults so the
     # actions worker fails closed instead of silently skipping a case fan-out.
 

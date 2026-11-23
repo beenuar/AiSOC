@@ -1,4 +1,4 @@
-"""The evidence-backed root-cause record (WS7.1 of the gap-closure program).
+"""The evidence-backed root-cause record.
 
 One record per case, with a status that separates what an investigation
 *established* from what a model *suggested*:

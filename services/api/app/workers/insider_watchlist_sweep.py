@@ -1,4 +1,4 @@
-"""Insider-watchlist sweep: expiry hygiene plus the HR door (WS4.4).
+"""Insider-watchlist sweep: expiry hygiene plus the HR door.
 
 Two jobs on one tick, deliberately asymmetric about defaults:
 

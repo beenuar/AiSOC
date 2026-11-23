@@ -1,5 +1,4 @@
--- 167: case ownership and the next-action clock (WS7.4 of the gap-closure
--- program).
+-- 167: case ownership and the next-action clock.
 --
 -- A case could sit open with nobody — person or agent — responsible and no
 -- time by which anything was due, and nothing surfaced that state. An owner
@@ -7,7 +6,7 @@
 -- an agent run (`owner_agent_run_id`, new): launching an investigation
 -- claims an unowned case for the run, and never steals one a person holds.
 -- `next_action_due_at` is the clock the attention feed and the shift
--- handoff (WS8.1) read.
+-- handoff read.
 
 ALTER TABLE aisoc_cases ADD COLUMN IF NOT EXISTS next_action_due_at TIMESTAMPTZ;
 ALTER TABLE aisoc_cases ADD COLUMN IF NOT EXISTS owner_agent_run_id UUID;

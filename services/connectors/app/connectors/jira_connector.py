@@ -29,7 +29,7 @@ _PRIORITY_SEVERITY = {
     "Lowest": "info",
 }
 
-# WS8: AiSOC severity → Jira priority. We invert ``_PRIORITY_SEVERITY``
+# AiSOC severity → Jira priority. We invert ``_PRIORITY_SEVERITY``
 # so the round-trip is lossless.
 _SEVERITY_TO_PRIORITY = {
     "critical": "Highest",
@@ -39,7 +39,7 @@ _SEVERITY_TO_PRIORITY = {
     "info": "Lowest",
 }
 
-# WS8: AiSOC status → Jira status name. The values on the right match
+# AiSOC status → Jira status name. The values on the right match
 # the default Jira workflow ("To Do" / "In Progress" / "Done"). Customers
 # with custom workflows can override via ``connector_config.status_map``
 # in the future; for now we ship the defaults so the happy path Just Works.
@@ -97,7 +97,7 @@ class JiraConnector(BaseConnector):
 
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
-        # WS8: bidirectional ticketing landed; Jira can now mint issues
+        # Bidirectional ticketing: Jira can mint issues
         # from AiSOC cases (PUSH_CASE) and project status transitions
         # onto them (PUSH_STATUS) in addition to pulling alerts.
         return (Capability.PULL_ALERTS, Capability.PUSH_CASE, Capability.PUSH_STATUS)
@@ -178,7 +178,7 @@ class JiraConnector(BaseConnector):
         }
 
     # ------------------------------------------------------------------
-    # WS8: bidirectional ticket sync.
+    # Bidirectional ticket sync.
     # ------------------------------------------------------------------
     #
     # Jira's REST API is well-documented but has a few gotchas the

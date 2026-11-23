@@ -1,4 +1,4 @@
-"""ORM mirrors of migration 166's resolution-contract tables (WS7.2).
+"""ORM mirrors of migration 166's resolution-contract tables.
 
 The SQL migration is the load-bearing definition (`make upgrade` / fresh
 install apply the chain); these models keep the parity picture complete and
@@ -24,7 +24,7 @@ class CaseResolutionPolicy(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False)
     #: Off by default: no row, or enforce=false, means the contract does not
-    #: gate `resolved` for this tenant (rule 14 — enforcement is opt-in).
+    #: gate `resolved` for this tenant (new enforcement is opt-in).
     enforce: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     require_containment: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     require_eradication_recovery: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

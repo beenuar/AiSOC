@@ -1,4 +1,4 @@
-"""The root-cause record's Postgres truths, against real Postgres (WS7.1).
+"""The root-cause record's Postgres truths, against real Postgres.
 
 Why this has to be live
 -----------------------

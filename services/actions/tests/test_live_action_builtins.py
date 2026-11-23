@@ -84,7 +84,7 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # exposure and nothing could act on it. Plus 2 from wave-2 8.2:
     # ExtraHop's two read-only NDR verbs, `lookup_network_flows` and
     # `lookup_network_device`.
-    # Plus 1 from WS1.1: the Elastic `sync_detection_rule` arm, registered
+    # Plus 1: the Elastic `sync_detection_rule` arm, registered
     # when the Splunk adapter stopped borrowing the Elastic executor.
     # Plus 4 from WS4.5: `revoke_file_share` across Google Drive,
     # OneDrive/SharePoint (Graph), Box and Dropbox.

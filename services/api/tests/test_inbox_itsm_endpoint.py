@@ -702,7 +702,7 @@ def _build_db_for_endpoint(
     r.fetchone = MagicMock(return_value=ref_row)
     results.append(r)
     # last_used_at update + any subsequent statements. Writes never call
-    # .fetchone(); the one read in this tail is WS7.2's resolution-policy
+    # .fetchone(); the one read in this tail is the resolution-policy
     # fetch, whose honest no-policy state is fetchone() -> None — a bare
     # MagicMock there would read as a truthy policy row made of mocks and
     # drag the contract into suites that model a tenant who never opted in.

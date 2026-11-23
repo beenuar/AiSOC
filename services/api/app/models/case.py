@@ -39,7 +39,7 @@ class Case(Base):
 
     # Assignment. An owner is a person (assigned_to_id) OR an agent run
     # (owner_agent_run_id): investigation launch claims an unowned case for
-    # the run and never steals one a person holds (WS7.4).
+    # the run and never steals one a person holds.
     assigned_to_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     owner_agent_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     #: The next-action clock the attention feed and shift handoff read.
