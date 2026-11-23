@@ -101,6 +101,10 @@ class ActionType(str, Enum):
     RESTORE_EMAIL = "restore_email"
     BLOCK_SENDER = "block_sender"
     UNBLOCK_SENDER = "unblock_sender"
+    # WS4.5 — remove sharing grants / links from a file across the four
+    # file-sharing estates (Drive, OneDrive/SharePoint, Box, Dropbox). In
+    # this enum because the post-action verifier is keyed by ActionType.
+    REVOKE_FILE_SHARE = "revoke_file_share"
 
 
 class ActionStatus(str, Enum):
@@ -186,6 +190,10 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.RESTORE_EMAIL: BlastRadius.LOW,
     ActionType.BLOCK_SENDER: BlastRadius.LOW,
     ActionType.UNBLOCK_SENDER: BlastRadius.LOW,
+    # WS4.5 — one file's sharing surface: above a queue flip, below a host
+    # isolation. Removing a grant interrupts whoever was working in the
+    # document, and every arm captures prior grants for rollback.
+    ActionType.REVOKE_FILE_SHARE: BlastRadius.MEDIUM,
 }
 
 # Actions that require explicit human approval
@@ -205,6 +213,10 @@ APPROVAL_REQUIRED_ACTIONS = {
     # exists to catch.
     ActionType.PURGE_EMAIL,
     ActionType.BLOCK_SENDER,
+    # Removing somebody's access to a document they may be working in is
+    # never automatic either; the capability contract says ANALYST and the
+    # legacy door must agree (test_approval_doors_agree).
+    ActionType.REVOKE_FILE_SHARE,
 }
 
 

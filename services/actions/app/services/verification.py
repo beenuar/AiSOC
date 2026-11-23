@@ -31,6 +31,12 @@ from typing import Any
 import structlog
 
 from app.clients.factories import _entra_client, _gmail_client, _m365_mail_client, _mde_client, _okta_client
+from app.clients.fileshare_clients import (
+    BoxShareClient,
+    DropboxShareClient,
+    GoogleDriveShareClient,
+    GraphDriveClient,
+)
 from app.clients.gmail_client import GmailClient
 from app.clients.m365_mail_client import RECOVERABLE_ITEMS
 from app.core.config import get_settings
@@ -613,8 +619,75 @@ async def _probe_sync_detection_rule(target: str, params: dict[str, Any]) -> boo
     return None
 
 
+async def _probe_revoke_file_share(target: str, params: dict[str, Any]) -> bool | None:
+    """The revoked grant is absent, by independent read-back (WS4.5).
+
+    The executor already read back once inside ``execute()``; this probe is
+    the *independent* second look the contract requires for a verb whose
+    failure mode is a 2xx that changed nothing. It re-lists the grants
+    through the same vendor client family and answers: ``False`` when a
+    grant the request asked to revoke is still visible, ``True`` when it is
+    gone, ``None`` when no vendor credentials (or no target identity) are
+    present — an unverifiable claim stays unverified rather than certified.
+    """
+    mode = str(params.get("revoke") or "grantee")
+    grantee = str(params.get("grantee_email") or "").lower()
+    if mode == "grantee" and not grantee:
+        return None
+
+    try:
+        key, subject = params.get("gws_service_account_key"), params.get("gws_subject_email")
+        if key and subject:
+            drive = GoogleDriveShareClient(key, subject, transport=params.get("_transport"))
+            perms = await drive.list_permissions(target)
+            if mode == "grantee":
+                return not any(str(p.get("emailAddress") or "").lower() == grantee for p in perms)
+            return not any(p.get("type") in ("anyone", "domain") for p in perms)
+
+        if params.get("azure_tenant_id") and params.get("azure_client_id") and params.get("azure_client_secret"):
+            drive_id = str(params.get("drive_id") or "")
+            if not drive_id:
+                return None
+            graph = GraphDriveClient(
+                str(params["azure_tenant_id"]),
+                str(params["azure_client_id"]),
+                str(params["azure_client_secret"]),
+                transport=params.get("_transport"),
+            )
+            perms = await graph.list_permissions(drive_id, target)
+            if mode == "grantee":
+
+                def _emails(p: dict[str, Any]) -> list[str]:
+                    out = [str(((p.get("grantedToV2") or {}).get("user") or {}).get("email") or "")]
+                    out += [str((ident.get("user") or {}).get("email") or "") for ident in p.get("grantedToIdentitiesV2") or []]
+                    return [e.lower() for e in out if e]
+
+                return not any(grantee in _emails(p) for p in perms)
+            return not any("link" in p for p in perms)
+
+        if params.get("box_access_token"):
+            box = BoxShareClient(str(params["box_access_token"]), transport=params.get("_transport"))
+            if mode == "grantee":
+                collabs = await box.list_collaborations(target)
+                return not any(str((c.get("accessible_by") or {}).get("login") or "").lower() == grantee for c in collabs)
+            return await box.get_shared_link(target) is None
+
+        if params.get("dropbox_access_token"):
+            dropbox = DropboxShareClient(str(params["dropbox_access_token"]), transport=params.get("_transport"))
+            if mode == "grantee":
+                members = await dropbox.list_file_members(target)
+                return not any(str(((u.get("user") or {}).get("email")) or "").lower() == grantee for u in members.get("users") or [])
+            return not await dropbox.list_shared_links(target)
+    except Exception as exc:  # noqa: BLE001 — an unreachable vendor is indeterminate, never certified
+        logger.warning("verification.revoke_file_share_probe_error", target=target, error=str(exc)[:300])
+        return None
+
+    return None
+
+
 _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.ISOLATE_HOST: _probe_isolate,
+    ActionType.REVOKE_FILE_SHARE: _probe_revoke_file_share,
     ActionType.BLOCK_IP: _probe_block_ip,
     ActionType.DISABLE_USER: _probe_disable_user,
     ActionType.ALLOW_IP: _probe_allow_ip,

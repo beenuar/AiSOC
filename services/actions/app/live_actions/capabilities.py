@@ -111,6 +111,10 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # image does not contain.
         "osquery_live_query",
         "suspend_session",
+        # WS4.5 — remove sharing grants or links from a file across the
+        # four file-sharing estates (Drive, OneDrive/SharePoint, Box,
+        # Dropbox), prior grants captured for rollback.
+        "revoke_file_share",
         "sync_detection_rule",
         # The return leg of a two-way SIEM integration: AiSOC's verdict
         # written back onto the vendor finding that produced the alert.

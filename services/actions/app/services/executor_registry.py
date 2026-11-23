@@ -15,6 +15,7 @@ from app.executors.endpoint import (
     RunAVScanExecutor,
     RunScriptExecutor,
 )
+from app.executors.fileshare import RevokeFileShareExecutor
 from app.executors.identity import (
     DisableUserExecutor,
     ForceMFAExecutor,
@@ -65,6 +66,8 @@ EXECUTOR_REGISTRY = {
     ActionType.CREATE_NOTABLE_EVENT: CreateNotableEventExecutor(),
     ActionType.SYNC_DETECTION_RULE: SyncDetectionRuleExecutor(),
     ActionType.UPDATE_WATCHER: UpdateWatcherExecutor(),
+    # WS4.5 — share revocation across the four file-sharing estates.
+    ActionType.REVOKE_FILE_SHARE: RevokeFileShareExecutor(),
     ActionType.BLOCK_IOC: BlockIOCExecutor(),
     # Phase 3.3 — alert lifecycle (Splunk ES / Elastic Security / MDE).
     ActionType.ACK_ALERT: AckAlertExecutor(),

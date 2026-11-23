@@ -210,6 +210,8 @@ class Capability(str, Enum):
     SEARCH_SIEM = "search_siem"
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"
+    # WS4.5 — share revocation across the four file-sharing estates.
+    REVOKE_FILE_SHARE = "revoke_file_share"
     UPDATE_WATCHER = "update_watcher"
     # The return leg. Ingest carries a vendor finding id in as `external_id`;
     # this verb carries AiSOC's verdict back out to the same finding, so a

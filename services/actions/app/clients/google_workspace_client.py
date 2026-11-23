@@ -132,7 +132,11 @@ class GoogleWorkspaceClient:
         claims = {
             "iss": self._key["client_email"],
             "sub": self._subject,
-            "scope": _SCOPES,
+            # Subclasses narrow this to their own scope set (the Drive share
+            # client, WS4.5): a service account's domain-wide delegation is
+            # authorized per scope list, so a admin-SDK token and a Drive
+            # token are different grants and must stay different mints.
+            "scope": getattr(self, "_scopes", _SCOPES),
             "aud": _TOKEN_URI,
             "iat": now,
             "exp": now + 3600,

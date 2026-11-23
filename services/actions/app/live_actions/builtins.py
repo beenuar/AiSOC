@@ -51,6 +51,7 @@ from app.executors.endpoint import (
     RunAVScanExecutor,
     RunScriptExecutor,
 )
+from app.executors.fileshare import RevokeFileShareExecutor
 from app.executors.identity import (
     DisableUserExecutor,
     ForceMFAExecutor,
@@ -600,6 +601,69 @@ class DefenderBlockIOC(_LegacyExecutorAdapter):
     _legacy_executor = BlockIOCExecutor()
     _legacy_action_type = ActionType.BLOCK_IOC
     _credential_keys = _DEFENDER_IOC_KEYS
+
+
+# ── WS4.5: revoke_file_share — four estates, one executor, four arms ──────
+#
+# One executor instance shared by the four adapters: the vendor arm is
+# selected inside by which credentials appear, and each adapter's
+# ``_credential_keys`` names exactly the set that selects its vendor (which
+# is also what the dry-run credential-strip removes, so a dry run can only
+# ever reach the simulation note).
+
+_REVOKE_FILE_SHARE = RevokeFileShareExecutor()
+
+_GOOGLE_DRIVE_SHARE_KEYS: tuple[str, ...] = ("gws_service_account_key", "gws_subject_email")
+_M365_DRIVE_SHARE_KEYS: tuple[str, ...] = ("azure_tenant_id", "azure_client_id", "azure_client_secret")
+_BOX_SHARE_KEYS: tuple[str, ...] = ("box_access_token",)
+_DROPBOX_SHARE_KEYS: tuple[str, ...] = ("dropbox_access_token",)
+
+
+@apply_contract
+class GoogleDriveRevokeFileShare(_LegacyExecutorAdapter):
+    vendor_id = "google_workspace"
+    capability = "revoke_file_share"
+    description = "Remove a grantee's access or the sharing link(s) from a Google Drive file, with prior grants captured for rollback."
+    requires_credentials = True
+    _legacy_executor = _REVOKE_FILE_SHARE
+    _legacy_action_type = ActionType.REVOKE_FILE_SHARE
+    _credential_keys = _GOOGLE_DRIVE_SHARE_KEYS
+
+
+@apply_contract
+class M365RevokeFileShare(_LegacyExecutorAdapter):
+    vendor_id = "m365"
+    capability = "revoke_file_share"
+    description = (
+        "Remove a grantee's access or the sharing link(s) from a OneDrive/SharePoint "
+        "item via Microsoft Graph, with prior grants captured for rollback."
+    )
+    requires_credentials = True
+    _legacy_executor = _REVOKE_FILE_SHARE
+    _legacy_action_type = ActionType.REVOKE_FILE_SHARE
+    _credential_keys = _M365_DRIVE_SHARE_KEYS
+
+
+@apply_contract
+class BoxRevokeFileShare(_LegacyExecutorAdapter):
+    vendor_id = "box"
+    capability = "revoke_file_share"
+    description = "Remove a collaborator or the shared link from a Box file, with prior grants captured for rollback."
+    requires_credentials = True
+    _legacy_executor = _REVOKE_FILE_SHARE
+    _legacy_action_type = ActionType.REVOKE_FILE_SHARE
+    _credential_keys = _BOX_SHARE_KEYS
+
+
+@apply_contract
+class DropboxRevokeFileShare(_LegacyExecutorAdapter):
+    vendor_id = "dropbox"
+    capability = "revoke_file_share"
+    description = "Remove a file member or revoke the shared link(s) on a Dropbox file, with prior grants captured for rollback."
+    requires_credentials = True
+    _legacy_executor = _REVOKE_FILE_SHARE
+    _legacy_action_type = ActionType.REVOKE_FILE_SHARE
+    _credential_keys = _DROPBOX_SHARE_KEYS
 
 
 # ---------------------------------------------------------------------------
@@ -1189,6 +1253,11 @@ class GmailUnblockSender(_MailboxAdapter):
 
 
 _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
+    # WS4.5 — share revocation across the four file-sharing estates.
+    GoogleDriveRevokeFileShare,
+    M365RevokeFileShare,
+    BoxRevokeFileShare,
+    DropboxRevokeFileShare,
     # Read-only investigation verbs. Registered first because they are
     # the ones an agent should reach for before anything below them.
     CrowdStrikeGetHost,

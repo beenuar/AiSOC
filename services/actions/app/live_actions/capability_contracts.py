@@ -580,6 +580,30 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         ),
         note="Writes a record into someone else's queue. Noise, not damage.",
     ),
+    "revoke_file_share": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="revoke_file_share",
+        required_permission=_CONTAIN,
+        # Every arm re-reads the grant list after the revocation and FAILS,
+        # naming what it still sees, if a revoked grant is still present —
+        # a 2xx on the DELETE is the vendor accepting the request, not the
+        # estate changing.
+        has_verification_probe=True,
+        note=(
+            "Removes sharing grants or links from a file on Google Drive, "
+            "OneDrive/SharePoint, Box or Dropbox. Its own reverse: execute() "
+            "captures the prior grants into rollback_data before every write "
+            "(none of these APIs has a recycle bin for permissions), and "
+            "rollback restores them — with one honest limit, recorded per "
+            "vendor in the clients: Graph, Box and Dropbox mint a NEW URL "
+            "when a sharing link is re-created, so a link rollback restores "
+            "access shape, never the circulating URL. ANALYST approval: "
+            "cutting access to a document someone is working in is "
+            "disruption on the same shelf as the other containment verbs."
+        ),
+    ),
     "sync_detection_rule": CapabilityContract(
         impact=ActionImpact.MODERATE,
         approval=ApprovalRequirement.ANALYST,

@@ -86,7 +86,9 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # `lookup_network_device`.
     # Plus 1 from WS1.1: the Elastic `sync_detection_rule` arm, registered
     # when the Splunk adapter stopped borrowing the Elastic executor.
-    assert count == 168
+    # Plus 4 from WS4.5: `revoke_file_share` across Google Drive,
+    # OneDrive/SharePoint (Graph), Box and Dropbox.
+    assert count == 172
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -123,6 +125,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("aws", "restore_role_sessions"),
         ("aws", "revoke_role_sessions"),
         ("aws_security_groups", "allow_ip"),
+        ("box", "revoke_file_share"),
         ("aws_security_groups", "block_ip"),
         ("azure_entra", "disable_service_identity"),
         ("azure_entra", "disable_user"),
@@ -159,6 +162,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("defender", "suppress_alert"),
         ("defender", "unisolate_host"),
         ("defender", "update_alert_disposition"),
+        ("dropbox", "revoke_file_share"),
         ("elastic", "ack_alert"),
         ("elastic", "search_siem"),
         ("elastic", "sync_detection_rule"),
@@ -193,6 +197,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("google_workspace", "get_oauth_grants"),
         ("google_workspace", "get_user_activity"),
         ("google_workspace", "purge_email"),
+        ("google_workspace", "revoke_file_share"),
         ("google_workspace", "reset_password"),
         ("google_workspace", "restore_email"),
         ("google_workspace", "revoke_oauth_grant"),
@@ -202,6 +207,7 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("google_workspace", "unblock_sender"),
         ("jira", "create_ticket"),
         ("m365", "block_sender"),
+        ("m365", "revoke_file_share"),
         ("m365", "purge_email"),
         ("m365", "restore_email"),
         ("m365", "search_mailboxes"),
@@ -299,7 +305,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 168
+    assert count == 172
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:
