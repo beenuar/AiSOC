@@ -50,7 +50,7 @@
     "@storybook/addon-a11y": "^10.6.7",
     "@storybook/addon-themes": "^10.6.7",
     "@storybook/react-vite": "^10.6.7",
-    "@storybook/test-runner": "^0.26.0",
+    "@storybook/test-runner": "^0.26.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
