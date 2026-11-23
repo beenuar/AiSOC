@@ -783,6 +783,9 @@ RATCHET: dict[str, str] = {
         "across tenants, after which sweep_tenant binds every read and write to that "
         "connector's own tenant_id — the enumeration-then-scoped-work shape"
     ),
+    "services/api/app/main.py::_demo_self_heal_bootstrap::PublishedReplay": (
+        "startup bootstrap, not a request path; runs before any caller exists"
+    ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
         "This is the UPDATE beside the no-deadline count already recorded above for "
@@ -973,7 +976,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 86
+MAX_RATCHET = 87
 
 
 # ---------------------------------------------------------------------------
