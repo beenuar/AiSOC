@@ -1222,7 +1222,7 @@ jobs:
               --user "$LAKE_ARCHIVE_LIVE_S3_ACCESS:$LAKE_ARCHIVE_LIVE_S3_SECRET" -X PUT "http://localhost:59000/$b")
             case "$code" in 200|409) : ;; *) echo "::error::bucket $b creation failed ($code)"; exit 1;; esac
           done
-          pip install --quiet duckdb
+          pip install --quiet duckdb clickhouse-driver
           python -m pytest ../../tests/isolation/test_lake_archive_live.py -v --tb=short -rs | tee /tmp/lake-archive.log
           grep -qE '[1-9][0-9]* passed' /tmp/lake-archive.log \
             || { echo "::error::the archive live suite did not report any passing test"; exit 1; }
