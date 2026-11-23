@@ -533,9 +533,6 @@ RATCHET: dict[str, str] = {
         "slug-collision probe across all replays; a tenant-scoped check would mint duplicates"
     ),
     # -- no request, so no caller's tenant to filter on ----------------------
-    "services/api/app/main.py::_demo_self_heal_bootstrap::PublishedReplay": (
-        "startup bootstrap, not a request path; runs before any caller exists"
-    ),
     "services/api/app/scripts/bootstrap_admin.py::bootstrap::User": "one-shot CLI bootstrap that creates the first tenant's first admin",
     "services/api/app/scripts/seed_demo.py::_ensure_user::User": "demo seeding CLI, addressed by a fixed deterministic id",
     "services/api/app/scripts/seed_demo.py::_seed_published_replay::PublishedReplay": (
