@@ -785,11 +785,6 @@ RATCHET: dict[str, str] = {
         "across tenants, after which sweep_tenant binds every read and write to that "
         "connector's own tenant_id — the enumeration-then-scoped-work shape"
     ),
-    "services/api/app/workers/siem_content_sweep.py::run_once::Connector": (
-        "WS1.2's inventory sweep: enumerate every enabled content-capable SIEM connector "
-        "across tenants, after which sweep_tenant binds every read and write to that "
-        "connector's own tenant_id — the enumeration-then-scoped-work shape"
-    ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
         "This is the UPDATE beside the no-deadline count already recorded above for "
