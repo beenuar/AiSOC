@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version.
+
 ### Security
 
 - **A malformed compressed frame can no longer panic the ingest receiver**
