@@ -18,7 +18,7 @@
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
     "pino": "^10.4.0",
-    "web-push": "^3.6.7",
+    "web-push": "^4.0.0",
     "ws": "^8.23.0"
   },
   "devDependencies": {
