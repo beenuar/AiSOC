@@ -121,6 +121,9 @@ async def undo_action(
         tenant_id=user.tenant_id,
         actor_id=user.user_id,
         actor_email=getattr(user, "email", None),
+        # Session vs API key must be distinguishable in the trail
+        # (check_audit_coverage): the prefix is None for a session.
+        api_key_prefix=getattr(user, "api_key_prefix", None),
         action="actions:undo",
         resource="action",
         resource_id=str(action_id),
