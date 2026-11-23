@@ -340,7 +340,7 @@ Tokens are minted via `POST /v1/inbox/tokens`, stored hashed (never plaintext), 
 
 A scoped, tenant-isolated query surface over the OpenSearch `events-*` indices. Every query is rewritten to inject `tenant_id` as a top-level filter before reaching OpenSearch — defense in depth on top of the existing index-level RBAC. Query timeouts and result-size caps are enforced per-tenant.
 
-### 12.4 Case Fan-out and Bidirectional ITSM (WS8)
+### 12.4 Case Fan-out and Bidirectional ITSM
 
 AiSOC is the **source of truth** for case state. ITSM systems (Jira, ServiceNow) are projections — analysts working in their familiar ticket UI still see correct context, but the canonical state lives in AiSOC.
 

@@ -556,7 +556,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
         )
 
-    # WS4.4 — insider-watchlist sweep. Expiry hygiene for every tenant
+    # Insider-watchlist sweep. Expiry hygiene for every tenant
     # (a watchlist row promised to end; silence would break that promise),
     # plus the HR door for tenants whose policy row opted in.
     insider_watchlist_task: asyncio.Task | None = None

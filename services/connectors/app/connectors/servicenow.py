@@ -39,7 +39,7 @@ _IMPACT_SEVERITY = {
     "3": "low",
 }
 
-# WS8: AiSOC severity → ServiceNow ``impact`` numeric code. ServiceNow's
+# AiSOC severity → ServiceNow ``impact`` numeric code. ServiceNow's
 # ``impact`` field is 3-tier (1=High / 2=Medium / 3=Low), so we set
 # impact=1 + urgency=1 together — ServiceNow's calculated ``priority``
 # matrix turns ``impact=1 + urgency=1`` into priority 1 ("Critical"),
@@ -67,7 +67,7 @@ _SEVERITY_TO_URGENCY = {
     "info": "3",
 }
 
-# WS8: AiSOC status → ServiceNow ``state`` numeric code. The default
+# AiSOC status → ServiceNow ``state`` numeric code. The default
 # ServiceNow incident state field is a numeric choice list:
 #   1=New, 2=In Progress, 3=On Hold, 6=Resolved, 7=Closed, 8=Canceled.
 # We map AiSOC's lifecycle onto that vocabulary. Customers with custom
@@ -110,7 +110,7 @@ class ServiceNowConnector(BaseConnector):
 
     @classmethod
     def capabilities(cls) -> tuple[Capability, ...]:
-        # WS8: bidirectional ticketing landed; ServiceNow can now mint
+        # Bidirectional ticketing: ServiceNow can mint
         # incidents from AiSOC cases (PUSH_CASE) and project status
         # transitions onto them (PUSH_STATUS) in addition to pulling
         # incidents.
@@ -191,7 +191,7 @@ class ServiceNowConnector(BaseConnector):
         }
 
     # ------------------------------------------------------------------
-    # WS8: bidirectional ticket sync.
+    # Bidirectional ticket sync.
     # ------------------------------------------------------------------
     #
     # ServiceNow's Table API is uniform across record types — POST to

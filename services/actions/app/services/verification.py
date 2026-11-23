@@ -636,7 +636,7 @@ _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.RESTORE_EMAIL: _probe_restore_email,
     ActionType.BLOCK_SENDER: _probe_block_sender,
     ActionType.UNBLOCK_SENDER: _probe_unblock_sender,
-    # WS1.1: the write is verified by content read-back, not by existence —
+    # The rule write is verified by content read-back, not by existence —
     # a tampered or partially-applied save must fail verification.
     ActionType.SYNC_DETECTION_RULE: _probe_sync_detection_rule,
 }

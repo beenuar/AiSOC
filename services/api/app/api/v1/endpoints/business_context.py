@@ -448,7 +448,7 @@ async def _fetch_sample_alerts(
 
 
 class ManagedRulesOut(BaseModel):
-    """The machine-owned half of the rule set, read-only (WS4.4).
+    """The machine-owned half of the rule set, read-only.
 
     `managed_yaml` is regenerated whole by the insider watchlist and applied
     by the triage worker beside the authored rules. It is exposed so an

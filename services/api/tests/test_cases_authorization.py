@@ -58,9 +58,9 @@ WRITE_HANDLERS = [
     # Reopening is a write, and a privileged one: it moves a case out of a
     # terminal state, which the forward-only PATCH deliberately cannot do.
     "reopen_case",
-    # WS7.1: writing the root-cause record is case writing.
+    # Writing the root-cause record is case writing.
     "put_case_root_cause",
-    # WS7.2: recording resolution facts is case writing.
+    # Recording resolution facts is case writing.
     "put_case_resolution",
 ]
 
@@ -69,7 +69,7 @@ WRITE_HANDLERS = [
 #: whole-surface count covers WRITE_HANDLERS plus this map, so a new write
 #: route still cannot arrive unaccounted.
 ADMIN_WRITE_HANDLERS: dict[str, str] = {
-    # WS7.2: whether `resolved` is gated is an admin decision, not an
+    # Whether `resolved` is gated is an admin decision, not an
     # analyst act — an analyst records facts, an admin turns the contract on.
     "put_resolution_policy": "settings:write",
 }

@@ -1,4 +1,4 @@
-"""The M365 audit DLP.All switch is real, per instance (WS4.2).
+"""The M365 audit DLP.All switch is real, per instance.
 
 What was wrong
 --------------

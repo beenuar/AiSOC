@@ -1,7 +1,7 @@
 """A case's root cause is an evidence-backed record, not a prose field.
 
-What was wrong (WS7.1 of the gap-closure program)
--------------------------------------------------
+What was wrong
+--------------
 The only root-cause artifact anywhere was ``root_cause_hypothesis`` — a free
 string on the forensic agent's run state, rendered into the report and the
 console as-is. There was no case-level record, no status distinguishing a

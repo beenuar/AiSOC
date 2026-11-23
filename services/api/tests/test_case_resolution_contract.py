@@ -1,4 +1,4 @@
-"""A case reaches `resolved` only through the resolution contract (WS7.2).
+"""A case reaches `resolved` only through the resolution contract.
 
 What was wrong
 --------------
@@ -17,11 +17,12 @@ What this asserts
   verified by a named probe/action reference or waived with a reason;
   eradication and recovery steps recorded; root cause **determined or
   undetermined-with-reason** (a hypothesis does not satisfy — that is the
-  point of WS7.1's statuses); at least one affected entity recorded; the
+  point of the root-cause record's statuses); at least one affected entity
+  recorded; the
   customer notified with channel and time.
 * **Per-tenant policy, off by default**: no policy row (or `enforce=false`)
   means no gaps — existing deployments keep their workflow until a tenant
-  turns the contract on. Rule 14: new enforcement is opt-in.
+  turns the contract on. New enforcement is opt-in.
 * The PATCH route refuses `… → resolved` with a 422 that lists every unmet
   requirement by name (the console surfaces `detail` verbatim in a toast).
 * The war-room "resolve" decision consults the same checker and, on gaps,

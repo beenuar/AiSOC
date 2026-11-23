@@ -590,7 +590,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         # compare it with the normalized intended content — existence alone
         # would be the wrong check, because this verb's failure mode is a
         # rule that saved with *different* content. A mismatch fails the
-        # action naming the differing fields (WS1.1; the clients gained the
+        # action naming the differing fields (the clients gained the
         # read half: get_saved_search / get_detection_rule).
         has_verification_probe=True,
         note=(

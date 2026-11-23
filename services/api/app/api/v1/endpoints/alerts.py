@@ -1052,7 +1052,7 @@ async def get_alert_dlp_finding(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
 ) -> dict[str, Any]:
     """One vocabulary over Netskope, Purview-via-Defender and the M365 audit
-    trail (WS4.1): policy, rule, data classes, file, channel, destination and
+    trail: policy, rule, data classes, file, channel, destination and
     its class, what the DLP product itself did, user and device.
 
     ``finding: null`` is the honest answer for an alert that is not a DLP

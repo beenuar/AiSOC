@@ -1,4 +1,4 @@
-"""The insider watchlist is a control, not a checkbox (WS4.4).
+"""The insider watchlist is a control, not a checkbox.
 
 What was wrong
 --------------

@@ -501,7 +501,7 @@ async def resolve_contract_target(
     case_id: Any,
     vendor_status: str,
 ) -> tuple[str, str | None]:
-    """What an inbound vendor `resolved`/`closed` may actually set (WS7.2).
+    """What an inbound vendor `resolved`/`closed` may actually set.
 
     A vendor webhook cannot be answered with a 422, so a vendor-side
     resolution that fails the tenant's resolution contract lands as
@@ -847,7 +847,7 @@ async def inbound_itsm_webhook(
     # system comment.
     actor_label = f"itsm-webhook ({vendor})"
     try:
-        # WS7.2: a vendor-side resolve/close that fails the tenant's
+        # A vendor-side resolve/close that fails the tenant's
         # resolution contract is demoted to `contained` with the gaps in
         # the system note — a webhook cannot be 422'd, but it must not be
         # the door that skips the contract either.

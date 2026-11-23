@@ -1,4 +1,4 @@
-"""Every open case has an owner and a next action, or it surfaces (WS7.4).
+"""Every open case has an owner and a next action, or it surfaces.
 
 What was wrong
 --------------
@@ -20,7 +20,7 @@ What this asserts
   never steals a case a person already owns.
 
 The attention feed is what the operations dashboard renders and what the
-WS8.1 shift handoff will consume.
+shift handoff will consume.
 """
 
 from __future__ import annotations

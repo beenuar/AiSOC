@@ -1,4 +1,4 @@
--- WS4.4 — the insider watchlist becomes a control instead of a checkbox.
+-- 168: the insider watchlist becomes a control instead of a checkbox.
 --
 -- `user_risk_profiles.is_watchlisted` has existed since migration 014 and the
 -- console wrote it — and that was the whole feature. Nothing consumed the

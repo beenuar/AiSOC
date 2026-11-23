@@ -1,9 +1,9 @@
-"""The resolution contract's Postgres truths, against real Postgres (WS7.2).
+"""The resolution contract's Postgres truths, against real Postgres.
 
 Why this has to be live
 -----------------------
 * ``resolution_gaps`` is a composition of four real reads (policy row, facts
-  row, the WS7.1 root-cause record, and the derived entity count over the
+  row, the case root-cause record, and the derived entity count over the
   case's observable graph and its alerts' affected-* arrays) — the entity
   count in particular is JSONB arithmetic a stub always gets right by
   construction.

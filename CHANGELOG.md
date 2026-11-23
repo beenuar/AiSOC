@@ -25,8 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A DLP alert normalizes into one finding, whatever vendor raised it**
-  (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
+- **A DLP alert normalizes into one finding, whatever vendor raised it.**
+  Netskope's DLP alerts, Purview DLP and
   insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit
   trail's `DlpRuleMatch` events each arrived as their vendor shaped them,
   readable only through `raw_event`. `app/services/dlp_finding.py` derives
@@ -45,8 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   corrupts one enforcement mapping and watches two fail.
 
 ### Added
-- **The insider watchlist is a control, not a checkbox** (WS4.4 of the
-  gap-closure program). `user_risk_profiles.is_watchlisted` existed since
+- **The insider watchlist is a control, not a checkbox.**
+  `user_risk_profiles.is_watchlisted` existed since
   migration 014 and the console wrote it — and nothing consumed it: no
   elevation, no expiry, no review. Now (migration 168): a watchlist row is
   **never indefinite** (reason + future expiry required; a sweep worker
@@ -70,7 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   WHERE; the two upserts own one column each; RLS under the NOBYPASSRLS
   role; the HR door end to end).
 - **The M365 audit connector's `DLP.All` stream is a real per-instance
-  switch** (WS4.2 of the gap-closure program). The module docstring had
+  switch.** The module docstring had
   promised "DLP can be re-enabled per-instance later via `connector_config`"
   while `_DEFAULT_CONTENT_TYPES` was hard-coded and the constructor accepted
   no such setting — the aspirational-comment family. The schema now declares
@@ -88,13 +88,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sensitive-data details require.
 
 - **Every open case has an accountable owner and a next-action clock**
-  (WS7.4, completing WS7 of the gap-closure program). An owner is a person
+  (completing the resolution-not-escalation workstream). An owner is a person
   (`assigned_to_id`) or an agent run (`owner_agent_run_id`, migration 167):
   launching an investigation claims an unowned case for the run — and never
   steals one a person already holds, pinned by a negative control that
   removes the two predicates and watches the test fail. `next_action_due_at`
   is PATCHable (null clears it), and `GET /cases/attention` feeds the
-  operations dashboard — and WS8.1's shift handoff next — with open cases
+  operations dashboard — and the shift handoff next — with open cases
   that are unowned or overdue, each row naming its `owner_kind` and carrying
   `overdue_seconds` as null until the due time passes, because "not due
   yet" and "due exactly now" are different facts and a confident zero would
@@ -102,8 +102,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Five investigator strategies for the reference-service surfaces**
-  (WS7.3 of the gap-closure program): `ai-agent-misuse` (the confused-deputy
+- **Five investigator strategies for the reference-service surfaces**:
+  `ai-agent-misuse` (the confused-deputy
   chase — session timeline, the agent identity's grants and calls, egress
   matched to tool calls), `data-handling` (business-context triage of DLP
   hits: the user's own history for this data class and destination, role
@@ -122,7 +122,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **A case reaches `resolved` only through the tenant's resolution
-  contract** (WS7.2 of the gap-closure program). `resolved` was a free
+  contract.** `resolved` was a free
   transition: the PATCH gate checked only the status ladder, the war-room
   chat decision and the inbound Jira/ServiceNow mirror checked nothing, and
   the hourly sweep then auto-closed whatever arrived. One shared checker
@@ -135,7 +135,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contract. The contract: containment verified by a named probe/action
   reference or waived with a reason; eradication and recovery recorded;
   root cause **determined or undetermined** (a hypothesis is an unverified
-  lead and is refused in those words — WS7.1's statuses doing their job);
+  lead and is refused in those words — the root-cause record's statuses
+  doing their job);
   at least one affected entity, derived from the case's own observable
   graph and its alerts' affected-* arrays, never self-attested; customer
   notified with channel and time together. **Off by default per tenant**
@@ -155,8 +156,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **A case's root cause is an evidence-backed record, not a prose field**
-  (WS7.1 of the gap-closure program). The only root-cause artifact was
+- **A case's root cause is an evidence-backed record, not a prose field.**
+  The only root-cause artifact was
   `root_cause_hypothesis`, a free string on the forensic agent's run state,
   rendered as-is — a reader could not tell "we walked the chain back to the
   09:02 delivery, here is the ledger entry" apart from "the model wrote a
@@ -218,7 +219,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and timers into the process for its lifetime.
 
 - **`sync_detection_rule` reaches the vendor it names, verifies by
-  read-back, and rolls back for real** (WS1.1 of the gap-closure program).
+  read-back, and rolls back for real.**
   The Splunk adapter described creating a Splunk saved search while
   delegating to an executor that only ever built an Elastic client — with
   Splunk credentials the call could only simulate, and
@@ -238,6 +239,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   read-back. Measured through the real builtins against mock vendor
   servers (11 cases); the negative control reverts the Splunk arm and the
   reach test fails with zero Splunk requests.
+
+### Changed
+
+- **Internal planning labels no longer appear outside pull-request titles.**
+  Code comments, docstrings, the published OpenAPI spec, workflow step
+  comments and this changelog cited workstream ids and brief-internal rule
+  numbers that nothing in the tree defined, so a reader of the published
+  spec or these notes hit an opaque label. Each citation is replaced by the
+  behaviour it referred to, the spec is regenerated from the corrected
+  docstrings, and `docs/roadmap/capability-program.md` now indexes the
+  program's workstreams against their merged pull requests — the one place
+  such ids are defined.
 
 ## [23.6.1] - 2026-11-22
 

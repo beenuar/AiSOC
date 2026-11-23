@@ -93,8 +93,8 @@ __all__ = [
 
 #: This format's own version, independent of OCSF's. Bumped when the
 #: payload shape changes in a way a reader must notice.
-# 1.1: optional `resolution` section (WS7.2) — the customer-facing summary
-# built from the persisted resolution facts and the WS7.1 root-cause record,
+# 1.1: optional `resolution` section — the customer-facing summary built
+# from the persisted resolution facts and the case root-cause record,
 # present only when the run's case carries them.
 BUNDLE_SCHEMA_VERSION = "1.1"
 
@@ -346,7 +346,7 @@ def build_bundle(
         ),
     }
     if resolution_summary is not None:
-        # WS7.2: present only when the run's case carries resolution facts /
+        # Present only when the run's case carries resolution facts /
         # a root-cause record — an absent section is the honest state, never
         # an empty scaffold pretending something was recorded.
         payload["resolution"] = {"summary_markdown": resolution_summary}

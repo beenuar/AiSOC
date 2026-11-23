@@ -110,8 +110,9 @@ def _resolve_token_url(app_credential: OAuthAppCredential, hints: Mapping[str, A
 def _parse_expires_at(value: Any) -> datetime | None:
     """Best-effort parse of an ``expires_at`` field stored in auth_config.
 
-    The hosted callback writes ISO-8601 with ``+00:00``; older rows
-    (pre-WS5) might be missing or malformed. Anything we can't parse is
+    The hosted callback writes ISO-8601 with ``+00:00``; rows written
+    before the hosted callback landed might be missing or malformed.
+    Anything we can't parse is
     treated as "expired" so the worker attempts a refresh on next tick.
     """
     if not isinstance(value, str) or not value:

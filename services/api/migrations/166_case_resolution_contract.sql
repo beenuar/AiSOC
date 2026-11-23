@@ -1,9 +1,9 @@
--- 166: the resolution contract (WS7.2 of the gap-closure program).
+-- 166: the resolution contract.
 --
 -- `resolved` was a free transition: the PATCH gate checked only the status
 -- ladder, and the war-room decision and the inbound ITSM mirror checked
 -- nothing. These two tables carry the per-tenant policy (off by default —
--- no row means no enforcement; rule 14, enforcement is opt-in) and the
+-- no row means no enforcement; new enforcement is opt-in) and the
 -- per-case facts the shared checker (`app/services/case_resolution.py`)
 -- reads: containment verified-with-reference or waived-with-reason,
 -- eradication and recovery steps, and the customer notification (channel

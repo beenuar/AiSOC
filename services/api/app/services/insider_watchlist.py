@@ -9,7 +9,7 @@ flag: no alert was elevated, nothing expired, and no review of the user's
 recent activity happened. A watchlist nothing reads is a checkbox, not a
 control.
 
-The three halves this module adds (WS4.4):
+The three halves this module adds:
 
 * **Expiry.** A watchlist row is never indefinite: watchlisting requires
   `expires_at` in the future, and an expired row stops elevating — first

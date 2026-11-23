@@ -1,4 +1,4 @@
-"""A DLP alert normalizes into one finding, whatever vendor raised it (WS4.1).
+"""A DLP alert normalizes into one finding, whatever vendor raised it.
 
 What was wrong
 --------------

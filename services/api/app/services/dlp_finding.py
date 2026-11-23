@@ -1,4 +1,4 @@
-"""The normalized DLP finding: one vocabulary over three vendors (WS4.1).
+"""The normalized DLP finding: one vocabulary over three vendors.
 
 Netskope's DLP alert feed, Purview DLP and insider-risk alerts riding
 Defender's ``alerts_v2``, and the M365 audit trail's ``DlpRuleMatch`` events

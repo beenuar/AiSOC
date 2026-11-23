@@ -1,4 +1,4 @@
-"""The insider watchlist's Postgres truths, against real Postgres (WS4.4).
+"""The insider watchlist's Postgres truths, against real Postgres.
 
 Why this has to be live
 -----------------------
