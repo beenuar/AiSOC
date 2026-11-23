@@ -28,10 +28,10 @@
     "@types/node": "^22.20.5",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
-    "eslint": "^10.14.0",
+    "eslint": "^10.15.0",
     "tsx": "^4.23.15",
     "typescript": "^5.3.3",
-    "typescript-eslint": "^8.72.2"
+    "typescript-eslint": "^8.73.0"
   },
   "optionalDependencies": {
     "@opentelemetry/api": "^1.10.0",
