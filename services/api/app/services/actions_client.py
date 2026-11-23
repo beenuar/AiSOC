@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from uuid import UUID
 
 import httpx
 import structlog
@@ -86,11 +87,12 @@ def service_headers() -> dict[str, str]:
     return headers
 
 
-async def _post(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
+async def _post(path: str, payload: dict[str, Any] | None, extra_headers: dict[str, str] | None = None) -> dict[str, Any]:
     url = f"{base_url()}{path}"
+    headers = {**service_headers(), **(extra_headers or {})}
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            response = await client.post(url, headers=service_headers(), json=payload)
+            response = await client.post(url, headers=headers, json=payload)
     except httpx.ConnectError as exc:
         # Nothing was written to a socket, so nothing was processed.
         raise ActionsServiceError(f"actions service unreachable: {exc}") from exc
@@ -112,11 +114,12 @@ async def _post(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
     return body
 
 
-async def _get(path: str) -> Any:
+async def _get(path: str, extra_headers: dict[str, str] | None = None) -> Any:
     url = f"{base_url()}{path}"
+    headers = {**service_headers(), **(extra_headers or {})}
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            response = await client.get(url, headers=service_headers())
+            response = await client.get(url, headers=headers)
     except httpx.HTTPError as exc:
         raise ActionsServiceError(f"actions service unreachable: {exc}") from exc
     if response.status_code >= 400:
@@ -126,6 +129,20 @@ async def _get(path: str) -> Any:
         return response.json()
     except ValueError as exc:
         raise ActionsServiceError("actions service returned a non-JSON body") from exc
+
+
+def _action_id_segment(action_id: str) -> str:
+    """An action id safe to interpolate into the upstream path.
+
+    Action ids are UUIDs minted by this platform. Parsing rather than
+    pattern-matching refuses anything else before it can steer a request
+    carrying the service token somewhere it was not aimed — the same guard
+    the capability identifier gets.
+    """
+    try:
+        return str(UUID(str(action_id)))
+    except ValueError as exc:
+        raise ActionsServiceError(f"{action_id!r} is not an action id") from exc
 
 
 #: Capability verbs are short identifiers from a closed vocabulary. This one
@@ -254,6 +271,57 @@ async def decide_action(
     if chatops_approver is not None:
         body["chatops_approver"] = chatops_approver
     return await _post(f"/api/v1/actions/{action_id}/{verb}", body or None)
+
+
+async def get_action(*, action_id: str, tenant_id: str) -> dict[str, Any]:
+    """Read one action record, tenant-narrowed.
+
+    The tenant travels on the header the actions service reads for its
+    scoped read; a caller that owns the record gets it whole — including
+    ``rollback_data`` and the vendor it executed against — and one that does
+    not gets the same 404 as for a record that never existed.
+    """
+    safe_id = _action_id_segment(action_id)
+    body = await _get(f"/api/v1/actions/{safe_id}", extra_headers={"X-Tenant-ID": tenant_id})
+    if not isinstance(body, dict):
+        raise ActionsServiceError("actions service returned an unexpected body shape")
+    return body
+
+
+async def undo_action(
+    *,
+    action_id: str,
+    tenant_id: str,
+    auth_config: dict[str, Any] | None = None,
+    principal: dict[str, Any] | None = None,
+    approver: dict[str, Any] | None = None,
+    requester: dict[str, Any] | None = None,
+    confidence: float | None = None,
+    requested_by: str = "aisoc-api",
+) -> dict[str, Any]:
+    """Ask the actions service to reverse one completed action.
+
+    ``auth_config`` carries the tenant's decrypted connector credentials in
+    connector-schema field names, exactly as :func:`dispatch_live_action`
+    sends them for a forward execution; the actions service translates them
+    at its boundary and they are never persisted anywhere. ``approver`` is
+    sent only when a queued undo has been decided — the actions service
+    grades the reverse capability itself and binds the approver under
+    separation of duties against ``requester``.
+    """
+    safe_id = _action_id_segment(action_id)
+    payload: dict[str, Any] = {"requested_by": requested_by}
+    if auth_config:
+        payload["auth_config"] = auth_config
+    if principal is not None:
+        payload["principal"] = principal
+    if approver is not None:
+        payload["approver"] = approver
+    if requester is not None:
+        payload["requester"] = requester
+    if confidence is not None:
+        payload["confidence"] = confidence
+    return await _post(f"/api/v1/actions/{safe_id}/rollback", payload, extra_headers={"X-Tenant-ID": tenant_id})
 
 
 async def dispatch_live_action(

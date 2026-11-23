@@ -206,7 +206,12 @@ def _column_text(value: Any) -> str:
 #: this module is the storage layer and the column holds text; importing the
 #: enum here would make the SQL depend on the executor contract, which is the
 #: coupling 055 avoided by storing the record whole.
-_INTENT_LOCKED_STATUSES = ("awaiting_approval", "running", "reconciliation_required")
+#:
+#: ``rolling_back`` is locked for the reversal's version of the same reason:
+#: what gets undone must be what executed, and a submission that retargeted a
+#: record mid-reversal would change what the executor is in the middle of
+#: restoring.
+_INTENT_LOCKED_STATUSES = ("awaiting_approval", "running", "reconciliation_required", "rolling_back")
 
 #: The same tuple as a SQL list. Built rather than written twice so the two
 #: cannot drift, and quoted here because these are fixed identifiers from a
@@ -487,6 +492,96 @@ async def claim_for_execution(
         return Claim(ClaimOutcome.WRONG_STATE, record=existing, current_status=current)
     except Exception as exc:  # noqa: BLE001
         _report_degraded("claim_readback_failed", action_id, exc)
+        return Claim(ClaimOutcome.STORE_UNAVAILABLE)
+    finally:
+        await conn.close()
+
+
+async def claim_rollback(action_id: str, *, tenant_id: str, claimed_by: str) -> Claim:
+    """Take exclusive ownership of an action's reversal, durably, or refuse.
+
+    The same one conditional ``UPDATE`` as :func:`claim_for_execution`, and
+    for the same reason: two undo requests — two replicas, or one operator
+    and one retry — must elect exactly one executor before a vendor is asked
+    to restore anything. Postgres locks the row, the loser re-evaluates
+    ``status = 'completed'`` against the committed ``rolling_back`` and
+    matches nothing.
+
+    Deliberately not a call into :func:`claim_for_execution`: that function
+    writes its claim under ``dispatch``, which on a completed record holds
+    the forward execution's provenance. A reversal that overwrote it would
+    erase the record of the thing being reversed, so the claim lands under
+    ``rollback`` and the settle (an ordinary :func:`save`) replaces it with
+    the outcome.
+
+    Only ``completed`` can be claimed. Everything else is a state in which
+    there is no effect to undo (never ran), nothing left to undo (already
+    rolled back) or an outcome nobody has established yet — the caller turns
+    ``current_status`` into the right refusal.
+    """
+    claimed_at = datetime.now(UTC).isoformat()
+    claim_note = {"state": "claimed", "claimed_by": claimed_by, "claimed_at": claimed_at}
+    dsn = _dsn()
+
+    if dsn is None:
+        async with _MEMORY_CLAIM_LOCK:
+            record = _MEMORY.get(action_id)
+            if record is None or str(record.get("tenant_id") or "") != str(tenant_id):
+                return Claim(ClaimOutcome.NOT_FOUND)
+            current = _column_text(record.get("status"))
+            if current != "completed":
+                return Claim(ClaimOutcome.WRONG_STATE, record=dict(record), current_status=current)
+            record["status"] = "rolling_back"
+            record["rollback"] = claim_note
+            return Claim(ClaimOutcome.CLAIMED, record=dict(record))
+
+    try:
+        conn = await _connect(dsn)
+    except Exception as exc:  # noqa: BLE001
+        _report_degraded("rollback_claim_connect_failed", action_id, exc)
+        return Claim(ClaimOutcome.STORE_UNAVAILABLE)
+
+    try:
+        row = await conn.fetchrow(
+            """
+            UPDATE aisoc_action_records
+               SET status = 'rolling_back',
+                   record = jsonb_set(
+                       jsonb_set(record, '{status}', to_jsonb('rolling_back'::text), true),
+                       '{rollback}', $3::jsonb, true
+                   ),
+                   updated_at = now()
+             WHERE id = $1
+               AND tenant_id = $2
+               AND status = 'completed'
+            RETURNING record
+            """,
+            action_id,
+            str(tenant_id),
+            json.dumps(claim_note),
+        )
+    except Exception as exc:  # noqa: BLE001
+        _report_degraded("rollback_claim_failed", action_id, exc)
+        await conn.close()
+        return Claim(ClaimOutcome.STORE_UNAVAILABLE)
+
+    try:
+        if row is not None:
+            global _DB_CONFIRMED
+            _DB_CONFIRMED = True
+            record = json.loads(row["record"])
+            _MEMORY[action_id] = record
+            return Claim(ClaimOutcome.CLAIMED, record=record)
+
+        existing = await _fetch_record(conn, action_id, str(tenant_id))
+        if existing is None:
+            _MEMORY.pop(action_id, None)
+            return Claim(ClaimOutcome.NOT_FOUND)
+        current = _column_text(existing.get("status"))
+        _MEMORY[action_id] = existing
+        return Claim(ClaimOutcome.WRONG_STATE, record=existing, current_status=current)
+    except Exception as exc:  # noqa: BLE001
+        _report_degraded("rollback_claim_readback_failed", action_id, exc)
         return Claim(ClaimOutcome.STORE_UNAVAILABLE)
     finally:
         await conn.close()

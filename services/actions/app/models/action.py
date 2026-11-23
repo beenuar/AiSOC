@@ -130,6 +130,11 @@ class ActionStatus(str, Enum):
     #: Not a terminal success: `services/api`'s usage meter counts `completed`
     #: as the one status meaning a vendor was touched, and that stays true.
     RECONCILIATION_REQUIRED = "reconciliation_required"
+    #: Claimed for reversal. Same discipline as ``RUNNING``: written to the
+    #: durable store *before* the vendor is asked to undo anything, so two
+    #: undo requests elect one executor and a replica that dies mid-reversal
+    #: leaves a record visibly in flight rather than one nobody started.
+    ROLLING_BACK = "rolling_back"
     ROLLED_BACK = "rolled_back"
 
 

@@ -35,7 +35,7 @@ from app.security.authz import (
 )
 from app.security.chatops_identity import resolve_approver
 from app.security.chatops_token import ChatOpsTokenError, verify_token
-from app.services import action_store
+from app.services import action_store, undo
 from app.services.action_store import ActionIntentConflict, ActionStoreUnavailable, ClaimOutcome
 from app.services.approval_gate import apply_matrix
 from app.services.blast_radius import BlastRadiusGate
@@ -708,6 +708,71 @@ async def reconcile_action(
         logger.error("action_store.reconcile_write_refused", action_id=action_id)
     logger.info("action_reconciled", action_id=action_id, status=record["status"], outcome=outcome.value)
     return record
+
+
+class UndoActionRequest(BaseModel):
+    """What a reversal needs that the stored record deliberately lacks.
+
+    ``auth_config`` carries the tenant's connector credentials in schema
+    field names, resolved server-side by the API service from the vault —
+    the executors never store credentials in ``rollback_data``, so they have
+    to arrive per call, exactly as they do on forward dispatch. ``approver``
+    is the deciding identity when the reverse capability's grading demands
+    one; ``requester`` is who asked for the undo, kept separate so
+    separation of duties has two identities to compare.
+    """
+
+    auth_config: dict[str, Any] = Field(default_factory=dict)
+    principal: ActionPrincipal | None = None
+    approver: ActionPrincipal | None = None
+    requester: ActionPrincipal | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    requested_by: str = Field(default="", max_length=200)
+
+
+@router.post("/actions/{action_id}/rollback")
+async def rollback_action(
+    action_id: str,
+    request: Request,
+    body: UndoActionRequest | None = None,
+    _auth: None = Depends(require_service_auth),
+):
+    """Reverse a completed action through its executor's own rollback.
+
+    Graded against the **reverse** capability's contract before anything
+    runs, with the same matrix forward dispatch uses — an undo of an
+    analyst-tier reversal waits for a distinct approver, and a prohibited
+    one never runs. The reversal is claimed in durable storage before the
+    vendor is contacted, so two undo requests elect one executor.
+
+    Governance outcomes are 200 with a status naming which one it was
+    (``rolled_back``, ``undo_failed``, ``pending_approval``, ``refused``),
+    the same single-shape contract the dispatch report keeps. 4xx is
+    reserved for requests this route will not serve: an action that never
+    executed or was already rolled back (409, naming it), a verb the
+    platform cannot reverse (422), a caller naming no tenant (400).
+    """
+    tenant_id = (request.headers.get(_TENANT_HEADER) or "").strip()
+    if not tenant_id:
+        raise HTTPException(
+            status_code=400,
+            detail=f"a reversal acts on one tenant's estate; declare it on {_TENANT_HEADER}",
+        )
+    payload = body or UndoActionRequest()
+    try:
+        report = await undo.undo_action(
+            action_id,
+            tenant_id=tenant_id,
+            auth_config=payload.auth_config,
+            principal=payload.principal,
+            approver=payload.approver,
+            requester=payload.requester,
+            confidence=payload.confidence,
+            requested_by=payload.requested_by or "aisoc-api",
+        )
+    except undo.UndoRefused as refusal:
+        raise HTTPException(status_code=refusal.status_code, detail=refusal.detail) from refusal
+    return report.as_dict()
 
 
 _CHOICE_COPY: dict[str, dict[str, str]] = {
