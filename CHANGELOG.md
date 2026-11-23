@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times.
+
 ### Security
 
 - **A malformed compressed frame can no longer panic the ingest receiver**
