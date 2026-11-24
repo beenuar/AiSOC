@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The archive destination can no longer be a server-side request forgery
+  vector** (GHSA-98q5-87mq-9979, high; reported by @laijunyue). A tenant's
+  `s3_endpoint` was shape-validated only, then bound into ClickHouse's
+  `s3()` table function — and ClickHouse issues that request from the
+  lake, outside the API's egress guard, so a tenant admin could point the
+  archive at cloud metadata (`http://169.254.169.254`) or internal HTTP
+  services and read a response-length oracle off the export error.
+  `validate_destination` now resolves the host and classifies every
+  address the way the webhook egress guard does: link-local, loopback,
+  reserved, multicast and unspecified are refused unconditionally;
+  RFC1918/ULA private ranges are refused unless the operator deliberately
+  set `AISOC_ARCHIVE_ALLOW_PRIVATE_ENDPOINTS=1` (an in-network MinIO is
+  the feature's most common legitimate destination, and that is an
+  operator-level trust decision, not a tenant-level one); one disallowed
+  record among several refuses the whole name. The check runs at policy
+  save and again at every use, so rows stored before this fix are refused
+  at export time. Verified live both ways: the vulnerable save returned
+  200 before the fix and 422 with the named reason after; 9 new tests
+  fail on the pre-fix tree.
+
+
 ## [23.7.0] - 2026-11-24
 
 ### Security
