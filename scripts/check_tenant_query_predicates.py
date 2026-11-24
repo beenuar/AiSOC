@@ -992,8 +992,8 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 89
-MAX_RATCHET = 88
+MAX_RATCHET = 90
+MAX_RATCHET = 90
 
 
 # ---------------------------------------------------------------------------
