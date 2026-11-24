@@ -25,10 +25,12 @@ from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .evidence_context import describe_alert_observations, select_alert_observations
 from .limits import max_completion_tokens
 from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
     sanitize_text,
+    wrap_untrusted,
 )
 from .state import ForensicFindings, InvestigatorState, StepKind
 from .tools import sha256_of
@@ -57,16 +59,26 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
     # The original alert payload is the ONLY primary evidence this agent
     # has; it used to be absent from the prompt entirely, which is how a
     # run on an empty payload produced a confident fictional timeline.
+    observations, omitted = select_alert_observations(state.raw_alert or {})
+    observation_block = ""
+    if observations:
+        table = describe_alert_observations(observations, omitted)
+        observation_block = (
+            "Linked alert observations (UTC | alert ID | source | severity):\n"
+            + wrap_untrusted(table, label="linked_alert_observations")
+            + "\n\n"
+        )
     raw_alert_blob = summarize_structure_for_llm(
         dict(state.raw_alert or {}),
         label="raw_alert",
-        max_lines=80,
+        max_lines=80 - len(observation_block.splitlines()),
         max_depth=3,
     )
     evidence_available = bool((state.raw_alert or {}).get("alerts") or (state.enrichment_cache or {}))
 
     prompt = (
         f"Alert summary:\n{safe_summary}\n\n"
+        f"{observation_block}"
         f"Original alert data:\n{raw_alert_blob}\n\n"
         f"Recon findings:\n{safe_recon}\n"
         f"MITRE techniques: {safe_mitre}\n\n"

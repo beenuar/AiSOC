@@ -10,7 +10,9 @@ Responsibilities:
 from __future__ import annotations
 
 import html
+import re
 import time
+import unicodedata
 from datetime import datetime
 from typing import Any
 
@@ -24,6 +26,7 @@ from app.llm.prompt_registry import prompt_text
 from app.prompt_serialization import summarize_structure_for_llm
 
 from .bundle_prompt import format_bundle_prompt_append
+from .evidence_context import LINKED_OBSERVATIONS_HEADING, render_alert_observations
 from .limits import max_completion_tokens
 from .prompt_sanitizer import (
     sanitize_iterable_of_strings,
@@ -91,7 +94,6 @@ def _build_context(state: InvestigatorState) -> str:
         f"Root cause: {safe_root_cause}",
         f"Blast radius: {safe_blast}",
         f"Confidence: {state.forensic.confidence:.0%}",
-        f"Timeline entries: {len(state.forensic.timeline)}",
         f"Artefacts: {safe_artefacts}",
         "",
         "=== RESPONSE PLAN ===",
@@ -109,18 +111,39 @@ def _build_context(state: InvestigatorState) -> str:
     return "\n".join(sections)
 
 
-def _md_to_html(md: str, case_id: str) -> str:
-    """Lightweight Markdown → HTML converter (no external deps required for basic output)."""
+def _markdown_body(md: str) -> str:
     try:
         import markdown
 
-        body = markdown.markdown(md, extensions=["tables", "fenced_code"])
+        return markdown.markdown(md, extensions=["tables", "fenced_code"])
     except ImportError:
         # Escaped, because a raw `<pre>` wrap leaks HTML through unchanged and
         # this report carries model output and connector-supplied entity names.
         # `orchestrator/report.py` already reached this conclusion and says so
         # in a comment; this copy did the thing that comment warns against.
-        body = f"<pre>{html.escape(md)}</pre>"
+        return f"<pre>{html.escape(md)}</pre>"
+
+
+def _contains_reserved_observations_heading(md: str) -> bool:
+    """Keep the application-owned section label out of untrusted prose.
+
+    Reject even prose mentions, not just headings, so alternate Markdown
+    heading forms, inline formatting and HTML do not present a competing
+    section under the same label.
+    """
+
+    def normalize(text: str) -> str:
+        visible = html.unescape(re.sub(r"<!--.*?-->|<[^>]*>", "", text, flags=re.DOTALL))
+        folded = unicodedata.normalize("NFKC", visible).casefold()
+        return "".join(char for char in folded if char.isalnum())
+
+    reserved = normalize(LINKED_OBSERVATIONS_HEADING)
+    return reserved in normalize(md) or reserved in normalize(_markdown_body(md))
+
+
+def _md_to_html(md: str, case_id: str) -> str:
+    """Lightweight Markdown → HTML converter (no external deps required for basic output)."""
+    body = _markdown_body(md)
 
     case_id = html.escape(str(case_id), quote=True)
     ts = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
@@ -178,12 +201,13 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
 
     t_llm = time.monotonic()
     try:
-        response = await safe_ainvoke(llm, messages)
-        state.report_md = response.content
+        # Text-only cache hits omit finish metadata. An identical retry
+        # must not reclassify truncated narrative as a complete report.
+        response = await safe_ainvoke(llm, messages, cache_response=False)
         latency_ms = int((time.monotonic() - t_llm) * 1000)
-        tokens = 0
-        if hasattr(response, "response_metadata"):
-            tokens = response.response_metadata.get("token_usage", {}).get("total_tokens", 0) or 0
+        metadata = getattr(response, "response_metadata", None) or {}
+        usage = metadata.get("token_usage") or getattr(response, "usage_metadata", None) or {}
+        tokens = usage.get("total_tokens", 0) or 0
         # Tier 1.6: record cost telemetry on the active CostTracker.
         call_record = record_llm_call(
             response,
@@ -197,9 +221,17 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
         cost_usd = call_record.cost_usd if call_record is not None else None
         cost_source = call_record.cost_source if call_record is not None else "unpriced"
         resolved_model = call_record.resolved_model if call_record is not None else None
+        content = response.content
+        rejection_reason = None
+        if metadata.get("finish_reason") in ("length", "max_tokens") or metadata.get("stop_reason") == "max_tokens":
+            rejection_reason = "completion_token_limit"
+        elif not isinstance(content, str) or not content.strip():
+            rejection_reason = "no_markdown_text"
+        elif _contains_reserved_observations_heading(content):
+            rejection_reason = "reserved_evidence_heading"
         state.log_llm_response(
             agent="ReportWriterAgent",
-            response=state.report_md if isinstance(state.report_md, str) else str(state.report_md),
+            response=content,
             prompt_hash=prompt_hash,
             model=model,
             tokens_used=tokens,
@@ -207,7 +239,11 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
             cost_usd=cost_usd,
             cost_source=cost_source,
             resolved_model=resolved_model,
+            rejection_reason=rejection_reason,
         )
+        if rejection_reason is not None:
+            raise ValueError(f"Report model response rejected: {rejection_reason}")
+        state.report_md = content
     except Exception as exc:  # noqa: BLE001
         logger.warning("report_writer llm failed", error=str(exc))
         state.log(
@@ -216,7 +252,12 @@ async def run_report_writer(state_dict: dict[str, Any]) -> dict[str, Any]:
             f"LLM call failed, using fallback report: {exc}",
         )
         state.report_md = _fallback_report(state)
+        if _contains_reserved_observations_heading(state.report_md):
+            # Fallback interpolation also contains upstream untrusted prose.
+            state.report_md = "# Incident Report\n\nNarrative unavailable. Review the linked alerts directly."
 
+    observations = render_alert_observations(state.raw_alert)
+    state.report_md = f"{state.report_md.rstrip()}\n\n{observations}\n"
     state.report_html = _md_to_html(state.report_md, state.case_id)
 
     elapsed_ms = int((time.monotonic() - t0) * 1000)

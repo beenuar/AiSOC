@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   container, then requires every expected migration to be recorded before
   starting services. A stale `latest` image can no longer report a successful
   upgrade merely because its older migration set has no pending files.
+- Investigation reports now render linked alert timestamps from their source records instead of asking the model to construct a timeline from the number of forensic entries. The forensic prompt also carries a bounded selection of linked alert metadata.
 
 - **Every actionable destination the marketing site shipped now exists**
   (2026-11-22 QA pass). Fetching every link the web app publishes found
