@@ -13335,6 +13335,385 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/operating-model/shifts:
+    get:
+      tags:
+      - operating-model
+      summary: List Shifts
+      operationId: list_shifts_api_v1_operating_model_shifts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ShiftOut'
+                type: array
+                title: Response List Shifts Api V1 Operating Model Shifts Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - operating-model
+      summary: Create Shift
+      operationId: create_shift_api_v1_operating_model_shifts_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftBody'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/operating-model/shifts/{shift_id}:
+    patch:
+      tags:
+      - operating-model
+      summary: Update Shift
+      operationId: update_shift_api_v1_operating_model_shifts__shift_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: shift_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Shift Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ShiftBody'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ShiftOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operating-model/handoffs:
+    get:
+      tags:
+      - operating-model
+      summary: List Handoffs
+      operationId: list_handoffs_api_v1_operating_model_handoffs_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/HandoffOut'
+                type: array
+                title: Response List Handoffs Api V1 Operating Model Handoffs Get
+      security:
+      - HTTPBearer: []
+  /api/v1/operating-model/handoffs/{handoff_id}/notes:
+    patch:
+      tags:
+      - operating-model
+      summary: Set Handoff Notes
+      description: 'The one human-authored field: the outgoing shift''s notes.'
+      operationId: set_handoff_notes_api_v1_operating_model_handoffs__handoff_id__notes_patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: handoff_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Handoff Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandoffNotesBody'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operating-model/handoffs/{handoff_id}/ack:
+    post:
+      tags:
+      - operating-model
+      summary: Ack Handoff
+      description: 'The incoming shift acknowledges. Idempotent: the first ack wins
+        and a
+
+        second returns the row unchanged — who actually took the handoff is the
+
+        fact worth keeping.'
+      operationId: ack_handoff_api_v1_operating_model_handoffs__handoff_id__ack_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: handoff_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Handoff Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HandoffOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operating-model/handoffs/generate:
+    post:
+      tags:
+      - operating-model
+      summary: Generate Handoffs Now
+      description: 'Generate any due handoff for THIS tenant now, without waiting
+        for the
+
+        sweep — the console''s refresh button. Idempotent through the
+
+        one-per-occurrence constraint.'
+      operationId: generate_handoffs_now_api_v1_operating_model_handoffs_generate_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/HandoffOut'
+                type: array
+                title: Response Generate Handoffs Now Api V1 Operating Model Handoffs
+                  Generate Post
+      security:
+      - HTTPBearer: []
+  /api/v1/operating-model/responsibility:
+    get:
+      tags:
+      - operating-model
+      summary: List Rules
+      operationId: list_rules_api_v1_operating_model_responsibility_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RuleOut'
+                type: array
+                title: Response List Rules Api V1 Operating Model Responsibility Get
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - operating-model
+      summary: Replace Rules
+      description: 'Replace the tenant''s matrix wholesale — the matrix is one document
+        a
+
+        tenant administrator reviews as a whole, and row-by-row drift is how
+
+        two contradictory rules accumulate. Narrow-only semantics mean the
+
+        worst a bad PUT can do is refuse acts until it is corrected.'
+      operationId: replace_rules_api_v1_operating_model_responsibility_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              items:
+                $ref: '#/components/schemas/RuleBody'
+              type: array
+              title: Body
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RuleOut'
+                type: array
+                title: Response Replace Rules Api V1 Operating Model Responsibility
+                  Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/operating-model/escalation-routes:
+    get:
+      tags:
+      - operating-model
+      summary: List Routes
+      operationId: list_routes_api_v1_operating_model_escalation_routes_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/RouteOut'
+                type: array
+                title: Response List Routes Api V1 Operating Model Escalation Routes
+                  Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - operating-model
+      summary: Create Route
+      operationId: create_route_api_v1_operating_model_escalation_routes_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RouteBody'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/operating-model/escalation-routes/{route_id}:
+    delete:
+      tags:
+      - operating-model
+      summary: Delete Route
+      operationId: delete_route_api_v1_operating_model_escalation_routes__route_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: route_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Route Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/operating-model/responsibility/preview:
+    get:
+      tags:
+      - operating-model
+      summary: Preview Decision
+      description: 'What would the matrix say for this act, for ME? The settings page''s
+
+        dry-run — an administrator editing rules sees the outcome before an
+
+        analyst hits the refusal.'
+      operationId: preview_decision_api_v1_operating_model_responsibility_preview_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: activity
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Activity
+      - name: alert_class
+        in: query
+        required: false
+        schema:
+          type: string
+          default: '*'
+          title: Alert Class
+      - name: severity
+        in: query
+        required: false
+        schema:
+          type: string
+          default: '*'
+          title: Severity
+      - name: verb
+        in: query
+        required: false
+        schema:
+          type: string
+          default: '*'
+          title: Verb
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Preview Decision Api V1 Operating Model Responsibility
+                  Preview Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/approvals:
     get:
       tags:
@@ -33192,6 +33571,62 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HandoffNotesBody:
+      properties:
+        notes:
+          type: string
+          maxLength: 8000
+          title: Notes
+      type: object
+      required:
+      - notes
+      title: HandoffNotesBody
+    HandoffOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        shift_id:
+          type: string
+          format: uuid
+          title: Shift Id
+        window_start:
+          type: string
+          format: date-time
+          title: Window Start
+        window_end:
+          type: string
+          format: date-time
+          title: Window End
+        snapshot:
+          additionalProperties: true
+          type: object
+          title: Snapshot
+        notes:
+          type: string
+          title: Notes
+        acked_by:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Acked By
+        acked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Acked At
+      type: object
+      required:
+      - id
+      - shift_id
+      - window_start
+      - window_end
+      - snapshot
+      - notes
+      title: HandoffOut
     HeatmapCell:
       properties:
         control_id:
@@ -40639,6 +41074,71 @@ components:
           default: 24
       type: object
       title: RotateScimTokenRequest
+    RouteBody:
+      properties:
+        responsibility:
+          type: string
+          pattern: ^(\*|provider|customer|shared)$
+          title: Responsibility
+          default: '*'
+        min_severity:
+          type: string
+          pattern: ^(info|low|medium|high|critical)$
+          title: Min Severity
+          default: high
+        unacked_minutes:
+          type: integer
+          maximum: 1440.0
+          minimum: 5.0
+          title: Unacked Minutes
+          default: 30
+        webhook_id:
+          type: string
+          format: uuid
+          title: Webhook Id
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - webhook_id
+      title: RouteBody
+    RouteOut:
+      properties:
+        responsibility:
+          type: string
+          pattern: ^(\*|provider|customer|shared)$
+          title: Responsibility
+          default: '*'
+        min_severity:
+          type: string
+          pattern: ^(info|low|medium|high|critical)$
+          title: Min Severity
+          default: high
+        unacked_minutes:
+          type: integer
+          maximum: 1440.0
+          minimum: 5.0
+          title: Unacked Minutes
+          default: 30
+        webhook_id:
+          type: string
+          format: uuid
+          title: Webhook Id
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        id:
+          type: string
+          format: uuid
+          title: Id
+      type: object
+      required:
+      - webhook_id
+      - id
+      title: RouteOut
     RuleActionWire:
       properties:
         set_severity:
@@ -40662,6 +41162,34 @@ components:
           default: false
       type: object
       title: RuleActionWire
+    RuleBody:
+      properties:
+        activity:
+          type: string
+          pattern: ^(triage|approval|action)$
+          title: Activity
+        alert_class:
+          type: string
+          title: Alert Class
+          default: '*'
+        severity:
+          type: string
+          pattern: ^(\*|info|low|medium|high|critical)$
+          title: Severity
+          default: '*'
+        verb:
+          type: string
+          title: Verb
+          default: '*'
+        owner:
+          type: string
+          pattern: ^(provider|customer|shared)$
+          title: Owner
+      type: object
+      required:
+      - activity
+      - owner
+      title: RuleBody
     RuleConditionWire:
       properties:
         field:
@@ -40689,6 +41217,39 @@ components:
       type: object
       title: RuleConditionWire
       description: Mirror of :class:`RuleCondition` for the wire / OpenAPI shape.
+    RuleOut:
+      properties:
+        activity:
+          type: string
+          pattern: ^(triage|approval|action)$
+          title: Activity
+        alert_class:
+          type: string
+          title: Alert Class
+          default: '*'
+        severity:
+          type: string
+          pattern: ^(\*|info|low|medium|high|critical)$
+          title: Severity
+          default: '*'
+        verb:
+          type: string
+          title: Verb
+          default: '*'
+        owner:
+          type: string
+          pattern: ^(provider|customer|shared)$
+          title: Owner
+        id:
+          type: string
+          format: uuid
+          title: Id
+      type: object
+      required:
+      - activity
+      - owner
+      - id
+      title: RuleOut
     RuleOverrideCreate:
       properties:
         child_tenant_id:
@@ -42414,6 +42975,83 @@ components:
       required:
       - enabled
       title: ShadowModeUpdateRequest
+    ShiftBody:
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Name
+        timezone:
+          type: string
+          title: Timezone
+          default: UTC
+        start_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: Start Minute
+        end_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: End Minute
+        weekdays:
+          items:
+            type: integer
+          type: array
+          title: Weekdays
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - name
+      - start_minute
+      - end_minute
+      title: ShiftBody
+    ShiftOut:
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          minLength: 1
+          title: Name
+        timezone:
+          type: string
+          title: Timezone
+          default: UTC
+        start_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: Start Minute
+        end_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: End Minute
+        weekdays:
+          items:
+            type: integer
+          type: array
+          title: Weekdays
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        id:
+          type: string
+          format: uuid
+          title: Id
+      type: object
+      required:
+      - name
+      - start_minute
+      - end_minute
+      - id
+      title: ShiftOut
     SiemSearchRequest:
       properties:
         indicator_type:

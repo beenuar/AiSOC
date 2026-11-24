@@ -30,6 +30,7 @@ from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
 from app.db.database import get_db
 from app.services import playbook_references
+from app.services import responsibility as responsibility_svc
 from app.services.playbook_step_dispatch import dispatch_step
 
 logger = structlog.get_logger(__name__)
@@ -101,6 +102,23 @@ async def dispatch_playbook_step(
     this route will not serve at all.
     """
     tenant_id, requested_by = _resolve_caller(body.tenant_id, user, x_aisoc_service_token)
+
+    # the co-managed responsibility matrix, narrow-only. Applies to
+    # a PERSON pressing the button; the engine's own dispatch rides a
+    # playbook whose approval was already matrix-checked at decide time.
+    # The check runs after the ordinary permission check (the dependency)
+    # and can only refuse an act the role allowed, never grant one.
+    if user is not None:
+        party = await responsibility_svc.party_for(db, caller_home_tenant=user.tenant_id, target_tenant=tenant_id)
+        decision = await responsibility_svc.check(
+            db,
+            tenant_id=tenant_id,
+            activity="action",
+            party=party,
+            verb=body.capability,
+        )
+        if not decision.allowed:
+            raise HTTPException(status_code=403, detail=decision.refusal_detail)
 
     report = await dispatch_step(
         db,

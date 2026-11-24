@@ -129,6 +129,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the federated backtest plug into seams named in the PR and are recorded
   follow-ups. 7 + 3 + 3 unit/mock-vendor cases, 3 live-Postgres cases in
   `integration.yml`, negative control on drift versioning.
+- **The co-managed operating model: shifts, responsibility, routing,
+  review** (migrations 173–175). **Shift
+  handoffs from real rows**: shifts are tenant configuration
+  (local wall-clock minutes in an IANA timezone — an overnight shift
+  belongs to the day it started, DST changes an occurrence's UTC length
+  and never its local clock), and a handoff is a snapshot of the tenant's
+  real open work at shift end — open alerts by severity, unowned/overdue
+  cases, pending approvals, running investigations — generated
+  idempotently, acknowledged by the incoming shift; a section whose store
+  cannot answer says `could_not_check`, never zeros; the console's Shifts
+  page now calls the real API, and the fabricated shift board the absence
+  test pinned stays deleted, the pin deliberately superseded to pin the
+  property that made it a defect (no module-level domain data). **The
+  responsibility matrix**: which party — provider, customer,
+  shared — owns triage, approval and action per alert class, severity and
+  verb; enforcement runs after the ordinary permission check at both human
+  chokepoints (playbook-step dispatch, approval decide) and **narrows
+  only** — a row can refuse what the role allowed, never grant what it
+  refused; an unreadable matrix degrades to the base authorization rather
+  than refusing tenant-wide. **Per-tenant escalation routing**:
+  overdue unowned cases escalate to the tenant's own outbound webhooks —
+  `enqueue_event`'s first production caller, the wiring the escalations
+  bridge's own docstring named as missing — once per case per route,
+  severity-floored, optionally matrix-filtered; the deployment-wide bridge
+  stays as the operator fallback. **The service review**: the
+  weekly tick now also builds a per-tenant review from the tenant's own
+  rows where every mean carries the count it averaged (QA agreement over
+  its reviewed denominator; MTTD/MTTR/MTTC per severity with per-severity
+  `total`s) — no denominator reads `not measured`, never zero — persisted
+  as its own artefact and **delivered** through `service.review` webhook
+  events, closing the generated-for-months-delivered-never gap. 22 unit
+  cases, 4 live-Postgres cases in `integration.yml`, negative controls on
+  the narrow-only rule and the escalation dedup.
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it**. Netskope's DLP alerts, Purview DLP and
   insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit

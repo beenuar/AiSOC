@@ -44,6 +44,7 @@ from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
 from app.services import action_undo
+from app.services import responsibility as responsibility_svc
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
 from app.services.approval_delivery import deliver_approval
 from app.services.branding.resolver import resolve_branding
@@ -457,6 +458,26 @@ async def decide_approval(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Approval already {row.status}; cannot change to {new_status}",
         )
+
+    # the co-managed responsibility matrix, narrow-only, beside the
+    # separation-of-duties checks: deciding an approval is the matrix's
+    # 'approval' activity, and a tenant that assigned approvals on this verb
+    # to the other party gets a refusal naming the rule. The verb comes from
+    # the approval's own action payload; absent one, the wildcard matches
+    # only wildcard rows.
+    action_payload = row.action or {}
+    verb = str(action_payload.get("capability") or action_payload.get("type") or "*")
+    party = await responsibility_svc.party_for(db, caller_home_tenant=user.tenant_id, target_tenant=row.tenant_id)
+    matrix = await responsibility_svc.check(
+        db,
+        tenant_id=row.tenant_id,
+        activity="approval",
+        party=party,
+        verb=verb,
+        severity=str(row.risk_level or "*") if row.risk_level in ("info", "low", "medium", "high", "critical") else "*",
+    )
+    if not matrix.allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=matrix.refusal_detail)
 
     # Everything from here writes a decision, so this is where it is authorized.
     # Placed after the idempotent return above and before the first mutation,
