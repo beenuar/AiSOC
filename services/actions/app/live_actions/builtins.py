@@ -64,9 +64,11 @@ from app.executors.mailbox import (
     M365,
     M365_CLIENT_PARAM_KEYS,
     BlockSenderExecutor,
+    BlockSenderOrgExecutor,
     PurgeEmailExecutor,
     RestoreEmailExecutor,
     UnblockSenderExecutor,
+    UnblockSenderOrgExecutor,
 )
 from app.executors.network import (
     AllowIPExecutor,
@@ -603,7 +605,7 @@ class DefenderBlockIOC(_LegacyExecutorAdapter):
     _credential_keys = _DEFENDER_IOC_KEYS
 
 
-# ── WS4.5: revoke_file_share — four estates, one executor, four arms ──────
+# ── revoke_file_share — four estates, one executor, four arms ──────
 #
 # One executor instance shared by the four adapters: the vendor arm is
 # selected inside by which credentials appear, and each adapter's
@@ -1200,6 +1202,30 @@ class M365UnblockSender(_MailboxAdapter):
 
 
 @apply_contract
+class MimecastBlockSenderOrg(_MailboxAdapter):
+    vendor_id = "mimecast"
+    capability = "block_sender_org"
+    description = "Create an organisation-wide Blocked Senders policy on the Mimecast gateway — every mailbox, future mail, by policy."
+    requires_credentials = True
+    _legacy_executor = BlockSenderOrgExecutor()
+    _legacy_action_type = ActionType.BLOCK_SENDER_ORG
+    _credential_keys = ("mimecast_client_id", "mimecast_client_secret")
+    _vendor_pin = "mimecast"
+
+
+@apply_contract
+class MimecastUnblockSenderOrg(_MailboxAdapter):
+    vendor_id = "mimecast"
+    capability = "unblock_sender_org"
+    description = "Delete the Blocked Senders policy block_sender_org created."
+    requires_credentials = True
+    _legacy_executor = UnblockSenderOrgExecutor()
+    _legacy_action_type = ActionType.UNBLOCK_SENDER_ORG
+    _credential_keys = ("mimecast_client_id", "mimecast_client_secret")
+    _vendor_pin = "mimecast"
+
+
+@apply_contract
 class GmailPurgeEmail(_MailboxAdapter):
     vendor_id = GOOGLE_WORKSPACE
     capability = "purge_email"
@@ -1253,7 +1279,7 @@ class GmailUnblockSender(_MailboxAdapter):
 
 
 _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
-    # WS4.5 — share revocation across the four file-sharing estates.
+    # share revocation across the four file-sharing estates.
     GoogleDriveRevokeFileShare,
     M365RevokeFileShare,
     BoxRevokeFileShare,
@@ -1372,6 +1398,8 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     M365RestoreEmail,
     M365BlockSender,
     M365UnblockSender,
+    MimecastBlockSenderOrg,
+    MimecastUnblockSenderOrg,
     GmailPurgeEmail,
     GmailRestoreEmail,
     GmailBlockSender,

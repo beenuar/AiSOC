@@ -111,7 +111,7 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # image does not contain.
         "osquery_live_query",
         "suspend_session",
-        # WS4.5 — remove sharing grants or links from a file across the
+        # remove sharing grants or links from a file across the
         # four file-sharing estates (Drive, OneDrive/SharePoint, Box,
         # Dropbox), prior grants captured for rollback.
         "revoke_file_share",
@@ -144,6 +144,9 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "restore_email",
         "search_mailboxes",
         "unblock_sender",
+        # the ORG-level gateway block (Mimecast publishes the verb).
+        "block_sender_org",
+        "unblock_sender_org",
         # TICKET
         "push_case",
         "push_status",

@@ -51,7 +51,10 @@ from typing import Any
 #: The three doors depth 7.1 names, plus ``manual`` for ``POST
 #: /phishing/submit``. A closed vocabulary so "the M365 report mailbox has
 #: gone quiet" is a diagnosis somebody can make.
-INTAKE_SOURCES: frozenset[str] = frozenset({"manual", "m365_graph", "google_workspace", "email_inbox"})
+#: `vendor_alert` is the fourth intake door: the tenant's own email-security
+#: stack (Proofpoint, Mimecast, Abnormal, Sublime, Defender for O365)
+#: joining the same campaigns user reports join.
+INTAKE_SOURCES: frozenset[str] = frozenset({"manual", "m365_graph", "google_workspace", "email_inbox", "vendor_alert"})
 
 _SHA256 = re.compile(r"\b[0-9a-fA-F]{64}\b")
 

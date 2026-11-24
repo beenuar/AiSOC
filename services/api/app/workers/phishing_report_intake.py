@@ -68,6 +68,7 @@ from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.services.phishing import campaigns as phishing_campaigns
 from app.services.phishing import intake as phishing_intake
+from app.services.phishing import vendor_intake
 from app.services.playbook_step_dispatch import dispatch_step
 from app.workers._tick_failures import TickFailures
 
@@ -114,6 +115,10 @@ class SweepReport:
     #: failure worth avoiding.
     incomplete: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+    #: The vendor-alert door: alerts from the tenant's email-security
+    #: stack joined to campaigns through the same record_report path.
+    vendor_alerts_seen: int = 0
+    vendor_reports_created: int = 0
 
 
 async def _mailbox_connectors(db: AsyncSession) -> list[Any]:
@@ -286,18 +291,62 @@ async def run_once() -> SweepReport:
 
         await db.commit()
 
+    # the fourth door: email-security vendor alerts join the same
+    # campaigns user reports join. The sweep reads the last day of alerts
+    # from the five vendor sources; record_report's own idempotency (the
+    # campaign upsert and the recipient ON CONFLICT DO NOTHING) makes a
+    # re-read harmless, so there is no cursor to corrupt.
+    try:
+        async with AsyncSessionLocal() as db:
+            await assert_cross_tenant_session(db, "phishing vendor-alert intake sweeps every tenant's email-security alerts")
+            rows = (
+                await db.execute(
+                    text(
+                        """
+                        SELECT tenant_id, connector_type, raw_event, id
+                        FROM alerts
+                        WHERE connector_type = ANY(:sources)
+                          AND created_at > NOW() - INTERVAL '24 hours'
+                        ORDER BY created_at DESC
+                        LIMIT 500
+                        """
+                    ),
+                    {"sources": list(vendor_intake.VENDOR_ALERT_SOURCES)},
+                )
+            ).fetchall()
+            for tenant_id, source, raw_event, _alert_id in rows:
+                report.vendor_alerts_seen += 1
+                payload = raw_event if isinstance(raw_event, dict) else {}
+                maybe_message = vendor_intake.from_vendor_alert(str(source), payload)
+                if maybe_message is None:
+                    continue
+                message = maybe_message
+                try:
+                    campaign = await phishing_campaigns.record_report(db, tenant_id=tenant_id, message=message)
+                    if campaign is not None:
+                        report.vendor_reports_created += 1
+                        report.campaigns_touched.add(campaign.id)
+                except Exception as exc:  # noqa: BLE001 — one alert must not stop the door
+                    report.errors.append(f"vendor intake {source}: {type(exc).__name__}")
+            await db.commit()
+    except Exception as exc:  # noqa: BLE001 — the fourth door must not take down the other three
+        report.errors.append(f"vendor intake sweep: {type(exc).__name__}")
+
     if report.incomplete:
         logger.info("phishing_report_intake: %s", "; ".join(report.incomplete[:5]))
     for problem in report.errors[:5]:
         logger.warning("phishing_report_intake: %s", problem)
     logger.info(
-        "phishing_report_intake swept tenants=%d mailboxes=%d seen=%d created=%d duplicates=%d campaigns=%d",
+        "phishing_report_intake swept tenants=%d mailboxes=%d seen=%d created=%d "
+        "duplicates=%d campaigns=%d vendor_seen=%d vendor_created=%d",
         report.tenants_considered,
         report.mailboxes_polled,
         report.messages_seen,
         report.reports_created,
         report.duplicates_skipped,
         len(report.campaigns_touched),
+        report.vendor_alerts_seen,
+        report.vendor_reports_created,
     )
     return report
 

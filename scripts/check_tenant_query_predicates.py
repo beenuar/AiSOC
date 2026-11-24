@@ -786,6 +786,12 @@ RATCHET: dict[str, str] = {
     "services/api/app/main.py::_demo_self_heal_bootstrap::PublishedReplay": (
         "startup bootstrap, not a request path; runs before any caller exists"
     ),
+    "services/api/app/workers/phishing_report_intake.py::run_once::alerts": (
+        "the vendor-alert door: enumerate the last day of email-security vendor alerts "
+        "across tenants, after which record_report binds every write to the row's own "
+        "tenant_id — the same enumeration-then-scoped-work shape as the sweeps above, and "
+        "the sweep is bounded (24h window, LIMIT 500) with idempotent downstream writes"
+    ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
         "This is the UPDATE beside the no-deadline count already recorded above for "
@@ -987,6 +993,7 @@ RATCHET: dict[str, str] = {
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
 MAX_RATCHET = 89
+MAX_RATCHET = 88
 
 
 # ---------------------------------------------------------------------------

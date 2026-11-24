@@ -18587,6 +18587,251 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/phishing/campaigns/{campaign_id}/recipient-scoping:
+    get:
+      tags:
+      - phishing
+      summary: Who interacted with this campaign, per recipient, source named
+      description: 'Every verdict is yes/no/could_not_check WITH the telemetry
+
+        source that answered it, because ''no'' from a tenant with no web proxy is
+
+        nobody-looked, and the two must never render the same. The proposals
+
+        scale revocation and reset with established credential risk only.'
+      operationId: get_recipient_scoping_api_v1_phishing_campaigns__campaign_id__recipient_scoping_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Campaign Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Recipient Scoping Api V1 Phishing Campaigns  Campaign
+                  Id  Recipient Scoping Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/phishing/campaigns/{campaign_id}/bec-signals:
+    get:
+      tags:
+      - phishing
+      summary: BEC pre-compromise signals for this campaign's sender — evidence, never
+        a verdict
+      description: 'Lookalike domain, VIP display-name borrowing, first-seen
+
+        sender (scoped to this pipeline''s own history) and Reply-To mismatch.
+
+        Domain-age is deliberately refused: no WHOIS/RDAP source is configured,
+
+        and inventing a registration date is worse than not stating one.'
+      operationId: get_bec_signals_api_v1_phishing_campaigns__campaign_id__bec_signals_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Campaign Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Get Bec Signals Api V1 Phishing Campaigns  Campaign
+                  Id  Bec Signals Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/phishing/campaigns/{campaign_id}/notify-reporters:
+    post:
+      tags:
+      - phishing
+      summary: Thank the people who reported this campaign (policy-gated, fixed template)
+      description: 'Reporter feedback. OFF by default (`phishing_policies.
+
+        reporter_feedback_enabled`); the notice is a FIXED template whose only
+
+        variables are the neutralized subject and the disposition — a free-text
+
+        path here would let campaign content ride an official notice. Delivery
+
+        goes through the tenant''s outbound webhooks (`phishing.reporter_feedback`
+
+        events), so every delivery is recorded by the webhook subsystem''s own
+
+        rows.'
+      operationId: notify_reporters_api_v1_phishing_campaigns__campaign_id__notify_reporters_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: campaign_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Campaign Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Notify Reporters Api V1 Phishing Campaigns  Campaign
+                  Id  Notify Reporters Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/phishing/vips:
+    get:
+      tags:
+      - phishing
+      summary: The tenant's VIP list (BEC impersonation targets)
+      operationId: list_vips_api_v1_phishing_vips_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties:
+                    type: string
+                  type: object
+                type: array
+                title: Response List Vips Api V1 Phishing Vips Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - phishing
+      summary: Add a VIP
+      operationId: add_vip_api_v1_phishing_vips_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VipBody'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Add Vip Api V1 Phishing Vips Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/phishing/vips/{vip_id}:
+    delete:
+      tags:
+      - phishing
+      summary: Remove a VIP
+      operationId: delete_vip_api_v1_phishing_vips__vip_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: vip_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Vip Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/phishing/policy:
+    get:
+      tags:
+      - phishing
+      summary: The tenant's phishing policy switches
+      operationId: get_phishing_policy_api_v1_phishing_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: boolean
+                type: object
+                title: Response Get Phishing Policy Api V1 Phishing Policy Get
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - phishing
+      summary: Set the tenant's phishing policy switches
+      operationId: put_phishing_policy_api_v1_phishing_policy_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PhishingPolicyBody'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: boolean
+                type: object
+                title: Response Put Phishing Policy Api V1 Phishing Policy Put
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/phishing/campaigns/{campaign_id}/purge:
     post:
       tags:
@@ -38357,6 +38602,18 @@ components:
       - description
       - category
       title: PermissionOut
+    PhishingPolicyBody:
+      properties:
+        reporter_feedback_enabled:
+          type: boolean
+          title: Reporter Feedback Enabled
+          default: false
+        block_sender_org_enabled:
+          type: boolean
+          title: Block Sender Org Enabled
+          default: false
+      type: object
+      title: PhishingPolicyBody
     PipelineHealth:
       properties:
         overall_status:
@@ -46258,6 +46515,23 @@ components:
       - mfa_token
       - code
       title: VerifyRequest
+    VipBody:
+      properties:
+        display_name:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Display Name
+        email:
+          type: string
+          maxLength: 320
+          minLength: 3
+          title: Email
+      type: object
+      required:
+      - display_name
+      - email
+      title: VipBody
     VulnerabilityCreate:
       properties:
         asset_id:

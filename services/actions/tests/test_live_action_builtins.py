@@ -86,9 +86,12 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # `lookup_network_device`.
     # Plus 1: the Elastic `sync_detection_rule` arm, registered
     # when the Splunk adapter stopped borrowing the Elastic executor.
-    # Plus 4 from WS4.5: `revoke_file_share` across Google Drive,
+    # Plus 4 from `revoke_file_share` across Google Drive,
     # OneDrive/SharePoint (Graph), Box and Dropbox.
-    assert count == 172
+    # Plus 2: the org-level gateway block pair, `block_sender_org` /
+    # `unblock_sender_org` on Mimecast — the one connected mail vendor
+    # publishing a tenant-wide blocked-senders verb.
+    assert count == 174
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -212,6 +215,8 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("m365", "restore_email"),
         ("m365", "search_mailboxes"),
         ("m365", "unblock_sender"),
+        ("mimecast", "block_sender_org"),
+        ("mimecast", "unblock_sender_org"),
         ("netskope", "allow_domain"),
         ("netskope", "allow_url"),
         ("netskope", "block_domain"),
@@ -305,7 +310,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 172
+    assert count == 174
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

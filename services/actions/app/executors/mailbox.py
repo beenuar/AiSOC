@@ -397,3 +397,101 @@ __all__ = [
     "UnblockSenderExecutor",
     "choose_vendor",
 ]
+
+
+class BlockSenderOrgExecutor(_MailboxExecutor):
+    """Stop future mail from one sender reaching the WHOLE organisation.
+
+    Only one connected mail vendor publishes this verb: a Mimecast
+    Blocked Senders policy (`create-policy`, `option: block_sender`,
+    `to: everyone`). Microsoft 365 and Gmail expose per-mailbox mechanisms
+    only — the per-mailbox `block_sender` contract's note stays true for
+    them — so dispatching this capability with anything but Mimecast
+    credentials is refused by NAME rather than approximated with a fan-out
+    of inbox rules, which would be a different action wearing this one's
+    name.
+
+    The policy id lands in ``rollback_data``; `UnblockSenderOrgExecutor`
+    deletes exactly that policy.
+    """
+
+    action_type = ActionType.BLOCK_SENDER_ORG
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        if not get_settings().AISOC_FEATURE_MAILBOX_REMEDIATION:
+            return self._refused(request, DISABLED_REASON)
+        params = dict(request.parameters or {})
+        sender = str(params.get("sender") or request.target or "")
+        if not sender or "@" not in sender:
+            return self._refused(request, "block_sender_org needs a sender email address")
+        client = _mimecast_client(params)
+        if client is None:
+            return self._refused(
+                request,
+                "block_sender_org is an organisation-wide gateway block, and the only "
+                "connected vendor publishing that verb is Mimecast (Blocked Senders "
+                "policy). Supply mimecast_client_id / mimecast_client_secret — "
+                "Microsoft 365 and Gmail expose per-mailbox blocks only (use "
+                "block_sender for those).",
+            )
+        try:
+            created = await client.create_blocked_sender_policy(
+                sender=sender,
+                description=f"AiSOC org block: {sender} (campaign response)",
+            )
+        except Exception as exc:  # noqa: BLE001
+            return self._failed(request, "mimecast", exc)
+        policy_id = str(created.get("id") or "")
+        return self._ok(
+            request,
+            "mimecast",
+            {
+                "sender": sender,
+                "policy_id": policy_id,
+                "scope": "organisation",
+                "summary": f"org-wide gateway block created for {sender!r} (Mimecast policy {policy_id})",
+            },
+            rollback={"policy_id": policy_id, "sender": sender},
+        )
+
+
+class UnblockSenderOrgExecutor(_MailboxExecutor):
+    """Delete the Blocked Senders policy ``block_sender_org`` created."""
+
+    action_type = ActionType.UNBLOCK_SENDER_ORG
+
+    async def execute(self, request: ActionRequest) -> ActionResult:
+        if not get_settings().AISOC_FEATURE_MAILBOX_REMEDIATION:
+            return self._refused(request, DISABLED_REASON)
+        params = dict(request.parameters or {})
+        policy_id = str(params.get("policy_id") or "")
+        if not policy_id:
+            return self._refused(
+                request,
+                "unblock_sender_org needs the policy_id block_sender_org returned in rollback_data",
+            )
+        client = _mimecast_client(params)
+        if client is None:
+            return self._refused(request, "unblock_sender_org needs mimecast_client_id / mimecast_client_secret")
+        try:
+            await client.delete_blocked_sender_policy(policy_id=policy_id)
+        except Exception as exc:  # noqa: BLE001
+            return self._failed(request, "mimecast", exc)
+        return self._ok(
+            request,
+            "mimecast",
+            {"policy_id": policy_id, "summary": f"org-wide gateway block {policy_id} removed"},
+        )
+
+
+def _mimecast_client(params: dict[str, Any]):  # noqa: ANN202 — optional-import pattern the other client builders use
+    from app.clients.mimecast_client import MimecastClient, MimecastError
+
+    client_id = str(params.get("mimecast_client_id") or "")
+    client_secret = str(params.get("mimecast_client_secret") or "")
+    if not client_id or not client_secret:
+        return None
+    try:
+        return MimecastClient(client_id=client_id, client_secret=client_secret)
+    except MimecastError:
+        return None
