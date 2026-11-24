@@ -25,7 +25,7 @@ def _alerts() -> list[dict[str, str]]:
             "id": _alert_id(i),
             "event_time": f"2026-11-24T{i:02d}:00:00+08:00",
             "severity": "high" if i == 7 else "low",
-            "source": "wazuh",
+            "source": "hids",
             "full_log": "RAW_LOG_NOT_A_REPORT_ROW",
         }
         for i in range(10)
@@ -50,7 +50,7 @@ def test_compaction_retains_disagreeing_observations() -> None:
 
 def test_unknown_or_unusable_report_metadata_is_not_guessed() -> None:
     alerts = _alerts()
-    alerts[0]["source"] = "wazuh|unexpected column"
+    alerts[0]["source"] = "hids|unexpected column"
     alerts[1]["event_time"] = "2026-11-24T01:00:00"
     report = render_alert_observations({"alerts": alerts[:2]})
     assert f"| {_alert_id(0)} | unknown | low |" in report
