@@ -33,6 +33,7 @@ class ElasticConnector(BaseConnector):
     connector_name = "Elastic SIEM"
     connector_category = "siem"
     supports_federated_search = True
+    supports_content_inventory = True
 
     @classmethod
     def schema(cls) -> ConnectorSchema:
@@ -115,6 +116,49 @@ class ElasticConnector(BaseConnector):
             "Authorization": f"Basic {token}",
             "Content-Type": "application/json",
         }
+
+    async def list_detection_content(self) -> list[dict[str, Any]]:
+        """Elastic Security detection rules via the documented
+        ``/api/detection_engine/rules/_find`` (Kibana) endpoint.
+
+        Read-only, paged, bounded. The threat field carries the rule's own
+        ATT&CK mapping where the author set one; absent stays empty.
+        """
+        out: list[dict[str, Any]] = []
+        page = 1
+        async with httpx.AsyncClient(timeout=30.0, verify=self._ssl_verify) as client:
+            while True:
+                resp = await client.get(
+                    f"{self._base_url}/api/detection_engine/rules/_find",
+                    params={"page": page, "per_page": 100},
+                    headers={**self._headers(), "kbn-xsrf": "true"},
+                )
+                resp.raise_for_status()
+                body = resp.json()
+                rules = body.get("data") or []
+                for rule in rules:
+                    attack = []
+                    for threat in rule.get("threat") or []:
+                        for technique in threat.get("technique") or []:
+                            tid = str(technique.get("id") or "")
+                            if tid:
+                                attack.append(tid)
+                    out.append(
+                        {
+                            "vendor_rule_id": str(rule.get("rule_id") or rule.get("id") or ""),
+                            "name": str(rule.get("name") or ""),
+                            "enabled": bool(rule.get("enabled")),
+                            "kind": str(rule.get("type") or "query"),
+                            "query": str(rule.get("query") or ""),
+                            "severity": str(rule.get("severity") or ""),
+                            "attack": sorted(set(attack)),
+                        }
+                    )
+                total = int(body.get("total") or 0)
+                if page * 100 >= min(total, 5000) or not rules:
+                    break
+                page += 1
+        return out
 
     async def test_connection(self) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=15.0, verify=self._ssl_verify) as client:

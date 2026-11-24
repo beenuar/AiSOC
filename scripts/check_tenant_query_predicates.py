@@ -533,9 +533,6 @@ RATCHET: dict[str, str] = {
         "slug-collision probe across all replays; a tenant-scoped check would mint duplicates"
     ),
     # -- no request, so no caller's tenant to filter on ----------------------
-    "services/api/app/main.py::_demo_self_heal_bootstrap::PublishedReplay": (
-        "startup bootstrap, not a request path; runs before any caller exists"
-    ),
     "services/api/app/scripts/bootstrap_admin.py::bootstrap::User": "one-shot CLI bootstrap that creates the first tenant's first admin",
     "services/api/app/scripts/seed_demo.py::_ensure_user::User": "demo seeding CLI, addressed by a fixed deterministic id",
     "services/api/app/scripts/seed_demo.py::_seed_published_replay::PublishedReplay": (
@@ -777,9 +774,17 @@ RATCHET: dict[str, str] = {
         "line. It returns a number, never a tenant's rows"
     ),
     "services/agents/app/hunt/hypothesis_scheduler.py::<module>::hunt_campaign_policies": (
-        "the hypothesis scheduler's policy enumeration (WS6.2): SELECT every enabled, due "
+        "the hypothesis scheduler's policy enumeration: SELECT every enabled, due "
         "policy row, after which every selection, campaign and marking is bound to that "
         "row's own tenant_id — the enumeration-then-scoped-work shape"
+    ),
+    "services/api/app/workers/siem_content_sweep.py::run_once::Connector": (
+        "The SIEM-content inventory sweep: enumerate every enabled content-capable SIEM connector "
+        "across tenants, after which sweep_tenant binds every read and write to that "
+        "connector's own tenant_id — the enumeration-then-scoped-work shape"
+    ),
+    "services/api/app/main.py::_demo_self_heal_bootstrap::PublishedReplay": (
+        "startup bootstrap, not a request path; runs before any caller exists"
     ),
     "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
         "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
@@ -800,7 +805,7 @@ RATCHET: dict[str, str] = {
         "fusion sessions.py's DISTINCT tenant_id entry"
     ),
     "services/api/app/workers/lake_archive_sweep.py::<module>::lake_archive_policies": (
-        "the archive sweep's tenant enumeration (WS2.1): SELECT the tenants whose policy row "
+        "the archive sweep's tenant enumeration: SELECT the tenants whose policy row "
         "opted in, after which each tenant's months export under that tenant's own id and "
         "credentials — the enumeration-then-scoped-work shape"
     ),
@@ -971,7 +976,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 86
+MAX_RATCHET = 87
 
 
 # ---------------------------------------------------------------------------

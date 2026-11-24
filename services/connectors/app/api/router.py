@@ -644,6 +644,62 @@ async def run_federated_query(connector_id: str, payload: FederatedQueryRequest)
     }
 
 
+class ContentInventoryRequest(BaseModel):
+    """Same trust boundary as ``/query``: the API service already decrypted
+    ``auth_config`` against the vault; the instance lives only for this
+    request."""
+
+    auth_config: dict[str, Any] = PydField(default_factory=dict)
+    connector_config: dict[str, Any] = PydField(default_factory=dict)
+
+
+@router.post("/connectors/{connector_id}/content")
+async def list_detection_content(
+    connector_id: str,
+    payload: ContentInventoryRequest,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+):
+    """List the SIEM's own detection content, read-only.
+
+    501 for connectors that have not opted in (`supports_content_inventory`),
+    mirroring federated search's refusal shape so the API layer renders
+    "this vendor does not expose it here" rather than an error.
+
+    ``principal`` is bound as a parameter rather than left to the router's
+    own dependency so the caller's subject lands in the audit log line — the
+    router-binding gate's rule for every new route.
+    """
+    cls = CONNECTOR_REGISTRY.get(connector_id)
+    if cls is None:
+        raise HTTPException(status_code=404, detail=f"Connector '{connector_id}' not found")
+    if not getattr(cls, "supports_content_inventory", False):
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=f"connector '{connector_id}' does not expose a detection-content inventory",
+        )
+    kwargs = {**payload.auth_config, **_connector_kwargs(payload.connector_config)}
+    connector = _instantiate_or_422(cls, kwargs)
+    try:
+        rules = await connector.list_detection_content()
+    except Exception as exc:  # noqa: BLE001 — one SIEM's failure is a verdict, not a crash
+        logger.exception(
+            "connector.content.runtime_error",
+            connector_id=_safe_log_val(connector_id),
+            subject=_safe_log_val(principal.subject),
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Content listing failed. Check connector configuration and connectivity.",
+        ) from exc
+    logger.info(
+        "connector.content.listed",
+        connector_id=_safe_log_val(connector_id),
+        rule_count=len(rules),
+        subject=_safe_log_val(principal.subject),
+    )
+    return {"connector_id": connector_id, "rule_count": len(rules), "rules": rules}
+
+
 @router.post("/connectors/{connector_id}/push_case")
 async def push_case(connector_id: str, payload: PushCaseRequest):
     """Mint or upsert an external ITSM ticket from an AiSOC case.

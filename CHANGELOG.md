@@ -52,8 +52,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it.**
   Netskope's DLP alerts, Purview DLP and
-- **Bounded hunting campaigns with governed selection** (WS6 of the
-  gap-closure program; migration 179). A campaign is a sequence of
+- **Bounded hunting campaigns with governed selection** (migration 179). A campaign is a sequence of
   distinct closed-schema plans — the model still never writes query text —
   each derived from a scrubbed summary of the previous step (counts and
   pseudonymized top values; a hosted model never sees rows), with budgets
@@ -73,40 +72,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing auto-promotes). 14 unit cases; the closed-schema boundary gate
   unchanged and green.
 - **AI security at runtime: session sequences, runaway sessions, refused
-  assets, MCP drift, shadow AI, prompt classes** (WS5 of the gap-closure
-  program; migration 176). **Session-scoped sequences** (WS5.1): inside one
+  assets, MCP drift, shadow AI, prompt classes** (migration 176). **Session-scoped sequences**: inside one
   AI session, an injection/guardrail finding, then a secret-bearing prompt,
   then an egress-capable tool is one high finding — through the real
   windowed engine, with the negative fixture (same events, two sessions)
   refusing to fire because the session is the claim, and a template-
   coupling pin that fails by name if the ai ingest templates stop mapping
-  any field a rule reads. **Runaway sessions** (WS5.2): per-session
+  any field a rule reads. **Runaway sessions**: per-session
   tool-call flood, and the SDK's prompt hash — emitted "precisely so
   detection can ask: the same prompt fifty times?" and never consumed —
   consumed: fifty identical hashes fire, sixty distinct ones do not.
-  **Refused assets** (WS5.3): the recorder's flush no longer overwrites a
+  **Refused assets**: the recorder's flush no longer overwrites a
   sanction-judged risk score with its sanction-blind one (the defect was
   the upsert's own `EXCLUDED.risk_score`; the fix is the SQL's CASE,
   proven live both ways), and a refused asset observed again now raises a
   high-severity triage alert citing the sanction decision — once per
-  flush, through the ordinary fusion path. **MCP manifest drift** (WS5.4):
+  flush, through the ordinary fusion path. **MCP manifest drift**:
   the SDK ships tool names + description SHA-256s hashed in the customer's
   process (one ≤80-char snippet, only for a description that already
   tripped an instruction pattern); the recorder versions manifests per
   (tenant, server) and drift — a moved hash, a new state-changing tool,
   instruction-shaped text — is a triage alert naming what moved. **Shadow
-  AI** (WS5.5): SWG/DNS events become AI-estate sightings against a
+  AI**: SWG/DNS events become AI-estate sightings against a
   shipped catalog whose every row is a vendor's own documented product
   domain with per-row provenance; the sighting states `cannot_see_prompts`
-  outright. **Prompt classes** (WS5.6): an opt-in, local, counts-only
+  outright. **Prompt classes**: an opt-in, local, counts-only
   classifier (personal/health/payment/source-code); off by default means
   the field is absent, and the standing prompt-content-never-leaves claim
   stays exactly true. 8 + 2 + 27 unit cases, 5 live-Postgres cases in
   `integration.yml`, negative controls on the judged-score guard and the
   drift hash comparison.
+- **SIEM detection engineering on the customer's SIEM: inventory, health,
+  outbound translation and the governed tuning arm** (migration 180). A read-only, versioned, per-tenant
+  inventory of the SIEM's own detection content — Splunk
+  scheduled/correlation searches and Elastic Security rules through the
+  vendors' documented admin APIs, content-hashed so drift is a fact (an
+  unchanged hash advances `last_seen`; a changed one bumps `version` and
+  keeps the prior hash), refreshed on a schedule and from the console's
+  new SIEM-content tab (honest empty/error/not-measured states). Rule
+  health comes from outcomes this platform attributed: FP rate over the
+  DISPOSED denominator with zero reading "not measured" never 0.0, vendor
+  execution state only where the listing exposed it. Outbound translation
+  (`packages/aisoc-migrate/outbound.py`) renders native rules to SPL, KQL
+  and EQL strictly within the subset the inbound parser reads back
+  identically — every fixture roundtrips through the real
+  `inbound.translate` — refusing with the roundtrip reason everything
+  else, with AQL explicitly render-only. SIEM-rule tuning proposals land
+  as DRAFTs on the same governed detection-proposal path native rules
+  use, applied (after review) through the fixed per-vendor
+  `sync_detection_rule` verb with content read-back verification.
+  Sentinel/QRadar inventory legs, the silent-sources monitor and
+  the federated backtest plug into seams named in the PR and are recorded
+  follow-ups. 7 + 3 + 3 unit/mock-vendor cases, 3 live-Postgres cases in
+  `integration.yml`, negative control on drift versioning.
 
-- **A DLP alert normalizes into one finding, whatever vendor raised it**
-  (WS4.1 of the gap-closure program). Netskope's DLP alerts, Purview DLP and
+- **A DLP alert normalizes into one finding, whatever vendor raised it**. Netskope's DLP alerts, Purview DLP and
   insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit
   trail's `DlpRuleMatch` events each arrived as their vendor shaped them,
   readable only through `raw_event`. `app/services/dlp_finding.py` derives
@@ -193,8 +213,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and names the stricter `ActivityFeed.ReadDlp` permission that
   sensitive-data details require.
 - **`revoke_file_share`: a leaked document's sharing grants are now a
-  governed action across all four file-sharing estates** (WS4.5 of the
-  gap-closure program) — Google Drive, OneDrive/SharePoint (Microsoft
+  governed action across all four file-sharing estates** — Google Drive, OneDrive/SharePoint (Microsoft
   Graph), Box and Dropbox, as four arms of one capability. The contract's
   three properties, proven per vendor against stateful mock servers
   (`test_revoke_file_share_vendor_arms.py`, 14 cases): prior grants are
@@ -214,10 +233,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ownership; a dry run strips credentials so the vendor sees zero
   requests; nothing-matched is a failure, not a silent success. Executor
   arms 168 → 172.
-- **The archive tier: long-term retention in an open format** (WS2 of the
-  gap-closure program; migrations 170–172). The lake's 400-day TTL is a
+- **The archive tier: long-term retention in an open format** (migrations 170–172). The lake's 400-day TTL is a
   hard ceiling nothing exempts, so everything older exists only if it was
-  exported first — and now it can be, trustworthily. **Archive** (WS2.1):
+  exported first — and now it can be, trustworthily. **Archive**:
   closed `(tenant, month)` partitions export to the tenant's own
   S3-compatible bucket as Parquet with a signed manifest (row count,
   event-time bounds, schema + OCSF version, per-file SHA-256), written and
@@ -227,15 +245,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sharp case a count check cannot see (same rows, different bytes: the
   checksum leg alone catches it, proven live). Per-tenant policy, default
   off; credentials vault-encrypted; WORM reported as *declared by
-  operator, not verified*. **Rehydration** (WS2.2): estimate first (bytes,
+  operator, not verified*. **Rehydration**: estimate first (bytes,
   files, months from manifests; retrieval cost **null unless a price is
   configured**), then an audited load — requester and reason required —
   into an expiring scratch table the lake explorer queries under the same
   tenant predicate `raw_events` gets, with foreign-tenant rows evicted
   after landing because a bucket is not a tenancy boundary.
-  **Portability** (WS2.3): Parquet + signed manifest + schema document to
+  **Portability**: Parquet + signed manifest + schema document to
   a bucket the tenant names, readable with no AiSOC code — the CI gate
-  opens it with DuckDB. **Scoped legal holds** (WS2.4): holds gain a time
+  opens it with DuckDB. **Scoped legal holds**: holds gain a time
   window, and a `user`/`host`/`ip` hold now **exempts exactly its own
   rows** from the retention purge (Postgres via the affected-* arrays,
   ClickHouse via user/hostname/IP columns, every value a bind) while the
