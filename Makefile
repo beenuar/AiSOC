@@ -517,24 +517,18 @@ _upgrade_backup:
 	  echo "pg_dump failed:" >&2; cat backups/.pg_dump.err >&2; rm -f "$$out"; exit 1; \
 	fi
 
-# AISOC_MIGRATIONS_STRICT is the whole point of this target.
-#
-# Without it `run_migrations.main()` logs each failure and returns normally:
-# exit 0 with a partially-applied schema, which is strictly worse than a clean
-# failure because the upgrade then reports success and starts the stack.
-#
-# It has to be set *inside* the container. The operator's shell is a different
-# environment, which is why the warning in the upgrade documentation was
-# unreachable through the documented command.
-#
-# `--no-deps` because this needs Postgres and nothing else; without it compose
-# waits on Kafka's healthcheck before it will run a schema migration.
+# A successful runner only proves that the files it found were applied.
+# An image published before this checkout's newest SQL can find no pending
+# migrations and exit 0 while `_schema_guard` still finds the host behind.
+# Compare names and hashes, then run the strict runner in that same one-off
+# container. Afterwards require every host migration to be recorded before
+# `upgrade` starts services; an empty or unreadable database is not success.
 _migrate:
 	@$(COMPOSE) up -d postgres >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory _wait_postgres
-	$(COMPOSE) run --rm --no-deps -T \
-	  -e AISOC_MIGRATIONS_STRICT=1 \
-	  api python -m app.scripts.run_migrations
+	$(PYTHON) scripts/upgrade_migrations.py --compose "$(COMPOSE)"
+	AISOC_PG_PSQL="$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc" \
+	  $(PYTHON) scripts/pending_migrations.py --require-applied
 
 # Names a port conflict before compose hits it. Silent when every port is
 # either free or already held by this deployment's own containers — re-running

@@ -1,0 +1,131 @@
+name: Upgrade migration consistency
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'Makefile'
+      - 'scripts/upgrade_migrations.py'
+      - 'scripts/pending_migrations.py'
+      - 'scripts/gate_toolkit.py'
+      - 'services/api/Dockerfile'
+      - 'services/api/pyproject.toml'
+      - 'services/api/poetry.lock'
+      - 'services/api/app/core/config.py'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/api/app/services/schema_skew.py'
+      - 'tests/test_upgrade_image_consistency.py'
+      - 'tests/test_upgrade_path.py'
+      - '.github/workflows/upgrade-migrations.yml'
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'Makefile'
+      - 'scripts/upgrade_migrations.py'
+      - 'scripts/pending_migrations.py'
+      - 'scripts/gate_toolkit.py'
+      - 'services/api/Dockerfile'
+      - 'services/api/pyproject.toml'
+      - 'services/api/poetry.lock'
+      - 'services/api/app/core/config.py'
+      - 'services/api/app/scripts/run_migrations.py'
+      - 'services/api/app/services/schema_skew.py'
+      - 'tests/test_upgrade_image_consistency.py'
+      - 'tests/test_upgrade_path.py'
+      - '.github/workflows/upgrade-migrations.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  upgrade-migrations:
+    name: Upgrade — image and schema consistency
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      AISOC_UPGRADE_TEST_IMAGE: aisoc-upgrade-test:local
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      - name: Install host test dependencies
+        run: python -m pip install 'pytest>=8,<9'
+      - name: Require a working container runtime
+        run: |
+          docker version
+          docker compose version
+      - name: Build the actual API image from its committed dependency lock
+        run: docker build --tag "$AISOC_UPGRADE_TEST_IMAGE" services/api
+      - name: Verify refusal on empty checkouts
+        run: python3 scripts/pending_migrations.py --self-test
+      - name: Exercise upgrade orchestration and the real runner against PostgreSQL
+        run: python -m pytest tests/test_upgrade_image_consistency.py tests/test_upgrade_path.py -q -rs
+      - name: Negative control — stale image succeeds without the fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Makefile "$RUNNER_TEMP/upgrade-Makefile"
+          trap 'cp "$RUNNER_TEMP/upgrade-Makefile" Makefile' EXIT
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("Makefile")
+          original = (
+              "_migrate:\n"
+              "\t@$(COMPOSE) up -d postgres >/dev/null 2>&1 || true\n"
+              "\t@$(MAKE) --no-print-directory _wait_postgres\n"
+              "\t$(COMPOSE) run --rm --no-deps -T "
+              "-e AISOC_MIGRATIONS_STRICT=1 api python -m app.scripts.run_migrations\n\n"
+          )
+          text, count = re.subn(
+              r"(?m)^_migrate:\n(?:\t[^\n]*\n|\n)*",
+              lambda _: original,
+              path.read_text(encoding="utf-8"),
+              count=1,
+          )
+          assert count == 1, "could not restore the original migration recipe"
+          path.write_text(text, encoding="utf-8")
+          PY
+          log="$RUNNER_TEMP/upgrade-stale-negative.log"
+          if python -m pytest tests/test_upgrade_image_consistency.py::test_live_stale_image_cannot_complete_upgrade -q > "$log" 2>&1; then
+            cat "$log"
+            echo '::error::stale-image regression passed with the original unsafe migration recipe'
+            exit 1
+          fi
+          cat "$log"
+          grep -F 'assert 0 != 0' "$log"
+      - name: Negative control — pending schema succeeds without post-verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp Makefile "$RUNNER_TEMP/upgrade-Makefile"
+          trap 'cp "$RUNNER_TEMP/upgrade-Makefile" Makefile' EXIT
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("Makefile")
+          text = path.read_text(encoding="utf-8")
+          start = text.index("_migrate:\n")
+          before, recipe = text[:start], text[start:]
+          check = (
+              '\tAISOC_PG_PSQL="$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc" \\\n'
+              '\t  $(PYTHON) scripts/pending_migrations.py --require-applied\n'
+          )
+          assert recipe.count(check) == 1, "could not remove the post-migration check"
+          path.write_text(before + recipe.replace(check, "", 1), encoding="utf-8")
+          PY
+          log="$RUNNER_TEMP/upgrade-ledger-negative.log"
+          if python -m pytest 'tests/test_upgrade_image_consistency.py::test_upgrade_does_not_start_when_migration_postcondition_fails[behind]' -q > "$log" 2>&1; then
+            cat "$log"
+            echo '::error::pending-schema regression passed without post-migration verification'
+            exit 1
+          fi
+          cat "$log"
+          grep -F 'assert 0 != 0' "$log"

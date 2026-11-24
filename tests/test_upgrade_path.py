@@ -424,9 +424,9 @@ def test_upgrade_target_exists_and_is_ordered() -> None:
     text = MAKEFILE.read_text(encoding="utf-8")
     assert re.search(r"^upgrade:", text, re.MULTILINE), "no `make upgrade` target"
     recipe = _recipe("upgrade")
-    for token in ("preflight_upgrade.py", "run_migrations"):
+    for token in ("preflight_upgrade.py", "upgrade_migrations.py"):
         assert token in recipe, f"`make upgrade` never runs {token}:\n{recipe}"
-    assert recipe.index("preflight_upgrade.py") < recipe.index("run_migrations"), (
+    assert recipe.index("preflight_upgrade.py") < recipe.index("upgrade_migrations.py"), (
         "the preflight runs after the migration, which is too late to refuse"
     )
 
@@ -534,10 +534,23 @@ def test_make_upgrade_sets_strict_mode() -> None:
     """Without it the runner logs the failure and returns: exit 0 over a
     partially-applied schema, which is the worst of both outcomes."""
     recipe = _recipe("upgrade")
-    assert STRICT in recipe, (
-        f"`make upgrade` applies migrations without {STRICT}; a failed migration "
-        f"would exit 0 and the upgrade would report success.\n{recipe}"
-    )
+    assert "scripts/upgrade_migrations.py" in recipe, recipe
+    tree = ast.parse((ROOT / "scripts/upgrade_migrations.py").read_text(encoding="utf-8"))
+    commands = [
+        node.args[0]
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "subprocess"
+        and node.func.attr == "run"
+        and node.args
+        and isinstance(node.args[0], ast.List)
+    ]
+    assert commands, "the upgrade helper does not execute Compose"
+    arguments = [node.value for node in commands[0].elts if isinstance(node, ast.Constant)]
+    assert f"{STRICT}=1" in arguments, "strict mode is not passed to the one-off container"
+    assert arguments.index("-e") < arguments.index(f"{STRICT}=1") < arguments.index("api")
 
 
 def test_cli_db_upgrade_sets_strict_mode_inside_the_container() -> None:
