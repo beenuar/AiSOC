@@ -210,7 +210,7 @@ class Capability(str, Enum):
     SEARCH_SIEM = "search_siem"
     CREATE_NOTABLE_EVENT = "create_notable_event"
     SYNC_DETECTION_RULE = "sync_detection_rule"
-    # WS4.5 — share revocation across the four file-sharing estates.
+    # share revocation across the four file-sharing estates.
     REVOKE_FILE_SHARE = "revoke_file_share"
     UPDATE_WATCHER = "update_watcher"
     # The return leg. Ingest carries a vendor finding id in as `external_id`;
@@ -252,11 +252,19 @@ class Capability(str, Enum):
     PURGE_EMAIL = "purge_email"
     RESTORE_EMAIL = "restore_email"
     # Per-mailbox sender block. Graph documents it as an inbox message
-    # rule and Gmail as a filter; neither vendor exposes its tenant-wide
-    # block list through the API this platform speaks, so this verb is
-    # scoped to the mailboxes it is dispatched against and says so.
+    # rule and Gmail as a filter; neither of those vendors exposes its
+    # tenant-wide block list through the API this platform speaks, so this
+    # verb is scoped to the mailboxes it is dispatched against and says so.
     BLOCK_SENDER = "block_sender"
     UNBLOCK_SENDER = "unblock_sender"
+    # Org-wide sender block. Mimecast is the one connected mail vendor that
+    # does publish the tenant-wide verb (a Blocked Senders policy applying
+    # to every mailbox), which is why this is a distinct capability pinned
+    # to the gateway vendor rather than a parameter on block_sender. The
+    # unblock deletes the policy the block created, by the id its
+    # rollback_data carries.
+    BLOCK_SENDER_ORG = "block_sender_org"
+    UNBLOCK_SENDER_ORG = "unblock_sender_org"
 
     # TICKET — bidirectional ITSM (Jira / ServiceNow / etc.).
     PUSH_CASE = "push_case"

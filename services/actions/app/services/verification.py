@@ -545,6 +545,48 @@ async def _probe_restore_email(target: str, params: dict[str, Any]) -> bool | No
         return None
 
 
+async def _probe_block_sender_org(target: str, params: dict[str, Any]) -> bool | None:
+    """Read the Blocked Senders policies back and confirm ours is among them
+    . The readback is Mimecast's own get-policy — the same vendor
+     answering whether the estate actually changed."""
+    if not get_settings().AISOC_FEATURE_MAILBOX_REMEDIATION:
+        return None
+    from app.executors.mailbox import _mimecast_client
+
+    client = _mimecast_client(params)
+    if client is None:
+        return None
+    policy_id = str(params.get("policy_id") or "")
+    if not policy_id:
+        return None
+    try:
+        policies = await client.get_blocked_sender_policies()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("verification.mimecast_probe_error", error=str(exc)[:300])
+        return None
+    return any(str(p.get("id") or "") == policy_id for p in policies)
+
+
+async def _probe_unblock_sender_org(target: str, params: dict[str, Any]) -> bool | None:
+    """The inverse readback: the policy must be GONE."""
+    if not get_settings().AISOC_FEATURE_MAILBOX_REMEDIATION:
+        return None
+    from app.executors.mailbox import _mimecast_client
+
+    client = _mimecast_client(params)
+    if client is None:
+        return None
+    policy_id = str(params.get("policy_id") or "")
+    if not policy_id:
+        return None
+    try:
+        policies = await client.get_blocked_sender_policies()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("verification.mimecast_probe_error", error=str(exc)[:300])
+        return None
+    return not any(str(p.get("id") or "") == policy_id for p in policies)
+
+
 async def _probe_block_sender(target: str, params: dict[str, Any]) -> bool | None:
     """Confirm the rule or filter exists in the mailbox it was created in."""
     if not get_settings().AISOC_FEATURE_MAILBOX_REMEDIATION:
@@ -620,7 +662,7 @@ async def _probe_sync_detection_rule(target: str, params: dict[str, Any]) -> boo
 
 
 async def _probe_revoke_file_share(target: str, params: dict[str, Any]) -> bool | None:
-    """The revoked grant is absent, by independent read-back (WS4.5).
+    """The revoked grant is absent, by independent read-back.
 
     The executor already read back once inside ``execute()``; this probe is
     the *independent* second look the contract requires for a verb whose
@@ -710,6 +752,9 @@ _DEFAULT_PROBES: dict[ActionType, Probe] = {
     ActionType.BLOCK_SENDER: _probe_block_sender,
     ActionType.UNBLOCK_SENDER: _probe_unblock_sender,
     # The rule write is verified by content read-back, not by existence —
+    ActionType.BLOCK_SENDER_ORG: _probe_block_sender_org,
+    ActionType.UNBLOCK_SENDER_ORG: _probe_unblock_sender_org,
+    # The write is verified by content read-back, not by existence —
     # a tampered or partially-applied save must fail verification.
     ActionType.SYNC_DETECTION_RULE: _probe_sync_detection_rule,
 }

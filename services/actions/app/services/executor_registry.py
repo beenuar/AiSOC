@@ -24,9 +24,11 @@ from app.executors.identity import (
 )
 from app.executors.mailbox import (
     BlockSenderExecutor,
+    BlockSenderOrgExecutor,
     PurgeEmailExecutor,
     RestoreEmailExecutor,
     UnblockSenderExecutor,
+    UnblockSenderOrgExecutor,
 )
 from app.executors.network import AllowIPExecutor, BlockDomainExecutor, BlockIPExecutor
 from app.executors.notification import CreateTicketExecutor, NotifySlackExecutor
@@ -66,7 +68,7 @@ EXECUTOR_REGISTRY = {
     ActionType.CREATE_NOTABLE_EVENT: CreateNotableEventExecutor(),
     ActionType.SYNC_DETECTION_RULE: SyncDetectionRuleExecutor(),
     ActionType.UPDATE_WATCHER: UpdateWatcherExecutor(),
-    # WS4.5 — share revocation across the four file-sharing estates.
+    # share revocation across the four file-sharing estates.
     ActionType.REVOKE_FILE_SHARE: RevokeFileShareExecutor(),
     ActionType.BLOCK_IOC: BlockIOCExecutor(),
     # Phase 3.3 — alert lifecycle (Splunk ES / Elastic Security / MDE).
@@ -83,6 +85,8 @@ EXECUTOR_REGISTRY = {
     ActionType.RESTORE_EMAIL: RestoreEmailExecutor(),
     ActionType.BLOCK_SENDER: BlockSenderExecutor(),
     ActionType.UNBLOCK_SENDER: UnblockSenderExecutor(),
+    ActionType.BLOCK_SENDER_ORG: BlockSenderOrgExecutor(),
+    ActionType.UNBLOCK_SENDER_ORG: UnblockSenderOrgExecutor(),
     # Notifications & orchestration
     ActionType.NOTIFY_SLACK: NotifySlackExecutor(),
     ActionType.CREATE_TICKET: CreateTicketExecutor(),

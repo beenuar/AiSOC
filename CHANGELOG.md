@@ -166,6 +166,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   events, closing the generated-for-months-delivered-never gap. 22 unit
   cases, 4 live-Postgres cases in `integration.yml`, negative controls on
   the narrow-only rule and the escalation dedup.
+- **Phishing: the vendor door, interaction scoping, BEC signals, reporter
+  feedback and the org-level block** (gap-closure program;
+  migration 177). Email-security vendor alerts (Proofpoint, Mimecast,
+  Abnormal, Sublime, Defender for O365) become a fourth intake door
+  joining the SAME campaigns user reports join — published vendor fields
+  only, an alert naming no message refused rather than invented.
+  Recipient scoping answers clicked / replied / credential-submitted per
+  recipient under the three-outcome discipline per check — `no` requires
+  connected telemetry that answered, absent telemetry names the missing
+  sources — and response proposals scale revocation and reset with
+  established credential risk only. BEC signals (lookalike domains, VIP
+  display-name borrowing against the new VIP list, pipeline-scoped
+  first-seen senders, Reply-To mismatch) attach as evidence that never
+  closes anything alone; domain-age is refused with its reason rather
+  than invented. Reporter feedback is policy-gated OFF by default, a
+  fixed template through the outbound-webhook queue. And the org-level
+  gateway block exists as the real vendor verb: a Mimecast Blocked
+  Senders policy behind new governed capabilities `block_sender_org` /
+  `unblock_sender_org` (MODERATE impact, analyst approval, readback
+  probes, rollback by policy id), refused by name for vendors publishing
+  only per-mailbox blocks, proposed from scoping only when the tenant's
+  switch is on. 14 unit cases; negative control on the telemetry-absence
+  discipline.
 
 - **A DLP alert normalizes into one finding, whatever vendor raised it**. Netskope's DLP alerts, Purview DLP and
   insider-risk alerts riding Defender's `alerts_v2`, and the M365 audit

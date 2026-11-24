@@ -31,19 +31,22 @@ import json
 import logging
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy import text as sa_text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.services.autonomy_effective import resolve_effective_tier
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
+from app.services.outbound_webhooks import enqueue_event
 from app.services.phishing import analysis as phishing_analysis
+from app.services.phishing import bec_signals, recipient_scoping
 from app.services.phishing import campaigns as phishing_campaigns
 from app.services.phishing import intake as phishing_intake
 from app.services.phishing import purge as phishing_purge
@@ -595,6 +598,243 @@ async def get_campaign(campaign_id: uuid.UUID, db: DBSession, user: AuthUser) ->
     if found is None:
         raise HTTPException(status_code=404, detail="Campaign not found.")
     return found
+
+
+@router.get(
+    "/campaigns/{campaign_id}/recipient-scoping",
+    summary="Who interacted with this campaign, per recipient, source named",
+)
+async def get_recipient_scoping(campaign_id: uuid.UUID, db: DBSession, user: AuthUser) -> dict[str, Any]:
+    """Every verdict is yes/no/could_not_check WITH the telemetry
+    source that answered it, because 'no' from a tenant with no web proxy is
+    nobody-looked, and the two must never render the same. The proposals
+    scale revocation and reset with established credential risk only."""
+    found = await phishing_campaigns.get_campaign(db, tenant_id=user.tenant_id, campaign_id=campaign_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+    first_seen = found.get("first_seen")
+    if isinstance(first_seen, str):
+        first_seen = datetime.fromisoformat(first_seen.replace("Z", "+00:00"))
+    report = await recipient_scoping.scope_campaign(
+        tenant_id=str(user.tenant_id),
+        campaign_id=str(campaign_id),
+        recipients=[str(r.get("recipient") or r) for r in found.get("recipients") or []],
+        urls=[str(u) for u in found.get("urls") or []],
+        subject=str(found.get("subject") or ""),
+        first_seen=first_seen or datetime.now(UTC) - timedelta(hours=72),
+    )
+    out = report.as_dict()
+    # the org-level gateway block is PROPOSED here only when the
+    # tenant turned the switch on, and dispatch still rides the governed
+    # path (analyst approval; the capability contract is MEDIUM impact
+    # because the blast radius is every mailbox).
+    block_enabled = (
+        await db.execute(
+            sa_text("SELECT block_sender_org_enabled FROM phishing_policies WHERE tenant_id = :t"),
+            {"t": str(user.tenant_id)},
+        )
+    ).scalar_one_or_none()
+    sender = str(found.get("sender") or "")
+    if block_enabled and sender and "@" in sender:
+        out["proposals"]["block_sender_org"] = {
+            "sender": sender,
+            "capability": "block_sender_org",
+            "note": "org-wide Mimecast Blocked Senders policy; dispatch requires analyst approval",
+        }
+    elif sender:
+        out["proposals"]["block_sender_org"] = {
+            "offered": False,
+            "reason": "phishing_policies.block_sender_org_enabled is off for this tenant (default)",
+        }
+    return out
+
+
+@router.get(
+    "/campaigns/{campaign_id}/bec-signals",
+    summary="BEC pre-compromise signals for this campaign's sender — evidence, never a verdict",
+)
+async def get_bec_signals(campaign_id: uuid.UUID, db: DBSession, user: AuthUser) -> dict[str, Any]:
+    """Lookalike domain, VIP display-name borrowing, first-seen
+    sender (scoped to this pipeline's own history) and Reply-To mismatch.
+    Domain-age is deliberately refused: no WHOIS/RDAP source is configured,
+    and inventing a registration date is worse than not stating one."""
+    found = await phishing_campaigns.get_campaign(db, tenant_id=user.tenant_id, campaign_id=campaign_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+    tenant_domains = sorted(
+        {str(r.get("recipient") or r).split("@")[-1].lower() for r in found.get("recipients") or [] if "@" in str(r.get("recipient") or r)}
+    )
+    signals = await bec_signals.compute_signals(
+        db,
+        tenant_id=user.tenant_id,
+        sender=str(found.get("sender") or ""),
+        headers={},
+        tenant_domains=tenant_domains,
+    )
+    return {
+        "campaign_id": str(campaign_id),
+        "signals": signals,
+        "not_computed": [
+            {
+                "kind": "domain_age",
+                "reason": "no WHOIS/RDAP source is configured; a registration date would be invented",
+            },
+            {
+                "kind": "reply_to_mismatch",
+                "reason": "campaign rows do not retain raw headers; computed at intake where headers exist",
+            },
+        ],
+        "discipline": "signals are evidence for triage; none closes or escalates alone",
+    }
+
+
+@router.post(
+    "/campaigns/{campaign_id}/notify-reporters",
+    summary="Thank the people who reported this campaign (policy-gated, fixed template)",
+)
+async def notify_reporters(
+    campaign_id: uuid.UUID,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+) -> dict[str, Any]:
+    """Reporter feedback. OFF by default (`phishing_policies.
+    reporter_feedback_enabled`); the notice is a FIXED template whose only
+    variables are the neutralized subject and the disposition — a free-text
+    path here would let campaign content ride an official notice. Delivery
+    goes through the tenant's outbound webhooks (`phishing.reporter_feedback`
+    events), so every delivery is recorded by the webhook subsystem's own
+    rows."""
+    policy = (
+        await db.execute(
+            sa_text("SELECT reporter_feedback_enabled FROM phishing_policies WHERE tenant_id = :t"),
+            {"t": str(user.tenant_id)},
+        )
+    ).scalar_one_or_none()
+    if not policy:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "reporter feedback is OFF for this tenant. Enable it under Settings → Phishing "
+                "(phishing_policies.reporter_feedback_enabled); it defaults off because emailing "
+                "reporters is an action a tenant opts into"
+            ),
+        )
+    found = await phishing_campaigns.get_campaign(db, tenant_id=user.tenant_id, campaign_id=campaign_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail="Campaign not found.")
+    reporters = sorted(
+        {str(r) for r in (found.get("reporters") or []) if r} or ({str(found.get("reported_by"))} if found.get("reported_by") else set())
+    )
+    if not reporters:
+        return {"notified": 0, "detail": "this campaign records no reporters to thank"}
+    neutral_subject = str(found.get("subject") or "")[:80].replace("http", "hxxp")
+    payload = {
+        "template": "reporter_feedback_v1",
+        "campaign_id": str(campaign_id),
+        "reporters": reporters,
+        "neutralized_subject": neutral_subject,
+        "disposition": str(found.get("status") or "under review"),
+        "body": (
+            "Thank you for reporting a suspicious message"
+            + (f" ({neutral_subject!r})" if neutral_subject else "")
+            + ". Our security team reviewed it; current disposition: "
+            + str(found.get("status") or "under review")
+            + ". No action is needed from you."
+        ),
+    }
+    await enqueue_event(db, tenant_id=user.tenant_id, event_type="phishing.reporter_feedback", payload=payload)
+    await db.commit()
+    return {"notified": len(reporters), "channel": "outbound webhooks (phishing.reporter_feedback)"}
+
+
+class VipBody(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=200)
+    email: str = Field(..., min_length=3, max_length=320)
+
+
+@router.get("/vips", summary="The tenant's VIP list (BEC impersonation targets)")
+async def list_vips(db: DBSession, user: AuthUser) -> list[dict[str, str]]:
+    rows = (
+        await db.execute(
+            sa_text("SELECT id, display_name, email FROM tenant_vips WHERE tenant_id = :t ORDER BY display_name"),
+            {"t": str(user.tenant_id)},
+        )
+    ).fetchall()
+    return [{"id": str(r[0]), "display_name": r[1], "email": r[2]} for r in rows]
+
+
+@router.post("/vips", status_code=201, summary="Add a VIP")
+async def add_vip(
+    body: VipBody,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> dict[str, str]:
+    vip_id = uuid.uuid4()
+    await db.execute(
+        sa_text(
+            "INSERT INTO tenant_vips (id, tenant_id, display_name, email, created_by) "
+            "VALUES (:id, :t, :n, :e, :u) ON CONFLICT (tenant_id, email) DO NOTHING"
+        ),
+        {"id": str(vip_id), "t": str(user.tenant_id), "n": body.display_name, "e": body.email.lower(), "u": str(user.user_id)},
+    )
+    await db.commit()
+    return {"id": str(vip_id)}
+
+
+@router.delete("/vips/{vip_id}", status_code=204, summary="Remove a VIP")
+async def delete_vip(
+    vip_id: uuid.UUID,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> None:
+    await db.execute(
+        sa_text("DELETE FROM tenant_vips WHERE tenant_id = :t AND id = :id"),
+        {"t": str(user.tenant_id), "id": str(vip_id)},
+    )
+    await db.commit()
+
+
+class PhishingPolicyBody(BaseModel):
+    reporter_feedback_enabled: bool = False
+    block_sender_org_enabled: bool = False
+
+
+@router.get("/policy", summary="The tenant's phishing policy switches")
+async def get_phishing_policy(db: DBSession, user: AuthUser) -> dict[str, bool]:
+    row = (
+        await db.execute(
+            sa_text("SELECT reporter_feedback_enabled, block_sender_org_enabled FROM phishing_policies WHERE tenant_id = :t"),
+            {"t": str(user.tenant_id)},
+        )
+    ).fetchone()
+    return {
+        "reporter_feedback_enabled": bool(row[0]) if row else False,
+        "block_sender_org_enabled": bool(row[1]) if row else False,
+    }
+
+
+@router.put("/policy", summary="Set the tenant's phishing policy switches")
+async def put_phishing_policy(
+    body: PhishingPolicyBody,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+) -> dict[str, bool]:
+    await db.execute(
+        sa_text(
+            """
+            INSERT INTO phishing_policies (tenant_id, reporter_feedback_enabled, block_sender_org_enabled, updated_by, updated_at)
+            VALUES (:t, :rf, :bs, :u, NOW())
+            ON CONFLICT (tenant_id) DO UPDATE
+              SET reporter_feedback_enabled = EXCLUDED.reporter_feedback_enabled,
+                  block_sender_org_enabled = EXCLUDED.block_sender_org_enabled,
+                  updated_by = EXCLUDED.updated_by,
+                  updated_at = NOW()
+            """
+        ),
+        {"t": str(user.tenant_id), "rf": body.reporter_feedback_enabled, "bs": body.block_sender_org_enabled, "u": str(user.user_id)},
+    )
+    await db.commit()
+    return {"reporter_feedback_enabled": body.reporter_feedback_enabled, "block_sender_org_enabled": body.block_sender_org_enabled}
 
 
 @router.post("/campaigns/{campaign_id}/purge", summary="Propose or run a purge across a campaign's recipients")

@@ -101,10 +101,14 @@ class ActionType(str, Enum):
     RESTORE_EMAIL = "restore_email"
     BLOCK_SENDER = "block_sender"
     UNBLOCK_SENDER = "unblock_sender"
-    # WS4.5 — remove sharing grants / links from a file across the four
+    # remove sharing grants / links from a file across the four
     # file-sharing estates (Drive, OneDrive/SharePoint, Box, Dropbox). In
     # this enum because the post-action verifier is keyed by ActionType.
     REVOKE_FILE_SHARE = "revoke_file_share"
+    # The ORG-level gateway block (Mimecast Blocked Senders policy);
+    # per-mailbox block_sender stays what it was.
+    BLOCK_SENDER_ORG = "block_sender_org"
+    UNBLOCK_SENDER_ORG = "unblock_sender_org"
 
 
 class ActionStatus(str, Enum):
@@ -195,10 +199,20 @@ ACTION_BLAST_RADIUS: dict[ActionType, BlastRadius] = {
     ActionType.RESTORE_EMAIL: BlastRadius.LOW,
     ActionType.BLOCK_SENDER: BlastRadius.LOW,
     ActionType.UNBLOCK_SENDER: BlastRadius.LOW,
-    # WS4.5 — one file's sharing surface: above a queue flip, below a host
+    # one file's sharing surface: above a queue flip, below a host
     # isolation. Removing a grant interrupts whoever was working in the
     # document, and every arm captures prior grants for rollback.
     ActionType.REVOKE_FILE_SHARE: BlastRadius.MEDIUM,
+    # The org-wide gateway block reaches every mailbox at once, which is the
+    # whole reason it is a distinct verb from the per-mailbox block_sender
+    # (LOW). HIGH keeps the legacy door above its auto-execute limit, so it
+    # holds for approval exactly as the capability contract's ANALYST tier
+    # does at the registry door. The unblock deletes the one policy
+    # block_sender_org created (the id travels in rollback_data), restoring
+    # the default state — LOW like its per-mailbox sibling, with the
+    # APPROVAL_REQUIRED_ACTIONS entry below keeping a human on it anyway.
+    ActionType.BLOCK_SENDER_ORG: BlastRadius.HIGH,
+    ActionType.UNBLOCK_SENDER_ORG: BlastRadius.LOW,
 }
 
 # Actions that require explicit human approval
@@ -222,6 +236,11 @@ APPROVAL_REQUIRED_ACTIONS = {
     # never automatic either; the capability contract says ANALYST and the
     # legacy door must agree (test_approval_doors_agree).
     ActionType.REVOKE_FILE_SHARE,
+    # Blocking a sender for the whole organisation — or lifting that block —
+    # is never automatic: both contracts say ANALYST, and the legacy door
+    # must agree (test_approval_doors_agree).
+    ActionType.BLOCK_SENDER_ORG,
+    ActionType.UNBLOCK_SENDER_ORG,
 }
 
 

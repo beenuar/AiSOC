@@ -824,7 +824,7 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         note=(
             "Stop future mail from one sender reaching one mailbox: an inbox "
             "message rule on Microsoft, a filter on Gmail. Per-mailbox, not "
-            "tenant-wide — neither vendor exposes its organisation-level "
+            "tenant-wide — neither Microsoft nor Google exposes an organisation-level "
             "block list through the API this platform speaks, and declaring "
             "the broader verb would have an analyst believe the organisation "
             "is covered when one mailbox is."
@@ -838,6 +838,33 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_CONTAIN,
         has_verification_probe=True,
         note="Remove the rule or filter block_sender created. Its declared reverse.",
+    ),
+    "block_sender_org": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="unblock_sender_org",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note=(
+            "Stop future mail from one sender reaching the WHOLE organisation: a "
+            "Mimecast Blocked Senders policy (create-policy, option block_sender, "
+            "to: everyone) — the one connected mail vendor that publishes the verb. "
+            "MODERATE because the blast radius is every mailbox: a mistyped sender "
+            "blocks a legitimate correspondent org-wide, which is why this is a "
+            "distinct capability rather than a parameter on the per-mailbox block. "
+            "Proposals come policy-gated from campaign scoping and nothing "
+            "dispatches without the analyst tier."
+        ),
+    ),
+    "unblock_sender_org": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_sender_org",
+        required_permission=_CONTAIN,
+        has_verification_probe=True,
+        note="Delete the Blocked Senders policy block_sender_org created, by the id its rollback_data carries.",
     ),
 }
 
