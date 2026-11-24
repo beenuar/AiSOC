@@ -46,21 +46,6 @@ afterEach(() => {
 });
 
 describe('alertsApi.list envelope', () => {
-  it('sends entity filters using the API vocabulary and preserves reserved characters', async () => {
-    fetchMock.mockResolvedValue(jsonResponse({ items: [], total: 0 }));
-    await alertsApi.list({
-      entityType: 'user', entityValue: 'Finance & Legal+ops@example.com',
-      severity: 'high', page: 2, pageSize: 25,
-    });
-    const url = new URL(String(fetchMock.mock.calls[0][0]), 'http://localhost');
-    expect(url.searchParams.get('entity_type')).toBe('user');
-    expect(url.searchParams.get('entity_value')).toBe('Finance & Legal+ops@example.com');
-    expect(url.searchParams.get('severity')).toBe('high');
-    expect(url.searchParams.get('page')).toBe('2');
-    expect(url.searchParams.has('entityType')).toBe(false);
-    expect(url.searchParams.has('entityValue')).toBe(false);
-  });
-
   it('reads the rows the API actually sends, under `items`', async () => {
     fetchMock.mockResolvedValue(
       jsonResponse({ items: [ALERT_ROW], total: 1, page: 1, page_size: 50, pages: 1 }),

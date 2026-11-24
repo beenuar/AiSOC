@@ -229,55 +229,6 @@ def _notice_for(reason: str | None) -> str | None:
     return None
 
 
-def _is_rejected_turn(message: dict[str, Any], reply: dict[str, Any]) -> bool:
-    if reply.get("role") != "assistant" or reply.get("source") != "template":
-        return False
-    reason = reply.get("template_reason")
-    if reason is not None:
-        if reason != INPUT_REJECTED:
-            return False
-    else:
-        # Before persisting a reason, releases stored either the dedicated
-        # reply or the generic error with a contract diagnostic as its detail.
-        text = reply.get("content")
-        if not (
-            text == _fallback_reply(INPUT_REJECTED)
-            or (
-                isinstance(text, str)
-                and text.startswith("I can't answer this: the configured model")
-                and "\n\nThe call reported: [LLMInputContract] " in text
-            )
-        ):
-            return False
-
-    # The diagnostic describes the failed invocation, not necessarily its
-    # paired user message. The guard may have rejected later tool evidence.
-    # Drop the old question only if it independently fails the same contract.
-    from app.llm.contract_rules import LLMContractViolation, LLMInputContract
-
-    try:
-        LLMInputContract.validate([message])
-    except LLMContractViolation:
-        return True
-    return False
-
-
-def _model_history(conversation: dict[str, Any]) -> list[dict[str, Any]]:
-    """Keep the transcript intact without replaying turns rejected by the contract."""
-    messages = conversation.get("messages", [])[-10:]
-    history = []
-    for index, message in enumerate(messages):
-        role = message.get("role")
-        if role not in {"user", "assistant"} or not isinstance(message.get("content"), str):
-            continue
-        if role == "assistant" and message.get("source") == "template":
-            continue
-        if role == "user" and index + 1 < len(messages) and _is_rejected_turn(message, messages[index + 1]):
-            continue
-        history.append(message)
-    return history
-
-
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
@@ -321,7 +272,13 @@ async def _get_openai_reply(
         reads = reads or _copilot_reads()
         # Template diagnostics are not model answers. Older failures embedded
         # rejected evidence, so replaying them could reject every later turn.
-        history = [(HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"]) for m in _model_history(conversation)]
+        history = [
+            (HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"])
+            for m in conversation.get("messages", [])[-10:]
+            if m.get("role") in {"user", "assistant"}
+            and isinstance(m.get("content"), str)
+            and not (m["role"] == "assistant" and m.get("source") == "template")
+        ]
         # Page fields are lookup hints, not evidence. In particular, a browser
         # cannot fabricate an `alerts` array and have it certified as a source.
         hints = {k: v[:512] for k, v in (context or {}).items() if k in {"page", "alertId", "caseId", "entity"} and isinstance(v, str)}
@@ -449,7 +406,6 @@ async def chat(
         "role": "assistant",
         "content": reply_text,
         "source": reply_source,
-        "template_reason": reply_reason,
         "notice": notice,
         "grounding": grounding,
         "data_access": reads.calls,
@@ -521,7 +477,6 @@ async def chat_stream(
         "role": "assistant",
         "content": reply_text,
         "source": reply_source,
-        "template_reason": reply_reason,
         "notice": notice,
         "grounding": grounding,
         "data_access": reads.calls,

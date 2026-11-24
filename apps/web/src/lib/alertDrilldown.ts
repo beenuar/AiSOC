@@ -1,5 +1,4 @@
 import type { AlertFilters } from '@/lib/api';
-import { isAlertEntityType } from '@/lib/alertEntityFilter';
 
 export type AlertDrilldown = ReturnType<typeof readAlertDrilldown>;
 
@@ -8,8 +7,6 @@ const DRILLDOWN_FILTER_KEYS = [
   'status',
   'unresolvedOnly',
   'createdWithinHours',
-  'entityType',
-  'entityValue',
 ] as const satisfies readonly (keyof AlertFilters)[];
 
 const QUEUE_URL_FILTER_KEYS = [
@@ -30,14 +27,6 @@ export function readAlertDrilldown(params: { get: (name: string) => string | nul
       ? parsedHours
       : undefined;
   const unresolvedOnly = params.get('unresolved_only') === 'true';
-  const entityType = params.get('entity_type');
-  const entityValue = params.get('entity_value')?.trim();
-  // Reject the pair together: an unknown type must not turn into an
-  // all-types match for the same value.
-  const entityFilters: Partial<AlertFilters> =
-    entityValue && entityValue.length <= 2048 && (!entityType || isAlertEntityType(entityType))
-      ? { entityValue, ...(isAlertEntityType(entityType) ? { entityType } : {}) }
-      : {};
 
   const pageRaw = params.get('page');
   const pageParsed = pageRaw && /^\d{1,5}$/.test(pageRaw) ? Number(pageRaw) : NaN;
@@ -59,7 +48,6 @@ export function readAlertDrilldown(params: { get: (name: string) => string | nul
       : undefined;
 
   const filters: Partial<AlertFilters> = {
-    ...entityFilters,
     ...(page !== undefined ? { page } : {}),
     ...(pageSize !== undefined ? { pageSize } : {}),
     ...(search !== undefined ? { search } : {}),

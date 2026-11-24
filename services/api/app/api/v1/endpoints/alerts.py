@@ -24,7 +24,6 @@ from app.services.alert_bulk_close import (
     BulkCloseOverMatch,
     bulk_close_alerts,
 )
-from app.services.alert_entity_filter import AlertEntityType, entity_filter
 from app.services.alert_queue import (
     AlertAlreadyClaimedError,
     AlertNotFoundError,
@@ -829,14 +828,6 @@ async def list_alerts(
     event_since: Annotated[AwareDatetime | None, Query(description="Inclusive event_time lower bound")] = None,
     event_until: Annotated[AwareDatetime | None, Query(description="Exclusive event_time upper bound")] = None,
     hostname: Annotated[str | None, Query(min_length=1, max_length=255)] = None,
-    entity_type: Annotated[
-        AlertEntityType | None,
-        Query(description="Optional entity kind. Requires entity_value; omit to match any supported kind."),
-    ] = None,
-    entity_value: Annotated[
-        str | None,
-        Query(min_length=1, max_length=2048, description="Exact, case-sensitive entity value; surrounding whitespace is trimmed."),
-    ] = None,
 ) -> AlertListResponse:
     """List alerts for the current tenant with filtering and pagination.
 
@@ -883,14 +874,6 @@ async def list_alerts(
         page_size = limit
 
     filters = [Alert.tenant_id == current_user.tenant_id]
-
-    if entity_type is not None and entity_value is None:
-        raise HTTPException(status_code=400, detail="entity_type requires entity_value")
-    if entity_value is not None:
-        entity_value = entity_value.strip()
-        if not entity_value:
-            raise HTTPException(status_code=422, detail="entity_value must not be blank")
-        filters.append(entity_filter(entity_value, entity_type))
 
     if event_since is not None and event_until is not None and event_since >= event_until:
         raise HTTPException(status_code=400, detail="event_since must precede event_until")

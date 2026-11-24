@@ -95,10 +95,6 @@ class Alert(Base):
     # so nothing above the database could read what the pipeline produced.
     entities: Mapped[list] = mapped_column(JSONB, default=list)
 
-    # Fusion stores IPs, domains and URLs here; those kinds are not all present
-    # in `entities`. The column has existed since the initial schema.
-    iocs: Mapped[list] = mapped_column(JSONB, default=list)
-
     # Relations
     case_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     parent_alert_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

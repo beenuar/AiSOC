@@ -2117,8 +2117,6 @@ function normalizeAlertFacets(raw: unknown): AlertFacets | undefined {
   };
 }
 
-export type AlertEntityType = "host" | "user" | "ip" | "domain" | "asset" | "url";
-
 export interface AlertFilters {
   severity?: string;
   status?: string;
@@ -2143,9 +2141,6 @@ export interface AlertFilters {
   startTime?: string;
   endTime?: string;
   search?: string;
-  /** Exact, case-sensitive entity value; omit the type to match any supported kind. */
-  entityValue?: string;
-  entityType?: AlertEntityType;
   page?: number;
   pageSize?: number;
   tenantId?: string;
@@ -2192,7 +2187,7 @@ export interface AlertUpdate {
  * for. Silence here is a UX bug, not a compatibility shim.
  */
 function alertListParams(filters: AlertFilters): Record<string, string> {
-  const { pageSize, unresolvedOnly, createdWithinHours, startTime, endTime, entityType, entityValue, ...rest } = filters;
+  const { pageSize, unresolvedOnly, createdWithinHours, startTime, endTime, ...rest } = filters;
   // Every pass-through key is enumerated at compile time — a missing or extra
   // key is a type error — so the property names written below are constants,
   // never a name derived from runtime input (CodeQL js/remote-property-injection),
@@ -2220,8 +2215,6 @@ function alertListParams(filters: AlertFilters): Record<string, string> {
   }
   if (startTime) params.event_since = startTime;
   if (endTime) params.event_until = endTime;
-  if (entityType) params.entity_type = entityType;
-  if (entityValue) params.entity_value = entityValue;
   return params;
 }
 

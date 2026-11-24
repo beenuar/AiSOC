@@ -373,8 +373,7 @@ interface DraggableWidgetProps {
   dragState: DragState;
   onDragStart: (id: WidgetId) => void;
   onDragOver: (id: WidgetId) => void;
-  onDrop: (id: WidgetId) => void;
-  onDragEnd: () => void;
+  onDrop: () => void;
   children: ReactNode;
 }
 
@@ -383,25 +382,17 @@ interface DraggableWidgetProps {
  * The ⠿ handle (aria-label "Drag to reorder") is the only interactive target;
  * clicking anywhere else in the widget works normally.
  */
-function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, onDragEnd, children }: DraggableWidgetProps) {
-  const widgetRef = useRef<HTMLDivElement>(null);
+function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, children }: DraggableWidgetProps) {
   const isDragging = dragState.dragId === id;
   const isOver = dragState.overId === id && dragState.dragId !== id;
 
   return (
     <div
-      ref={widgetRef}
-      onDragOver={(e) => {
-        if (!dragState.dragId) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        onDragOver(id);
-      }}
-      onDrop={(e) => {
-        if (!dragState.dragId) return;
-        e.preventDefault();
-        onDrop(id);
-      }}
+      draggable
+      onDragStart={() => onDragStart(id)}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(id); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(); }}
+      onDragEnd={onDrop}
       className={clsx(
         'relative group transition-opacity',
         isDragging && 'opacity-40',
@@ -411,8 +402,6 @@ function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, onDra
     >
       {/* Drag handle — visible on hover */}
       <button
-        type="button"
-        draggable
         aria-label="Drag to reorder"
         title="Drag to reorder"
         className={clsx(
@@ -421,16 +410,13 @@ function DraggableWidget({ id, dragState, onDragStart, onDragOver, onDrop, onDra
           'opacity-0 group-hover:opacity-100 transition-opacity',
           'select-none text-base leading-none',
         )}
-        onDragStart={(e) => {
-          e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('application/x-aisoc-dashboard-widget', id);
-          if (widgetRef.current) {
-            const bounds = widgetRef.current.getBoundingClientRect();
-            e.dataTransfer.setDragImage(widgetRef.current, e.clientX - bounds.left, e.clientY - bounds.top);
-          }
-          onDragStart(id);
+        // Pointer-down on the handle initiates the native drag
+        onPointerDown={(e) => {
+          // We rely on the parent div's draggable; just prevent focus loss
+          e.currentTarget.closest('[draggable]')?.dispatchEvent(
+            new DragEvent('dragstart', { bubbles: true })
+          );
         }}
-        onDragEnd={onDragEnd}
         tabIndex={-1}
       >
         ⠿
@@ -462,30 +448,26 @@ function useDashboardLayout() {
     }
   }, []);
 
-  const handleDragEnd = useCallback(() => {
+  const handleDrop = useCallback(() => {
+    const { dragId, overId } = dragState.current;
     dragState.current = { dragId: null, overId: null };
     forceRender((n) => n + 1);
-  }, []);
 
-  const handleDrop = useCallback((targetId: WidgetId) => {
-    const { dragId } = dragState.current;
-    handleDragEnd();
-
-    if (!dragId || dragId === targetId) return;
+    if (!dragId || !overId || dragId === overId) return;
 
     setOrder((prev) => {
       const next = [...prev];
       const from = next.indexOf(dragId);
-      const to = next.indexOf(targetId);
+      const to = next.indexOf(overId);
       if (from === -1 || to === -1) return prev;
       next.splice(from, 1);
       next.splice(to, 0, dragId);
       try { localStorage.setItem(WIDGET_ORDER_KEY, JSON.stringify(next)); } catch {}
       return next;
     });
-  }, [handleDragEnd]);
+  }, []);
 
-  return { order, dragState: dragState.current, handleDragStart, handleDragOver, handleDrop, handleDragEnd };
+  return { order, dragState: dragState.current, handleDragStart, handleDragOver, handleDrop };
 }
 
 /**
@@ -641,7 +623,7 @@ export function DashboardView() {
     : [];
 
   // WS-F3: drag-and-drop widget reordering
-  const { order, dragState, handleDragStart, handleDragOver, handleDrop, handleDragEnd } = useDashboardLayout();
+  const { order, dragState, handleDragStart, handleDragOver, handleDrop } = useDashboardLayout();
 
   /** Map each widget ID to its rendered section. */
   const widgetContent: Record<WidgetId, ReactNode> = {
@@ -907,7 +889,6 @@ export function DashboardView() {
             onDragStart={handleDragStart}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            onDragEnd={handleDragEnd}
           >
             {widgetContent[id]}
           </DraggableWidget>

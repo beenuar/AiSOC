@@ -7,7 +7,6 @@ import json
 import uuid
 
 import pytest
-from app.api.copilot_grounding import ground_answer
 from app.llm.contract import LLMContractViolation, LLMInputContract
 from app.prompting.tool_results import MAX_TOOL_MESSAGE_CHARS, render_tool_message
 from app.tools.copilot import MAX_EVIDENCE_BYTES, CopilotReads
@@ -114,9 +113,7 @@ def test_whole_tool_message_retains_coverage_and_only_cites_visible_records(text
     assert decoded["records"], "an oversized narrative must not discard the entire first record"
     assert [source.ref for source in reads.sources] == [record["ref"] for record in decoded["records"]]
     for source, record in zip(reads.sources, decoded["records"], strict=True):
-        assert source.text.splitlines() == [
-            fact for key, value in record.items() if key != "ref" for fact in (value if isinstance(value, list) else [value])
-        ]
+        assert json.loads(source.text) == {key: value for key, value in record.items() if key != "ref"}
     assert reads.calls[-1]["records"] == len(decoded["records"])
     assert reads.calls[-1]["truncated"] is True
     assert reads._evidence_bytes <= MAX_EVIDENCE_BYTES
@@ -129,17 +126,3 @@ def test_raw_logs_and_secret_text_still_fail_the_contract():
     result = reads._records("copilot_record", "alert", [{"id": ALERT, "description": "-----BEGIN PRIVATE KEY-----"}])
     with pytest.raises(LLMContractViolation):
         LLMInputContract.validate([{"role": "tool", "content": render_tool_message(result)}])
-
-
-def test_grounding_only_cites_projected_values_not_schema_keys():
-    reads = CopilotReads()
-    reads._records(
-        "copilot_record",
-        "alert",
-        [{"id": ALERT, "raw_event": {"device": {"name": "workstation-a"}, "src_endpoint": {"hostname": "edge.example"}}}],
-    )
-
-    result = ground_answer("Observed device.name and edge.example.", reads.sources)
-
-    assert result.uncited == ("device.name",)
-    assert [(citation.claim, citation.refs) for citation in result.citations] == [("edge.example", (f"alert:{ALERT}",))]
