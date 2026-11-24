@@ -33,7 +33,12 @@ jobs:
           persist-credentials: false
 
       - name: Run analysis
-        uses: ossf/scorecard-action@23f22cd43608bae7a1f1fa2603d7314dee9538a5 # v2.6.0
+        uses: ossf/scorecard-action@fa7117db83c52d787ae5a89f350999701505d78e # v2.5.0
+        # Held at v2.5.0: the v2.6.0 action's own action.yaml references
+        # docker://ghcr.io/ossf/scorecard-action:v2.6.0, whose manifest is
+        # absent upstream (docker pull resolves the tag to a digest ghcr
+        # answers 404 for), so every run of v2.6.0 fails before Scorecard
+        # executes. Re-bump when upstream republishes the image.
         with:
           results_file: results.sarif
           results_format: sarif
