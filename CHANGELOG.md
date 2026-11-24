@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [23.7.1] - 2026-11-24
+
 ### Security
 
 - **The archive destination can no longer be a server-side request forgery
