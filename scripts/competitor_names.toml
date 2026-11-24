@@ -122,7 +122,7 @@ reason = "Connector modules, the connector registry, event fixtures and connecto
 [[allow]]
 paths = ["services/fusion/app/data/ai_app_catalog.json"]
 names = ["Security Copilot (title case)"]
-reason = "The shadow-AI catalog (WS5.5) lists public AI PRODUCT domains a tenant's SWG may observe — vendor-documented domains with per-row provenance, the normalizer-profile class of integration surface. The row names Microsoft's assistant as the product running at copilot.microsoft.com, not as a benchmark."
+reason = "The shadow-AI catalog lists public AI PRODUCT domains a tenant's SWG may observe — vendor-documented domains with per-row provenance, the normalizer-profile class of integration surface. The row names Microsoft's assistant as the product running at copilot.microsoft.com, not as a benchmark."
 
 
 [[allow]]

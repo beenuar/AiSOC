@@ -1,4 +1,4 @@
-"""Share-permission clients for the four file-sharing estates (WS4.5).
+"""Share-permission clients for the four file-sharing estates.
 
 One capability — ``revoke_file_share`` — four vendors, and the client layer
 holds only the vendor verbs the executor composes: list the grants on a

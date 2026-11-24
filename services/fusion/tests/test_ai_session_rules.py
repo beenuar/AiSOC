@@ -1,4 +1,4 @@
-"""Session-scoped AI runtime rules, through the real ruleset and engine (WS5.1–5.2).
+"""Session-scoped AI runtime rules, through the real ruleset and engine.
 
 What a rule here counts as
 --------------------------
@@ -11,14 +11,14 @@ silently never firing: the recorded aspirational-rule defect).
 
 The three rules
 ---------------
-* `wd-ai-session-untrusted-then-secret-then-egress` (WS5.1): inside ONE
+* `wd-ai-session-untrusted-then-secret-then-egress`: inside ONE
   session, an injection/guardrail finding, then a prompt the SDK's local
   scanner flagged as secret-bearing, then an egress-capable tool call —
   ordered, one high finding. The negative fixture is the same three events
   across two sessions: it must NOT fire, because the session is the claim.
-* `wd-ai-session-tool-call-flood` (WS5.2): per-session tool-call rate far
+* `wd-ai-session-tool-call-flood`: per-session tool-call rate far
   above human-driven use.
-* `wd-ai-identical-prompt-repetition` (WS5.2): the SDK hashes every prompt
+* `wd-ai-identical-prompt-repetition`: the SDK hashes every prompt
   precisely so detection can ask "the same prompt fifty times?"
   (`redaction.py`'s own stated purpose) — and until now nothing consumed
   the hash. Grouped by the hash itself: cross-session repetition of one
@@ -60,7 +60,7 @@ REPEAT_ID = "wd-ai-identical-prompt-repetition"
 def _engine() -> WindowedDetectionEngine:
     rules = tuple(r for r in load_window_rules(RULESET) if r.id in (FLOOD_ID, REPEAT_ID))
     sequences = tuple(s for s in load_sequence_rules(RULESET) if s.id == SEQ_ID)
-    assert len(rules) == 2 and len(sequences) == 1, "the committed ruleset no longer carries the WS5 rules by these ids"
+    assert len(rules) == 2 and len(sequences) == 1, "the committed ruleset no longer carries the AI-session rules by these ids"
     return WindowedDetectionEngine(FakeRedis(), rules=rules, sequences=sequences)
 
 

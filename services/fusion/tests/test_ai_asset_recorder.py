@@ -271,7 +271,7 @@ class _FakeConn:
         self._sink = sink
 
     async def fetchval(self, _sql: str, *args: Any) -> None:
-        """The flush reads RETURNING sanctioned (WS5.3); the fake answers
+        """The flush reads RETURNING sanctioned; the fake answers
         None — an unjudged row — and records the args like execute does."""
         self._sink.append(args)
         return None

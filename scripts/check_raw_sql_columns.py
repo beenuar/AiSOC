@@ -201,7 +201,7 @@ UNMIGRATED_TABLES: dict[str, str] = {
 FOREIGN_ENGINE_TABLES: dict[str, str] = {
     "FUNCTION": (
         "Not a table: ClickHouse's `INSERT INTO FUNCTION s3(...)` — the lake's object-storage "
-        "table function (WS2 archive/export), sent through execute_lake_query to ClickHouse. "
+        "table function (archive/export), sent through execute_lake_query to ClickHouse. "
         "No Postgres migration can declare it; the archive live suite in integration.yml "
         "exercises the real statements against a real ClickHouse + MinIO pair."
     ),
@@ -303,7 +303,7 @@ DYNAMIC_SQL: dict[tuple[str, str], str] = {
     ): (
         "ClickHouse scratch-table statements whose identifier is machine-derived "
         "(`aisoc.rehydrated_<id>`, regex-pinned beside every use) with every value a bound "
-        "parameter — the rehydration loader (WS2.2). Same store and same live gate as the "
+        "parameter — the rehydration loader. Same store and same live gate as the "
         "FUNCTION entry above."
     ),
     (

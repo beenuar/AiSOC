@@ -1,6 +1,6 @@
 """`revoke_file_share` reaches the vendor it names, verifies, and rolls back.
 
-What this closes (WS4.5 of the gap-closure program)
+What this closes
 ---------------------------------------------------
 A leaked document's blast radius is its sharing grants, and the product had
 no verb for them: no executor touched Drive, OneDrive/SharePoint, Box or

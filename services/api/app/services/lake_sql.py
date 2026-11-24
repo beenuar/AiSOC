@@ -60,7 +60,7 @@ ALLOWED_TABLES: Final[frozenset[str]] = frozenset(
     }
 )
 
-# Rehydrated archive ranges (WS2.2). A rehydration loads archived months
+# Rehydrated archive ranges. A rehydration loads archived months
 # into a scratch table named by the job id — `aisoc.rehydrated_<8 hex>` —
 # with the lake's own schema, so the explorer can query it under exactly
 # the predicate regime raw_events gets: same tenant injection, same row

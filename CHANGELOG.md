@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The post-merge sweep removed a duplicated phishing test module that ran its 223 lines twice, and scrubbed the workstream labels that rode the program's earlier merges into code comments, docstrings, migration COMMENTs, test names and the generated OpenAPI spec — labels stay in PR titles and the neutral capability index only.
+
 ### Changed
 
 - Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.

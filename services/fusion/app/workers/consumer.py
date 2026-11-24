@@ -1278,7 +1278,7 @@ class FusionWorker:
             await self._fuse_and_persist(alert, source_event_id=source_event_id, session=session)
 
     async def _raise_refused_asset_alerts(self) -> None:
-        """WS5.3 — a refused AI asset observed again becomes a triage alert.
+        """a refused AI asset observed again becomes a triage alert.
 
         The recorder's flush reports sightings that landed on a
         ``sanctioned = FALSE`` row (`drain_refused`). Before this, the only
@@ -1325,7 +1325,7 @@ class FusionWorker:
                 )
 
     async def _raise_mcp_drift_alerts(self) -> None:
-        """WS5.4 — manifest drift becomes a triage alert naming what moved.
+        """manifest drift becomes a triage alert naming what moved.
 
         Severity by what the drift IS: instruction-shaped text in a tool
         description is HIGH (that is the poisoning shape itself); a changed

@@ -1,4 +1,4 @@
-"""The recorder's flush must not erase a sanction judgement (WS5.3).
+"""The recorder's flush must not erase a sanction judgement.
 
 The defect, exactly
 -------------------
@@ -147,7 +147,7 @@ async def test_a_refused_assets_judgement_survives_reobservation(pool):
     row = await _row(pool, "agent-refused")
     assert row["observation_count"] >= 2, "the re-observation itself must still count"
     assert row["risk_score"] == 55, (
-        "the flush overwrote the sanction route's judged score with its sanction-blind one — the exact WS5.3 defect"
+        "the flush overwrote the sanction route's judged score with its sanction-blind one — the exact refused-asset defect"
     )
     assert "refused" in str(row["risk_reasons"]), "the judged reason was replaced with the factually false 'Not declared'"
 
@@ -174,7 +174,7 @@ async def test_an_approved_assets_judgement_survives_too(pool):
 
 
 async def test_a_refused_sighting_is_reported_for_triage(pool):
-    """The WS5.3 alert half: the flush tells its caller which sightings hit
+    """The refused-asset alert half: the flush tells its caller which sightings hit
     a refused asset, so the consumer can raise a triage alert citing the
     sanction decision instead of only nudging an inventory score."""
     recorder = _recorder(pool)
@@ -199,7 +199,7 @@ async def test_a_refused_sighting_is_reported_for_triage(pool):
 
 
 async def test_mcp_manifests_version_and_drift(pool):
-    """WS5.4 against real Postgres: same manifest touches, changed manifest
+    """Manifest drift against real Postgres: same manifest touches, changed manifest
     versions, and the drift findings name what moved."""
     from app.services.ai_asset_recorder import AiAssetRecorder
 

@@ -1,4 +1,4 @@
--- WS5.4 — MCP manifests, versioned per (tenant, server).
+-- MCP manifests, versioned per (tenant, server).
 --
 -- A poisoned MCP server attacks through its manifest: a tool description
 -- that quietly grows instructions between sessions, or a new state-changing
@@ -13,7 +13,7 @@
 -- annotations, and any flagged instruction-pattern names with their ≤80
 -- character snippet. Full descriptions are deliberately nowhere.
 
--- lane allocation: migration 176 (WS5)
+-- lane allocation: migration 176
 
 CREATE TABLE IF NOT EXISTS aisoc_ai_mcp_manifests (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS aisoc_ai_mcp_manifests (
 );
 
 COMMENT ON TABLE aisoc_ai_mcp_manifests IS
-    'Versioned MCP manifests per (tenant, server) — WS5.4. Hashes and flags '
+    'Versioned MCP manifests per (tenant, server) — hashes and flags '
     'only; tool description text never ships. Drift between consecutive '
     'versions is the detection.';
 

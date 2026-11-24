@@ -1,4 +1,4 @@
-"""The hypothesis scheduler: which campaigns run, and why (WS6.2).
+"""The hypothesis scheduler: which campaigns run, and why.
 
 Three deterministic schedulers already exist — saved-hunt cron, corpus
 cadence, retro-hunts — and none SELECTS hypotheses or dispatches the LLM
@@ -9,7 +9,7 @@ hunt agent. This is the selection layer above them:
   agent asking questions of the estate on a schedule is automation a
   tenant chooses).
 * **Selection sources, this revision**: APPROVED hunt requests not yet
-  campaigned (``hunt_source_reports.approved_at`` set — the WS6.3 gate —
+  campaigned (``hunt_source_reports.approved_at`` set — the approval gate —
   and ``campaigned_at`` null), then corpus hypotheses that have never run
   for this tenant (the corpus scheduler's own staleness store). The
   coverage-gap ranker, KEV-exposure matches and new-intel sources are
@@ -174,7 +174,7 @@ async def verify_leads(
     runner: Any | None = None,
 ) -> list[dict[str, Any]]:
     """Each top lead becomes a labelled item triaged by the investigation
-    agent under its own run (WS6.4). Capped, best-effort, and the verdicts
+    agent under its own run. Capped, best-effort, and the verdicts
     ride back on the lead dicts so the campaign report carries them.
 
     ``runner`` is injectable for tests; production resolves the real
