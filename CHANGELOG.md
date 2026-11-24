@@ -7,21 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- Source-built images now report their real version: the API and agents Dockerfiles declare an `AISOC_VERSION` build argument that the release workflow fills, but compose's `build:` blocks never passed it, so `make up UP_FLAGS=--build` produced a `/health`, OpenAPI `info.version` and startup log that all said `unknown`. The two build blocks now pass `AISOC_BUILD_VERSION`, which `make up` fills from the `VERSION` file — verified live: a rebuilt stack reports 23.6.1 on `/health` and in the console footer.
-- The post-merge sweep removed a duplicated phishing test module that ran its 223 lines twice, and scrubbed the workstream labels that rode the program's earlier merges into code comments, docstrings, migration COMMENTs, test names and the generated OpenAPI spec — labels stay in PR titles and the neutral capability index only.
-
-### Changed
-
-- Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.
-- Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version.
-- Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version, and the thirteen poetry locks were regenerated with CI's own Poetry so fastapi (with its coupled starlette) is the only resolution that moves.
-- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times.
-- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times; beyond the four packages only vite's own transitive rolldown matrix moves.
+## [23.7.0] - 2026-11-24
 
 ### Security
-
 - **A malformed compressed frame can no longer panic the ingest receiver**
   (GO-2026-6865 / CVE-2026-116591). `services/ingest` pinned
   `github.com/klauspost/compress v1.20.1` (indirect), whose fse/huff0
@@ -35,41 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   base picks up at build time). All 17 ingest test packages pass on the new
   pin. Below the audit's high/critical fail threshold by policy, fixed
   anyway because the path is attacker-reachable.
-### Fixed
 
-- `make upgrade` now compares the checkout's SQL migration filenames and
-  SHA-256 hashes with the API image before invoking the runner in that same
-  container, then requires every expected migration to be recorded before
-  starting services. A stale `latest` image can no longer report a successful
-  upgrade merely because its older migration set has no pending files.
-- Investigation reports now render linked alert timestamps from their source records instead of asking the model to construct a timeline from the number of forensic entries. The forensic prompt also carries a bounded selection of linked alert metadata.
-
-- **Every actionable destination the marketing site shipped now exists**
-  (2026-11-22 QA pass). Fetching every link the web app publishes found
-  four classes of dead destination, each verified against the authority
-  that owns it: the footer's Discord invite answered "Unknown Invite" from
-  Discord's own API (the invite page serves HTTP 200, which is why a
-  status-code check never caught it); the footer's X link named an account
-  x.com answers 404 for; seventeen `mailto:` links across ten marketing
-  pages (hello@, press@, privacy@, security@, legal@) lived at a domain
-  that publishes no MX record, so every enquiry — including the privacy
-  page's deletion-request route and a "security disclosures" contact that
-  contradicted SECURITY.md's actual private-reporting flow — bounced; and
-  the hero's and why-open-source page's "Open the demo" buttons deep-linked
-  a hosted case at a host that now redirects every path to the repository
-  front page. Each surface now points at a venue verified live: GitHub
-  Discussions (the channel SUPPORT.md names), the published quickstart for
-  the seeded demo, and SECURITY.md's private vulnerability reporting. The
-  mesh page also stops defaulting its hub to a host that is NXDOMAIN (no
-  `MESH_HUB_URL` now means no doomed fetch, same honest placeholders), and
-  the mesh doc and service docstring stop claiming a community hub "runs
-  at" that host. `tests/test_dead_destination_links.py` pins the dead
-  destinations out of the shipped sources, and the hosted-hostname gate's
-  allow-list was ratcheted down to match (15 entries dropped, 4 lowered) so
-  a re-add is a deliberate decision against the recorded evidence.
 
 ### Added
-
 - **A DLP alert normalizes into one finding, whatever vendor raised it.**
   Netskope's DLP alerts, Purview DLP and
 - **Bounded hunting campaigns with governed selection** (migration 179). A campaign is a sequence of
@@ -246,7 +202,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   route, with the credential-incapable legacy reversals refused up front
   rather than simulated.
 
-### Added
 - **The insider watchlist is a control, not a checkbox.**
   `user_risk_profiles.is_watchlisted` existed since
   migration 014 and the console wrote it — and nothing consumed it: no
@@ -353,8 +308,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   yet" and "due exactly now" are different facts and a confident zero would
   blur them.
 
-### Added
-
 - **Five investigator strategies for the reference-service surfaces**:
   `ai-agent-misuse` (the confused-deputy
   chase — session timeline, the agent identity's grants and calls, egress
@@ -371,8 +324,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to a real tool in both directions) and has its own selection row;
   technique match still outranks keywords. Keywords chosen not to collide
   with the existing ten (verified by the full selection matrix).
-
-### Added
 
 - **A case reaches `resolved` only through the tenant's resolution
   contract.** `resolved` was a free
@@ -407,8 +358,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   negative control forces the checker to answer no-gaps and watches two
   cases fail.
 
-### Added
-
 - **A case's root cause is an evidence-backed record, not a prose field.**
   The only root-cause artifact was
   `root_cause_hypothesis`, a free string on the forensic agent's run state,
@@ -432,7 +381,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   role); the negative control disables the determined-requires-citation
   rule and watches two cases fail.
 
+
+- **The bundled gateway's nine model aliases accept per-alias overrides**
+  without editing the mounted YAML: each alias reads its own environment
+  variable, inherits its FAST/DEEP tier when unset or blank, and accepts a
+  differing model only under the same recognized provider prefix as the
+  effective tier — a mismatch logs the setting names (never the operator's
+  model string) and inherits, so a typo degrades to the tier instead of
+  taking the gateway down. Contributed by @knowlet.
+
+### Changed
+- Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.
+- Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version, and the thirteen poetry locks were regenerated with CI's own Poetry so fastapi (with its coupled starlette) is the only resolution that moves.
+- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times; beyond the four packages only vite's own transitive rolldown matrix moves.
+
+- **Internal planning labels no longer appear outside pull-request titles.**
+  Code comments, docstrings, the published OpenAPI spec, workflow step
+  comments and this changelog cited workstream ids and brief-internal rule
+  numbers that nothing in the tree defined, so a reader of the published
+  spec or these notes hit an opaque label. Each citation is replaced by the
+  behaviour it referred to, the spec is regenerated from the corrected
+  docstrings, and `docs/roadmap/capability-program.md` now indexes the
+  program's workstreams against their merged pull requests — the one place
+  such ids are defined.
+
+
 ### Fixed
+- Source-built images now report their real version: the API and agents Dockerfiles declare an `AISOC_VERSION` build argument that the release workflow fills, but compose's `build:` blocks never passed it, so `make up UP_FLAGS=--build` produced a `/health`, OpenAPI `info.version` and startup log that all said `unknown`. The two build blocks now pass `AISOC_BUILD_VERSION`, which `make up` fills from the `VERSION` file — verified live: a rebuilt stack reports 23.6.1 on `/health` and in the console footer.
+- The post-merge sweep removed a duplicated phishing test module that ran its 223 lines twice, and scrubbed the workstream labels that rode the program's earlier merges into code comments, docstrings, migration COMMENTs, test names and the generated OpenAPI spec — labels stay in PR titles and the neutral capability index only.
+
+- `make upgrade` now compares the checkout's SQL migration filenames and
+  SHA-256 hashes with the API image before invoking the runner in that same
+  container, then requires every expected migration to be recorded before
+  starting services. A stale `latest` image can no longer report a successful
+  upgrade merely because its older migration set has no pending files.
+- Investigation reports now render linked alert timestamps from their source records instead of asking the model to construct a timeline from the number of forensic entries. The forensic prompt also carries a bounded selection of linked alert metadata.
+
+- **Every actionable destination the marketing site shipped now exists**
+  (2026-11-22 QA pass). Fetching every link the web app publishes found
+  four classes of dead destination, each verified against the authority
+  that owns it: the footer's Discord invite answered "Unknown Invite" from
+  Discord's own API (the invite page serves HTTP 200, which is why a
+  status-code check never caught it); the footer's X link named an account
+  x.com answers 404 for; seventeen `mailto:` links across ten marketing
+  pages (hello@, press@, privacy@, security@, legal@) lived at a domain
+  that publishes no MX record, so every enquiry — including the privacy
+  page's deletion-request route and a "security disclosures" contact that
+  contradicted SECURITY.md's actual private-reporting flow — bounced; and
+  the hero's and why-open-source page's "Open the demo" buttons deep-linked
+  a hosted case at a host that now redirects every path to the repository
+  front page. Each surface now points at a venue verified live: GitHub
+  Discussions (the channel SUPPORT.md names), the published quickstart for
+  the seeded demo, and SECURITY.md's private vulnerability reporting. The
+  mesh page also stops defaulting its hub to a host that is NXDOMAIN (no
+  `MESH_HUB_URL` now means no doomed fetch, same honest placeholders), and
+  the mesh doc and service docstring stop claiming a community hub "runs
+  at" that host. `tests/test_dead_destination_links.py` pins the dead
+  destinations out of the shipped sources, and the hosted-hostname gate's
+  allow-list was ratcheted down to match (15 entries dropped, 4 lowered) so
+  a re-add is a deliberate decision against the recorded evidence.
 
 - **A threat-intel sink that refuses documents no longer has them marked as
   stored** (found on a live stack whose OpenSearch sat behind a disk
@@ -493,17 +500,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   servers (11 cases); the negative control reverts the Splunk arm and the
   reach test fails with zero Splunk requests.
 
-### Changed
 
-- **Internal planning labels no longer appear outside pull-request titles.**
-  Code comments, docstrings, the published OpenAPI spec, workflow step
-  comments and this changelog cited workstream ids and brief-internal rule
-  numbers that nothing in the tree defined, so a reader of the published
-  spec or these notes hit an opaque label. Each citation is replaced by the
-  behaviour it referred to, the spec is regenerated from the corrected
-  docstrings, and `docs/roadmap/capability-program.md` now indexes the
-  program's workstreams against their merged pull requests — the one place
-  such ids are defined.
 
 ## [23.6.1] - 2026-11-22
 

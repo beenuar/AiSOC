@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.5"
-date: "2026-11-05"
+version: "v1.6"
+date: "2026-11-24"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -664,6 +664,98 @@ share one linked alert — not a seeded example.*
 Production never falls back to synthetic data: an unreachable backend makes the
 console name the failure rather than invent an investigation — the same
 discipline the CORE attack-graph `503` above shows.*
+
+---
+
+### New capability surfaces (v23.7.0)
+
+Eight capability programs landed in v23.7.0. Each is reachable from the
+console's navigation and from the REST API; none requires configuration
+beyond what its own tab asks for, and each renders an honest empty state
+until its data source exists.
+
+**SIEM content and tuning** (*Detection Tuning* in the sidebar;
+`/api/v1/siem-content/*`). A read-only, versioned inventory of the
+detection content on your own Splunk or Elastic SIEM, refreshed on a
+schedule or on demand. Every rule row carries a SHA-256 over its
+behaviour-defining fields, so drift is a recorded fact rather than a diff
+nobody ran. Rule health is computed only from alert outcomes this
+platform itself attributed, and every rate carries its denominator — a
+rule with no disposed alerts reads *not measured*, never a reassuring
+zero. The tuning arm files exclusion, threshold, severity, disable and
+new-rule changes as drafts on the same proposal path native rules use;
+applying an approved change rides the per-vendor sync verb and verifies
+by reading the content back.
+
+**The archive tier** (`/api/v1/lake/*`). Closed lake months export to
+open-format Parquet with per-object manifests and hashes; verification
+re-reads what it wrote; rehydration lands a bounded scratch table your
+queries can join; portability exports give you your data back in a form
+that outlives this product. Scoped legal holds exempt a named user, host
+or IP's rows — bounded in time — while the rest of the tenant purges on
+its ordinary schedule; a whole-tenant hold still freezes everything.
+
+**Phishing operations** (`/api/v1/phishing/*`). Alerts from your
+email-security vendor (Proofpoint TAP, Mimecast TTP, Abnormal, Sublime,
+Defender for O365) become intake records that join the same campaigns
+user reports join. Per-recipient scoping answers clicked /
+replied-or-forwarded / credential-submitted under a three-outcome
+discipline: *no* requires connected telemetry that answered; absent
+telemetry names the sources that were missing; an unreachable lake is
+*could not check*, everywhere. BEC signals are evidence with named
+sources, never verdicts. Reporter feedback is off by default and
+policy-gated; the org-level sender block exists only where the vendor
+publishes the verb, with readback verification both ways.
+
+**DLP and insider risk** (`/api/v1/dlp/*`, the watchlist on the user
+entity pages). Netskope, Purview and Defender DLP alerts normalize into
+one finding shape. The insider watchlist expires on its own clock,
+generates managed context rules while it stands, and watches a
+configurable departure window. `revoke_file_share` removes sharing
+grants across Google Drive, OneDrive/SharePoint, Box and Dropbox as a
+governed action: prior grants are captured for rollback, removal is
+verified by reading the share back, and a re-created link after rollback
+is reported honestly as a new URL.
+
+**AI-runtime security** (*AI Estate* in the sidebar; `/api/v1/ai-assets`,
+`/api/v1/mcp-servers`). Session-scoped sequence rules over AI telemetry,
+runaway-session detection, refused-asset alerts that never overwrite a
+sanction decision's judged score, MCP manifest drift (a changed tool
+description is a versioned fact), shadow-AI sightings derived from
+SWG/DNS telemetry against a provenance-carrying catalogue, and an opt-in,
+local, counts-only prompt-class signal.
+
+**Hunting campaigns** (*Hunt* in the sidebar; `/api/v1/hunts`). A
+campaign is a budgeted sequence of closed-schema query plans — the model
+never writes query text — each step derived from a scrubbed summary of
+the last. Budgets for steps, rows, model calls and wall clock are checked
+before each step. Campaign selection is opt-in, cadenced, and takes only
+approved hunt requests; every selection is recorded with its reason
+before the campaign starts. Productive campaigns open draft detection
+proposals through the governed path; nothing auto-promotes.
+
+**Resolution discipline** (visible on every case). Open cases carry an
+accountable owner and a next-action clock; `resolved` is reachable only
+through the tenant's resolution policy; root cause is an evidence-backed
+record rather than a prose field; and five investigator strategies cover
+the new surfaces end to end.
+
+**The co-managed operating model** (*Shifts* in the sidebar;
+`/api/v1/operating-model/*`). Shift handoffs generate from the tenant's
+real open work at shift end. The responsibility matrix narrows only — a
+row can refuse an act the caller's role would have allowed, never grant
+one it refused — and an unreadable matrix degrades to the base
+authorization rather than to an outage. Escalation routes fire per
+tenant and severity; service reviews generate on their own schedule as a
+second artefact beside the executive digest.
+
+**Undo for completed actions** (`POST /api/v1/actions/{id}/undo`). The
+reverse of a completed response action is itself a governed action: the
+request body structurally cannot carry credentials (they resolve
+server-side from the vault), the reversal is graded against the reverse
+capability's contract with separation-of-duties approval, and a vendor
+that refuses settles as an honest failed undo — the action stays
+`completed` and retryable, never a fake `rolled_back`.
 
 ---
 
