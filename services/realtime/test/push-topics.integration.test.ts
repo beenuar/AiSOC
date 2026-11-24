@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import express from 'express';
 import Redis from 'ioredis';
 import pino from 'pino';
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import { PushManager } from '../src/push';
 
 const redisUrl = process.env.REALTIME_TEST_REDIS_URL;

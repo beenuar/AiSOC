@@ -23,7 +23,7 @@
 import type Redis from 'ioredis';
 import type { Logger } from 'pino';
 import type { Request, Response } from 'express';
-import webpush from 'web-push';
+import * as webpush from 'web-push';
 import crypto from 'crypto';
 import { nativePlatformOf, sendNative } from './native-push.js';
 

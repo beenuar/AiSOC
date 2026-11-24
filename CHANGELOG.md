@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.
+
 ### Security
 
 - **A malformed compressed frame can no longer panic the ingest receiver**
