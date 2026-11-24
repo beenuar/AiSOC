@@ -28,6 +28,8 @@ Four answers, and the two that are not "fine" are distinguishable
     No schema at all. The initdb hook owns this case and applies the whole
     chain as the data directory is created. Reporting it as behind would
     refuse every first run, which is a worse defect than the one being fixed.
+    ``--require-applied`` disables this exception: after an explicit upgrade,
+    every migration must actually be recorded, including on an empty database.
 
 ``up to date`` (exit 0)
     Every migration on disk is recorded as applied.
@@ -71,6 +73,10 @@ Reporting ``behind`` would send an operator to run a command that changes
 nothing. It is one branch in :func:`exit_code_for`, named, and
 ``tests/test_upgrade_path.py`` asserts it is the only case on which the two
 disagree.
+
+``--require-applied`` retains that policy for extra applied migrations. Its
+postcondition is that this checkout's whole chain is recorded as applied;
+it does not attempt to make an older checkout roll back a newer schema.
 
 Reading the database
 --------------------
@@ -230,6 +236,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="print the verdict only, for a caller that renders its own message",
     )
+    parser.add_argument(
+        "--require-applied",
+        action="store_true",
+        help="require every migration to be recorded, even on an empty database (post-upgrade verification)",
+    )
     args = parser.parse_args(argv)
 
     root = tree_under_test()
@@ -280,6 +291,12 @@ def main(argv: list[str] | None = None) -> int:
         return UNKNOWN
 
     if not table or table == "":
+        if args.require_applied:
+            verdict = skew.evaluate_skew(applied=set(), on_disk=on_disk)
+            print(f"pending_migrations: behind — {len(verdict.pending)} migration(s) are not recorded as applied.")
+            print(f"  The required {TRACKING_TABLE} ledger is absent; the upgrade is not complete.")
+            _list(verdict.pending)
+            return exit_code_for(verdict)
         # No tracking table. Either a brand-new database (the initdb hook has
         # not run or there is nothing here yet) or one that predates tracking.
         # The two are told apart by whether anything else exists.

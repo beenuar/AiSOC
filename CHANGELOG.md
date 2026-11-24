@@ -32,6 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anyway because the path is attacker-reachable.
 ### Fixed
 
+- `make upgrade` now compares the checkout's SQL migration filenames and
+  SHA-256 hashes with the API image before invoking the runner in that same
+  container, then requires every expected migration to be recorded before
+  starting services. A stale `latest` image can no longer report a successful
+  upgrade merely because its older migration set has no pending files.
+
 - **Every actionable destination the marketing site shipped now exists**
   (2026-11-22 QA pass). Fetching every link the web app publishes found
   four classes of dead destination, each verified against the authority

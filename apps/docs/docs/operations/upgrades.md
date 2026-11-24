@@ -55,8 +55,8 @@ Run through this list every time:
 
 ## In-place upgrade procedure
 
-The supported upgrade path is "stop, pull, migrate, start", and on a Compose
-deployment it is one command:
+The supported upgrade path backs up the database, pulls images, verifies and
+applies migrations, then starts services. On a Compose deployment it is one command:
 
 ```bash
 cd /opt/aisoc                 # your install path
@@ -77,11 +77,25 @@ worth knowing what you are consenting to:
 1. **Preflight** ([`scripts/preflight_upgrade.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/preflight_upgrade.py)) refuses an upgrade a restore could not undo. Four conditions, each a hard stop: `.env` is absent; `AISOC_CREDENTIAL_KEY` is unset or empty; it is set but is not a readable Fernet key; or there is no non-empty backup from the last 24 hours. The first is the one that bites quietly — `scripts/ensure_env.py` is careful never to overwrite a secret that already has a value, but when `.env` is *missing* it copies the example and mints a **brand-new** Fernet key, which orphans every stored credential in one step. That is why the preflight runs before anything that could call it, and why `make upgrade` does not depend on the `env` target.
 2. **A pre-upgrade dump** to `backups/pre-upgrade-<timestamp>.sql.gz`, taken with the stack still on the old code. A `pg_dump | gzip` into a full disk exits 0 and leaves a file, so the preflight runs a second time afterwards with its backup arm enabled, and an empty dump is refused rather than reported as a backup. This is a local artefact for *this* operation and is a different thing from `scripts/backup.sh`, which is the off-host disaster-recovery path for all seven components.
 3. **Image pull** for the target tag.
-4. **Migrations**, with `AISOC_MIGRATIONS_STRICT=1` set **inside the container**. This is the point of the step: without it `run_migrations.main()` logs each failure, rolls that statement back, continues, and returns normally — exit 0 with a partially-applied schema, which is worse than a clean failure because the upgrade then reports success and starts the stack. Setting the variable in your own shell does not reach the container, which is why the warning this document used to carry was unreachable through the command it was attached to.
-5. **Start**, then wait for health.
+4. **Compare migration files** in the checkout and the API container by filename and SHA-256 of the UTF-8 text the runner executes. Line endings are normalized by the same text-reading behaviour as the runner, so CRLF checkouts match LF images. A missing, extra, or changed SQL file stops the upgrade before the migration runner executes. This also works with older images: the verifier is supplied by the host, then invokes the existing runner in the same container only when the files agree.
+5. **Migrations**, with `AISOC_MIGRATIONS_STRICT=1` set **inside the container**. Without it `run_migrations.main()` can log a failure and return normally. Strict mode makes SQL execution failures stop the upgrade; the preceding file comparison catches migrations that an older image would never have seen.
+6. **Verify applied migrations** against the checkout's expected filenames. Every expected migration must be recorded in `aisoc_schema_migrations`. Pending migrations, a missing tracking table, an empty database, or an unreadable database stop the upgrade before services start. Historical tracking rows absent from the checkout retain their existing warning behaviour; this check does not attempt a schema downgrade.
+7. **Start**, then wait for health.
 
 The dump stays under `./backups/`. Keep it until you have confirmed the new
 release behaves.
+
+### When the API image and checkout disagree
+
+`latest` names the most recently published image, which can lag behind `main`
+while a build is queued or running. A successful pull does not prove that the
+image contains the migrations from a recent `git pull`.
+
+The upgrade names files missing from the image, present only in the image, or
+different in content. Wait for the matching images to finish publishing, or
+select a release whose source checkout and `AISOC_VERSION` agree, then rerun
+`make upgrade`. Keep the pre-upgrade backup. Bypassing the check or mounting new
+SQL into an older image does not make the running application match the schema.
 
 ### `make up` will not migrate for you
 
