@@ -373,6 +373,11 @@ services:
     build:
       context: ./services/api
       dockerfile: Dockerfile
+      args:
+        # Stamps /health, the OpenAPI info.version and the startup log for
+        # source-built images; make up fills it from the VERSION file, the
+        # same value publish-images.yml passes at release build time.
+        AISOC_VERSION: ${AISOC_BUILD_VERSION:-}
     image: ghcr.io/beenuar/aisoc-core-api:${AISOC_VERSION:-latest}
     pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-api
@@ -785,6 +790,11 @@ services:
     build:
       context: ./services/agents
       dockerfile: Dockerfile
+      args:
+        # Stamps /health, the OpenAPI info.version and the startup log for
+        # source-built images; make up fills it from the VERSION file, the
+        # same value publish-images.yml passes at release build time.
+        AISOC_VERSION: ${AISOC_BUILD_VERSION:-}
     image: ghcr.io/beenuar/aisoc-agents:${AISOC_VERSION:-latest}
     pull_policy: ${AISOC_PULL_POLICY:-missing}
     container_name: aisoc-agents
