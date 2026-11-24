@@ -32,6 +32,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anyway because the path is attacker-reachable.
 ### Fixed
 
+- Investigation reports now render linked alert timestamps from their source records instead of asking the model to construct a timeline from the number of forensic entries. The forensic prompt also carries a bounded selection of linked alert metadata.
+
 - **Every actionable destination the marketing site shipped now exists**
   (2026-11-22 QA pass). Fetching every link the web app publishes found
   four classes of dead destination, each verified against the authority

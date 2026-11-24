@@ -214,7 +214,7 @@ class InvestigatorState(BaseModel):
     def log_llm_response(
         self,
         agent: str,
-        response: str,
+        response: str | list[Any],
         *,
         prompt_hash: str | None = None,
         model: str | None = None,
@@ -223,8 +223,12 @@ class InvestigatorState(BaseModel):
         latency_ms: int = 0,
         cost_usd: float | None = None,
         cost_source: str = "unpriced",
+        rejection_reason: str | None = None,
     ) -> str:
-        """Record the literal LLM response. Returns the output hash.
+        """Record the LLM response. Returns the output hash.
+
+        Rejected prose is represented by its digest and a reason, without a
+        literal preview. Usage and the link to the originating prompt remain.
 
         ``cost_usd`` is ``None`` when nothing could price the call, and the
         ledger entry says so via ``cost_source`` rather than recording a
@@ -235,7 +239,6 @@ class InvestigatorState(BaseModel):
         """
         output_hash = _stable_hash(response)
         meta = {
-            "response": response[:8000],
             "model": model,
             "resolved_model": resolved_model,
             "tokens_used": tokens_used,
@@ -243,6 +246,11 @@ class InvestigatorState(BaseModel):
             "cost_source": cost_source,
             "prompt_hash": prompt_hash,
         }
+        if rejection_reason is None:
+            meta["response"] = (response if isinstance(response, str) else str(response))[:8000]
+        else:
+            meta["outcome"] = "rejected"
+            meta["rejection_reason"] = rejection_reason
         self.audit_log.append(
             AuditEntry(
                 kind=StepKind.LLM_RESPONSE,

@@ -169,12 +169,14 @@ def _cap_prompt_bytes(messages: list[Any]) -> list[Any]:
     return out
 
 
-async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
+async def safe_ainvoke(llm: Any, messages: Iterable[Any], *, cache_response: bool = True, **kwargs: Any) -> Any:
     """Validate ``messages`` against the contract, then call ``llm.ainvoke``.
 
     All callsites in ``services/agents`` MUST route through this function
     (or :func:`safe_astream` for streaming) so the contract is uniformly
     enforced. Raises :class:`LLMContractViolation` on contract breach.
+    Callers that validate provider metadata (such as the finish reason) must
+    bypass the text-only cache with ``cache_response=False``.
     """
     materialised = list(messages)
     LLMInputContract.validate(materialised)
@@ -187,7 +189,7 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
     # text cache cannot replay it, and a fresh console lookup must not become
     # a cached prose answer with no read behind it.
     bound_tools = (getattr(llm, "kwargs", None) or {}).get("tools")
-    use_cache = _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs and not bound_tools
+    use_cache = cache_response and _RESPONSE_CACHE_ENABLED and bool(model) and bool(user_input) and not kwargs and not bound_tools
     if use_cache:
         cached = _RESPONSE_CACHE.lookup(model=model, prompt=prompt, user_input=user_input)
         if cached is not None:
