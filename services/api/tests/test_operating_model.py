@@ -30,9 +30,9 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 from zoneinfo import ZoneInfo
 
-import app.services.service_review as sr
 import pytest
 from app.services import responsibility as resp
+from app.services import service_review as sr
 from app.services.escalation_router import _severity_at_or_above
 from app.services.shift_handoff import GENERATION_GRACE, ShiftConfigError, latest_ended_occurrence, validate_timezone
 
