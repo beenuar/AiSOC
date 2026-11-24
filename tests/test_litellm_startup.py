@@ -111,6 +111,44 @@ def test_local_default_and_provider_native_auth_are_preserved():
     assert normalized["AISOC_LLM_API_BASE"] == "http://ollama:11434"
 
 
+@pytest.mark.parametrize("blank", [None, "", " \t"])
+def test_role_models_inherit_effective_tiers_without_overwriting_explicit_models(blank):
+    tiers = {"AISOC_LLM_MODEL_FAST": "openai/fast-fixture", "AISOC_LLM_MODEL_DEEP": "openai/deep-fixture"}
+    inputs = dict(tiers)
+    if blank is not None:
+        inputs["AISOC_LLM_MODEL_REPORT"] = blank
+    inputs["AISOC_LLM_MODEL_INVESTIGATION"] = "openai/per-investigation"
+    _, env = launch(inputs)
+    gateway = yaml.safe_load((ROOT / "docker-compose.yml").read_text())["services"]["litellm"]
+    for entry in yaml.safe_load(CONFIG.read_text())["model_list"]:
+        alias = entry["model_name"]
+        env_name = f"AISOC_LLM_MODEL_{alias.removeprefix('aisoc-').upper().replace('-', '_')}"
+        assert gateway["environment"][env_name] == "${" + env_name + ":-}"
+        assert entry["litellm_params"]["model"] == "os.environ/" + env_name
+        expected = tiers["AISOC_LLM_MODEL_DEEP"] if alias == "aisoc-report" else tiers["AISOC_LLM_MODEL_FAST"]
+        assert env[env_name] == ("openai/per-investigation" if alias == "aisoc-investigation" else expected)
+
+
+@pytest.mark.parametrize(
+    ("inherited", "override", "expected", "ignored"),
+    [
+        ("bedrock/global.primary", " bedrock/global.secondary ", "bedrock/global.secondary", False),
+        ("openai/gpt-4o", "openai/alternate", "openai/alternate", False),
+        ("ollama_chat/local", "bedrock/global.secondary", "ollama_chat/local", True),
+        ("openai/gpt-4o", "anthropic/model", "openai/gpt-4o", True),
+        ("unknown/primary", "unknown/alternate", "unknown/primary", True),
+        ("model-without-provider", "another-model", "model-without-provider", True),
+        ("openai/gpt-4o", "openai/", "openai/gpt-4o", True),
+    ],
+)
+def test_role_override_does_not_change_provider_class(inherited, override, expected, ignored, capsys):
+    _, env = launch({"AISOC_LLM_MODEL_DEEP": inherited, "AISOC_LLM_MODEL_REPORT": override})
+    assert env["AISOC_LLM_MODEL_REPORT"] == expected
+    warning = capsys.readouterr().err
+    assert ("Ignoring AISOC_LLM_MODEL_REPORT" in warning) == ignored
+    assert override.strip() not in warning
+
+
 def test_host_profiles_are_an_explicit_readonly_mount():
     overlay = yaml.safe_load((ROOT / "infra/compose/docker-compose.aws-profile.yml").read_text())
     assert set(overlay["services"]) == {"litellm"}

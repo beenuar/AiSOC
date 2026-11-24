@@ -181,6 +181,10 @@ def _inside(case: str) -> None:
         "OPENAI_API_KEY": "fixture-openai" if case in {"openai", "anthropic", "bedrock-bearer-conflict"} else "",
         "ANTHROPIC_API_KEY": "fixture-anthropic" if provider == "anthropic" else "",
     }
+    if case == "openai-role-override":
+        env["OPENAI_API_KEY"] = "fixture-openai"
+        env["AISOC_LLM_MODEL_REPORT"] = "openai/report-fixture"
+        env["AISOC_LLM_MODEL_SUMMARY"] = " \t"
     keyless = case.endswith(("-empty-key", "-whitespace-key"))
     if keyless:
         env[f"{provider.upper()}_API_KEY"] = " \t\n" if case.endswith("-whitespace-key") else ""
@@ -239,6 +243,16 @@ def _inside(case: str) -> None:
                     return
                 with urllib.request.urlopen(request, timeout=30) as response:
                     assert json.load(response)["choices"][0]["message"]["content"] == "fixture-ok"
+                if case == "openai-role-override":
+                    for alias, expected in (("aisoc-report", "report-fixture"), ("aisoc-summary", "gpt-4o-mini")):
+                        alternate = urllib.request.Request(
+                            request.full_url,
+                            data=json.dumps({"model": alias, "messages": [{"role": "user", "content": "fixture"}]}).encode(),
+                            headers={"Content-Type": "application/json", "Authorization": f"Bearer {MASTER}"},
+                        )
+                        with urllib.request.urlopen(alternate, timeout=30) as response:
+                            assert json.load(response)["choices"][0]["message"]["content"] == "fixture-ok"
+                        assert requests[-1][2]["model"] == expected
                 assert requests, "No provider request reached the fixture"
                 path, headers, _body = requests[-1]
                 headers = {name.lower(): value for name, value in headers.items()}
@@ -329,6 +343,9 @@ class GatewayHTTPTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             finally:
                 subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=15, check=False)
+
+    def test_role_override_and_blank_inheritance_reach_the_expected_model(self):
+        self.run_image("openai-role-override")
 
     def test_ollama_without_provider_key(self):
         self.run_image("ollama")

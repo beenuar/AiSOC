@@ -1147,6 +1147,15 @@ services:
       # and clear AISOC_LLM_API_BASE — to route to a hosted provider instead.
       AISOC_LLM_MODEL_FAST: ${AISOC_LLM_MODEL_FAST:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
       AISOC_LLM_MODEL_DEEP: ${AISOC_LLM_MODEL_DEEP:-ollama_chat/llama3.2:3b-instruct-q4_K_M}
+      AISOC_LLM_MODEL_TRIAGE: ${AISOC_LLM_MODEL_TRIAGE:-}
+      AISOC_LLM_MODEL_RECON: ${AISOC_LLM_MODEL_RECON:-}
+      AISOC_LLM_MODEL_INVESTIGATION: ${AISOC_LLM_MODEL_INVESTIGATION:-}
+      AISOC_LLM_MODEL_COPILOT: ${AISOC_LLM_MODEL_COPILOT:-}
+      AISOC_LLM_MODEL_SUMMARY: ${AISOC_LLM_MODEL_SUMMARY:-}
+      AISOC_LLM_MODEL_REPORT: ${AISOC_LLM_MODEL_REPORT:-}
+      AISOC_LLM_MODEL_NL: ${AISOC_LLM_MODEL_NL:-}
+      AISOC_LLM_MODEL_HUNT: ${AISOC_LLM_MODEL_HUNT:-}
+      AISOC_LLM_MODEL_DETECTION: ${AISOC_LLM_MODEL_DETECTION:-}
       # `-` and not `:-`, deliberately: an operator moving to a hosted provider
       # sets AISOC_LLM_API_BASE= (empty) in .env, and `:-` would helpfully undo
       # that by substituting the Ollama address back in. start.py unsets a

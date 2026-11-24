@@ -37,7 +37,10 @@
 #     AISOC_LLM_MODEL_DEEP=openai/gpt-4o
 #     AISOC_LLM_API_BASE=
 #
-# then `make llm-reload`. No code change, no profile change, no edit to this file.
+# then recreate LiteLLM with the same Compose files as the deployment. Keep
+# any active GPU, host-Ollama, ports, or credential overlay, except when
+# intentionally changing topology (for example moving off host Ollama).
+# See "Apply and verify gateway changes" in the LLM gateway guide.
 # Air-gapped deployments keep the defaults and never set a key.
 #
 # When no live model is reachable at all AiSOC still degrades to its
@@ -48,43 +51,43 @@ model_list:
   # ── Auto-triage: high volume, cheap+fast. ─────────────────────────────────────
   - model_name: aisoc-triage
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_TRIAGE
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Recon / enrichment reasoning. ─────────────────────────────────────────────
   - model_name: aisoc-recon
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_RECON
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Deep investigation: the multi-step reasoning path — worth a stronger model.
   - model_name: aisoc-investigation
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_DEEP
+      model: os.environ/AISOC_LLM_MODEL_INVESTIGATION
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Contextual copilot: interactive analyst Q&A. ──────────────────────────────
   - model_name: aisoc-copilot
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_COPILOT
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Summaries: alert/incident condensation. ───────────────────────────────────
   - model_name: aisoc-summary
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_SUMMARY
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Reports: analyst-facing write-ups — quality over cost. ────────────────────
   - model_name: aisoc-report
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_DEEP
+      model: os.environ/AISOC_LLM_MODEL_REPORT
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Natural-language generation: NL→query / NL→detection translation. ─────────
   - model_name: aisoc-nl
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_NL
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # Gap-closure Phase 8.3. The hunting agent turns a natural-language
@@ -94,7 +97,7 @@ model_list:
   # AISOC_LLM_MODEL at something larger.
   - model_name: aisoc-hunt
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_HUNT
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # Parity 2.5. The detection-tuning loop rewrites a Sigma rule from an
@@ -105,7 +108,7 @@ model_list:
   # JSON against a fixed schema rather than reasoning.
   - model_name: aisoc-detection
     litellm_params:
-      model: os.environ/AISOC_LLM_MODEL_FAST
+      model: os.environ/AISOC_LLM_MODEL_DETECTION
       api_base: os.environ/AISOC_LLM_API_BASE
 
   # ── Other backends ────────────────────────────────────────────────────────────
@@ -139,8 +142,8 @@ model_list:
   # nothing measured supports autonomous closure on any of them. Re-grade
   # with `scripts/run_verdict_eval.py` before moving a deployment.
   #
-  # Per-alias divergence — a different model for one workload only — is the case
-  # that does need an edit: replace that alias's `os.environ/...` with a literal.
+  # Set a per-alias AISOC_LLM_MODEL_* value in .env to override only one backend.
+  # The Compose launcher fills in tier values for unset or blank overrides.
 
 # ── Gateway behaviour ─────────────────────────────────────────────────────────
 litellm_settings:
