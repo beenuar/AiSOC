@@ -1,4 +1,4 @@
--- WS6.2 — the hypothesis scheduler's per-tenant switch, cadence and budget.
+-- the hypothesis scheduler's per-tenant switch, cadence and budget.
 --
 -- Three deterministic schedulers already run (saved-hunt cron, corpus
 -- cadence, retro-hunts); none SELECTS hypotheses or dispatches the LLM hunt
@@ -11,7 +11,7 @@
 -- APPROVED hunt request is a selection source, and a request that already
 -- launched a campaign must not launch one per tick.
 
--- lane allocation: migration 179 (WS6)
+-- lane allocation: migration 179
 
 CREATE TABLE IF NOT EXISTS hunt_campaign_policies (
     tenant_id       UUID        PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS hunt_campaign_policies (
 );
 
 COMMENT ON TABLE hunt_campaign_policies IS
-    'Per-tenant hypothesis-scheduler policy (WS6.2). Off until a row enables '
+    'Per-tenant hypothesis-scheduler policy. Off until a row enables '
     'it; every selection the scheduler makes is recorded with its reason.';
 
 ALTER TABLE hunt_source_reports

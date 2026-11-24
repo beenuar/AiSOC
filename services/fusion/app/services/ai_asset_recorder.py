@@ -294,7 +294,7 @@ ON CONFLICT ON CONSTRAINT aisoc_ai_assets_identity DO UPDATE SET
     -- when there is one and the older value when there is not.
     principal         = COALESCE(EXCLUDED.principal, aisoc_ai_assets.principal),
     attributes        = aisoc_ai_assets.attributes || EXCLUDED.attributes,
-    -- WS5.3. A judged asset's score is OWNED by the sanction route:
+    -- A judged asset's score is OWNED by the sanction route:
     -- `_score()` is sanction-blind by design ("a newly observed asset is by
     -- definition one nobody has judged yet"), so letting it overwrite a
     -- judged row silently erased ai_inventory's +30 "Reviewed and refused,
@@ -374,7 +374,7 @@ def _basename(path: str) -> str:
     return stem[:-4] if stem.endswith(".exe") else stem
 
 
-#: WS5.5 — the shadow-AI catalog: a vendor's own documented product domain
+#: — the shadow-AI catalog: a vendor's own documented product domain
 #: per row, shipped as data with per-row provenance (`ai_app_catalog.json`).
 #: Suffix-matched so `eu.api.openai.com` still matches `api.openai.com`'s
 #: vendor; a miss is a miss — nothing is inferred.
@@ -399,7 +399,7 @@ def _load_catalog() -> tuple[int, dict[str, dict[str, str]]]:
 
 _CATALOG_VERSION, _CATALOG = _load_catalog()
 
-# ── WS5.4: MCP manifests — versioned, drift-detected ────────────────────────
+# ── MCP manifests — versioned, drift-detected ────────────────────────
 
 _MANIFEST_LATEST_SQL = """
 SELECT version, tools FROM aisoc_ai_mcp_manifests
@@ -476,7 +476,7 @@ def _catalog_match(domain: str) -> tuple[str, dict[str, str]] | None:
 
 
 def _from_network(tenant_id: str, ocsf: dict[str, Any], now: float) -> list[_Sighting]:
-    """AI-app sightings from SWG/DNS telemetry (WS5.5).
+    """AI-app sightings from SWG/DNS telemetry.
 
     The source can see the DOMAIN and never the prompt; the sighting's
     attributes state that limitation outright, because a reader of the AI
@@ -546,7 +546,7 @@ def classify(message: dict[str, Any]) -> list[_Sighting]:
     elif ocsf.get("class_uid") == 1007:
         out.extend(_from_endpoint(tenant_id, ocsf, now))
     else:
-        # WS5.5 — SWG/DNS events become AI-app sightings when the domain
+        # SWG/DNS events become AI-app sightings when the domain
         # matches the shipped catalog. Deliberately the fallthrough arm: the
         # AI-native sources above already know what they are looking at.
         out.extend(_from_network(tenant_id, ocsf, now))
@@ -937,12 +937,12 @@ class AiAssetRecorder:
         self._pending: dict[tuple[str, str, str, str], _Sighting] = {}
         self._last_flush = time.monotonic()
         self._metrics = {"observed": 0, "written": 0, "dropped": 0, "refused_seen": 0}
-        #: WS5.3 — sightings whose upsert landed on a `sanctioned = FALSE`
+        #: — sightings whose upsert landed on a `sanctioned = FALSE`
         #: row. The consumer drains these and raises a triage alert citing
         #: the sanction decision; a refused asset that keeps running should
         #: interrupt somebody, not only nudge an inventory score.
         self._refused: list[dict[str, str]] = []
-        #: WS5.4 — buffered MCP manifests, latest per (tenant, server), and
+        #: — buffered MCP manifests, latest per (tenant, server), and
         #: the drift findings the flush computed against the stored version.
         self._manifests: dict[tuple[str, str], dict[str, Any]] = {}
         self._mcp_drift: list[dict[str, Any]] = []
@@ -952,7 +952,7 @@ class AiAssetRecorder:
         return dict(self._metrics)
 
     def _buffer_manifest(self, message: dict[str, Any]) -> None:
-        """WS5.4 — recognise and buffer an SDK manifest event.
+        """recognise and buffer an SDK manifest event.
 
         The marker is the reserved tool name `mcp:manifest` riding the
         ai-runtime mapping; the payload is `mcp_tools`, hashes and flags
@@ -1023,7 +1023,7 @@ class AiAssetRecorder:
 
     def drain_mcp_drift(self) -> list[dict[str, Any]]:
         """Manifest drift findings since the last drain — the consumer's
-        input for WS5.4's alerts. Draining empties the buffer."""
+        input for the manifest-drift alerts. Draining empties the buffer."""
         out = self._mcp_drift
         self._mcp_drift = []
         return out
@@ -1032,7 +1032,7 @@ class AiAssetRecorder:
         """Sightings that landed on a refused asset since the last drain.
 
         The consumer turns each into a triage alert citing the sanction
-        decision (WS5.3). Draining empties the buffer, so one flush reports
+        decision. Draining empties the buffer, so one flush reports
         a refused re-observation exactly once.
         """
         out = self._refused

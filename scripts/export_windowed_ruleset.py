@@ -429,7 +429,7 @@ WINDOWED_RULES: list[dict] = [
         # the proxy for already recorded. A threshold rule cannot express it
         # — that is the whole reason 3.2's ordered sequences exist.
     },
-    # ── WS5: AI-session rules ────────────────────────────────────────────
+    # ── AI-session rules ────────────────────────────────────────────
     # Natively authored (AI-runtime telemetry is none of the four published
     # product groups); the template-coupling pin in
     # services/fusion/tests/test_ai_session_rules.py holds every field these

@@ -68,7 +68,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 ARTEFACTS: dict[str, int] = {
     "detection_ruleset.json": 1196,
     "detection_ruleset_imported.json": 1770,
-    # 76 -> 79 with WS5's three authored AI-session rules.
+    # 76 -> 79 with the three authored AI-session rules.
     "windowed_ruleset.json": 79,
 }
 
@@ -96,7 +96,7 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: `scripts/check_scenario_family_alignment.py`. The same work removed 44
 #: orphan YAML files and two duplicate slugs, each of which had been
 #: inflating the *published* total above what the engine loads.
-# 3045 -> 3048 with WS5's three authored AI-session windowed rules.
+# 3045 -> 3048 with the three authored AI-session windowed rules.
 FUSION_LOADED_TOTAL = 3048
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")

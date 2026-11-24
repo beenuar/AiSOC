@@ -189,7 +189,7 @@ async def _generate_for_tenant(
         )
         db.add(artefact)
 
-        # WS8.4 — the per-tenant service review rides the same weekly tick:
+        # the per-tenant service review rides the same weekly tick:
         # the digest's narrative beside the review's measured, denominated
         # figures (every mean carries the count it averaged; "not measured"
         # where there is no denominator), persisted as its own artefact and

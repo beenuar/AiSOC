@@ -1,4 +1,4 @@
-"""The archive tier's pure halves (WS2). The engine truths live in
+"""The archive tier's pure halves. The engine truths live in
 ``tests/isolation/test_lake_archive_live.py``; this file pins what must not
 drift without a container: path and window derivation, destination
 validation, the estimate's cost honesty, the scratch-table namespace, the

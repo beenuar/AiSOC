@@ -1,4 +1,4 @@
-"""Bounded campaigns: budgets gate steps, questions must be new (WS6.1).
+"""Bounded campaigns: budgets gate steps, questions must be new.
 
 Driven through the real campaign loop with a scripted ``invoke`` — the same
 injection seam the single-hunt suite uses — and the real plan validator, so

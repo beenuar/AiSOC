@@ -167,7 +167,7 @@ SCENARIO_FLOOR = 907
 #: none. Held so the unclassifiable set cannot grow silently — the honest
 #: close is to give the windowed schema a product, which is a change to how
 #: those rules are authored and is recorded as open rather than guessed at.
-#: 26 → 29 with WS5's three natively-authored AI-session rules
+#: 26 → 29 with the three natively-authored AI-session rules
 #: (wd-ai-session-untrusted-then-secret-then-egress, wd-ai-session-tool-call-flood,
 #: wd-ai-identical-prompt-repetition): AI-runtime telemetry is none of the four
 #: published groups, so these are counted and held here rather than forced

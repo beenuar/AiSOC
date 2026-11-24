@@ -19,7 +19,7 @@ Snapshot honesty
 ----------------
 Each section is computed from its own store and carries its own failure:
 a store that cannot answer contributes ``{"could_not_check": reason}``
-rather than zeros. The attention section reuses the WS7.4 criteria (open
+rather than zeros. The attention section reuses the service-review criteria (open
 cases that are unowned, or past their next-action deadline) by querying
 the same columns the `/cases/attention` endpoint reads.
 """

@@ -294,7 +294,7 @@ async def propose_detection_from_campaign(
     # requires, because this writes the same table. The proposal lands as a
     # DRAFT on the governed propose -> review -> promote path; nothing here
     # touches a live rule, and the reviewer reads the campaign that produced
-    # it rather than a bare suggestion (WS6.4 — the wiring that finally
+    # it rather than a bare suggestion (the wiring that finally
     # assigns the long-declared, never-assigned proposal id).
     user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
     db: DBSession,

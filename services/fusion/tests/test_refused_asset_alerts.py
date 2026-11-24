@@ -1,4 +1,4 @@
-"""A refused AI asset observed again raises a triage alert (WS5.3).
+"""A refused AI asset observed again raises a triage alert.
 
 The recorder half (the judged-score guard + `drain_refused`) is proven
 against live Postgres in `test_ai_asset_recorder_live.py`; this file pins

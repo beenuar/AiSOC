@@ -1,4 +1,4 @@
--- WS2.1 — the archive tier: closed lake months exported to object storage
+-- the archive tier: closed lake months exported to object storage
 -- in an open format, with a signed manifest and a verification trail.
 --
 -- The lake (ClickHouse `aisoc.raw_events`) holds at most `MAX_LAKE_DAYS`
@@ -21,7 +21,7 @@
 -- the database that owns the rows writes the files, and verification
 -- re-reads them through the same engine.
 
--- lane allocation: migration 170 (WS2)
+-- lane allocation: migration 170
 
 CREATE TABLE IF NOT EXISTS lake_archive_policies (
     tenant_id       UUID        PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS lake_archive_policies (
 );
 
 COMMENT ON TABLE lake_archive_policies IS
-    'Per-tenant archive-tier policy (WS2.1). Off until a row enables it; '
+    'Per-tenant archive-tier policy. Off until a row enables it; '
     'credentials vault-encrypted; worm_declared is an operator declaration, '
     'reported as such and never as verified.';
 

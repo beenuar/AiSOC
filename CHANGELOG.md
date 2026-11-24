@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Source-built images now report their real version: the API and agents Dockerfiles declare an `AISOC_VERSION` build argument that the release workflow fills, but compose's `build:` blocks never passed it, so `make up UP_FLAGS=--build` produced a `/health`, OpenAPI `info.version` and startup log that all said `unknown`. The two build blocks now pass `AISOC_BUILD_VERSION`, which `make up` fills from the `VERSION` file — verified live: a rebuilt stack reports 23.6.1 on `/health` and in the console footer.
+- The post-merge sweep removed a duplicated phishing test module that ran its 223 lines twice, and scrubbed the workstream labels that rode the program's earlier merges into code comments, docstrings, migration COMMENTs, test names and the generated OpenAPI spec — labels stay in PR titles and the neutral capability index only.
+
 ### Changed
 
 - Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.

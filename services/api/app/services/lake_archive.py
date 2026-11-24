@@ -1,4 +1,4 @@
-"""The archive tier: closed lake months in an open format (WS2.1–2.3).
+"""The archive tier: closed lake months in an open format.
 
 The shape of the thing
 ----------------------
@@ -267,7 +267,7 @@ async def verify_partition(manifest: dict[str, Any], dest: Destination) -> list[
 
 
 # ---------------------------------------------------------------------------
-# Rehydration (WS2.2)
+# Rehydration
 # ---------------------------------------------------------------------------
 
 #: The scratch-table namespace. `lake_sql.rewrite_for_tenant` recognises
@@ -388,7 +388,7 @@ async def drop_rehydration_table(table: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Attestation (WS2.4's reporting half)
+# Attestation (scoped-holds reporting half)
 # ---------------------------------------------------------------------------
 
 _ATTESTATION_HOLDS_SQL = text(

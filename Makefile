@@ -144,7 +144,7 @@ up: env _ports _refresh _schema_guard
 	@# --rebuild uses it (`make up UP_FLAGS=--build`), which is how that
 	@# flag reaches compose on the Unix side while install.ps1 appends
 	@# --build to its own invocation. Empty by default.
-	$(COMPOSE) up -d $(UP_FLAGS)
+	AISOC_BUILD_VERSION=$$(cat VERSION 2>/dev/null) $(COMPOSE) up -d $(UP_FLAGS)
 	@echo ""
 	@echo "Waiting for services to become healthy…"
 	@$(MAKE) --no-print-directory _wait

@@ -525,7 +525,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"),
     )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
-    # WS8 — operating-model sweep: shift handoffs from real rows + per-tenant
+    # operating-model sweep: shift handoffs from real rows + per-tenant
     # escalation routing over the outbound webhooks. Per-tenant configuration
     # gates the behaviour (no shifts -> no handoffs; no routes -> no
     # escalations); the worker is hygiene, on by default.

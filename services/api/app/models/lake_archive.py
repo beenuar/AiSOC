@@ -1,4 +1,4 @@
-"""ORM models for the archive tier (WS2, migrations 170–171)."""
+"""ORM models for the archive tier (migrations 170–171)."""
 
 from __future__ import annotations
 

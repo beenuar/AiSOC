@@ -1,4 +1,4 @@
--- WS2.2 + WS2.3 — rehydration jobs and portability exports, as audited rows.
+-- Rehydration jobs and portability exports, as audited rows.
 --
 -- Rehydration brings an archived range back into a queryable table —
 -- estimate FIRST (bytes, files, retrieval cost only when a price is
@@ -11,7 +11,7 @@
 -- TENANT names: Parquet + the signed manifest + a schema document, readable
 -- with no AiSOC code (the gate proves it with DuckDB).
 
--- lane allocation: migration 171 (WS2)
+-- lane allocation: migration 171
 
 CREATE TABLE IF NOT EXISTS lake_rehydrations (
     id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -47,7 +47,7 @@ CREATE TABLE IF NOT EXISTS lake_rehydrations (
 );
 
 COMMENT ON TABLE lake_rehydrations IS
-    'Audited rehydration jobs (WS2.2): archived months loaded back into a '
+    'Audited rehydration jobs: archived months loaded back into a '
     'scratch ClickHouse table with an expiry. The estimate precedes the '
     'load; reason and requester are required.';
 
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS lake_portability_exports (
 );
 
 COMMENT ON TABLE lake_portability_exports IS
-    'Audited portability exports (WS2.3): Parquet + signed manifest + schema '
+    'Audited portability exports: Parquet + signed manifest + schema '
     'document written to a bucket the tenant names, readable with no AiSOC '
     'code. Request credentials are used for the job and never persisted.';
 

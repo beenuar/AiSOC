@@ -103,7 +103,7 @@ CREATE TRIGGER case_external_refs_set_updated_at
     BEFORE UPDATE ON case_external_refs
     FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
-COMMENT ON TABLE  case_external_refs              IS 'WS8: AiSOC case ↔ external ticket mapping (Jira/ServiceNow/etc.).';
+COMMENT ON TABLE  case_external_refs              IS 'AiSOC case ↔ external ticket mapping (Jira/ServiceNow/etc.).';
 COMMENT ON COLUMN case_external_refs.connector_instance_id IS 'Row in connectors table that owns the push; ties ref to a specific Jira project / ServiceNow instance.';
 COMMENT ON COLUMN case_external_refs.external_id  IS 'Vendor handle (Jira issue key, ServiceNow sys_id, etc.). Unique per connector instance.';
 COMMENT ON COLUMN case_external_refs.external_status IS 'Last known status on the external side; used to short-circuit no-op status pushes.';

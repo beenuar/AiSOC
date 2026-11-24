@@ -1,4 +1,4 @@
--- WS2.4 — legal holds scoped in time, so a hold exempts ONLY its own rows.
+-- legal holds scoped in time, so a hold exempts ONLY its own rows.
 --
 -- What was deferred, in the purge worker's own words: "the subject of a
 -- bulk tenant purge is the tenant. Every live hold in this tenant matches
@@ -20,9 +20,9 @@
 -- (`subject_kind = 'tenant'`) keep the old whole-tenant freeze, because
 -- that is what a tenant-wide hold MEANS. The lake TTL ceiling is untouched
 -- and untouchable — a hold older than `MAX_LAKE_DAYS` is only satisfiable
--- through the archive tier (WS2.1), and the attestation says so.
+-- through the archive tier, and the attestation says so.
 
--- lane allocation: migration 172 (WS2)
+-- lane allocation: migration 172
 
 ALTER TABLE legal_holds
     ADD COLUMN IF NOT EXISTS covers_from  TIMESTAMPTZ,

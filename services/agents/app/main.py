@@ -134,7 +134,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001
             logger.warning("hunt.scheduler.start_failed", error=str(exc))
 
-    # WS6.2 — the hypothesis scheduler: per-tenant, opt-in campaign
+    # the hypothesis scheduler: per-tenant, opt-in campaign
     # selection (hunt_campaign_policies gates everything; an absent row is
     # off). The loop itself is hygiene and follows the corpus scheduler's
     # env gate so dev/CI can silence background jobs the same way.

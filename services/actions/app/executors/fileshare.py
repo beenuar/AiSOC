@@ -1,4 +1,4 @@
-"""``revoke_file_share`` — four estates, one contract (WS4.5).
+"""``revoke_file_share`` — four estates, one contract.
 
 What this verb is
 -----------------

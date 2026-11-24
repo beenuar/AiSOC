@@ -1,4 +1,4 @@
-"""Archive sweep: export closed months, verify, expire rehydrations (WS2).
+"""Archive sweep: export closed months, verify, expire rehydrations.
 
 Three jobs on one tick, each bounded so a large estate cannot wedge the
 loop:

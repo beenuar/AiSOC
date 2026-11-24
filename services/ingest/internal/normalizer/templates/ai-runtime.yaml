@@ -54,10 +54,10 @@ field_map:
   # the prompt, so credential-in-prompt detection works even under the
   # default hashed capture mode where the text never leaves the process.
   prompt_secret_kinds: finding.evidence.prompt_secret_kinds
-  # WS5.6 — opt-in sensitive-class match counts ({class: n}); counts only,
+  # opt-in sensitive-class match counts ({class: n}); counts only,
   # never content. Absent unless the SDK was constructed with the opt-in.
   prompt_class_counts: finding.evidence.prompt_class_counts
-  # WS5.4 — MCP manifest records: per tool {name, description_sha256,
+  # MCP manifest records: per tool {name, description_sha256,
   # annotations, flagged?, snippet?}. Hashed in the customer's process.
   mcp_tools: finding.evidence.mcp_tools
   argument_keys: finding.evidence.argument_keys

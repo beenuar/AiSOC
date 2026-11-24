@@ -1,4 +1,4 @@
-"""Bounded hunting campaigns: distinct questions, summarized hand-offs (WS6.1).
+"""Bounded hunting campaigns: distinct questions, summarized hand-offs.
 
 A campaign is a SEQUENCE of closed-schema plans, each derived from a
 **summary** of the previous step's result — never from the rows themselves.

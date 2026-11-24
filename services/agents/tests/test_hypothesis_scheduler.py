@@ -1,8 +1,8 @@
-"""The hypothesis scheduler selects, records, gates and marks (WS6.2–6.4).
+"""The hypothesis scheduler selects, records, gates and marks.
 
 Driven with a scripted asyncpg double and a stubbed campaign runner: what
 this file pins is the SELECTION machinery — the per-tenant opt-in, the
-approval gate (an unapproved request is never selected — WS6.3's
+approval gate (an unapproved request is never selected — the request-approval
 requirement carried into campaigns), the reason recorded BEFORE the
 campaign, the once-only `campaigned_at` marking, the per-tick cap, and the
 leads → verification → proposal hand-off order.
@@ -115,7 +115,7 @@ async def test_an_approved_request_runs_once_with_its_reason_recorded(
 
 @pytest.mark.asyncio
 async def test_an_unapproved_request_is_never_selected(monkeypatch: pytest.MonkeyPatch) -> None:
-    """WS6.3's gate carried into campaigns: approval precedes execution."""
+    """The approval gate carried into campaigns: approval precedes execution."""
     conn = _FakeConn([_policy()], [_request(approved=False)])
     run = AsyncMock()
     monkeypatch.setattr(sched, "run_campaign", run)

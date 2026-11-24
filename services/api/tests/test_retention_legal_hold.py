@@ -175,7 +175,7 @@ class TestAHoldOutranksThePurge:
     @pytest.mark.asyncio
     async def test_a_hold_on_a_user_narrows_the_purge_to_exempt_its_rows(self, patched) -> None:
         """Deliberately supersedes the whole-tenant freeze this test used to
-        pin (WS2.4, migration 172). The old rationale — "a bulk statement
+        pin (migration 172). The old rationale — "a bulk statement
         cannot evaluate a per-subject predicate row by row" — stopped being
         true when the purge statements gained per-hold exemption clauses:
         a user/host/ip hold now subtracts exactly its own rows (within its
