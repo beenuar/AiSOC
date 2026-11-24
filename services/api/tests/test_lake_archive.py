@@ -6,8 +6,10 @@ explorer's rehydrated-table arm, and the hold-exemption SQL composers."""
 
 from __future__ import annotations
 
+import socket
 import uuid
 from datetime import UTC, date, datetime
+from unittest.mock import patch
 
 import pytest
 from app.services import lake_archive
@@ -46,7 +48,14 @@ class TestDestinationValidation:
             lake_archive.validate_destination("http://minio:9000", "Bad_Bucket!")
 
     def test_a_sane_destination_passes(self) -> None:
-        lake_archive.validate_destination("http://minio:9000", "tenant-archive")
+        """An in-network MinIO is the common legitimate destination — and
+        since GHSA-98q5-87mq-9979 it requires the operator's explicit
+        allowance, because the lake issues the request outside the API's
+        egress guard. The refusal-by-default case is pinned in
+        test_lake_archive_ssrf.py."""
+        records = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.7", 0))]
+        with patch.object(socket, "getaddrinfo", return_value=records):
+            lake_archive.validate_destination("http://minio:9000", "tenant-archive", allow_private=True)
 
 
 class TestEstimateHonesty:

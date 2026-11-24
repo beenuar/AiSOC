@@ -524,6 +524,15 @@ class Settings(BaseSettings):
         default=True,
         validation_alias=AliasChoices("LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"),
     )
+    #: RFC1918/ULA archive endpoints are an operator trust decision
+    #: (GHSA-98q5-87mq-9979): a tenant-supplied s3_endpoint is bound into
+    #: ClickHouse's s3() call, which issues the request from the lake —
+    #: outside the API egress guard. Default off; the operator running an
+    #: in-network MinIO sets this once, deliberately.
+    ARCHIVE_ALLOW_PRIVATE_ENDPOINTS: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("ARCHIVE_ALLOW_PRIVATE_ENDPOINTS", "AISOC_ARCHIVE_ALLOW_PRIVATE_ENDPOINTS"),
+    )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
     # operating-model sweep: shift handoffs from real rows + per-tenant
     # escalation routing over the outbound webhooks. Per-tenant configuration

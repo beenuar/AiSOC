@@ -44,17 +44,21 @@ configured means ``cost: null``, never an invented figure.
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
 import re
+import socket
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.db.clickhouse import execute_lake_query
 from app.security.credential_vault import get_vault
 from app.services.evidence_bundle import sign_envelope
@@ -86,14 +90,48 @@ def month_bounds(month: date) -> tuple[datetime, datetime]:
     return start, end
 
 
-def validate_destination(endpoint: str, bucket: str) -> None:
-    """Refuse endpoints/buckets the URL composer cannot carry safely."""
+def validate_destination(endpoint: str, bucket: str, *, allow_private: bool | None = None) -> None:
+    """Refuse endpoints/buckets the URL composer cannot carry safely.
+
+    The endpoint is tenant input bound into ClickHouse's ``s3()`` table
+    function, which issues the request from the lake — outside the API
+    process and therefore outside its egress guard (GHSA-98q5-87mq-9979).
+    So beyond the shape check, every address the host resolves to is
+    classified the way ``destinations._guard_url`` classifies webhook
+    targets: link-local (the cloud-metadata range), loopback, reserved,
+    multicast and unspecified addresses are refused unconditionally, and
+    RFC1918/ULA private ranges are refused unless the operator set
+    ``AISOC_ARCHIVE_ALLOW_PRIVATE_ENDPOINTS=1`` — an in-network MinIO is
+    this feature's most common legitimate destination, and that is an
+    operator-level trust decision, not a tenant-level one. One disallowed
+    record among several refuses the whole name, because which record
+    ClickHouse's resolver picks is not ours to predict.
+    """
     if not _ENDPOINT_RE.match(endpoint or ""):
         raise ArchiveConfigError(
             f"s3_endpoint must be http(s)://host[:port] — got {endpoint!r}. Path-style addressing is composed from it."
         )
     if not _BUCKET_RE.match(bucket or ""):
         raise ArchiveConfigError(f"s3_bucket must be a valid bucket name — got {bucket!r}")
+
+    if allow_private is None:
+        allow_private = bool(getattr(settings, "ARCHIVE_ALLOW_PRIVATE_ENDPOINTS", False))
+
+    host = urlparse(endpoint).hostname or ""
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        raise ArchiveConfigError(f"cannot resolve s3_endpoint host {host!r}") from exc
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        hard_refused = ip.is_link_local or ip.is_loopback or ip.is_reserved or ip.is_multicast or ip.is_unspecified
+        if hard_refused:
+            raise ArchiveConfigError(f"s3_endpoint resolves to a disallowed address ({ip}); the lake would issue this request")
+        if ip.is_private and not allow_private:
+            raise ArchiveConfigError(
+                f"s3_endpoint resolves to a private address ({ip}). An in-network object store is an "
+                "operator decision: set AISOC_ARCHIVE_ALLOW_PRIVATE_ENDPOINTS=1 on the API service to allow it"
+            )
 
 
 @dataclass(frozen=True)
