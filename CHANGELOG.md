@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times.
+- Folded the root-lockfile dev-tooling Dependabot wave into one change: `vite` 8.3.8, `turbo` 2.11.13, `@playwright/test` 1.65.1 and `@storybook/test-runner` 0.26.1, regenerating `pnpm-lock.yaml` once instead of four conflicting times; beyond the four packages only vite's own transitive rolldown matrix moves.
 
 ### Security
 
