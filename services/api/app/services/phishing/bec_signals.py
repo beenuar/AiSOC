@@ -107,7 +107,9 @@ def lookalike_domain(sender_domain: str, tenant_domains: list[str]) -> BecSignal
                 f"{d!r} is one edit from the tenant domain {own_l!r}",
                 "string analysis against the tenant's own domains",
             )
-        if d != own_l and _canonical(d) == own_l:
+        # The loop's own guard already skipped the d == own_l case, so the
+        # only question left is whether normalisation collapses them.
+        if _canonical(d) == own_l:
             return BecSignal(
                 "lookalike_domain",
                 f"{d!r} homoglyph-normalises to the tenant domain {own_l!r}",
