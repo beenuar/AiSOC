@@ -115,7 +115,7 @@ jobs:
           start = text.index("_migrate:\n")
           before, recipe = text[:start], text[start:]
           check = (
-              '\tAISOC_PG_PSQL="$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc" \\\n'
+              '\tAISOC_PG_PSQL=$(call shell_quote,$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc) \\\n'
               '\t  $(PYTHON) scripts/pending_migrations.py --require-applied\n'
           )
           assert recipe.count(check) == 1, "could not remove the post-migration check"

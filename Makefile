@@ -32,6 +32,8 @@ PYTHON  ?= python3
 # generated the file correctly and then started compose without it, and
 # failed on exactly the bind it had just resolved.
 COMPOSE ?= docker compose $(shell test -f docker-compose.ports.yml && printf -- '-f docker-compose.yml -f docker-compose.ports.yml')
+# Pass a command string as one shell argument without consuming its own quotes.
+shell_quote = '$(subst ','"'"',$(1))'
 PROFILE ?=
 
 # `--profile full` when PROFILE=full, nothing otherwise.
@@ -526,8 +528,8 @@ _upgrade_backup:
 _migrate:
 	@$(COMPOSE) up -d postgres >/dev/null 2>&1 || true
 	@$(MAKE) --no-print-directory _wait_postgres
-	$(PYTHON) scripts/upgrade_migrations.py --compose "$(COMPOSE)"
-	AISOC_PG_PSQL="$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc" \
+	$(PYTHON) scripts/upgrade_migrations.py --compose $(call shell_quote,$(COMPOSE))
+	AISOC_PG_PSQL=$(call shell_quote,$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc) \
 	  $(PYTHON) scripts/pending_migrations.py --require-applied
 
 # Names a port conflict before compose hits it. Silent when every port is

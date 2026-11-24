@@ -193,19 +193,34 @@ def test_empty_checkout_is_not_compared_as_current(tmp_path: Path, remove_direct
     assert "Upgrade complete" not in result.stdout
 
 
-def test_matching_migrations_run_once_with_compose_options_and_strict_mode(tmp_path: Path) -> None:
+@pytest.mark.parametrize("quoting", ["single", "double_option", "double_adapter", "apostrophe"])
+def test_matching_migrations_run_once_with_compose_options_and_strict_mode(tmp_path: Path, quoting: str) -> None:
     checkout, image, marker, compose = _upgrade_fixture(tmp_path)
     shutil.copy(checkout / "services/api/migrations/002_next.sql", image / "migrations/002_next.sql")
+    command = shlex.split(compose)
+    if quoting == "double_option":
+        compose = f'{shlex.join(command[:-1])} "{command[-1]}"'
+    elif quoting == "double_adapter":
+        compose = f'{shlex.quote(command[0])} "{command[1]}" {shlex.join(command[2:])}'
+    elif quoting == "apostrophe":
+        adapter = Path(command[1])
+        renamed = adapter.with_name("operator's compose adapter.py")
+        adapter.rename(renamed)
+        command[1] = str(renamed)
+        command[-1] = "provider's config.yml"
+        compose = shlex.join(command)
+    expected_options = command[2:]
     result = _run_upgrade(tmp_path, checkout, image, marker, compose)
     assert result.returncode == 0, result.stdout + result.stderr
     assert marker.read_text(encoding="utf-8") == "1"
     calls = _compose_calls(tmp_path)
     runs = [call for call in calls if "run" in call]
     assert len(runs) == 1, "comparison and migration must use the same one-off container"
-    assert runs[0][:4] == ["-f", "base.yml", "-f", "provider config.yml"]
+    assert runs[0][:4] == expected_options
     assert all(flag in runs[0] for flag in ("--rm", "--no-deps", "-T"))
     assert runs[0].index("AISOC_MIGRATIONS_STRICT=1") < runs[0].index("api")
     postcheck = next(call for call in calls if "SELECT name FROM aisoc_schema_migrations" in call)
+    assert postcheck[:4] == expected_options
     startup = next(call for call in calls if call[-2:] == ["up", "-d"])
     assert calls.index(runs[0]) < calls.index(postcheck) < calls.index(startup)
     assert "Upgrade complete" in result.stdout
