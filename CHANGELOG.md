@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Moved `web-push` to 4.0.0 in `services/realtime`; v4 is ESM with named exports only, so the module import became `import * as webpush`, keeping every call site unchanged.
 - Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version.
+- Moved `fastapi` to `>=0.117,<0.166` (resolving 0.165.0) across all thirteen service pyprojects and the five CI install surfaces in one change, the only form the single-pin gate accepts; the API suite (5,623 tests), the import floor test and the generated OpenAPI spec were all verified unchanged on the new version, and the thirteen poetry locks were regenerated with CI's own Poetry so fastapi (with its coupled starlette) is the only resolution that moves.
 
 ### Security
 
