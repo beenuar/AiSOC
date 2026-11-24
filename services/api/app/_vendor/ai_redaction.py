@@ -37,6 +37,19 @@ class CaptureMode(str, Enum):
     FULL = "full"
 
 
+# A whole PEM private key block, same pattern as ``_PEM_BLOCK_RE`` in
+# ``services/agents/app/privacy/redactor.py`` (this package has no dependencies,
+# so it cannot be imported). Any key type (ENCRYPTED, DSA, PGP ... BLOCK), real
+# or JSON-escaped newlines. A block cut off before its END line still loses the
+# base64 and header lines that follow it.
+_PEM_SEP = r"(?:\s|\\[rn])+"
+_PEM_HEADER = r"[A-Za-z][A-Za-z\-]*: [^\r\n\\]*(?=[\r\n]|\\[rn]|\Z)"
+_PEM_BLOCK_RE = re.compile(
+    r"-----BEGIN ((?:[A-Z0-9]+ )*)PRIVATE KEY((?: BLOCK)?)-----"
+    rf"(?:(?:{_PEM_SEP}(?:[A-Za-z0-9+/=]+|{_PEM_HEADER}))*{_PEM_SEP}-----END \1PRIVATE KEY\2-----"
+    rf"|(?:{_PEM_SEP}(?:[A-Za-z0-9+/=]{{16,}}|{_PEM_HEADER}))*)"
+)
+
 #: Patterns masked before any content is sent, in MASKED mode.
 #:
 #: Deliberately narrow and high-confidence. A greedy redactor that mangles
@@ -54,7 +67,7 @@ _SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("github_token", re.compile(r"\bgh[pousr]_[A-Za-z0-9]{36,}\b")),
     ("openai_key", re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b")),
     ("slack_token", re.compile(r"\bxox[abprs]-[A-Za-z0-9-]{10,}\b")),
-    ("private_key", re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+    ("private_key", _PEM_BLOCK_RE),
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b")),
     ("email", re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]{2,}\b")),
     ("credit_card", re.compile(r"\b(?:\d[ -]*?){13,16}\b")),

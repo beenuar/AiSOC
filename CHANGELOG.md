@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   template replies are excluded from model history so an old failure containing
   raw evidence cannot block subsequent questions.
 
+### Security
+
+- **`aisoc-ai-sdk` MASKED mode now removes the whole PEM private key.** The
+  pattern matched only the `BEGIN` header line, so the key body was sent in
+  clear behind `[redacted:private_key]`. It now uses the same block pattern as
+  the agents' privacy redactor (#1869): any key type, real or JSON-escaped
+  newlines, and blocks cut off before their `END` line.
+
 ## [23.7.1] - 2026-11-24
 
 ### Security

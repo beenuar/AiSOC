@@ -71,6 +71,36 @@ def test_masked_mode_removes_secret_shapes():
     assert set(result.redacted_kinds) == {"aws_access_key", "openai_key"}
 
 
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\\n"])
+@pytest.mark.parametrize(
+    "kind", ["RSA PRIVATE KEY", "EC PRIVATE KEY", "OPENSSH PRIVATE KEY", "PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "PGP PRIVATE KEY BLOCK"]
+)
+def test_masked_mode_removes_the_private_key_with_its_header(kind: str, newline: str):
+    """The header is not the secret. The key body under it is."""
+    body = newline.join(["MII" + "a1B+" * 15, "c2/D" * 16, "e3F=="])
+    key = f"-----BEGIN {kind}-----{newline}{body}{newline}-----END {kind}-----"
+    result = redact(f"deploy with {key} today", CaptureMode.MASKED)
+    assert result.content == "deploy with [redacted:private_key] today"
+    assert result.redacted_kinds == ("private_key",)
+
+
+def test_masked_mode_removes_a_private_key_with_pem_headers():
+    key = (
+        "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0A1B\n\n"
+        + "a1B+" * 16
+        + "\n-----END RSA PRIVATE KEY-----"
+    )
+    assert redact(key, CaptureMode.MASKED).content == "[redacted:private_key]"
+
+
+def test_masked_mode_removes_a_cut_off_private_key_but_not_the_text_around():
+    """A prompt truncated by a token limit has no END line."""
+    key = "-----BEGIN PRIVATE KEY-----\n" + "a1B+" * 16 + "\n" + "c2/D" * 16
+    assert redact(key, CaptureMode.MASKED).content == "[redacted:private_key]"
+    prose = "what does -----BEGIN PRIVATE KEY----- mean?"
+    assert redact(prose, CaptureMode.MASKED).content == "what does [redacted:private_key] mean?"
+
+
 def test_full_mode_is_verbatim():
     """It exists for incident response, and must not silently half-redact."""
     text = "AKIAIOSFODNN7EXAMPLE"
