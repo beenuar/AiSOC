@@ -30,7 +30,49 @@ OPTIONAL_ENV = (
 )
 
 
+MODEL_TIERS = {
+    "AISOC_LLM_MODEL_TRIAGE": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_RECON": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_INVESTIGATION": "AISOC_LLM_MODEL_DEEP",
+    "AISOC_LLM_MODEL_COPILOT": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_SUMMARY": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_REPORT": "AISOC_LLM_MODEL_DEEP",
+    "AISOC_LLM_MODEL_NL": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_HUNT": "AISOC_LLM_MODEL_FAST",
+    "AISOC_LLM_MODEL_DETECTION": "AISOC_LLM_MODEL_FAST",
+}
+
+
+# These provider routes already have documented deployments in this repository.
+# Match by full provider prefix: an arbitrary or bare model name is not proof
+# that changing it would preserve provider routing.
+MODEL_PROVIDERS = frozenset({"anthropic", "bedrock", "ollama", "ollama_chat", "openai"})
+
+
+def _provider(model: str) -> str | None:
+    prefix, slash, name = model.partition("/")
+    if slash and name.strip() and prefix in MODEL_PROVIDERS:
+        return prefix
+    return None
+
+
 def main() -> None:
+    # Read the effective container environment after Compose overlays. Nested
+    # host-side interpolation would miss the GPU and host-LLM tier defaults.
+    for name, tier in MODEL_TIERS.items():
+        override = os.environ.get(name, "").strip()
+        inherited = os.environ.get(tier)
+        provider = _provider(override)
+        if override and inherited is not None and (override == inherited or (provider is not None and provider == _provider(inherited))):
+            os.environ[name] = override
+            continue
+        if override:
+            # Never print the operator's model string or endpoint.
+            print(f"Ignoring {name}: use the same recognized provider prefix as {tier}.", file=sys.stderr)
+        if inherited is not None:
+            os.environ[name] = inherited
+        else:
+            os.environ.pop(name, None)
     for name in OPTIONAL_ENV:
         if name in os.environ and not os.environ[name].strip():
             del os.environ[name]

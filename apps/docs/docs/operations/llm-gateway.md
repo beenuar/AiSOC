@@ -33,9 +33,10 @@ AiSOC task ──▶ alias (e.g. "aisoc-triage") ──▶ LiteLLM ──▶ rea
 
 This gives operators two things without any AiSOC code change:
 
-1. **Per-task model assignment.** Point `aisoc-triage` at a cheap local model
-   and `aisoc-investigation` at a strong hosted one — or swap either at any time
-   — by editing one config file.
+1. **Per-task model assignment.** Change the model for a single alias while
+   keeping its deployment's existing provider route. For example, choose a
+   larger model for `aisoc-investigation` without changing the other aliases
+   that inherit DEEP. A per-task override cannot switch provider prefixes.
 2. **Centralized observability.** LiteLLM exports per-task latency, tokens,
    cost, errors, retries, and fallbacks on `/metrics`, scraped by the bundled
    Prometheus (job `aisoc-litellm`). This complements the
@@ -57,19 +58,46 @@ configuration and does not use the Compose startup wrapper.
 The shipped aliases mirror AiSOC's workloads. They live in
 `infra/litellm/config.yaml`:
 
-| Alias | Workload | Model variable |
+| Alias | Workload | Optional override → inherited tier |
 | --- | --- | --- |
-| `aisoc-triage` | Auto-triage | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-recon` | Recon / enrichment | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-investigation` | Deep investigation | `AISOC_LLM_MODEL_DEEP` |
-| `aisoc-copilot` | Contextual copilot | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-summary` | Summaries | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-report` | Reports | `AISOC_LLM_MODEL_DEEP` |
-| `aisoc-nl` | NL query / detection generation | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-hunt` | Structured hunt plan | `AISOC_LLM_MODEL_FAST` |
-| `aisoc-detection` | Detection tuning | `AISOC_LLM_MODEL_FAST` |
+| `aisoc-triage` | Auto-triage | `AISOC_LLM_MODEL_TRIAGE` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-recon` | Recon / enrichment | `AISOC_LLM_MODEL_RECON` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-investigation` | Deep investigation | `AISOC_LLM_MODEL_INVESTIGATION` → `AISOC_LLM_MODEL_DEEP` |
+| `aisoc-copilot` | Contextual copilot | `AISOC_LLM_MODEL_COPILOT` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-summary` | Summaries | `AISOC_LLM_MODEL_SUMMARY` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-report` | Reports | `AISOC_LLM_MODEL_REPORT` → `AISOC_LLM_MODEL_DEEP` |
+| `aisoc-nl` | NL query / detection generation | `AISOC_LLM_MODEL_NL` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-hunt` | Structured hunt plan | `AISOC_LLM_MODEL_HUNT` → `AISOC_LLM_MODEL_FAST` |
+| `aisoc-detection` | Detection tuning | `AISOC_LLM_MODEL_DETECTION` → `AISOC_LLM_MODEL_FAST` |
 
-Both variables default to `ollama_chat/llama3.2:3b-instruct-q4_K_M`.
+Set an override only for the role you want to change. An unset, empty, or
+whitespace-only override inherits the effective tier after Compose overlays.
+A differing override must have the same recognized provider prefix as its
+effective tier (`anthropic/`, `bedrock/`, `ollama/`, `ollama_chat/`, or
+`openai/`). An override with a different or unrecognized prefix is ignored
+with a startup warning, and the role retains the tier model. The global
+endpoint, provider-native credentials and direct model pins remain unchanged.
+This check does not validate a specific endpoint, model ID, inference profile
+or region.
+
+The fixed pipeline's forensic and dry-run response stages both use
+`aisoc-investigation`; its override applies to both. Gateway overrides are
+deployment-wide, not tenant-specific. They do not add tenant override support
+to the manual investigation path or enable a second model call. Separate
+responder routing and automatic second opinions require tenant routing,
+egress policy, and result-validation work outside this configuration feature.
+
+A gateway alias does not tell the agent whether the upstream model is local
+or hosted. An existing tenant route or local-looking gateway URL is not a
+privacy guarantee about the destination behind the gateway. Check the
+deployment's data handling and egress policy before configuring hosted
+backends.
+
+After changing a model override, [recreate the gateway with the active
+deployment's Compose files](#apply-and-verify-gateway-changes). To roll back,
+clear the override and repeat those steps.
+
+Both tiers default to `ollama_chat/llama3.2:3b-instruct-q4_K_M`.
 A normal `make up` starts the gateway and bundled Ollama without provider keys.
 Once the weights are available, the model can answer; if inference is
 unavailable, AiSOC uses its deterministic fallback. Gateway liveness alone
@@ -80,7 +108,7 @@ is not proof that a model can answer.
 | Requirement | Configure | Credential used |
 | --- | --- | --- |
 | Local, no account or key | Default `make up` | None upstream |
-| Deployment-wide OpenAI / Anthropic / Bedrock across the bundled aliases | Host `.env`, then `make llm-reload` | Provider-native credential in LiteLLM |
+| Deployment-wide OpenAI / Anthropic / Bedrock across the bundled aliases | Host `.env`, then recreate the gateway with the active Compose files | Provider-native credential in LiteLLM |
 | One tenant's Explain and automatic alert triage | Settings → Deployment & AI; select a provider, its key and any endpoint/model overrides | Tenant key, or a deployment key only for the same complete API base |
 | Those tenant paths through another LiteLLM gateway | Select `local-litellm` or `custom`; supply its OpenAI-compatible URL, served model/alias and gateway key | Key issued by that gateway |
 
@@ -162,7 +190,9 @@ AISOC_LLM_API_BASE=
 For Anthropic, use `anthropic/<model-id>` and `ANTHROPIC_API_KEY` instead.
 The aliases omit `api_key` so LiteLLM selects the matching native credential.
 An empty `AISOC_LLM_API_BASE` is normalized to absent at gateway startup;
-the provider then selects its default endpoint. A nonempty value is preserved,
+the provider then selects its default endpoint. The host-Ollama overlay first
+substitutes its host address for an empty endpoint, so do not use that overlay
+for a hosted provider's default endpoint. A nonempty value is preserved,
 including an existing OpenAI-compatible server or a private endpoint.
 The shared endpoint applies to both model tiers; mixed-provider deployments
 needing different endpoints should configure them per alias in the YAML.
@@ -236,21 +266,56 @@ request does not prove that the original instance role has the same access.
 
 ### Apply and verify gateway changes
 
+Reuse the **same Compose project and ordered files** the deployment was
+started with. A plain `make llm-reload` does not remember the GPU or host-LLM
+overlay used by an earlier `make up-gpu` or `make up-host-llm`. Without that
+overlay, recreation can select the base CPU model or the bundled Ollama
+address instead of the existing host address.
+
+From the repository directory in Bash, set the prefix for your running
+deployment. These examples assume base Compose plus at most one model overlay:
+
 ```bash
-make llm-reload
+# CPU / base Compose
+compose=(docker compose -f docker-compose.yml)
+
+# GPU / bundled Ollama (choose instead of the CPU line)
+# compose=(docker compose -f docker-compose.yml -f infra/compose/docker-compose.gpu.yml)
+
+# Host Ollama (choose instead of the CPU line)
+# compose=(docker compose -f docker-compose.yml -f infra/compose/docker-compose.host-llm.yml)
 ```
 
-This recreates only LiteLLM, including its environment and mounts.
-`make upgrade` also performs this step. A plain restart does not replace a
-container's environment, and `compose up` does not detect changed bytes in a
-bind-mounted YAML file. Expect active gateway requests to be interrupted
-briefly during recreation.
+If you use port, AWS-profile, or other overlay files, include them in the
+same order as the running stack. Preserve any explicit deployment options
+such as `--project-name`, `--env-file`, or `--profile`. Then recreate **only**
+LiteLLM, with no dependency changes:
+
+```bash
+"${compose[@]}" up -d --no-deps --force-recreate litellm
+```
+
+This is the operation performed by `make llm-reload`; if you use that target,
+supply the deployment's full `COMPOSE` override and matching `PROFILE` when
+applicable. Neither form starts, recreates, nor pulls models in the bundled
+Ollama services. A plain restart does not replace the container's environment,
+and `compose up` does not detect changed bytes in a bind-mounted YAML file.
+Recreating the gateway briefly interrupts active gateway requests.
+
+To verify identical prompts through the agents service after a model change,
+recreate that service too, using the same Compose prefix. Its in-process
+response cache is keyed by logical alias and is not cleared by a gateway-only
+reload.
+
+```bash
+"${compose[@]}" up -d --no-deps --force-recreate agents
+```
 
 Compare the actual mounted file with the host copy, without printing secrets:
 
 ```bash
 python3 -c "import hashlib; print(hashlib.sha256(open('infra/litellm/config.yaml','rb').read()).hexdigest())"
-docker compose exec -T litellm python -c "import hashlib; print(hashlib.sha256(open('/etc/litellm/config.yaml','rb').read()).hexdigest())"
+"${compose[@]}" exec -T litellm python -c "import hashlib; print(hashlib.sha256(open('/etc/litellm/config.yaml','rb').read()).hexdigest())"
 ```
 
 Then test a real completion through the gateway. This incurs one model call
@@ -261,7 +326,7 @@ Verify that the returned model is the intended FAST or DEEP backend:
 does not prove the DEEP model succeeded:
 
 ```bash
-docker compose exec -T litellm python - <<'PY_GATEWAY'
+"${compose[@]}" exec -T litellm python - <<'PY_GATEWAY'
 import json
 import os
 import urllib.request
