@@ -51,6 +51,12 @@ from app.models.mssp import (
     MSSPTenantNote,
 )
 from app.models.oauth import OAuthAppCredential, OAuthState
+from app.models.operating_model import (
+    EscalationRoute,
+    ResponsibilityRule,
+    ShiftHandoff,
+    SocShift,
+)
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -104,6 +110,10 @@ __all__ = [
     "LakeArchivePolicy",
     "LakePortabilityExport",
     "LakeRehydration",
+    "EscalationRoute",
+    "ResponsibilityRule",
+    "ShiftHandoff",
+    "SocShift",
     "InstitutionalMemory",
     "InvestigationRun",
     "InvestigationEvent",

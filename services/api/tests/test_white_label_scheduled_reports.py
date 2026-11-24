@@ -207,7 +207,16 @@ class TestTheScheduledDigest:
         await worker._generate_for_tenant(tenant, PERIOD_START, PERIOD_END)
 
         async with session_factory() as db:
-            return (await db.execute(select(ReportArtefact).where(ReportArtefact.tenant_id == tenant))).scalar_one()
+            # The service-review arm added a second artefact per run (report_type="service_review"),
+            # so this fetch names the digest rather than assuming one-per-run.
+            return (
+                await db.execute(
+                    select(ReportArtefact).where(
+                        ReportArtefact.tenant_id == tenant,
+                        ReportArtefact.report_type == "weekly_digest",
+                    )
+                )
+            ).scalar_one()
 
     async def test_the_pdf_carries_the_operators_brand(self, monkeypatch, session_factory) -> None:
         """The worker rendered with no branding, so this was the platform PDF."""

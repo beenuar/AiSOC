@@ -821,6 +821,16 @@ RATCHET: dict[str, str] = {
         "tenants — a scratch table outliving its job is retention nobody chose, whoever's it "
         "is — and the per-row UPDATE that marks it expired by primary key"
     ),
+    "services/api/app/services/shift_handoff.py::<module>::soc_shifts": (
+        "the handoff sweep's shift enumeration: SELECT every enabled shift, after which "
+        "each snapshot query is bound to that shift's own tenant — the enumeration-then-scoped-"
+        "work shape (sessions.py, lake_archive_sweep)"
+    ),
+    "services/api/app/services/escalation_router.py::<module>::escalation_routes": (
+        "the escalation router's route enumeration: SELECT every enabled route, after "
+        "which the overdue-case read, the webhook fan-out and the nag write are each bound to "
+        "that route's own tenant — the same enumeration-then-scoped-work shape"
+    ),
     "services/fusion/app/services/sessions.py::<module>::sessions": (
         "SELECT DISTINCT tenant_id of sessions due for expiry — the enumeration that drives the "
         "sweep, which then closes each tenant's sessions under its own id"
@@ -976,7 +986,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 87
+MAX_RATCHET = 89
 
 
 # ---------------------------------------------------------------------------

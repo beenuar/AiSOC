@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 import logging
 import uuid
 from datetime import UTC, date, datetime, timedelta
@@ -50,6 +51,8 @@ from app.models.tenant import Tenant
 from app.services.branding.resolver import resolve_branding
 from app.services.digest_pdf import WeasyPrintUnavailableError, render_digest_pdf
 from app.services.executive_digest import build_weekly_digest
+from app.services.outbound_webhooks import enqueue_event
+from app.services.service_review import build_service_review, review_summary_for_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +188,42 @@ async def _generate_for_tenant(
             status="completed",
         )
         db.add(artefact)
+
+        # WS8.4 — the per-tenant service review rides the same weekly tick:
+        # the digest's narrative beside the review's measured, denominated
+        # figures (every mean carries the count it averaged; "not measured"
+        # where there is no denominator), persisted as its own artefact and
+        # DELIVERED through the tenant's outbound webhooks — the digest had
+        # been generated for months with nothing delivering it.
+        try:
+            review = await build_service_review(db, tenant_id, period_start=period_start, period_end=period_end)
+            review_json = json.dumps(review, default=str)
+            db.add(
+                ReportArtefact(
+                    id=uuid.uuid4(),
+                    tenant_id=tenant_id,
+                    report_type="service_review",
+                    title=(f"Service review {period_start.strftime('%d %b')}–{period_end.strftime('%d %b %Y')}"),
+                    period_start=period_start,
+                    period_end=period_end,
+                    output_format="json",
+                    body_b64=base64.b64encode(review_json.encode()).decode("ascii"),
+                    storage_key=(f"service_review/{tenant_id}/{period_start.strftime('%Y-%m-%d')}.json"),
+                    file_size_bytes=len(review_json),
+                    data_snapshot=review,
+                    generated_by="weekly_digest_worker",
+                    status="completed",
+                )
+            )
+            await enqueue_event(
+                db,
+                tenant_id=tenant_id,
+                event_type="service.review",
+                payload=review_summary_for_webhook(review),
+            )
+        except Exception as exc:  # noqa: BLE001 — the digest must not die with the review
+            logger.warning("service_review.failed tenant_id=%s err=%s", tenant_id, type(exc).__name__)
+
         await db.commit()
 
         logger.info(

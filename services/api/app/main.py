@@ -44,6 +44,7 @@ from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.insider_watchlist_sweep import run_forever as run_insider_watchlist_sweep
 from app.workers.lake_archive_sweep import run_forever as run_lake_archive_sweep
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.operating_model_sweep import run_forever as run_operating_model_sweep
 from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
 from app.workers.phishing_report_intake import run_forever as run_phishing_report_intake
 from app.workers.report_scheduler import run_forever as run_report_scheduler
@@ -83,6 +84,7 @@ _PHISHING_INTAKE_LOCK_TTL_SECONDS = 300
 _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
 _INSIDER_WATCHLIST_LOCK_TTL_SECONDS = 900
 _LAKE_ARCHIVE_LOCK_TTL_SECONDS = 3600
+_OPERATING_MODEL_LOCK_TTL_SECONDS = 300
 
 _CASE_AUTO_CLOSE_LOCK_TTL_SECONDS = 1800
 # Comfortably past one pass. The scheduler's own poll is 300s and a pass
@@ -620,6 +622,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "and expired rehydration tables are not dropped. Set LAKE_ARCHIVE_SWEEP_ENABLED=true"
         )
 
+    # Shift handoffs + per-tenant escalation routing.
+    operating_model_task: asyncio.Task | None = None
+    if settings.OPERATING_MODEL_SWEEP_ENABLED:
+        try:
+            operating_model_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="operating_model_sweep",
+                    ttl_seconds=_OPERATING_MODEL_LOCK_TTL_SECONDS,
+                    worker=run_operating_model_sweep,
+                ),
+                name="operating_model_sweep_worker",
+            )
+            logger.info("operating_model_sweep worker started")
+        except Exception as exc:
+            logger.warning("operating_model_sweep worker failed to start", error=str(exc))
+    else:
+        logger.info(
+            "operating_model_sweep disabled; shift handoffs will not generate and "
+            "per-tenant escalation routes will not fire. Set OPERATING_MODEL_SWEEP_ENABLED=true"
+        )
+
     case_auto_close_task: asyncio.Task | None = None
     if settings.CASE_AUTO_CLOSE_ENABLED:
         try:
@@ -829,6 +852,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("lake_archive_sweep worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("lake_archive_sweep worker shutdown error", error=type(exc).__name__)
+    if operating_model_task is not None and not operating_model_task.done():
+        operating_model_task.cancel()
+        try:
+            await operating_model_task
+        except asyncio.CancelledError:
+            logger.debug("operating_model_sweep worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("operating_model_sweep worker shutdown error", error=type(exc).__name__)
 
     if siem_content_task is not None and not siem_content_task.done():
         siem_content_task.cancel()

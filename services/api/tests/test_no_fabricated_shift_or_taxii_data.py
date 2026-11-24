@@ -28,31 +28,37 @@ SERVICE_ROOT = pathlib.Path(__file__).resolve().parents[1]
 REPO_ROOT = SERVICE_ROOT.parents[1]
 
 
-class TestTheShiftBoardIsGone:
-    def test_the_module_no_longer_exists(self) -> None:
+class TestTheShiftBoardIsRealNow:
+    """Deliberately supersedes the absence pin.
+
+    The deleted ``shifts.py`` served three invented shifts from a
+    module-level list — "a route with no caller serving data nobody entered
+    is not a feature with a bug", and the pin held that line until a real
+    backend existed. It does now (``operating_model.py``, migrations 173+):
+    rows live in Postgres under RLS, and a handoff is a snapshot GENERATED
+    from the tenant's real open work. What this class pins is the property
+    that made the old module a defect: **no module-level domain data**.
+    """
+
+    def test_the_fabricated_module_stays_gone(self) -> None:
         module = SERVICE_ROOT / "app" / "api" / "v1" / "endpoints" / "shifts.py"
         assert not module.exists(), (
-            "shifts.py is back. It served three invented shifts from a module-level list "
-            "with no tenant filter, and POST and PUT wrote into that same list"
+            "shifts.py is back under its old name. The real backend is operating_model.py; a second shifts module invites the old defect"
         )
 
-    def test_nothing_mounts_it(self) -> None:
-        router = (SERVICE_ROOT / "app" / "api" / "v1" / "router.py").read_text(encoding="utf-8")
-        assert "shifts" not in router, "the shifts router is still mounted"
+    def test_the_real_module_holds_no_data(self) -> None:
+        source = (SERVICE_ROOT / "app" / "api" / "v1" / "endpoints" / "operating_model.py").read_text(encoding="utf-8")
+        for marker in ("MOCK_", "SAMPLE_", "_DEMO = [", "alerts_handled"):
+            assert marker not in source, f"operating_model.py contains {marker!r} — the fabricated-list defect the deleted shifts.py had"
 
-    def test_the_console_page_is_unaffected(self) -> None:
-        """It never called the API: it renders its own demo-gated sample.
-
-        Asserted so that deleting the route is not mistaken for deleting the
-        page, and so a future reader does not restore the route believing the
-        console needs it.
-        """
+    def test_the_console_view_calls_the_real_api_and_invents_nothing(self) -> None:
         view = REPO_ROOT / "apps" / "web" / "src" / "components" / "shifts" / "ShiftsView.tsx"
         if not view.exists():
             pytest.skip("the console shift view is not in this checkout")
         source = view.read_text(encoding="utf-8")
-        assert "canUseDemoData" in source, "the console shift view lost its demo gate"
-        assert "/api/v1/shifts" not in source, "the console shift view now calls the deleted route"
+        assert "/api/v1/operating-model/handoffs" in source, "the console shift view no longer calls the real backend"
+        assert "MOCK_HANDOFF_ITEMS" not in source, "the fabricated handoff fixture is back in the console view"
+        assert "/api/v1/shifts" not in source, "the console calls the deleted legacy route"
 
 
 class TestTheStixRoutesRefuseOutsideDemoMode:

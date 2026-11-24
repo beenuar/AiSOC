@@ -525,6 +525,15 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("LAKE_ARCHIVE_SWEEP_ENABLED", "AISOC_LAKE_ARCHIVE_SWEEP_ENABLED"),
     )
     LAKE_ARCHIVE_SWEEP_INTERVAL_SECONDS: int = 3600  # 1h
+    # WS8 — operating-model sweep: shift handoffs from real rows + per-tenant
+    # escalation routing over the outbound webhooks. Per-tenant configuration
+    # gates the behaviour (no shifts -> no handoffs; no routes -> no
+    # escalations); the worker is hygiene, on by default.
+    OPERATING_MODEL_SWEEP_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("OPERATING_MODEL_SWEEP_ENABLED", "AISOC_OPERATING_MODEL_SWEEP_ENABLED"),
+    )
+    OPERATING_MODEL_SWEEP_INTERVAL_SECONDS: int = 300  # 5m
 
     # the SIEM content inventory sweep (hours, not minutes: the
     # vendor admin APIs it reads are rate-limited surfaces).

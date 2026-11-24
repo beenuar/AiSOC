@@ -217,7 +217,11 @@ def _literal_for(
     if data_type == "boolean":
         return "false"
     if data_type in ("timestamp with time zone", "timestamp without time zone"):
-        return "now()"
+        # Offset by the column's position so two timestamp columns in one row
+        # differ: an ordered-window CHECK (`window_start < window_end`, WS8's
+        # shift_handoffs) refuses a row whose window is zero seconds wide, and
+        # every column rendering the same `now()` made that refusal certain.
+        return f"now() + interval '{ordinal} second'"
     if data_type == "date":
         return "current_date"
     if data_type == "jsonb":

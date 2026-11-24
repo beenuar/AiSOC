@@ -74,6 +74,7 @@ from app.api.v1.endpoints import (
     oauth,
     onboarding,
     oncall,
+    operating_model,
     outbound_webhooks,
     passkeys,
     phishing,
@@ -274,6 +275,7 @@ api_router.include_router(costs.router)
 api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(siem_content.router)
+api_router.include_router(operating_model.router)
 api_router.include_router(approvals.router)
 api_router.include_router(outbound_webhooks.router)
 api_router.include_router(passkeys.router)
