@@ -192,5 +192,5 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # header (the defect #2065 fixed). The "key" bodies are repeated filler
 # (`a1B+` / `c2/D`), not key material — a fixture that did not look like a
 # real key could not test the redactor.
-packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:89
-packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:98
+packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:91
+packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:100
