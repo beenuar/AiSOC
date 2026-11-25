@@ -285,19 +285,25 @@ describe('CaseWorkspace', () => {
         tenantId: 'tenant-1',
         window: '24h',
         seedAlertId: 'alert-seed',
+        // The seed is NOT a chain link: the API scores every non-seed
+        // candidate. The fixture used to put it at chain[0], which is how
+        // the view came to label its top-ranked link "seed".
+        seedEventTime: now,
         chainSignature: 'sig-xyz',
         confidence: 0.82,
         generatedAt: now,
         chain: [
           {
-            alertId: 'alert-seed',
-            title: 'Seed — Suspicious PowerShell on FIN-WS-01',
+            // Ranked first, but it happened AFTER the link below it, so
+            // rank order and reading order genuinely differ here.
+            alertId: 'alert-3',
+            title: 'Credential dumping on FIN-WS-01',
             severity: 'critical',
-            eventTime: now,
+            eventTime: new Date('2026-05-15T00:12:00Z').toISOString(),
             score: 1.0,
-            distance: 0,
-            dtSeconds: 0,
-            sharedEntities: [],
+            distance: 1,
+            dtSeconds: 720,
+            sharedEntities: [{ kind: 'host', value: 'FIN-WS-01' }],
             mitreTechniques: ['T1059.001'],
             connectorType: 'edr',
             sourceEventIds: ['evt-1'],
@@ -318,11 +324,11 @@ describe('CaseWorkspace', () => {
         ],
         entityGraph: {
           nodes: [
-            { id: 'alert-seed', kind: 'alert', severity: 'critical', event_time: now },
+            { id: 'alert-3', kind: 'alert', severity: 'critical', event_time: now },
             { id: 'alert-2', kind: 'alert', severity: 'high' },
             { id: 'user:svc-finance', kind: 'user', label: 'svc-finance' },
           ],
-          edges: [{ source: 'alert-seed', target: 'alert-2', kind: 'shares_entity' }],
+          edges: [{ source: 'alert-3', target: 'alert-2', kind: 'shares_entity' }],
         },
       };
       swrState.attackChainData = timeline;
@@ -330,7 +336,7 @@ describe('CaseWorkspace', () => {
       renderWorkspace();
 
       // Both chain links should render.
-      expect(screen.getByText(/Seed — Suspicious PowerShell on FIN-WS-01/i)).toBeInTheDocument();
+      expect(screen.getByText(/Credential dumping on FIN-WS-01/i)).toBeInTheDocument();
       expect(screen.getByText(/Lateral SMB session to FIN-DB-02/i)).toBeInTheDocument();
 
       // Confidence is surfaced as a percentage to the analyst.
@@ -339,6 +345,23 @@ describe('CaseWorkspace', () => {
       // MITRE techniques from the chain should be visible.
       expect(screen.getByText('T1059.001')).toBeInTheDocument();
       expect(screen.getByText('T1021.002')).toBeInTheDocument();
+
+      // The list is read oldest-first even though the API ranked
+      // 'Credential dumping' (t+12m) above 'Lateral SMB' (t+5m).
+      const rendered = screen.getAllByText(
+        /Lateral SMB session to FIN-DB-02|Credential dumping on FIN-WS-01/i,
+      );
+      expect(rendered.map((n) => n.textContent)).toEqual([
+        'Lateral SMB session to FIN-DB-02',
+        'Credential dumping on FIN-WS-01',
+      ]);
+
+      // No chain row may claim to be the seed — the seed is not in the chain.
+      expect(screen.queryByText(/^seed$/i)).not.toBeInTheDocument();
+
+      // Deltas are signed from the seed rather than hidden behind a label.
+      expect(screen.getByText(/Δt \+5m/)).toBeInTheDocument();
+      expect(screen.getByText(/Δt \+12m/)).toBeInTheDocument();
     });
 
     // Helper: read the active window from the WindowSelector. The UI is a

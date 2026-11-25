@@ -135,6 +135,7 @@ INSERT INTO alerts (
     affected_hosts, affected_users, affected_ips,
     session_id, session_key_kind, originating_human,
     src_ip_class, src_ip_class_dataset_version,
+    incident_id, chain_id, chain_position, chain_stage,
     first_seen, last_seen
 )
 SELECT
@@ -147,6 +148,7 @@ SELECT
     $25::jsonb, $26::jsonb, $27::jsonb,
     $28, $29, $30,
     $31, $32,
+    $33, $34, $35, $36,
     COALESCE($17, NOW()), COALESCE($17, NOW())
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
@@ -613,6 +615,43 @@ def _affected(fused: FusedAlert) -> tuple[list[str], list[str], list[str]]:
     return hosts, _usernames(fused), ips
 
 
+#: Column widths from migration 181. Truncating here keeps a long value from
+#: failing the whole insert: losing the alert because its story label was
+#: oversized is never the trade.
+_MAX_CHAIN_ID = 128
+_MAX_CHAIN_STAGE = 64
+
+
+def _attack_story_columns(fused: FusedAlert) -> tuple[str | None, int | None, str | None]:
+    """``(chain_id, chain_position, chain_stage)`` from the story enrichment.
+
+    ``AttackChainGrouper`` writes its ``ChainAssignment`` into
+    ``enrichments["attack_chain"]``. It is produced by another component, so
+    this reads defensively: anything that is not a well-formed assignment
+    yields NULLs rather than raising, because the alert row matters more than
+    its story metadata. A position that is not a positive integer is dropped
+    on its own — migration 181's CHECK would reject it, and a fabricated 0
+    would read as a real placement.
+    """
+    story = fused.enrichments.get("attack_chain")
+    if not isinstance(story, dict):
+        return (None, None, None)
+
+    chain_id = story.get("chain_id")
+    if not isinstance(chain_id, str) or not chain_id.strip():
+        return (None, None, None)
+    chain_id = chain_id.strip()[:_MAX_CHAIN_ID]
+
+    raw_position = story.get("position")
+    # bool is an int subclass; a True here would persist as position 1.
+    position = int(raw_position) if isinstance(raw_position, int) and not isinstance(raw_position, bool) and raw_position >= 1 else None
+
+    stage = story.get("stage")
+    stage = stage.strip()[:_MAX_CHAIN_STAGE] if isinstance(stage, str) and stage.strip() else None
+
+    return (chain_id, position, stage)
+
+
 def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
     """The positional arguments `_INSERT_SQL` takes, in order.
 
@@ -656,6 +695,8 @@ def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
         fused.originating_human,
         alert.src_ip_class,
         alert.src_ip_class_dataset_version,
+        fused.incident_id,
+        *_attack_story_columns(fused),
     )
 
 

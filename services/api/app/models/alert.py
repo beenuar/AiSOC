@@ -81,6 +81,15 @@ class Alert(Base):
     src_ip_class: Mapped[str | None] = mapped_column(Text, nullable=True)
     src_ip_class_dataset_version: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Fusion's groupings, made durable by migration 181. The incident comes
+    # from `Correlator.correlate` (which otherwise only lives in Redis under
+    # a one-hour TTL) and the chain trio from `AttackChainGrouper`. All
+    # nullable: an alert that joined no story has no chain, and says so.
+    incident_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    chain_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    chain_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    chain_stage: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)
