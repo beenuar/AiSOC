@@ -234,28 +234,31 @@ def _is_rejected_turn(message: dict[str, Any], reply: dict[str, Any]) -> bool:
         return False
     reason = reply.get("template_reason")
     if reason is not None:
-        return reason == INPUT_REJECTED
+        if reason != INPUT_REJECTED:
+            return False
+    else:
+        # Before persisting a reason, releases stored either the dedicated
+        # reply or the generic error with a contract diagnostic as its detail.
+        text = reply.get("content")
+        if not (
+            text == _fallback_reply(INPUT_REJECTED)
+            or (
+                isinstance(text, str)
+                and text.startswith("I can't answer this: the configured model")
+                and "\n\nThe call reported: [LLMInputContract] " in text
+            )
+        ):
+            return False
 
-    # The first dedicated rejection reply did not persist its reason.
-    text = reply.get("content")
-    if text == _fallback_reply(INPUT_REJECTED):
+    # The diagnostic describes the failed invocation, not necessarily its
+    # paired user message. The guard may have rejected later tool evidence.
+    # Drop the old question only if it independently fails the same contract.
+    from app.llm.contract_rules import LLMContractViolation, LLMInputContract
+
+    try:
+        LLMInputContract.validate([message])
+    except LLMContractViolation:
         return True
-
-    # Earlier releases persisted the generic error, with the contract exception
-    # embedded as its detail. Don't confuse a rejection of tool evidence with
-    # rejection of a valid user question: confirm the stored user input against
-    # the same contract, without logging or reusing the legacy exception text.
-    if (
-        isinstance(text, str)
-        and text.startswith("I can't answer this: the configured model")
-        and "\n\nThe call reported: [LLMInputContract] " in text
-    ):
-        from app.llm.contract_rules import LLMContractViolation, LLMInputContract
-
-        try:
-            LLMInputContract.validate([message])
-        except LLMContractViolation:
-            return True
     return False
 
 

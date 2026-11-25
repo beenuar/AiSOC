@@ -258,7 +258,9 @@ async def test_rejected_question_is_not_replayed_but_stays_in_transcript(monkeyp
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_history_preserves_other_failures_and_excludes_only_rejected_turns(legacy):
+def test_history_preserves_other_failures_and_excludes_only_rejected_turns(monkeypatch, legacy):
+    monkeypatch.setattr(contract_rules, "_ENFORCED", True)
+    monkeypatch.setattr(contract_rules, "_MAX_MESSAGE_CHARS", 100)
     rejected_reply = {
         "role": "assistant",
         "source": "template",
@@ -269,7 +271,7 @@ def test_history_preserves_other_failures_and_excludes_only_rejected_turns(legac
     messages = [
         {"role": "user", "content": "A normal question that timed out."},
         {"role": "assistant", "source": "template", "template_reason": copilot.CALL_FAILED, "content": "Timed out."},
-        {"role": "user", "content": "A rejected question."},
+        {"role": "user", "content": "An over-limit question. " * 10},
         rejected_reply,
         {"role": "user", "content": "A valid new question."},
         {"role": "assistant", "source": "llm", "content": "An accepted answer."},
@@ -289,3 +291,70 @@ def test_generic_legacy_rejection_of_other_history_does_not_drop_valid_user_turn
     }
 
     assert copilot._model_history({"messages": [question, reply]}) == [question]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+@pytest.mark.parametrize("tagged", [False, True])
+async def test_dedicated_tool_rejection_preserves_original_question_in_followup(monkeypatch, stream, tagged):
+    monkeypatch.setenv("SECRET_KEY", SECRET)
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://gateway.test/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "test-gateway-key")
+    monkeypatch.setattr(contract_rules, "_ENFORCED", True)
+    monkeypatch.setattr(contract_rules, "_MAX_MESSAGE_CHARS", 2500)
+
+    question = "What happened on the workstation?"
+    with pytest.raises(contract_rules.LLMContractViolation):
+        contract_rules.LLMInputContract.validate([{"role": "tool", "content": "synthetic detail " * 200}])
+    reply = {
+        "role": "assistant",
+        "source": "template",
+        "content": copilot._fallback_reply(copilot.INPUT_REJECTED),
+    }
+    if tagged:
+        reply["template_reason"] = copilot.INPUT_REJECTED
+    saved = [{"role": "user", "content": question}, reply]
+    calls = []
+
+    async def handle(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chat-2",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "aisoc-copilot",
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "A fresh answer."}, "finish_reason": "stop"}],
+            },
+        )
+
+    async def get(**kwargs):
+        return conversation_store.Conversation("conversation-1", "test", list(saved), datetime.now(UTC).isoformat())
+
+    async def append(**kwargs):
+        saved.extend(kwargs["new_messages"])
+        return conversation_store.Conversation("conversation-1", "test", saved, datetime.now(UTC).isoformat())
+
+    monkeypatch.setattr(conversation_store, "get_conversation", get)
+    monkeypatch.setattr(conversation_store, "append_messages", append)
+    make_model = factory.make_chat_model
+    app = FastAPI()
+    app.include_router(copilot.router)
+    followup = "Can you revisit that question?"
+    async with (
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)) as provider,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://console.test") as browser,
+    ):
+        monkeypatch.setattr(factory, "make_chat_model", lambda *a, **kw: make_model(*a, http_async_client=provider, **kw))
+        response = await browser.post(
+            "/api/v1/copilot/chat" + ("/stream" if stream else ""),
+            headers={"Authorization": "Bearer " + _token()},
+            json={"conversationId": "conversation-1", "message": followup},
+        )
+
+    assert response.status_code == 200
+    assert json.loads(response.text.splitlines()[0])["source"] == "llm"
+    assert len(calls) == 1
+    assert [m["content"] for m in calls[0]["messages"] if m["role"] != "system"] == [question, followup]
+    assert saved[:2] == [{"role": "user", "content": question}, reply]
