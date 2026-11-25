@@ -59,6 +59,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sources, which no connector in this tree emits. They sit in
   `detections/sigma-correlations/_refused/` where the gate re-checks that
   they are genuinely refused, so a file cannot be parked there to dodge it.
+- A compiled Sigma correlation now carries the **product of the base rules it
+  is built from**, so the published cloud/identity/SaaS/code breakdown counts
+  it in the group whose telemetry it actually reads. Stages that disagree
+  carry none rather than picking one. This classified the four correlations
+  already in the tree as well as the eleven added beside them, so the ceiling
+  on unclassified windowed rules falls 29 -> 25.
 
 
 ### Fixed

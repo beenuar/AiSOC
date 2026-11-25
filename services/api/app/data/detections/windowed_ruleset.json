@@ -1301,6 +1301,7 @@
       ],
       "name": "A principal was denied a role and then assumed one",
       "ordered": true,
+      "product": "aws",
       "sequence": [
         {
           "errorCode_pattern_match_any": [
@@ -1340,6 +1341,7 @@
       ],
       "name": "One principal rewrote both the ACL and the policy of S3 storage",
       "ordered": false,
+      "product": "aws",
       "sequence": [
         {
           "eventName_pattern_match_any": [
@@ -1381,6 +1383,7 @@
         "T1098.001"
       ],
       "name": "One principal minted several AWS access keys in a burst",
+      "product": "aws",
       "severity": "high",
       "threshold": 6,
       "window_seconds": 600
@@ -1399,6 +1402,7 @@
       ],
       "name": "A principal created an IAM user and minted it a key",
       "ordered": true,
+      "product": "aws",
       "sequence": [
         {
           "eventName_pattern_match_any": [
@@ -1438,6 +1442,7 @@
         "T1580"
       ],
       "name": "One principal acting across an unusual number of AWS regions",
+      "product": "aws",
       "severity": "medium",
       "threshold": 6,
       "window_seconds": 900
@@ -1457,6 +1462,7 @@
       ],
       "name": "A principal stopped CloudTrail logging and then changed IAM",
       "ordered": true,
+      "product": "aws",
       "sequence": [
         {
           "eventName_pattern_match_any": [
@@ -1493,6 +1499,7 @@
       ],
       "name": "An actor consented to an application and granted it permissions",
       "ordered": true,
+      "product": "azure",
       "sequence": [
         {
           "operationName_pattern_match_any": [
@@ -1522,6 +1529,7 @@
       ],
       "name": "One actor removed an authentication method and registered another",
       "ordered": false,
+      "product": "azure",
       "sequence": [
         {
           "operationName_pattern_match_any": [
@@ -1551,6 +1559,7 @@
       ],
       "name": "One actor both assigned a directory role and removed a resource lock",
       "ordered": false,
+      "product": "azure",
       "sequence": [
         {
           "operationName_pattern_match_any": [
@@ -1581,6 +1590,7 @@
       ],
       "name": "An actor created a user and gave it a directory role",
       "ordered": true,
+      "product": "azure",
       "sequence": [
         {
           "operationName_pattern_match_any": [
@@ -1610,6 +1620,7 @@
       ],
       "name": "One Okta actor both gained admin privilege and assigned an application",
       "ordered": false,
+      "product": "okta",
       "sequence": [
         {
           "eventType_pattern_match_any": [
@@ -1640,6 +1651,7 @@
       ],
       "name": "An Okta account had its factors reset and a new one enrolled",
       "ordered": true,
+      "product": "okta",
       "sequence": [
         {
           "eventType_pattern_match_any": [
@@ -1669,6 +1681,7 @@
       ],
       "name": "Okta MFA push followed by a session for the same account",
       "ordered": true,
+      "product": "okta",
       "sequence": [
         {
           "eventType_pattern_match_any": [
@@ -1699,6 +1712,7 @@
       ],
       "name": "An account was created on a host and then added to a local group",
       "ordered": true,
+      "product": "windows",
       "sequence": [
         {
           "EventID_pattern_match_any": [
@@ -1729,6 +1743,7 @@
       ],
       "name": "A host cleared its security log and had a service installed",
       "ordered": false,
+      "product": "windows",
       "sequence": [
         {
           "EventID_pattern_match_any": [

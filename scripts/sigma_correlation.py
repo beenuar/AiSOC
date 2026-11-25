@@ -152,6 +152,7 @@ def compile_correlation(
     *,
     selectors: dict[str, dict[str, Any]],
     correlations: frozenset[str] = frozenset(),
+    products: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """One Sigma correlation document to one windowed rule.
 
@@ -193,6 +194,17 @@ def compile_correlation(
         "correlation_type": correlation_type,
         "correlates": names,
     }
+    # The product comes from the rules this correlation is built out of, not
+    # from a field an author could type differently to the telemetry. A
+    # windowed rule carrying neither a product nor a `translated_from` is
+    # counted in no group and in no `other`, so the published breakdown stops
+    # reconciling with the headline (`scripts/project_stats.py`). Stages that
+    # disagree leave it absent rather than picking one: a chain spanning two
+    # products belongs to neither.
+    stage_products = {products.get(name, "") for name in names} if products else set()
+    stage_products.discard("")
+    if len(stage_products) == 1:
+        common["product"] = stage_products.pop()
     if not common["id"] or not common["name"]:
         raise CorrelationRefusal(R_CONDITION_SHAPE, "the document has no id or title")
 
