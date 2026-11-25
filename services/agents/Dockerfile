@@ -40,6 +40,14 @@ WORKDIR /app
 # proves a missing system library is required.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
+        # WeasyPrint's native stack. Without it the report.pdf route 500s on
+        # every deployment and the case-report-export try_pdf leg can never
+        # render — the same four libraries the API image already ships.
+        libpango-1.0-0 \
+        libpangocairo-1.0-0 \
+        libcairo2 \
+        libgdk-pixbuf-2.0-0 \
+        shared-mime-info \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=deps /requirements.txt /requirements.txt

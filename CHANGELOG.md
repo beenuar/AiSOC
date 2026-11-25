@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The agents image can actually render the PDFs its routes offer.** Its
+  Dockerfile never installed WeasyPrint's native stack, so on every
+  deployment the legacy `report.pdf` route answered 500 ("cannot load
+  library 'libgobject-2.0-0'") and the case-report-export `try_pdf` leg
+  could never produce a PDF — the API-side fallback carried the journey.
+  The image now ships the same four Pango/Cairo libraries the API image
+  always has; verified live with a warm export (17,715-byte PDF) and a
+  cold one after an agents restart (served from persisted artifacts).
+
 ### Security
 
 - **A vendor redirect can no longer carry a live action past the SSRF guard**
