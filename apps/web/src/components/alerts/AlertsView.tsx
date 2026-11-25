@@ -9,6 +9,7 @@ import { alertsApi, type Alert, type AlertFacets, type AlertFilters, type Confid
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { EntityRiskQueue } from './EntityRiskQueue';
+import { EntityAlertFilter } from './EntityAlertFilter';
 import { InvestigationRail } from './InvestigationRail';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
@@ -205,10 +206,14 @@ function StatusBadge({ status }: { status: string }) {
 function FiltersBar({
   filters,
   onChange,
+  onEntityDraftEdit,
+  entityFormRevision,
   total,
 }: {
   filters: AlertFilters;
   onChange: (f: AlertFilters) => void;
+  onEntityDraftEdit: () => void;
+  entityFormRevision: number;
   total: number;
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
@@ -280,6 +285,12 @@ function FiltersBar({
         </button>
       )}
       <span className="ml-auto text-xs text-gray-600">{total} total</span>
+      <EntityAlertFilter
+        key={JSON.stringify([filters.entityType, filters.entityValue, entityFormRevision])}
+        filters={filters}
+        onChange={onChange}
+        onDraftEdit={onEntityDraftEdit}
+      />
     </div>
   );
 }
@@ -414,15 +425,24 @@ export function AlertsView({
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.
-  const [viewMode, setViewMode] = useState<ViewMode>(drilldown?.viewMode ?? initialViewMode);
-  const [autoApplyDefault] = useState((drilldown?.viewMode ?? initialViewMode) !== 'alerts');
+  const [viewChoice, setViewChoice] = useState<{ searchKey: string; mode: ViewMode }>();
+  // A same-route entity link changes the URL without remounting this view.
+  // A tab choice applies until navigation changes the query string.
+  const viewMode = viewChoice?.searchKey === searchKey
+    ? viewChoice.mode
+    : drilldown?.viewMode ?? initialViewMode;
+  // Native history writes update the address immediately, but the App
+  // Router's useSearchParams snapshot can lag behind this filter state.
+  // Once a filter is applied locally, a late saved default must not win.
+  const [filtersChangedLocally, setFiltersChangedLocally] = useState(false);
+  const autoApplyDefault = !filtersChangedLocally && (drilldown?.viewMode ?? initialViewMode) !== 'alerts';
   const { t } = useLocale();
 
   const { data, error, isLoading } = useSWR(
     ['alerts', filters],
     () => alertsApi.list(filters),
     {
-      fallbackData: demoFallback({
+      fallbackData: filters.entityValue ? undefined : demoFallback({
         alerts: MOCK_ALERTS,
         total: MOCK_ALERTS.length,
         page: 1,
@@ -438,6 +458,7 @@ export function AlertsView({
   );
 
   const handleFilterChange = useCallback((newFilters: AlertFilters) => {
+    setFiltersChangedLocally(true);
     setFilters(newFilters);
 
     const url = new URL(window.location.href);
@@ -450,6 +471,8 @@ export function AlertsView({
       status: newFilters.status || undefined,
       disposition: newFilters.disposition || undefined,
       search: newFilters.search || undefined,
+      entity_type: newFilters.entityType || undefined,
+      entity_value: newFilters.entityValue || undefined,
       unresolved_only: newFilters.unresolvedOnly ? 'true' : undefined,
       created_within_hours: newFilters.createdWithinHours?.toString(),
     };
@@ -495,7 +518,7 @@ export function AlertsView({
               type="button"
               role="tab"
               aria-selected={viewMode === 'entities'}
-              onClick={() => setViewMode('entities')}
+              onClick={() => setViewChoice({ searchKey, mode: 'entities' })}
               className={clsx(
                 'text-xs px-3 py-1.5 rounded-md transition-colors',
                 viewMode === 'entities'
@@ -509,7 +532,7 @@ export function AlertsView({
               type="button"
               role="tab"
               aria-selected={viewMode === 'alerts'}
-              onClick={() => setViewMode('alerts')}
+              onClick={() => setViewChoice({ searchKey, mode: 'alerts' })}
               className={clsx(
                 'text-xs px-3 py-1.5 rounded-md transition-colors',
                 viewMode === 'alerts'
@@ -536,7 +559,7 @@ export function AlertsView({
       </div>
 
       {viewMode === 'entities' ? (
-        <EntityRiskQueue />
+        <EntityRiskQueue onViewAlerts={() => setViewChoice({ searchKey, mode: 'alerts' })} />
       ) : (
         <AlertsTable
           alerts={alerts}
@@ -578,21 +601,35 @@ function AlertsTable({
   // because the rail is only rendered inside the "alerts" view mode.
   // Switching to the entities tab unmounts this state cleanly, which is
   // what we want — the rail is alert-scoped, not entity-scoped.
-  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const entityScope = JSON.stringify([filters.entityType, filters.entityValue]);
+  const [selected, setSelected] = useState<{ scope: string; id: string | null }>({ scope: entityScope, id: null });
+  if (selected.scope !== entityScope) setSelected({ scope: entityScope, id: null });
+  const selectedAlertId = selected.scope === entityScope ? selected.id : null;
+  const setSelectedAlertId = (id: string | null) => setSelected({ scope: entityScope, id });
   // Depth 9.3 — bulk selection, separate from the rail's single selection.
   // A Set rather than an array so toggling is O(1) and the "select all on
   // this page" header checkbox does not have to scan.
-  const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
+  const [checked, setChecked] = useState<{ scope: string; ids: Set<string> }>({ scope: entityScope, ids: new Set() });
+  // Clear the stored selection as well as hiding it, so removing the filter
+  // cannot revive actions on alerts selected under the previous entity.
+  if (checked.scope !== entityScope) setChecked({ scope: entityScope, ids: new Set() });
+  const checkedIds = checked.scope === entityScope ? checked.ids : new Set<string>();
+  const setCheckedIds = (ids: Set<string>) => setChecked({ scope: entityScope, ids });
+  // Preserve the highlight after a default writes its own URL. Until it has
+  // actually loaded, applied filters or an entity draft must take precedence.
+  const [defaultLoaded, setDefaultLoaded] = useState(false);
+  const [entityDraftEdited, setEntityDraftEdited] = useState(false);
+  const [entityFormRevision, setEntityFormRevision] = useState(0);
   const { mutate } = useSWRConfig();
 
   const toggleChecked = useCallback((id: string) => {
-    setCheckedIds((previous) => {
-      const next = new Set(previous);
+    setChecked((previous) => {
+      const next = new Set(previous.scope === entityScope ? previous.ids : []);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
+      return { scope: entityScope, ids: next };
     });
-  }, []);
+  }, [entityScope]);
 
   return (
     <div className="space-y-4">
@@ -624,17 +661,28 @@ function AlertsTable({
       <SavedViewsBar<AlertFilters>
         viewType="alerts"
         filters={filters}
-        autoApplyDefault={autoApplyDefault}
-        onApply={(applied) =>
+        autoApplyDefault={defaultLoaded || (autoApplyDefault && !entityDraftEdited)}
+        onDefaultLoaded={() => setDefaultLoaded(true)}
+        onApply={(applied) => {
+          // Preset selection replaces an unsaved draft even if the applied
+          // entity pair happens to be unchanged. A late automatic default
+          // cannot enter this path once the analyst starts editing.
+          setEntityFormRevision((revision) => revision + 1);
           onFilterChange({
             ...applied,
             page: 1,
             pageSize: filters.pageSize ?? 25,
-          })
-        }
+          });
+        }}
       />
 
-      <FiltersBar filters={filters} onChange={onFilterChange} total={total} />
+      <FiltersBar
+        filters={filters}
+        onChange={onFilterChange}
+        onEntityDraftEdit={() => setEntityDraftEdited(true)}
+        entityFormRevision={entityFormRevision}
+        total={total}
+      />
 
       <BulkTriageBar
         selectedIds={[...checkedIds]}
@@ -773,11 +821,13 @@ function AlertsTableGrid({
             filter-aware copy is the difference between an analyst thinking
             "the system is broken" and "I should clear my filters".
           */}
-          {filters.severity || filters.status || filters.unresolvedOnly || filters.createdWithinHours ? (
+          {filters.severity || filters.status || filters.unresolvedOnly || filters.createdWithinHours || filters.entityValue ? (
             <EmptyState
               icon={EmptyStateIcons.search}
               title="No alerts match these filters"
-              description="Try clearing the severity, status, unresolved-only, or creation-time filters to widen the search."
+              description={filters.entityValue
+                ? 'Try another entity value or clear the filters to widen the search.'
+                : 'Try clearing the severity, status, unresolved-only, or creation-time filters to widen the search.'}
               action={
                 <button
                   onClick={() => onFilterChange({ page: 1, pageSize: filters.pageSize ?? 25, sort: filters.sort })}

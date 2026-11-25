@@ -898,6 +898,39 @@ paths:
             maxLength: 255
           - type: 'null'
           title: Hostname
+      - name: entity_type
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - enum:
+            - host
+            - user
+            - ip
+            - domain
+            - asset
+            - url
+            type: string
+          - type: 'null'
+          description: Optional entity kind. Requires entity_value; omit to match
+            any supported kind.
+          title: Entity Type
+        description: Optional entity kind. Requires entity_value; omit to match any
+          supported kind.
+      - name: entity_value
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 2048
+          - type: 'null'
+          description: Exact, case-sensitive entity value; surrounding whitespace
+            is trimmed.
+          title: Entity Value
+        description: Exact, case-sensitive entity value; surrounding whitespace is
+          trimmed.
       responses:
         '200':
           description: Successful Response

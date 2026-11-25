@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import Link from 'next/link';
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import {
@@ -25,6 +26,7 @@ import {
 } from '@/lib/api';
 import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
+import { entityAlertsHref } from '@/lib/alertEntityFilter';
 
 // ─── Visual config ───────────────────────────────────────────────────────────
 
@@ -393,9 +395,11 @@ function EntityRow({
 function EntityDetailDrawer({
   entity,
   onClose,
+  onViewAlerts,
 }: {
   entity: EntityRiskRecord;
   onClose: () => void;
+  onViewAlerts?: () => void;
 }) {
   const { t } = useLocale();
   const cfg = ENTITY_TYPE_CONFIG[entity.entity_type] ?? ENTITY_TYPE_CONFIG.user;
@@ -408,6 +412,7 @@ function EntityDetailDrawer({
   );
   const record = data ?? entity;
   const band = bandFor(record.score, record.threshold);
+  const alertsHref = entityAlertsHref(record.entity_type, record.entity_value);
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -513,6 +518,22 @@ function EntityDetailDrawer({
           )}
 
           <div>
+            <Link
+              href={alertsHref}
+              onNavigate={() => {
+                // If only the local tab changed, navigating to this same URL
+                // cannot update useSearchParams. Otherwise let navigation
+                // install the entity filters before mounting the alert grid.
+                const target = new URL(alertsHref, window.location.href);
+                if (target.pathname === window.location.pathname && target.search === window.location.search) {
+                  onViewAlerts?.();
+                }
+              }}
+              className="mb-3 inline-flex rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-300 hover:bg-blue-500/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-400"
+            >
+              View all alerts for this entity
+            </Link>
+            <p className="mb-3 text-xs text-gray-500">Includes matching alerts outside the current risk window.</p>
             <h3 className="text-xs uppercase tracking-wider text-gray-500 mb-2">
               Contributing alerts
             </h3>
@@ -571,7 +592,7 @@ function EntityDetailDrawer({
 
 // ─── Main view ───────────────────────────────────────────────────────────────
 
-export function EntityRiskQueue() {
+export function EntityRiskQueue({ onViewAlerts }: { onViewAlerts?: () => void } = {}) {
   const { t } = useLocale();
   const [promotedOnly, setPromotedOnly] = useState(false);
   const [selected, setSelected] = useState<EntityRiskRecord | null>(null);
@@ -753,6 +774,7 @@ export function EntityRiskQueue() {
         <EntityDetailDrawer
           entity={selected}
           onClose={() => setSelected(null)}
+          onViewAlerts={onViewAlerts}
         />
       )}
     </div>
