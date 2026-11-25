@@ -229,6 +229,32 @@ def _notice_for(reason: str | None) -> str | None:
     return None
 
 
+def _model_history(conversation: dict[str, Any]) -> list[dict[str, Any]]:
+    """Keep the transcript intact without replaying turns rejected by the contract."""
+    messages = conversation.get("messages", [])[-10:]
+    history = []
+    for index, message in enumerate(messages):
+        role = message.get("role")
+        if role not in {"user", "assistant"} or not isinstance(message.get("content"), str):
+            continue
+        if role == "assistant" and message.get("source") == "template":
+            continue
+        if role == "user" and index + 1 < len(messages):
+            reply = messages[index + 1]
+            if (
+                reply.get("role") == "assistant"
+                and reply.get("source") == "template"
+                and (
+                    reply.get("template_reason") == INPUT_REJECTED
+                    # Compatibility with transcripts written before persisting the reason.
+                    or (reply.get("template_reason") is None and reply.get("content") == _fallback_reply(INPUT_REJECTED))
+                )
+            ):
+                continue
+        history.append(message)
+    return history
+
+
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
@@ -272,13 +298,7 @@ async def _get_openai_reply(
         reads = reads or _copilot_reads()
         # Template diagnostics are not model answers. Older failures embedded
         # rejected evidence, so replaying them could reject every later turn.
-        history = [
-            (HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"])
-            for m in conversation.get("messages", [])[-10:]
-            if m.get("role") in {"user", "assistant"}
-            and isinstance(m.get("content"), str)
-            and not (m["role"] == "assistant" and m.get("source") == "template")
-        ]
+        history = [(HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"]) for m in _model_history(conversation)]
         # Page fields are lookup hints, not evidence. In particular, a browser
         # cannot fabricate an `alerts` array and have it certified as a source.
         hints = {k: v[:512] for k, v in (context or {}).items() if k in {"page", "alertId", "caseId", "entity"} and isinstance(v, str)}
@@ -406,6 +426,7 @@ async def chat(
         "role": "assistant",
         "content": reply_text,
         "source": reply_source,
+        "template_reason": reply_reason,
         "notice": notice,
         "grounding": grounding,
         "data_access": reads.calls,
@@ -477,6 +498,7 @@ async def chat_stream(
         "role": "assistant",
         "content": reply_text,
         "source": reply_source,
+        "template_reason": reply_reason,
         "notice": notice,
         "grounding": grounding,
         "data_access": reads.calls,

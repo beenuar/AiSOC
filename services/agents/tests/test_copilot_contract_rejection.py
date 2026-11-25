@@ -172,3 +172,90 @@ async def test_old_failure_text_does_not_poison_the_next_question(monkeypatch):
     assert "A prior model answer." in contents
     assert "What can I ask next?" in contents
     assert CANARY not in json.dumps(sent)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_rejected_question_is_not_replayed_but_stays_in_transcript(monkeypatch, stream):
+    monkeypatch.setenv("SECRET_KEY", SECRET)
+    monkeypatch.setenv("LLM_GATEWAY_URL", "http://gateway.test/v1")
+    monkeypatch.setenv("LITELLM_MASTER_KEY", "test-gateway-key")
+    monkeypatch.setattr(contract_rules, "_ENFORCED", True)
+    monkeypatch.setattr(contract_rules, "_MAX_MESSAGE_CHARS", 2500)
+    rejected = "too long " * 300
+    saved = [
+        {"role": "user", "content": "A valid prior question."},
+        {"role": "assistant", "content": "A valid prior answer.", "source": "llm"},
+    ]
+    calls = []
+
+    async def handle(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "id": "chat-1",
+                "object": "chat.completion",
+                "created": 1,
+                "model": "aisoc-copilot",
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "A fresh answer."}, "finish_reason": "stop"}],
+            },
+        )
+
+    async def append(**kwargs):
+        saved.extend(kwargs["new_messages"])
+        return conversation_store.Conversation("conversation-1", "test", saved, datetime.now(UTC).isoformat())
+
+    async def get(**kwargs):
+        return conversation_store.Conversation("conversation-1", "test", list(saved), datetime.now(UTC).isoformat())
+
+    monkeypatch.setattr(conversation_store, "get_conversation", get)
+    monkeypatch.setattr(conversation_store, "append_messages", append)
+    make_model = factory.make_chat_model
+    app = FastAPI()
+    app.include_router(copilot.router)
+    route = "/api/v1/copilot/chat" + ("/stream" if stream else "")
+    headers = {"Authorization": "Bearer " + _token()}
+    async with (
+        httpx.AsyncClient(transport=httpx.MockTransport(handle)) as provider,
+        httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://console.test") as browser,
+    ):
+        monkeypatch.setattr(factory, "make_chat_model", lambda *a, **kw: make_model(*a, http_async_client=provider, **kw))
+        first = await browser.post(route, headers=headers, json={"conversationId": "conversation-1", "message": rejected})
+        first_payload = json.loads(first.text.splitlines()[0])
+        assert first.status_code == 200
+        assert first_payload["template_reason"] == "input_contract_rejected"
+        assert not calls
+        assert saved[-2]["content"] == rejected
+
+        second = await browser.post(route, headers=headers, json={"conversationId": "conversation-1", "message": "A valid follow-up."})
+    assert second.status_code == 200
+    assert json.loads(second.text.splitlines()[0])["source"] == "llm"
+    assert len(calls) == 1
+    assert saved[-3]["template_reason"] == "input_contract_rejected"
+    assert [m["content"] for m in calls[0]["messages"] if m["role"] != "system"] == [
+        "A valid prior question.",
+        "A valid prior answer.",
+        "A valid follow-up.",
+    ]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_history_preserves_other_failures_and_excludes_only_rejected_turns(legacy):
+    rejected_reply = {
+        "role": "assistant",
+        "source": "template",
+        "content": copilot._fallback_reply(copilot.INPUT_REJECTED),
+    }
+    if not legacy:
+        rejected_reply["template_reason"] = copilot.INPUT_REJECTED
+    messages = [
+        {"role": "user", "content": "A normal question that timed out."},
+        {"role": "assistant", "source": "template", "template_reason": copilot.CALL_FAILED, "content": "Timed out."},
+        {"role": "user", "content": "A rejected question."},
+        rejected_reply,
+        {"role": "user", "content": "A valid new question."},
+        {"role": "assistant", "source": "llm", "content": "An accepted answer."},
+    ]
+
+    assert copilot._model_history({"messages": messages}) == [messages[0], messages[4], messages[5]]
