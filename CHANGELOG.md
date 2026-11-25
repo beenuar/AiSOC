@@ -29,7 +29,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answered "none"), and an alert at the 200-id provenance ceiling sets
   `source_event_ids_truncated`. Gated against real ClickHouse, with a
   negative control that removes the derivation and watches the opaque-id
-  cases fail.
+  cases fail. The console renders it as a **Timeline** tab on the case
+  workspace: entries grouped by kill-chain stage in MITRE order, each event
+  nested beneath the alert it produced, with the lake-unavailable and
+  provenance-ceiling notices shown rather than swallowed. An event takes the
+  stage of its alert — keying events on their own absent stage sweeps every
+  one of them into a trailing bucket, tearing the evidence away from the
+  alert it explains, which is what the browser journey caught before the tab
+  shipped.
 
 - **Fusion's incident and attack-story grouping is now durable** (migration
   181). `Correlator.correlate` assigned an incident id that lived in Redis

@@ -28,6 +28,7 @@ import {
   apiFetch,
   type AttackChainTimeline,
   type AttackChainWindow,
+  type IncidentTimeline,
   type Case,
   type CaseAttackPath,
   casesApi,
@@ -45,6 +46,7 @@ import {
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { IncidentTimelineView } from "./IncidentTimeline";
 import { InvestigationLedger } from "./InvestigationLedger";
 import { WarRoomPanel } from "./WarRoomPanel";
 import { RelatedCasesPanel } from "./RelatedCasesPanel";
@@ -53,13 +55,20 @@ import { canUseDemoData } from "@/lib/demoFallback";
 import { useUrlTab } from "@/hooks/useUrlTab";
 
 type WorkspaceTab =
-  "overview" | "investigation" | "attack-path" | "attack-chain" | "ledger" | "report";
+  | "overview"
+  | "investigation"
+  | "attack-path"
+  | "attack-chain"
+  | "incident-timeline"
+  | "ledger"
+  | "report";
 
 const VALID_TABS: readonly WorkspaceTab[] = [
   "overview",
   "investigation",
   "attack-path",
   "attack-chain",
+  "incident-timeline",
   "ledger",
   "report",
 ];
@@ -972,6 +981,16 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
                   graph
                 </span>
               </span>
+            ) : tab === "incident-timeline" ? (
+              <span className="inline-flex items-center gap-1">
+                Timeline
+                <span
+                  className="rounded bg-sky-500/15 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wider text-sky-300 ring-1 ring-sky-500/30"
+                  title="Every linked alert at its own event time, with the raw events behind it"
+                >
+                  chronology
+                </span>
+              </span>
             ) : tab === "attack-chain" ? (
               <span className="inline-flex items-center gap-1">
                 Attack chain
@@ -1010,6 +1029,13 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
       {/* Attack-chain tab — ranked temporal timeline of related alerts */}
       {activeTab === "attack-chain" && <AttackChainPanel caseId={caseRecord.id || caseId} />}
+
+      {/* Incident timeline — the case's alerts and the events behind them,
+          in the order they actually happened. Distinct from the attack-chain
+          tab above, which ranks related alerts by relevance to a seed. */}
+      {activeTab === "incident-timeline" && (
+        <IncidentTimelinePanel caseId={caseRecord.id || caseId} />
+      )}
 
       {/* Ledger tab — persistent, replayable agent decision log */}
       {activeTab === "ledger" && (
@@ -2219,4 +2245,52 @@ function Panel({
       <div className="p-3">{children}</div>
     </div>
   );
+}
+
+/**
+ * The incident timeline tab.
+ *
+ * Fetches once per case and hands the payload straight to the view, which
+ * owns every honest state in it. There is deliberately no window selector
+ * here: the attack-chain tab ranks *related* alerts inside a window, while
+ * this one shows the alerts the case actually links, and narrowing that by
+ * time would hide evidence an analyst explicitly attached.
+ */
+function IncidentTimelinePanel({ caseId }: { caseId: string }) {
+  const hasCaseId = Boolean(caseId);
+  const { data, error, isLoading } = useSWR<IncidentTimeline>(
+    hasCaseId ? ["case:incident-timeline", caseId] : null,
+    () => casesApi.getIncidentTimeline(caseId),
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+
+  if (!hasCaseId || isLoading) {
+    return (
+      <div className="space-y-3">
+        <Skeleton className="h-5 w-48" />
+        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <ErrorState
+        title="Failed to load the incident timeline"
+        error={error}
+      />
+    );
+  }
+
+  if (!data) {
+    return (
+      <EmptyState
+        title="No timeline yet"
+        description="This case has no chronology to show."
+      />
+    );
+  }
+
+  return <IncidentTimelineView data={data} />;
 }
