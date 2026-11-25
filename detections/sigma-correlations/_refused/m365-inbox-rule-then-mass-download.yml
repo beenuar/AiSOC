@@ -1,0 +1,49 @@
+title: M365 inbox rule created
+name: m365-inbox-rule-created
+id: aisoc-corr-base-m365-inbox-rule
+status: experimental
+description: One Exchange Online inbox-rule creation.
+logsource:
+  product: m365
+  service: exchange
+detection:
+  selection:
+    Operation: New-InboxRule
+  condition: selection
+---
+title: M365 file downloaded from SharePoint or OneDrive
+name: m365-file-downloaded
+id: aisoc-corr-base-m365-file-downloaded
+status: experimental
+description: One SharePoint or OneDrive file download.
+logsource:
+  product: m365
+  service: sharepoint
+detection:
+  selection:
+    Operation: FileDownloaded
+  condition: selection
+---
+title: An account created an inbox rule and then downloaded files
+id: aisoc-corr-m365-inbox-rule-then-download
+status: experimental
+description: >-
+  An inbox-rule creation followed by a file download by the same account
+  inside an hour. The order is the detection: a rule that hides or forwards
+  mail, created before the account starts pulling documents, is the standard
+  business-email-compromise opening — the rule keeps the owner from noticing
+  what follows. Users create inbox rules constantly, so this is medium and
+  deliberately paired rather than alerting on rules alone.
+level: medium
+category: saas
+tags:
+  - attack.t1114.003
+  - attack.t1530
+correlation:
+  type: temporal_ordered
+  rules:
+    - m365-inbox-rule-created
+    - m365-file-downloaded
+  group-by:
+    - UserId
+  timespan: 60m

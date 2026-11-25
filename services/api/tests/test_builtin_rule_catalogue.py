@@ -69,7 +69,12 @@ ARTEFACTS: dict[str, int] = {
     "detection_ruleset.json": 1196,
     "detection_ruleset_imported.json": 1770,
     # 76 -> 79 with the three authored AI-session rules.
-    "windowed_ruleset.json": 79,
+    # 79 -> 90 with eleven authored Sigma correlations: multi-stage chains
+    # across the four log sources `EMITTERS` covers (windows, cloudtrail,
+    # okta, azure). Two further candidates naming GCP and M365 log sources
+    # are refused with their reason rather than shipped, because no
+    # connector emits them.
+    "windowed_ruleset.json": 90,
 }
 
 #: Windowed rules declared in fusion's Python rather than in any artefact.
@@ -97,7 +102,12 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: orphan YAML files and two duplicate slugs, each of which had been
 #: inflating the *published* total above what the engine loads.
 # 3045 -> 3048 with the three authored AI-session windowed rules.
-FUSION_LOADED_TOTAL = 3048
+# 3048 -> 3059 with the eleven authored Sigma correlations above. Each one
+# compiles through `scripts/sigma_correlation.py`, every field it names is
+# proven emitted by a connector, ingest template or the Go normalizer by
+# `check_sigma_correlations.py` (no ceiling), and the committed artefact is
+# replayed through the real engine by `test_sigma_correlation_replay.py`.
+FUSION_LOADED_TOTAL = 3059
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

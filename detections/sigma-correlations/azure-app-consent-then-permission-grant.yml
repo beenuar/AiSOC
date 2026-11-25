@@ -1,0 +1,50 @@
+title: Entra application consented to
+name: azure-consent-to-application
+id: aisoc-corr-base-azure-consent-app
+status: experimental
+description: One Entra consent grant to an application.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Consent to application
+  condition: selection
+---
+title: Entra delegated permission granted
+name: azure-add-delegated-permission
+id: aisoc-corr-base-azure-delegated-grant
+status: experimental
+description: One Entra delegated permission grant to a service principal.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Add delegated permission grant
+  condition: selection
+---
+title: An actor consented to an application and granted it permissions
+id: aisoc-corr-azure-consent-then-delegated-grant
+status: experimental
+description: >-
+  Consent to an application followed by a delegated permission grant from the
+  same actor inside thirty minutes. The order is the point: consent is the
+  door and the grant is what walks through it, so the pair describes an
+  application acquiring access in one sitting rather than an administrator
+  reviewing one of them on its own. Illicit-consent phishing has this exact
+  shape, and so does a developer onboarding a legitimate app — which is why
+  this names the application rather than judging it.
+level: medium
+category: identity
+tags:
+  - attack.t1550.001
+  - attack.t1098.003
+correlation:
+  type: temporal_ordered
+  rules:
+    - azure-consent-to-application
+    - azure-add-delegated-permission
+  group-by:
+    - actor
+  timespan: 30m

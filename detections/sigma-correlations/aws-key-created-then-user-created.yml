@@ -1,0 +1,50 @@
+title: AWS IAM access key created for persistence correlation
+name: aws-iam-key-created-persist
+id: aisoc-corr-base-aws-key-created-persist
+status: experimental
+description: One IAM CreateAccessKey call.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: CreateAccessKey
+  condition: selection
+---
+title: AWS IAM user created
+name: aws-iam-create-user
+id: aisoc-corr-base-aws-create-user
+status: experimental
+description: One IAM CreateUser call.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: CreateUser
+  condition: selection
+---
+title: A principal created an IAM user and minted it a key
+id: aisoc-corr-aws-user-created-then-key-minted
+status: experimental
+description: >-
+  CreateUser followed by CreateAccessKey from the same principal inside
+  fifteen minutes. This is also exactly what an onboarding script does, which
+  is why the level is medium and why the window is short: the signal is not
+  that it happened but that it happened interactively and quickly, and the
+  alert exists to be correlated with who the acting principal was rather than
+  to be actioned alone.
+level: medium
+category: cloud
+tags:
+  - attack.t1136.003
+correlation:
+  type: temporal_ordered
+  rules:
+    - aws-iam-create-user
+    - aws-iam-key-created-persist
+  group-by:
+    - user_arn
+  timespan: 15m

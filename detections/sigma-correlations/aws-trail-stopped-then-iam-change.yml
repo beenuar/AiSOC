@@ -1,0 +1,52 @@
+title: AWS CloudTrail logging stopped
+name: aws-cloudtrail-stop-logging
+id: aisoc-corr-base-aws-trail-stop
+status: experimental
+description: One StopLogging call against a CloudTrail trail.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: cloudtrail.amazonaws.com
+    eventName: StopLogging
+  condition: selection
+---
+title: AWS IAM policy attached to a user
+name: aws-iam-attach-user-policy
+id: aisoc-corr-base-aws-attach-user-policy
+status: experimental
+description: One AttachUserPolicy call. Routine during onboarding.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: AttachUserPolicy
+  condition: selection
+---
+title: A principal stopped CloudTrail logging and then changed IAM
+id: aisoc-corr-aws-trail-stopped-then-iam-change
+status: experimental
+description: >-
+  The same principal stopped a trail and then attached an IAM policy, in that
+  order, inside an hour. The order is the detection and the reason to keep the
+  window long: stopping the trail first is what makes the second action
+  unlogged on that trail, so the pair reads as evasion preceding privilege
+  change rather than as two unrelated administrative calls. Either alone is
+  something an administrator does; stopping logging and then granting is the
+  sequence an operator should be asked about.
+level: high
+category: cloud
+tags:
+  - attack.t1562.008
+  - attack.t1098
+correlation:
+  type: temporal_ordered
+  rules:
+    - aws-cloudtrail-stop-logging
+    - aws-iam-attach-user-policy
+  group-by:
+    - user_arn
+  timespan: 60m

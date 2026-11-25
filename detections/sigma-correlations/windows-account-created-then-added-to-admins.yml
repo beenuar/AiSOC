@@ -1,0 +1,49 @@
+title: Windows local account created
+name: windows-account-created
+id: aisoc-corr-base-windows-account-created
+status: experimental
+description: One Windows account-creation event (4720).
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4720
+  condition: selection
+---
+title: Windows member added to a security-enabled local group
+name: windows-member-added-to-group
+id: aisoc-corr-base-windows-group-add
+status: experimental
+description: One Windows local group membership addition (4732).
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4732
+  condition: selection
+---
+title: An account was created on a host and then added to a local group
+id: aisoc-corr-windows-account-created-then-group-add
+status: experimental
+description: >-
+  Account creation followed by a local group addition on the same host inside
+  fifteen minutes. Build automation and imaging do this, which keeps the level
+  at medium — but the ordering is what separates it from the ordinary case of
+  an existing account being added to a group, and a brand-new local account
+  joining a privileged group minutes after creation is the classic way a
+  foothold is made to survive a reboot.
+level: medium
+category: endpoint
+tags:
+  - attack.t1136.001
+  - attack.t1098
+correlation:
+  type: temporal_ordered
+  rules:
+    - windows-account-created
+    - windows-member-added-to-group
+  group-by:
+    - Computer
+  timespan: 15m

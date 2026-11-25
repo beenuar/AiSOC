@@ -1,0 +1,49 @@
+title: Entra authentication method deleted
+name: azure-auth-method-deleted
+id: aisoc-corr-base-azure-auth-method-deleted
+status: experimental
+description: One Entra authentication-method removal from a user.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Delete user authentication method
+  condition: selection
+---
+title: Entra authentication method registered
+name: azure-auth-method-registered
+id: aisoc-corr-base-azure-auth-method-added
+status: experimental
+description: One Entra authentication-method registration.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: User registered security info
+  condition: selection
+---
+title: One actor removed an authentication method and registered another
+id: aisoc-corr-azure-auth-method-swapped
+status: experimental
+description: >-
+  The same actor deleted an authentication method and registered one inside
+  thirty minutes, in either order. A user replacing a lost phone does exactly
+  this, which is why it is unordered and medium — the pair is a prompt to
+  confirm the change was the user's, not a verdict that it was not. What makes
+  it worth one alert rather than two audit rows is that swapping the factor is
+  how an account takeover becomes durable: the attacker keeps access and the
+  owner stops receiving the prompts that would have told them.
+level: medium
+category: identity
+tags:
+  - attack.t1098.005
+correlation:
+  type: temporal
+  rules:
+    - azure-auth-method-deleted
+    - azure-auth-method-registered
+  group-by:
+    - actor
+  timespan: 30m

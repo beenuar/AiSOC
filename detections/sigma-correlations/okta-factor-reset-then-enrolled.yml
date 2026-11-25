@@ -1,0 +1,49 @@
+title: Okta factor reset for an account
+name: okta-factor-reset
+id: aisoc-corr-base-okta-factor-reset
+status: experimental
+description: One Okta MFA factor reset.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.mfa.factor.reset_all
+  condition: selection
+---
+title: Okta factor enrolled for an account
+name: okta-factor-enrolled
+id: aisoc-corr-base-okta-factor-enrolled
+status: experimental
+description: One Okta MFA factor enrolment.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.mfa.factor.activate
+  condition: selection
+---
+title: An Okta account had its factors reset and a new one enrolled
+id: aisoc-corr-okta-factor-reset-then-enrolled
+status: experimental
+description: >-
+  A factor reset followed by a factor activation on the same account inside
+  thirty minutes. This is the standard help-desk recovery path, and it is also
+  the standard account-takeover path — the two are indistinguishable from the
+  events alone, which is precisely why they are worth one correlated alert
+  rather than two log lines nobody joins. The question it asks an analyst is
+  answerable in a minute: did the account's owner call the help desk?
+level: medium
+category: identity
+tags:
+  - attack.t1098.005
+  - attack.t1556.006
+correlation:
+  type: temporal_ordered
+  rules:
+    - okta-factor-reset
+    - okta-factor-enrolled
+  group-by:
+    - actor_email
+  timespan: 30m

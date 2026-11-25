@@ -1,0 +1,48 @@
+title: GCP service-account key created
+name: gcp-sa-key-created
+id: aisoc-corr-base-gcp-sa-key-created
+status: experimental
+description: One service-account key creation in Google Cloud.
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    methodName: google.iam.admin.v1.CreateServiceAccountKey
+  condition: selection
+---
+title: GCP IAM policy set
+name: gcp-set-iam-policy
+id: aisoc-corr-base-gcp-set-iam-policy
+status: experimental
+description: One SetIamPolicy call in Google Cloud.
+logsource:
+  product: gcp
+  service: gcp.audit
+detection:
+  selection:
+    methodName: SetIamPolicy
+  condition: selection
+---
+title: One principal minted a service-account key and rewrote an IAM policy
+id: aisoc-corr-gcp-key-created-then-policy-set
+status: experimental
+description: >-
+  A service-account key creation and a SetIamPolicy call by the same principal
+  inside thirty minutes, in either order. Terraform does both in a single
+  apply, which is why this is unordered and medium rather than high — the
+  value is in naming one principal that both created a durable credential and
+  changed who may use what, so a reviewer looks once instead of reconstructing
+  it from two audit streams.
+level: medium
+category: cloud
+tags:
+  - attack.t1098.001
+correlation:
+  type: temporal
+  rules:
+    - gcp-sa-key-created
+    - gcp-set-iam-policy
+  group-by:
+    - principalEmail
+  timespan: 30m
