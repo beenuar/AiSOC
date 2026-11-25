@@ -8,9 +8,9 @@ Endpoints (all under ``/api/v1/copilot``):
     POST /chat                      — one-shot chat (creates / continues conv.)
     POST /chat/stream               — streaming NDJSON variant
 
-When no model answers, the reply says so and names which of the two
-reasons applies — nothing is configured, or what is configured did not
-return. A failed investigation reports partial reads separately; it never invents findings.
+When no model answers, the reply distinguishes missing configuration, rejected
+input and a failed model call. A failed investigation reports partial reads
+separately; it never invents findings.
 """
 
 from __future__ import annotations
@@ -93,11 +93,10 @@ class CopilotChatResponse(BaseModel):
     #: The console must label a ``template`` reply rather than presenting it as
     #: analysis of the user's environment.
     source: Literal["llm", "template"] = "llm"
-    #: Why no model answered, when ``source`` is ``template``. Additive
-    #: rather than a third ``source`` value, so existing clients branching
-    #: on ``template`` keep working while a new one can tell "nothing is
-    #: configured" from "what is configured did not answer" (issue #1275).
-    template_reason: Literal["no_model_configured", "model_call_failed"] | None = None
+    #: Why no model answered, when ``source`` is ``template``. The source
+    #: remains compatible while callers distinguish missing configuration,
+    #: a provider failure and a prompt rejected before the request was sent.
+    template_reason: Literal["no_model_configured", "model_call_failed", "input_contract_rejected"] | None = None
     notice: str | None = None
     #: Which factual claims in `reply` cite a record, and which cite
     #: nothing (parity 3.6). The console renders the label beside the
@@ -141,10 +140,11 @@ def _tenant_of(principal: TenantPrincipal) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
-#: Why no model answered. These are two different operator problems and
-#: the old code could not tell them apart (issue #1275).
+#: Why no model answered. Input rejected before a request reaches the provider
+#: needs a different remedy from missing configuration or a failed call.
 NO_MODEL = "no_model_configured"
 CALL_FAILED = "model_call_failed"
+INPUT_REJECTED = "input_contract_rejected"
 
 
 def _fallback_reply(reason: str, *, model: str | None = None, detail: str | None = None) -> str:
@@ -171,6 +171,15 @@ def _fallback_reply(reason: str, *, model: str | None = None, detail: str | None
             "an unanswered question rather than a finding.\n\n"
             "To enable the copilot, configure a model — either a hosted provider key or the "
             "bundled local model — and ask again."
+        )
+    if reason == INPUT_REJECTED:
+        return (
+            "I can't answer this: AiSOC rejected the input before the next model request "
+            "because it did not satisfy the LLM input contract.\n\n"
+            "No completed analysis is available. Treat this as an unanswered question rather than a finding. "
+            "Any completed reads are listed separately.\n\n"
+            "The rejected input was not sent in that request. Check how conversation context "
+            "and tool evidence are prepared for the model; retrying the same input will be rejected again."
         )
 
     named = f" ({model})" if model else ""
@@ -212,6 +221,11 @@ def _notice_for(reason: str | None) -> str | None:
             "question. This is not analysis of your environment, and it is not a missing "
             "API key."
         )
+    if reason == INPUT_REJECTED:
+        return (
+            "The LLM input contract rejected the next model request before it was sent. "
+            "No completed analysis is available; any completed reads are listed separately."
+        )
     return None
 
 
@@ -233,14 +247,11 @@ async def _get_openai_reply(
     alerts" as real analysis of their environment. The frontend had an honest
     fallback of its own that never fired, because the backend reported success.
 
-    The two fallback conditions are now distinguished (issue #1275). They
-    used to collapse into one message telling the operator to configure an
-    API key — advice that is simply wrong when a local model is configured
-    and timed out, which is the common case on CPU. This repository has the
-    same lesson recorded from the RBA banner that named fusion while fusion
-    was healthy: a diagnostic pointing at the wrong subsystem sends someone
-    to fix something that is not broken, and is worse than a vague one.
+    A prompt rejected by the input contract never reaches the provider, so
+    it must not receive the same diagnostic as a failed model call. Neither
+    condition is evidence that no model was configured.
     """
+    from app.llm.contract_rules import LLMContractViolation
     from app.llm.factory import resolve_api_key, resolve_model_alias
 
     model = resolve_model_alias("copilot")
@@ -259,10 +270,14 @@ async def _get_openai_reply(
         from app.security.agent_identity import issue_identity
 
         reads = reads or _copilot_reads()
+        # Template diagnostics are not model answers. Older failures embedded
+        # rejected evidence, so replaying them could reject every later turn.
         history = [
             (HumanMessage if m["role"] == "user" else AIMessage)(content=m["content"])
             for m in conversation.get("messages", [])[-10:]
-            if m.get("role") in {"user", "assistant"} and isinstance(m.get("content"), str)
+            if m.get("role") in {"user", "assistant"}
+            and isinstance(m.get("content"), str)
+            and not (m["role"] == "assistant" and m.get("source") == "template")
         ]
         # Page fields are lookup hints, not evidence. In particular, a browser
         # cannot fabricate an `alerts` array and have it certified as a source.
@@ -305,6 +320,11 @@ async def _get_openai_reply(
         if result["truncated"] or not result["content"]:
             raise RuntimeError("The investigation did not complete within its tool-call budget.")
         return result["content"], "llm", None
+    except LLMContractViolation as exc:
+        # Both str(exc) and exc.reason can contain rejected input, including
+        # secret-shaped matches. Keep it out of replies, history and logs.
+        logger.warning("copilot.input_contract_rejected", model=model, role=exc.role)
+        return _fallback_reply(INPUT_REJECTED), "template", INPUT_REJECTED
     except Exception as exc:
         # `str(exc)` is empty for several httpx timeout classes, which is
         # how the report ended up with `copilot.openai_error` carrying no
@@ -378,7 +398,8 @@ async def chat(
     if reply_source == "llm" and not reads.calls:
         notice = "No environment data was read for this reply; it is not an investigation of your estate."
     elif any(call["status"] != "ok" for call in reads.calls):
-        notice = "Some requested data could not be checked. Do not interpret a failed read as absence of activity."
+        read_notice = "Some requested data could not be checked. Do not interpret a failed read as absence of activity."
+        notice = f"{notice} {read_notice}" if notice else read_notice
 
     assistant_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -447,7 +468,8 @@ async def chat_stream(
     if reply_source == "llm" and not reads.calls:
         notice = "No environment data was read for this reply; it is not an investigation of your estate."
     elif any(call["status"] != "ok" for call in reads.calls):
-        notice = "Some requested data could not be checked. Do not interpret a failed read as absence of activity."
+        read_notice = "Some requested data could not be checked. Do not interpret a failed read as absence of activity."
+        notice = f"{notice} {read_notice}" if notice else read_notice
 
     msg_id = str(uuid.uuid4())
     assistant_msg: dict[str, Any] = {

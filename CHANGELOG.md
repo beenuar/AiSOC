@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Copilot projects alert and case evidence into allowlisted summaries instead of
+  forwarding raw OCSF payloads to the model. Bounded tool messages retain their
+  coverage metadata, and citation sources contain only the retained evidence.
+- Copilot reports LLM input-contract rejection separately from a failed model
+  call, without copying rejected input into the reply or diagnostic log. Prior
+  template replies are excluded from model history so an old failure containing
+  raw evidence cannot block subsequent questions.
+
 ## [23.7.1] - 2026-11-24
 
 ### Security

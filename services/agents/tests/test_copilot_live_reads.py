@@ -60,7 +60,7 @@ async def test_chat_reads_evidence_before_answering_and_never_trusts_client_sour
                     "title": "SIEM signal",
                     "severity": "high",
                     "affected_hosts": ["WS-42"],
-                    "raw_event": {"full_log": "connection from 198.51.100.42"},
+                    "raw_event": {"src_endpoint": {"ip": "198.51.100.42"}, "full_log": "opaque vendor log"},
                 },
             )
         assert request.url.host == "gateway.test"
