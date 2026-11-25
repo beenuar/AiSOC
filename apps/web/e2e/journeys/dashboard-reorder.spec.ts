@@ -177,9 +177,18 @@ test('dropping outside the widgets cancels the reorder', async ({ page }) => {
   const target = widget(page, 'charts-row');
   await dragOver(page, source.getByRole('button', { name: 'Drag to reorder', exact: true }), target);
   await expect(target).toHaveClass(/ring-2/);
-  const outside = await page.getByRole('banner').boundingBox();
-  expect(outside).not.toBeNull();
-  await page.mouse.move(outside!.x + outside!.width / 2, outside!.y + outside!.height / 2, { steps: 12 });
+  // Use the side gutter so travelling toward the banner cannot cross the
+  // source widget again and mask a stale-hover reorder on dragend.
+  const banner = await page.getByRole('banner').boundingBox();
+  const box = await target.boundingBox();
+  expect(banner).not.toBeNull();
+  expect(box).not.toBeNull();
+  const gutterX = box!.x - 12;
+  const bannerCenterY = banner!.y + banner!.height / 2;
+  await page.mouse.move(gutterX, box!.y + 28, { steps: 16 });
+  await page.mouse.move(gutterX, bannerCenterY, { steps: 16 });
+  await page.mouse.move(banner!.x + banner!.width / 2, bannerCenterY);
+  await expect(target).toHaveClass(/ring-2/);
   await page.mouse.up();
   await expectIdle(page);
 });
