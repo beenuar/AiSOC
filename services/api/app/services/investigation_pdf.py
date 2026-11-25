@@ -63,3 +63,16 @@ def render_investigation_pdf(markdown: str, *, case_id: str) -> bytes:
         # explicit error; a partial or placeholder document is not a report.
         logger.exception("investigation_pdf.render_failed")
         raise InvestigationPdfUnavailable(PDF_UNAVAILABLE_DETAIL) from exc
+
+
+def render_investigation_html_pdf(document: str) -> bytes:
+    """Render only case-verified Agents HTML, without fetching resources."""
+    try:
+        import weasyprint
+
+        fetcher_class = getattr(weasyprint, "URLFetcher", None)
+        fetcher = fetcher_class(allowed_protocols=()) if fetcher_class is not None else _deny_resource_fetch
+        return weasyprint.HTML(string=document, url_fetcher=fetcher).write_pdf()
+    except Exception as exc:
+        logger.exception("investigation_pdf.render_html_failed")
+        raise InvestigationPdfUnavailable(PDF_UNAVAILABLE_DETAIL) from exc

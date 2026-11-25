@@ -19,6 +19,7 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -49,6 +50,7 @@ def _required() -> bool:
 @dataclass
 class AgentsHTTP:
     replies: dict[str, tuple[int, bytes, str]] = field(default_factory=dict)
+    runs: dict[str, tuple[str | None, str]] = field(default_factory=dict)
     requests: list[tuple[str, str, str | None, str | None]] = field(default_factory=list)
     disconnect: bool = False
     url: str = ""
@@ -57,10 +59,7 @@ class AgentsHTTP:
         self.replies[path] = (status, json.dumps(body).encode(), "application/json")
 
     def run(self, run_id: uuid.UUID, case_id: uuid.UUID | str | None, *, status: str = "completed") -> None:
-        self.json(
-            f"/api/v1/investigations/{run_id}",
-            {"run_id": str(run_id), "case_id": str(case_id) if case_id is not None else None, "status": status},
-        )
+        self.runs[str(run_id)] = (str(case_id) if case_id is not None else None, status)
 
 
 @pytest.fixture
@@ -77,9 +76,28 @@ def agents_http(monkeypatch):
             if upstream.disconnect:
                 self.close_connection = True
                 return
-            status, body, content_type = upstream.replies.get(self.path, (404, b'{"detail":"Run not found"}', "application/json"))
+            url = urlsplit(self.path)
+            missing = (404, b'{"detail":"Run not found"}', "application/json")
+            status, body, content_type = upstream.replies.get(url.path, missing)
+            case_mismatch = False
+            if url.path.endswith("/case-report-export"):
+                run_id = url.path.split("/")[-2]
+                case_id, run_status = upstream.runs.get(run_id, (None, "missing"))
+                query = parse_qs(url.query)
+                if case_id is None or case_id not in query.get("case_id", []) + query.get("case_number", []):
+                    status, body, content_type = missing
+                    case_mismatch = run_id in upstream.runs
+                elif run_status != "completed":
+                    status, body, content_type = (409, b'{"detail":"Not complete"}', "application/json")
+                elif status == 200 and content_type == "application/pdf" and query.get("try_pdf") != ["true"]:
+                    # The actual Agents endpoint does not produce a PDF unless
+                    # requested; an over-capable stub would hide regressions.
+                    body = b'{"report_html":"<h1>Verified warm export</h1>"}'
+                    content_type = "application/json"
             self.send_response(status)
             self.send_header("Content-Type", content_type)
+            if case_mismatch:
+                self.send_header("X-AiSOC-Report-Rejected", "case-mismatch")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -342,16 +360,16 @@ async def test_markdown_and_raw_html_resources_are_never_fetched(api: PDFAPI) ->
 async def test_warm_pdf_preserves_bytes_and_scoped_service_credentials(api: PDFAPI, upstream_pdf: bytes, metadata_case: str) -> None:
     run_id = uuid.uuid4()
     api.agents.run(run_id, api.case_id if metadata_case == "uuid" else api.case_number)
-    api.agents.replies[f"/api/v1/investigations/{run_id}/report.pdf"] = (200, upstream_pdf, "application/pdf")
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
 
     response = await api.pdf(run_id)
 
     _assert_pdf(response)
     assert response.content == upstream_pdf
-    assert [path for _, path, _, _ in api.agents.requests] == [
-        f"/api/v1/investigations/{run_id}",
-        f"/api/v1/investigations/{run_id}/report.pdf",
-    ]
+    assert len(api.agents.requests) == 1
+    request = urlsplit(api.agents.requests[0][1])
+    assert request.path == f"/api/v1/investigations/{run_id}/case-report-export"
+    assert parse_qs(request.query) == {"case_id": [str(api.case_id)], "case_number": [api.case_number], "try_pdf": ["true"]}
     assert all(
         method == "GET" and tenant == str(api.tenant) and credential == f"Bearer {SERVICE_TOKEN}"
         for method, _, tenant, credential in api.agents.requests
@@ -361,7 +379,7 @@ async def test_warm_pdf_preserves_bytes_and_scoped_service_credentials(api: PDFA
 async def test_warm_completed_run_survives_stale_running_ledger(api: PDFAPI, upstream_pdf: bytes) -> None:
     run_id = await api.run(status="running")
     api.agents.run(run_id, api.case_id)
-    api.agents.replies[f"/api/v1/investigations/{run_id}/report.pdf"] = (200, upstream_pdf, "application/pdf")
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
 
     response = await api.pdf(run_id)
 
@@ -372,39 +390,25 @@ async def test_warm_completed_run_survives_stale_running_ledger(api: PDFAPI, ups
 async def test_stale_running_ledger_cannot_override_warm_case_mismatch(api: PDFAPI, upstream_pdf: bytes) -> None:
     run_id = await api.run(status="running")
     api.agents.run(run_id, api.other_case_id)
-    api.agents.replies[f"/api/v1/investigations/{run_id}/report.pdf"] = (200, upstream_pdf, "application/pdf")
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
 
     response = await api.pdf(run_id)
 
     assert response.status_code == 404, response.text
-    assert all(not path.endswith("/report.pdf") for _, path, _, _ in api.agents.requests)
+    assert len(api.agents.requests) == 1
 
 
-@pytest.mark.parametrize("body", [b"invalid JSON", b"[]"])
-async def test_malformed_warm_metadata_returns_readable_bad_gateway(api: PDFAPI, body: bytes) -> None:
+@pytest.mark.parametrize("body", [b"invalid PDF", b"[]", b"%PDF-"])
+async def test_malformed_warm_pdf_returns_readable_bad_gateway(api: PDFAPI, body: bytes) -> None:
     run_id = uuid.uuid4()
-    api.agents.replies[f"/api/v1/investigations/{run_id}"] = (200, body, "application/json")
+    api.agents.run(run_id, api.case_id)
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, body, "application/pdf")
 
     response = await api.pdf(run_id)
 
     assert response.status_code == 502, response.text
-    assert isinstance(response.json()["detail"], str)
-    assert not response.json()["detail"].startswith("{")
-    assert all(not path.endswith("/report.pdf") for _, path, _, _ in api.agents.requests)
-
-
-@pytest.mark.parametrize("status", [[], {}, None], ids=["list", "object", "missing"])
-async def test_invalid_warm_status_returns_readable_bad_gateway(api: PDFAPI, status: object) -> None:
-    run_id = uuid.uuid4()
-    metadata = {"case_id": str(api.case_id), "run_id": str(run_id), **({"status": status} if status is not None else {})}
-    api.agents.json(f"/api/v1/investigations/{run_id}", metadata)
-
-    response = await api.pdf(run_id)
-
-    assert response.status_code == 502, response.text
-    assert isinstance(response.json()["detail"], str)
-    assert not response.json()["detail"].startswith("{")
-    assert all(not path.endswith("/report.pdf") for _, path, _, _ in api.agents.requests)
+    assert response.json() == {"detail": "Invalid investigation PDF from agents"}
+    assert len(api.agents.requests) == 1
 
 
 @pytest.mark.parametrize("owner", ["other_case", "missing_case", "unknown_case"])
@@ -413,12 +417,12 @@ async def test_warm_run_requires_existing_matching_case(api: PDFAPI, upstream_pd
     requested_case = uuid.uuid4() if owner == "unknown_case" else api.case_id
     metadata_case = {"other_case": api.other_case_id, "missing_case": None, "unknown_case": requested_case}[owner]
     api.agents.run(run_id, metadata_case)
-    api.agents.replies[f"/api/v1/investigations/{run_id}/report.pdf"] = (200, upstream_pdf, "application/pdf")
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
 
     response = await api.pdf(run_id, case_id=requested_case)
 
     assert response.status_code == 404, response.text
-    assert all(not path.endswith("/report.pdf") for _, path, _, _ in api.agents.requests)
+    assert len(api.agents.requests) == (0 if owner == "unknown_case" else 1)
 
 
 @pytest.mark.parametrize("owner", ["other_case", "other_tenant", "run_id_alias", "other_artifact_tenant"])
@@ -464,7 +468,7 @@ async def test_unknown_run_has_one_readable_error_detail(api: PDFAPI) -> None:
 async def test_warm_pdf_error_preserves_status_without_nesting_json(api: PDFAPI) -> None:
     run_id = uuid.uuid4()
     api.agents.run(run_id, api.case_id)
-    api.agents.json(f"/api/v1/investigations/{run_id}/report.pdf", {"detail": "Report not yet generated"}, status=409)
+    api.agents.json(f"/api/v1/investigations/{run_id}/case-report-export", {"detail": "Report not yet generated"}, status=409)
     response = await api.pdf(run_id)
     assert response.status_code == 409, response.text
     assert response.json() == {"detail": "Report not yet generated"}
@@ -485,7 +489,7 @@ async def test_missing_native_renderer_returns_service_unavailable(api: PDFAPI, 
     assert response.status_code == 503, response.text
     assert response.headers["content-type"].startswith("application/json")
     assert isinstance(response.json()["detail"], str)
-    assert api.agents.requests == []
+    assert len(api.agents.requests) == 1
 
 
 async def test_native_render_failure_returns_service_unavailable(api: PDFAPI, monkeypatch) -> None:
@@ -500,4 +504,58 @@ async def test_native_render_failure_returns_service_unavailable(api: PDFAPI, mo
     assert response.status_code == 503, response.text
     assert response.headers["content-type"].startswith("application/json")
     assert isinstance(response.json()["detail"], str)
-    assert api.agents.requests == []
+    assert len(api.agents.requests) == 1
+
+
+async def test_native_failure_falls_back_to_one_case_bound_warm_request(api: PDFAPI, upstream_pdf: bytes, monkeypatch) -> None:
+    run_id = await api.run()
+    api.agents.run(run_id, api.case_id)
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
+    monkeypatch.setitem(sys.modules, "weasyprint", None)
+
+    response = await api.pdf(run_id)
+
+    _assert_pdf(response)
+    assert response.content == upstream_pdf
+    assert len(api.agents.requests) == 1
+    assert parse_qs(urlsplit(api.agents.requests[0][1]).query)["try_pdf"] == ["true"]
+
+
+async def test_structured_agents_error_keeps_the_readable_message(api: PDFAPI) -> None:
+    run_id = uuid.uuid4()
+    api.agents.run(run_id, api.case_id)
+    api.agents.json(
+        f"/api/v1/investigations/{run_id}/case-report-export",
+        {"detail": [{"loc": ["query", "case_id"], "msg": "Invalid case identifier"}]},
+        status=422,
+    )
+    response = await api.pdf(run_id)
+    assert response.status_code == 422
+    assert response.json() == {"detail": "Invalid case identifier"}
+
+
+async def test_warm_html_renders_in_api_without_agents_native_dependency(api: PDFAPI) -> None:
+    run_id = uuid.uuid4()
+    api.agents.run(run_id, api.case_id)
+    api.agents.json(f"/api/v1/investigations/{run_id}/case-report-export", {"report_html": "<h1>Verified warm export</h1>"})
+    response = await api.pdf(run_id)
+    _assert_pdf(response)
+    assert "Verified warm export" in _pdf_text(response.content)
+    assert len(api.agents.requests) == 1
+
+
+@pytest.mark.parametrize("have_ledger", [False, True], ids=["no-run-row", "completed-run-no-markdown"])
+async def test_api_renderer_unavailable_can_download_optional_warm_pdf(
+    api: PDFAPI, upstream_pdf: bytes, monkeypatch, have_ledger: bool
+) -> None:
+    run_id = await api.run(markdown=None) if have_ledger else uuid.uuid4()
+    api.agents.run(run_id, api.case_id)
+    api.agents.replies[f"/api/v1/investigations/{run_id}/case-report-export"] = (200, upstream_pdf, "application/pdf")
+    monkeypatch.setitem(sys.modules, "weasyprint", None)
+
+    response = await api.pdf(run_id)
+
+    _assert_pdf(response)
+    assert response.content == upstream_pdf
+    assert len(api.agents.requests) == 1
+    assert parse_qs(urlsplit(api.agents.requests[0][1]).query)["try_pdf"] == ["true"]

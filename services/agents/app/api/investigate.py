@@ -7,6 +7,7 @@ Endpoints:
   GET  /api/v1/investigations/{run_id}/report.md
   GET  /api/v1/investigations/{run_id}/report.html
   GET  /api/v1/investigations/{run_id}/report.pdf  → weasyprint PDF
+  GET  /api/v1/investigations/{run_id}/case-report-export  → case-verified report content
   WS   /api/v1/investigations/{run_id}/stream  → SSE-style step stream
 """
 
@@ -23,8 +24,9 @@ from uuid import UUID, uuid4
 import httpx
 import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import HTMLResponse, PlainTextResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from pydantic import BaseModel
+from starlette.concurrency import run_in_threadpool
 
 from app.graph.runner import default_budget
 from app.investigator import InvestigatorOrchestrator, ledger
@@ -470,6 +472,55 @@ async def get_report_pdf(run_id: str, principal: ScopedPrincipal):
         ) from exc
     except Exception as exc:  # noqa: BLE001
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {exc}") from exc
+
+
+def _reject_case_pdf_resource(_url: str) -> dict[str, Any]:
+    raise ValueError("Resource loading is disabled for case PDF exports")
+
+
+def _render_case_pdf(html_content: str) -> bytes:
+    import weasyprint  # type: ignore
+
+    fetcher_class = getattr(weasyprint, "URLFetcher", None)
+    fetcher = fetcher_class(allowed_protocols=()) if fetcher_class is not None else _reject_case_pdf_resource
+    return weasyprint.HTML(string=html_content, url_fetcher=fetcher).write_pdf()
+
+
+@router.get("/investigations/{run_id}/case-report-export")
+async def get_case_report_export(
+    run_id: str,
+    principal: ScopedPrincipal,
+    case_id: UUID,
+    case_number: str | None = None,
+    try_pdf: bool = False,
+) -> Response:
+    """Export a case-bound run from the replica that owns it."""
+    if principal.subject != "service":
+        raise HTTPException(status_code=403, detail="Service authentication required")
+    run = _run_for_principal(run_id, principal, detail="Run not found")
+    allowed_cases = {str(case_id)}
+    if case_number:
+        allowed_cases.add(case_number)
+    if not isinstance(run.get("case_id"), str) or run["case_id"] not in allowed_cases:
+        raise HTTPException(status_code=404, detail="Run not found", headers={"X-AiSOC-Report-Rejected": "case-mismatch"})
+    if run.get("status") != "completed":
+        raise HTTPException(status_code=409, detail="Report not yet available: investigation is not complete")
+    html_content = run.get("report_html")
+    if not isinstance(html_content, str) or not html_content.strip():
+        raise HTTPException(status_code=404, detail="Report not yet generated")
+
+    if try_pdf:
+        # The renderer is optional in Agents. Prefer the API image's
+        # locked renderer unless the API explicitly asks for native recovery.
+        try:
+            pdf = await run_in_threadpool(_render_case_pdf, html_content)
+        except ImportError:
+            pass
+        except Exception:  # noqa: BLE001 - a failed optional renderer cannot hide the verified HTML.
+            logger.exception("case_pdf.render_failed")
+        else:
+            return Response(content=pdf, media_type="application/pdf")
+    return JSONResponse({"report_html": html_content})
 
 
 @router.websocket("/investigations/{run_id}/stream")
