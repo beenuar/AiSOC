@@ -25,6 +25,7 @@ import os
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -49,10 +50,16 @@ import sys  # noqa: E402
 if str(_API) not in sys.path:
     sys.path.insert(0, str(_API))
 
-from app.services.incident_timeline import (  # noqa: E402
-    TimelineAlert,
-    build_incident_timeline,
-)
+#: The API's own modules are imported inside the functions that use them,
+#: not here. `tests/isolation/` is collected as a whole by jobs that do not
+#: install the API's dependencies — the cross-store suite among them — and a
+#: module-level `from app...` raises at COLLECTION, before `skipif` is ever
+#: consulted, which interrupts the whole directory rather than skipping this
+#: file. `test_lake_live.py` imports its app modules inside the `lake`
+#: fixture for the same reason. The annotation-only import below is guarded
+#: by TYPE_CHECKING, which is false at runtime, so it costs no import.
+if TYPE_CHECKING:
+    from app.services.incident_timeline import TimelineAlert
 
 
 def _as_the_lake_writer_stores_it(ingest_id: str) -> uuid.UUID:
@@ -172,6 +179,8 @@ def lake():
 
 
 def _alert(ids: list[str], *, minutes: int = 10, stage: str | None = None) -> TimelineAlert:
+    from app.services.incident_timeline import TimelineAlert
+
     return TimelineAlert(
         id=uuid.uuid4(),
         title="Credential dumping via LSASS access",
@@ -190,6 +199,7 @@ def _alert(ids: list[str], *, minutes: int = 10, stage: str | None = None) -> Ti
 
 async def _timeline(alerts, tenant=TENANT):  # noqa: ANN001, ANN202
     from app.db.clickhouse import execute_lake_query
+    from app.services.incident_timeline import build_incident_timeline
 
     return await build_incident_timeline(alerts=alerts, tenant_id=tenant, lake_query=execute_lake_query)
 

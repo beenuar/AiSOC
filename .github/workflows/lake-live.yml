@@ -181,7 +181,15 @@ jobs:
             echo '::error title=timeline-join::the timeline suite passed without deriving the lake event id, so it is not testing the join'
             exit 1
           fi
-          grep -F 'lsass_access' "$RUNNER_TEMP/neg.log"
+          # Which test broke is the evidence, not merely that something did.
+          # Without the derivation the opaque ingest id reaches ClickHouse as
+          # a non-UUID string, the read fails closed (`lake_read_failed`) and
+          # the timeline honestly reports no events — so the seeded action
+          # name never appears in the log at all, and grepping for it asserted
+          # nothing. Name the case that must fail instead.
+          cat "$RUNNER_TEMP/neg.log"
+          grep -F 'FAILED' "$RUNNER_TEMP/neg.log" \
+            | grep -F 'test_an_opaque_ingest_id_finds_its_event_through_the_derivation'
 
       # Fix-pass 4.4: the usage meter that counts lake rows. Its offline
       # cases drive a stand-in for `execute_lake_query`, which proves the
