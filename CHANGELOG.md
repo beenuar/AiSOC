@@ -9,6 +9,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A case now renders one chronology of the incident** — every linked alert
+  at its own `event_time`, interleaved with the raw lake events that
+  produced it, oldest first, each event naming the alert it belongs to and
+  each alert carrying its kill-chain stage
+  (`GET /api/v1/cases/{case_id}/incident-timeline`). Every other timeline in
+  the product shows a single granularity: six workflow events on the alert
+  rail, status changes and ingest-time "Alert linked" markers on the case
+  stream, relevance-ranked alerts on the attack chain, five metadata rows in
+  the investigator report. The links to join them had been in place all
+  along and nothing walked them. The join crosses an id the lake
+  **rewrites** — `LakeWriter` stores a UUIDv5 derivation of any ingest id
+  that is not already a UUID, while the alert keeps the ingest id verbatim —
+  so the reader mirrors that derivation; comparing the stored strings
+  matches nothing for every non-UUID producer, and matches it silently, as
+  an empty result indistinguishable from a quiet estate. Honest about both
+  ways it can be incomplete: a deployment without ClickHouse reports
+  `events_available: false` with the reason (distinct from a lake that
+  answered "none"), and an alert at the 200-id provenance ceiling sets
+  `source_event_ids_truncated`. Gated against real ClickHouse, with a
+  negative control that removes the derivation and watches the opaque-id
+  cases fail.
+
 - **Fusion's incident and attack-story grouping is now durable** (migration
   181). `Correlator.correlate` assigned an incident id that lived in Redis
   under a one-hour TTL, and `AttackChainGrouper` assigned a kill-chain story

@@ -51,6 +51,7 @@ from starlette.concurrency import run_in_threadpool
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
+from app.db.clickhouse import execute_lake_query
 from app.models.investigation import (
     InvestigationArtifact,
     InvestigationEvent,
@@ -75,6 +76,7 @@ from app.services.case_postmortem import build_case_postmortem
 from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
+from app.services.incident_timeline import TimelineAlert, build_incident_timeline
 from app.services.investigation_pdf import (
     PDF_UNAVAILABLE_DETAIL,
     InvestigationPdfUnavailable,
@@ -1526,6 +1528,94 @@ async def case_timeline(case_id: str, db: DBSession, user: CaseReader) -> Timeli
 
     events.sort(key=lambda e: e.timestamp)
     return TimelineResponse(events=events)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Incident timeline
+#
+# The route above is an *activity* stream: who changed what, and a marker per
+# linked alert stamped at the time the alert row was created. This one is the
+# incident itself — every linked alert at its own `event_time`, interleaved
+# with the raw lake events that produced it, oldest first.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{case_id}/incident-timeline",
+    summary="Chronology of a case: its alerts and the events behind them",
+)
+async def case_incident_timeline(case_id: str, db: DBSession, user: CaseReader) -> dict[str, Any]:
+    """Return one chronological view of everything this case observed.
+
+    Alerts come from the case's own `alert_ids`, read tenant-scoped, and are
+    ordered by `event_time` — when the activity happened, not when the row
+    was written. Each alert's `source_event_ids` are resolved against the
+    ClickHouse lake through the same identity the lake writer stamps.
+
+    The honest states matter more than the happy path here. A deployment on
+    the core profile ships no ClickHouse at all, so `events_available` is
+    false with a reason rather than an empty event list that would read as a
+    quiet estate; and an alert sitting on the 200-id provenance ceiling sets
+    `source_event_ids_truncated`, because the events shown are then known
+    not to be all of them.
+    """
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    case_row = (
+        await db.execute(
+            text("SELECT id, alert_ids FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
+        )
+    ).fetchone()
+    if not case_row:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    alert_ids = [str(a) for a in (case_row.alert_ids or []) if a]
+    alerts: list[TimelineAlert] = []
+    if alert_ids:
+        rows = (
+            await db.execute(
+                text(
+                    """
+                    SELECT id, title, severity, event_time, created_at, status,
+                           incident_id, chain_id, chain_position, chain_stage,
+                           source_event_ids, connector_type, mitre_techniques
+                      FROM alerts
+                     WHERE tenant_id = CAST(:tenant_id AS uuid)
+                       AND id = ANY(CAST(:ids AS uuid[]))
+                     ORDER BY COALESCE(event_time, created_at)
+                    """
+                ).bindparams(tenant_id=str(user.tenant_id), ids=alert_ids)
+            )
+        ).fetchall()
+        for row in rows:
+            alerts.append(
+                TimelineAlert(
+                    id=row.id,
+                    title=row.title or "(untitled alert)",
+                    severity=str(row.severity or "info"),
+                    # `event_time` is nullable on old rows; the creation time
+                    # is the only other thing we actually know.
+                    event_time=row.event_time or row.created_at,
+                    status=str(row.status or "new"),
+                    incident_id=row.incident_id,
+                    chain_id=row.chain_id,
+                    chain_position=row.chain_position,
+                    chain_stage=row.chain_stage,
+                    source_event_ids=[str(e) for e in (row.source_event_ids or [])],
+                    connector_type=row.connector_type,
+                    mitre_techniques=[str(t) for t in (row.mitre_techniques or [])],
+                )
+            )
+
+    timeline = await build_incident_timeline(
+        alerts=alerts,
+        tenant_id=user.tenant_id,
+        lake_query=execute_lake_query,
+    )
+    payload = timeline.to_dict()
+    payload["case_id"] = str(cid)
+    return payload
 
 
 # ─────────────────────────────────────────────────────────────────────────────
