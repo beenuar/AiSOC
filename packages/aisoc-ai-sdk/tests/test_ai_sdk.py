@@ -71,11 +71,13 @@ def test_masked_mode_removes_secret_shapes():
     assert set(result.redacted_kinds) == {"aws_access_key", "openai_key"}
 
 
-@pytest.mark.parametrize("newline", ["\n", "\r\n", "\\n"])
-@pytest.mark.parametrize(
+# pytest's mark decorators are untyped in this environment's stubs; the
+# targeted ignores keep the mypy baseline exact rather than widening it.
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\\n"])  # type: ignore[untyped-decorator]
+@pytest.mark.parametrize(  # type: ignore[untyped-decorator]
     "kind", ["RSA PRIVATE KEY", "EC PRIVATE KEY", "OPENSSH PRIVATE KEY", "PRIVATE KEY", "ENCRYPTED PRIVATE KEY", "PGP PRIVATE KEY BLOCK"]
 )
-def test_masked_mode_removes_the_private_key_with_its_header(kind: str, newline: str):
+def test_masked_mode_removes_the_private_key_with_its_header(kind: str, newline: str) -> None:
     """The header is not the secret. The key body under it is."""
     body = newline.join(["MII" + "a1B+" * 15, "c2/D" * 16, "e3F=="])
     key = f"-----BEGIN {kind}-----{newline}{body}{newline}-----END {kind}-----"
@@ -84,7 +86,7 @@ def test_masked_mode_removes_the_private_key_with_its_header(kind: str, newline:
     assert result.redacted_kinds == ("private_key",)
 
 
-def test_masked_mode_removes_a_private_key_with_pem_headers():
+def test_masked_mode_removes_a_private_key_with_pem_headers() -> None:
     key = (
         "-----BEGIN RSA PRIVATE KEY-----\nProc-Type: 4,ENCRYPTED\nDEK-Info: AES-128-CBC,0A1B\n\n"
         + "a1B+" * 16
@@ -93,7 +95,7 @@ def test_masked_mode_removes_a_private_key_with_pem_headers():
     assert redact(key, CaptureMode.MASKED).content == "[redacted:private_key]"
 
 
-def test_masked_mode_removes_a_cut_off_private_key_but_not_the_text_around():
+def test_masked_mode_removes_a_cut_off_private_key_but_not_the_text_around() -> None:
     """A prompt truncated by a token limit has no END line."""
     key = "-----BEGIN PRIVATE KEY-----\n" + "a1B+" * 16 + "\n" + "c2/D" * 16
     assert redact(key, CaptureMode.MASKED).content == "[redacted:private_key]"
