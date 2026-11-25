@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.6"
-date: "2026-11-24"
+version: "v1.7"
+date: "2026-11-25"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -666,6 +666,25 @@ console name the failure rather than invent an investigation — the same
 discipline the CORE attack-graph `503` above shows.*
 
 ---
+
+### Updates in v23.7.1 and v23.7.2
+
+Two same-day security patches followed the capability release, both from
+community reports and both verified live in each direction before
+publishing: the archive tier's tenant-supplied S3 endpoint is now
+resolve-and-classified before ClickHouse dials it (link-local, loopback
+and reserved ranges always refused; RFC1918 behind the operator's
+`AISOC_ARCHIVE_ALLOW_PRIVATE_ENDPOINTS`), and the osctrl/FleetDM action
+clients refuse HTTP redirects outright — a redirect is a second URL the
+dispatcher's SSRF guard never validated.
+
+Investigation reports now export to PDF **from persisted artifacts**: a
+completed run's report survives an agents restart, the export verifies
+the run belongs to the case in the authenticated tenant, and the
+renderer loads no external resources — images and iframes in evidence
+cannot turn an export into a network request or file read. The agents
+image ships WeasyPrint's native libraries, which its PDF routes had
+always needed.
 
 ### New capability surfaces (v23.7.0)
 

@@ -126,9 +126,10 @@ detects an attack. **Two** rules still cannot fire — down from 119, because a 
 stopped being counted as executable — and both are waiting on a behavioural baseline. The ratchet
 only moves down. ([why 1,362 were refused](docs/detections/sigma-compilation.md))
 
-**Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry behind
-it and labels the rest *uncited* rather than dropping them, and any investigation exports as a **signed
-evidence bundle** — byte-identical, prompts as digests, OCSF 1.9.0. ([how](docs/architecture/evidence-bundles.md))
+**Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry behind it and labels the rest *uncited*, and any investigation exports as a **signed evidence bundle** — byte-identical, prompts as digests, OCSF 1.9.0. ([how](docs/architecture/evidence-bundles.md))
+
+**Beyond detection: the whole operating loop (new in v23.7).** Eight capability programs, each gated by tests with recorded negative controls: **your SIEM's own detection content managed from here** (versioned inventory, drift hashes, outcome-attributed rule health with honest denominators, governed tuning) · **a long-term archive tier** (open-format Parquet, rehydration, portability, scoped legal holds) · **phishing operations** (vendor alerts and user reports in one campaign model, strict three-outcome recipient scoping, BEC signals as evidence never verdicts) · **DLP and insider risk** (vendor-neutral findings, an expiring watchlist, governed share-revocation across four estates) · **AI-runtime security** (session sequences, runaway sessions, MCP drift, shadow AI) · **bounded hunting campaigns** (closed-schema plans; the model never writes query text) · **resolution over escalation** (owners, next-action clocks, policy-gated `resolved`) · **a co-managed operating model** (shift handoffs, a narrow-only responsibility matrix, escalation routing).
+Completed actions **undo** through a governed mirror of forward dispatch, and investigation PDFs export from **persisted artifacts**, surviving restarts. Index: [docs/roadmap/capability-program.md](docs/roadmap/capability-program.md).
 
 **Where state lives.** Twenty service trees (14 Python, 4 Go, 2 TypeScript) behind the Next.js console. Kafka is the
 spine; Postgres holds the alerts, cases and the tamper-evident audit chain; Redis and Qdrant are in CORE too, and
@@ -166,11 +167,10 @@ thing in a fresh install that is neither synthetic nor yours.
 
 The published numbers carry their own provenance. ([methodology](https://beenuar.github.io/AiSOC/docs/benchmark) · [real vs synthetic data](apps/docs/docs/concepts/real-vs-synthetic.md))
 
-- **Every verdict scorecard names the model that actually served it** — gateway-attested or self-reported, with an explicit provenance status. A run with missing attribution, zero real calls or a deterministic fallback cannot be advertised as a named model's performance, and a measurement that cannot be bound to an attributed call cannot authorize closures.
-- **Denominators are published, and the uncomfortable direction wins.** Full-cohort recall keeps abstentions and failures in the malicious denominator; closure claims ship with their contamination rate; alert reduction has three labelled figures (75.3% legacy grouping, 33.3% production key, 24.5% on a detection-shaped cohort after a missing identifier was fixed to *narrow* the group instead of widening it). Unmeasured reads *not measured*, never `0`.
-- **The reflex path is observable** — nine named stages from queue delay to verification, and a decision contract carrying supporting evidence, contradictory evidence, missing prerequisites and the escalation reason.
-- **Replay is time-frozen; re-hunting is labelled.** Historical replay enforces evidence cutoffs in the retrieval queries (never by prompt), discloses the model-knowledge limit, and cannot execute real actions — the mutation boundary is the write adapter. Applying new intelligence to old telemetry is a distinct, rehearsable mode, and its discoveries are never counted as predictions at the original event time.
-- **Model suitability is per task.** The matrix grades each configured model on the same locked evidence against a deterministic baseline floor (balanced accuracy exactly 0.250); unfunded rows read *not measured*, with one-command reproduction against any local OpenAI-compatible endpoint.
+- **Every verdict scorecard names the model that actually served it** — gateway-attested, with an explicit provenance status; zero real calls or a deterministic fallback can never read as a model's performance.
+- **Denominators are published, and the uncomfortable direction wins** — full-cohort recall keeps abstentions in the malicious denominator; alert reduction ships three labelled figures; unmeasured reads *not measured*, never `0`.
+- **Replay is time-frozen; re-hunting is labelled** — evidence cutoffs enforced in the retrieval queries, the mutation boundary at the write adapter, and new-intel discoveries never counted as predictions at the original event time.
+- **Model suitability is per task** — each configured model graded on locked evidence against a deterministic floor, with one-command reproduction against any local OpenAI-compatible endpoint.
 
 ## AI agents
 

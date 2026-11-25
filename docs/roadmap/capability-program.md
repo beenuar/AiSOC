@@ -10,19 +10,22 @@ should need them.
 | Id | Workstream | Shipped so far |
 |----|------------|----------------|
 | WS1 | SIEM detection engineering on the customer's SIEM | WS1.1 — `sync_detection_rule` reaches the vendor it names, verifies by read-back and rolls back ([#1998](https://github.com/beenuar/AiSOC/pull/1998)) |
-| WS2 | Long-term lake: archive, rehydration, portability, legal holds | in flight at the time of writing ([#2007](https://github.com/beenuar/AiSOC/pull/2007)) |
-| WS3 | Phishing pipeline | in flight at the time of writing ([#2011](https://github.com/beenuar/AiSOC/pull/2011)) |
-| WS4 | DLP and insider risk | WS4.1 — the normalized DLP finding, one vocabulary over three vendors ([#2003](https://github.com/beenuar/AiSOC/pull/2003)) · WS4.2 — the M365 audit `DLP.All` per-instance switch ([#2004](https://github.com/beenuar/AiSOC/pull/2004)) · WS4.4 — the insider watchlist as a real control: expiry, elevation, departure review, the HR door ([#2005](https://github.com/beenuar/AiSOC/pull/2005)) · WS4.5 in flight ([#2006](https://github.com/beenuar/AiSOC/pull/2006)) |
-| WS5 | AI-security runtime | in flight at the time of writing ([#2009](https://github.com/beenuar/AiSOC/pull/2009)) |
-| WS6 | Hunting campaigns | in flight at the time of writing ([#2010](https://github.com/beenuar/AiSOC/pull/2010)) |
+| WS2 | Long-term lake: archive, rehydration, portability, legal holds | Shipped ([#2007](https://github.com/beenuar/AiSOC/pull/2007)): Parquet archive exports with manifests and verification, bounded rehydration into scratch tables, portability exports, and scoped legal holds that exempt a user/host/IP's rows while the rest of the tenant purges. Hardened same-day against endpoint SSRF (GHSA-98q5-87mq-9979, v23.7.1) |
+| WS3 | Phishing pipeline | Shipped ([#2011](https://github.com/beenuar/AiSOC/pull/2011)): the vendor-alert intake door joining user reports in the same campaigns, three-outcome recipient scoping, BEC signals as sourced evidence, policy-gated reporter feedback, and the org-level gateway block with readback verification |
+| WS4 | DLP and insider risk | WS4.1 — the normalized DLP finding, one vocabulary over three vendors ([#2003](https://github.com/beenuar/AiSOC/pull/2003)) · WS4.2 — the M365 audit `DLP.All` per-instance switch ([#2004](https://github.com/beenuar/AiSOC/pull/2004)) · WS4.4 — the insider watchlist as a real control: expiry, elevation, departure review, the HR door ([#2005](https://github.com/beenuar/AiSOC/pull/2005)) · WS4.5 — `revoke_file_share` across Google Drive, Microsoft Graph, Box and Dropbox, verified and rollback-capable ([#2006](https://github.com/beenuar/AiSOC/pull/2006)) |
+| WS5 | AI-security runtime | Shipped ([#2009](https://github.com/beenuar/AiSOC/pull/2009)): session-scoped sequences, runaway-session detection, refused-asset alerts that never overwrite a judged score, MCP manifest drift, shadow-AI sightings, counts-only prompt classes |
+| WS6 | Hunting campaigns | Shipped ([#2010](https://github.com/beenuar/AiSOC/pull/2010)): budgeted closed-schema campaign plans, approval-gated selection recorded with reasons, lead verification under capped investigator runs, draft detection proposals through the governed path |
 | WS7 | Resolution, not escalation | WS7.1 — the evidence-backed case root-cause record ([#1999](https://github.com/beenuar/AiSOC/pull/1999)) · WS7.2 — the resolution contract gating `resolved` ([#2000](https://github.com/beenuar/AiSOC/pull/2000)) · WS7.3 — five investigator strategies for the reference-service surfaces ([#2001](https://github.com/beenuar/AiSOC/pull/2001)) · WS7.4 — case ownership and the attention feed ([#2002](https://github.com/beenuar/AiSOC/pull/2002)) |
-| WS8 | Team/provider operating model | in flight at the time of writing ([#2008](https://github.com/beenuar/AiSOC/pull/2008)) |
+| WS8 | Team/provider operating model | Shipped ([#2008](https://github.com/beenuar/AiSOC/pull/2008)): shift handoffs from real open work, the narrow-only responsibility matrix, per-tenant escalation routing, scheduled service reviews |
 
 Phase 0 — the baseline gap verification plus the neutral-reference gate
 entry — merged as [#1997](https://github.com/beenuar/AiSOC/pull/1997).
-Further WS1 sub-items are in flight as
-[#2014](https://github.com/beenuar/AiSOC/pull/2014). Rows marked in flight
-get their shipped descriptions here when their pull requests merge.
+WS1.2–1.6 (content inventory with drift hashes, outcome-attributed rule
+health, outbound translation, the governed tuning arm) shipped as
+[#2014](https://github.com/beenuar/AiSOC/pull/2014), with the refresh-500
+and separation-of-duties fixes in
+[#2069](https://github.com/beenuar/AiSOC/pull/2069). The whole program
+shipped in release v23.7.0; every row above is complete.
 
 An earlier, unrelated program used the same `WS<n>` shorthand for the
 two-way SIEM/ITSM integration work (bidirectional ticketing, push
