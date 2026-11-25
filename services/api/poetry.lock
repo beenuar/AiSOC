@@ -2313,6 +2313,22 @@ lingua = ["lingua (>=4.16)"]
 testing = ["pytest"]
 
 [[package]]
+name = "markdown"
+version = "3.11.3"
+description = "Python implementation of John Gruber's Markdown."
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "markdown-3.11.3-py3-none-any.whl", hash = "sha256:e1a31a112232504d753e5c01bb8c2de90d3f0ba986b063e10770cf7695b09e73"},
+    {file = "markdown-3.11.3.tar.gz", hash = "sha256:81eb91631dc97ad1efbc76019ef0f80fe90ca49ddf81546752d79989c3bfff3e"},
+]
+
+[package.extras]
+docs = ["ghp-import (==2.1.0)", "justhtml (==3.11.2)", "mdx_gh_links (==0.4)", "mkdocstrings (==1.0.6)", "mkdocstrings-python (==1.16.8)", "pygments (==2.21.0)", "pymdown-extensions (==11.0.2)", "zensical (==0.0.62)"]
+testing = ["coverage", "pyyaml"]
+
+[[package]]
 name = "markupsafe"
 version = "3.0.3"
 description = "Safely add untrusted strings to HTML/XML markup."
@@ -4617,4 +4633,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "52bc7f0bff439cac30159eca424b30b73f450d2043ba2261b12b6dfb74cbe8eb"
+content-hash = "eb631e81ca8bb9392d3a148ac74c6ea9939aac18717d0b95278acae0d38f3d4c"
