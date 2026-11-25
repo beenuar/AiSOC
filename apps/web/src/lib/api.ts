@@ -3093,8 +3093,8 @@ export const casesApi = {
   downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
     const resp = await apiFetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`);
     if (!resp.ok) {
-      const err = await resp.text().catch(() => resp.statusText);
-      throw new Error(err);
+      const err = await resp.text().catch(() => "");
+      throw new ApiError(apiErrorDetail(err) ?? `PDF download failed (${resp.status})`, resp.status, err);
     }
     const blob = await resp.blob();
     const url = URL.createObjectURL(blob);

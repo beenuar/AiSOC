@@ -47,6 +47,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import AliasChoices, BaseModel, Field
 from sqlalchemy import select, text
+from starlette.concurrency import run_in_threadpool
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
@@ -74,6 +75,11 @@ from app.services.case_postmortem import build_case_postmortem
 from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
+from app.services.investigation_pdf import (
+    PDF_UNAVAILABLE_DETAIL,
+    InvestigationPdfUnavailable,
+    render_investigation_pdf,
+)
 from app.services.related_cases import ObservableKind, RelatedCasesResponse, find_related_cases
 from app.services.semantic_memory import remember_closed_case
 
@@ -2678,6 +2684,18 @@ async def case_auto_postmortem(
     return postmortem
 
 
+def _pdf_agents_error(response: httpx.Response) -> HTTPException:
+    """Forward the upstream detail without encoding a JSON object inside it."""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+    detail = payload.get("detail") if isinstance(payload, dict) else None
+    if not isinstance(detail, str) or not detail.strip():
+        detail = response.text or f"PDF request failed ({response.status_code})"
+    return HTTPException(status_code=response.status_code, detail=detail)
+
+
 @router.get(
     "/{case_id}/investigations/{run_id}/report.pdf",
     summary="Download investigation PDF report",
@@ -2685,25 +2703,102 @@ async def case_auto_postmortem(
 async def case_investigation_pdf(
     case_id: str,
     run_id: str,
+    db: DBSession,
     user: CaseReader,
 ) -> Response:
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    # UUID resolution alone does not establish that the case exists or is
+    # owned by this tenant. Only the actual row can supply an accepted alias.
+    case = (
+        await db.execute(
+            text("SELECT case_number FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id"),
+            {"id": cid, "tenant_id": user.tenant_id},
+        )
+    ).first()
+    if case is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    case_ids = {str(cid), case.case_number}
+    filename = f"case-{_safe_filename_segment(case_id)}-{_safe_filename_segment(run_id)}.pdf"
+
+    ledger_run = None
+    if _looks_like_uuid(run_id):
+        ledger_run = (
+            await db.execute(
+                select(InvestigationRun).where(
+                    InvestigationRun.tenant_id == user.tenant_id,
+                    InvestigationRun.id == uuid.UUID(run_id),
+                )
+            )
+        ).scalar_one_or_none()
+    if ledger_run is not None:
+        if ledger_run.case_id not in case_ids:
+            raise HTTPException(status_code=404, detail="Run not found")
+        if ledger_run.status in {"completed", "closed"}:
+            report = (
+                await db.execute(
+                    select(InvestigationArtifact.content)
+                    .where(
+                        InvestigationArtifact.tenant_id == user.tenant_id,
+                        InvestigationArtifact.run_id == ledger_run.id,
+                        InvestigationArtifact.kind == "report_md",
+                    )
+                    .order_by(InvestigationArtifact.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if report and report.strip():
+                try:
+                    pdf = await run_in_threadpool(render_investigation_pdf, report, case_id=str(cid))
+                except InvestigationPdfUnavailable as exc:
+                    raise HTTPException(status_code=503, detail=PDF_UNAVAILABLE_DETAIL) from exc
+                return Response(
+                    content=pdf,
+                    media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+                )
+
+    # Persistence is best-effort. A warm completed run can still have no
+    # saved report, or a stale running ledger row after a failed status write.
+    # Independently verify its case and completion before proxying its PDF.
     safe_run_id = quote(run_id, safe="")
+    tenant_headers = {"X-AiSOC-Tenant-ID": str(user.tenant_id)}
+    meta = await _agents_proxy(
+        "GET",
+        f"/api/v1/investigations/{safe_run_id}",
+        headers=tenant_headers,
+    )
+    if meta.status_code >= 400:
+        if meta.status_code == 404 and ledger_run is not None:
+            if ledger_run.status not in {"completed", "closed"}:
+                raise HTTPException(status_code=409, detail="Report not yet available: investigation is not complete")
+            raise HTTPException(status_code=404, detail="Report not found")
+        raise _pdf_agents_error(meta)
+    try:
+        metadata = meta.json()
+    except ValueError as exc:
+        raise HTTPException(status_code=502, detail="Invalid investigation metadata from agents") from exc
+    if not isinstance(metadata, dict):
+        raise HTTPException(status_code=502, detail="Invalid investigation metadata from agents")
+    if not isinstance(metadata.get("case_id"), str) or metadata["case_id"] not in case_ids:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if not isinstance(metadata.get("status"), str):
+        raise HTTPException(status_code=502, detail="Invalid investigation metadata from agents")
+    if metadata.get("status") not in {"completed", "closed"}:
+        raise HTTPException(status_code=409, detail="Report not yet available: investigation is not complete")
     resp = await _agents_proxy(
         "GET",
         f"/api/v1/investigations/{safe_run_id}/report.pdf",
-        headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)},
+        headers=tenant_headers,
     )
     if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    safe_case_id = _safe_filename_segment(case_id)
-    safe_run_id_filename = _safe_filename_segment(run_id)
+        raise _pdf_agents_error(resp)
     return Response(
         content=resp.content,
         media_type=resp.headers.get("content-type", "application/pdf"),
         headers={
             "Content-Disposition": resp.headers.get(
                 "content-disposition",
-                f'attachment; filename="case-{safe_case_id}-{safe_run_id_filename}.pdf"',
+                f'attachment; filename="{filename}"',
             ),
         },
     )
