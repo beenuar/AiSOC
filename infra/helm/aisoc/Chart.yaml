@@ -35,13 +35,13 @@ type: application
 # gate refuses.
 # 7.23.0: the same appVersion-only move, carrying v23.4.0.
 # 7.26.0: the same appVersion-only move, carrying v23.7.0.
-version: 7.26.1
+version: 7.26.2
 # Used as the image tag wherever a `tag:` in values.yaml is left empty, so
 # it has to be a tag the registry actually holds — it read "5.2.0", which
 # exists for no image, so every pod of a default install would have gone to
 # ImagePullBackOff. scripts/check_published_images.py resolves it the same
 # way the templates do and fails when it names nothing.
-appVersion: "v23.7.1"
+appVersion: "v23.7.2"
 
 keywords:
   - security
