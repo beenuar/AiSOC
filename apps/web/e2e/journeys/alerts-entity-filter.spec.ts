@@ -326,6 +326,31 @@ test("a delayed saved default cannot replace an entity filter the analyst alread
   );
 });
 
+test("a delayed saved default cannot replace an entity draft before Apply", async ({ page }) => {
+  let releaseDefault = () => {};
+  const savedViewsGate = new Promise<void>((resolve) => { releaseDefault = resolve; });
+  await mockBackend(page, { savedViewsGate });
+  await page.goto("/alerts");
+  await page.getByRole("tab", { name: "Alerts", exact: true }).click();
+  const entityType = page.getByLabel("Entity type", { exact: true });
+  const entityValue = page.getByLabel("Entity value", { exact: true });
+  await entityType.selectOption("host");
+  await entityValue.fill(HOST);
+
+  releaseDefault();
+  await expect(page.getByTestId("saved-view-chip-entity-conflicting-default")).toHaveAttribute("aria-pressed", "false");
+  await expect(entityType).toHaveValue("host");
+  await expect(entityValue).toHaveValue(HOST);
+  await expect(page).toHaveURL((url) => !url.searchParams.has("entity_value") && !url.searchParams.has("severity"));
+
+  await page.getByRole("button", { name: "Apply entity filter", exact: true }).click();
+  await expect(page.getByText("Showing 25 of 30 alerts", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get("entity_type") === "host" && url.searchParams.get("entity_value") === HOST &&
+    !url.searchParams.has("severity"),
+  );
+});
+
 test("the entity drawer opens its alert queue without applying a conflicting saved default", async ({ page }) => {
   const requests = await mockBackend(page);
   await page.goto("/alerts");

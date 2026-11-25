@@ -7,9 +7,11 @@ import { ALERT_ENTITY_LABELS, isAlertEntityType } from '@/lib/alertEntityFilter'
 export function EntityAlertFilter({
   filters,
   onChange,
+  onDraftEdit,
 }: {
   filters: AlertFilters;
   onChange: (filters: AlertFilters) => void;
+  onDraftEdit: () => void;
 }) {
   const id = useId();
   const [entityType, setEntityType] = useState<AlertEntityType | ''>(filters.entityType ?? '');
@@ -20,6 +22,7 @@ export function EntityAlertFilter({
     <form
       aria-label="Filter alerts by entity"
       className="flex w-full flex-wrap items-end gap-3 border-t border-gray-800/60 pt-3"
+      onChange={onDraftEdit}
       onSubmit={(event) => {
         event.preventDefault();
         if (!value || value.length > 2048) return;

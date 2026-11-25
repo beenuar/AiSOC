@@ -206,10 +206,12 @@ function StatusBadge({ status }: { status: string }) {
 function FiltersBar({
   filters,
   onChange,
+  onEntityDraftEdit,
   total,
 }: {
   filters: AlertFilters;
   onChange: (f: AlertFilters) => void;
+  onEntityDraftEdit: () => void;
   total: number;
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
@@ -285,6 +287,7 @@ function FiltersBar({
         key={JSON.stringify([filters.entityType, filters.entityValue])}
         filters={filters}
         onChange={onChange}
+        onDraftEdit={onEntityDraftEdit}
       />
     </div>
   );
@@ -611,8 +614,9 @@ function AlertsTable({
   const checkedIds = checked.scope === entityScope ? checked.ids : new Set<string>();
   const setCheckedIds = (ids: Set<string>) => setChecked({ scope: entityScope, ids });
   // Preserve the highlight after a default writes its own URL. Until it has
-  // actually loaded, explicit filters must cancel a delayed default response.
+  // actually loaded, applied filters or an entity draft must take precedence.
   const [defaultLoaded, setDefaultLoaded] = useState(false);
+  const [entityDraftEdited, setEntityDraftEdited] = useState(false);
   const { mutate } = useSWRConfig();
 
   const toggleChecked = useCallback((id: string) => {
@@ -654,7 +658,7 @@ function AlertsTable({
       <SavedViewsBar<AlertFilters>
         viewType="alerts"
         filters={filters}
-        autoApplyDefault={autoApplyDefault || defaultLoaded}
+        autoApplyDefault={defaultLoaded || (autoApplyDefault && !entityDraftEdited)}
         onDefaultLoaded={() => setDefaultLoaded(true)}
         onApply={(applied) =>
           onFilterChange({
@@ -665,7 +669,12 @@ function AlertsTable({
         }
       />
 
-      <FiltersBar filters={filters} onChange={onFilterChange} total={total} />
+      <FiltersBar
+        filters={filters}
+        onChange={onFilterChange}
+        onEntityDraftEdit={() => setEntityDraftEdited(true)}
+        total={total}
+      />
 
       <BulkTriageBar
         selectedIds={[...checkedIds]}

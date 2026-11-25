@@ -141,6 +141,45 @@ describe('Alerts entity filter', () => {
     expect(state.filters.entityValue).toBeUndefined();
   });
 
+  it.each([
+    { name: 'type and value', entityType: 'host', entityValue: 'WS-DRAFT' },
+    { name: 'type alone', entityType: 'host', entityValue: '' },
+    { name: 'value alone', entityType: '', entityValue: 'WS-DRAFT' },
+  ])('keeps an unapplied entity draft ($name) when a default arrives', async ({ entityType, entityValue }) => {
+    window.history.replaceState(null, '', '/alerts');
+    const routerParams = new URLSearchParams();
+    const page = await AlertsPage({ searchParams: Promise.resolve({}) });
+    const tree = () => <SearchParamsContext.Provider value={routerParams}>{cloneElement(page)}</SearchParamsContext.Provider>;
+    const { rerender } = render(tree());
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Alerts' }));
+    const typeInput = () => screen.getByLabelText('Entity type');
+    const valueInput = () => screen.getByLabelText('Entity value');
+    if (entityType) await user.selectOptions(typeInput(), entityType);
+    if (entityValue) await user.type(valueInput(), entityValue);
+    expect(state.filters.entityValue).toBeUndefined();
+
+    state.savedViews = [{
+      id: 'late-default', name: 'Domain fixture', view_type: 'alerts',
+      is_default: true, filters: { entityType: 'domain', entityValue: 'saved.example' },
+    }];
+    rerender(tree());
+
+    expect(typeInput()).toHaveValue(entityType);
+    expect(valueInput()).toHaveValue(entityValue);
+    expect(state.filters.entityValue).toBeUndefined();
+    expect(new URLSearchParams(window.location.search).has('entity_value')).toBe(false);
+
+    if (entityValue) {
+      await user.click(screen.getByRole('button', { name: 'Apply entity filter' }));
+      expect(state.filters).toMatchObject({ entityType: entityType || undefined, entityValue, page: 1 });
+    }
+    await user.click(screen.getByRole('button', { name: /Domain fixture/, pressed: false }));
+    expect(typeInput()).toHaveValue('domain');
+    expect(valueInput()).toHaveValue('saved.example');
+    expect(state.filters).toMatchObject({ entityType: 'domain', entityValue: 'saved.example', page: 1 });
+  });
+
   it('still applies the saved default on an untouched queue', async () => {
     state.savedViews = [{
       id: 'default', name: 'Low severity fixture', view_type: 'alerts',
