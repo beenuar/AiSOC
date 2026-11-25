@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **SIEM-content "Refresh inventory" no longer 500s.** The refresh endpoint
+  selected connectors on a non-existent `Connector.enabled` attribute — the
+  model's flag is `is_enabled` — so every refresh raised `AttributeError` and
+  returned 500 before it could even report "no connector connected". The
+  selection moved into `siem_content.content_capable_connectors`, pinned by a
+  live test that returns only enabled Splunk/Elastic connectors and skips
+  disabled and non-content ones.
+- **SIEM-tuning proposals now record their author, so separation of duties is
+  enforced on them.** A tuning proposal (`POST /siem-content/tuning-proposals`)
+  was inserted without `proposed_by_id`. The detection-proposal promote path
+  bars the author from approving their own proposal, but that check is guarded
+  by `proposed_by_id IS NOT NULL`, so these proposals skipped it and a reviewer
+  could approve their own change to the customer's SIEM — the one surface that
+  writes detection content into the engine. The insert moved into
+  `siem_content.record_tuning_proposal`, which records the authenticated
+  author; pinned by a live test asserting the author is stored.
 - Copilot projects alert and case evidence into allowlisted summaries instead of
   forwarding raw OCSF payloads to the model. Bounded tool messages retain their
   coverage metadata, and citation sources contain only the retained evidence.

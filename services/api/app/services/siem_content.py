@@ -34,11 +34,12 @@ from datetime import UTC, datetime
 from typing import Any
 
 import httpx
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.connectors_auth import connectors_headers
+from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
 
 logger = logging.getLogger("aisoc.siem_content")
@@ -75,6 +76,24 @@ _UPSERT_SQL = text(
     RETURNING (xmax = 0) AS inserted
     """
 )
+
+
+async def content_capable_connectors(db: AsyncSession, *, tenant_id: uuid.UUID) -> list[Connector]:
+    """The tenant's enabled connectors whose type has a /content leg.
+
+    The model's flag is ``is_enabled``; the refresh endpoint once queried a
+    non-existent ``Connector.enabled`` and 500'd on every call before it could
+    report "no connector". Centralised here so the selection is tested once
+    through the real ORM.
+    """
+    result = await db.execute(
+        select(Connector).where(
+            Connector.tenant_id == tenant_id,
+            Connector.is_enabled.is_(True),
+            Connector.connector_type.in_(CONTENT_SOURCES),
+        )
+    )
+    return list(result.scalars().all())
 
 
 def content_hash(rule: dict[str, Any]) -> str:
@@ -240,3 +259,64 @@ async def rule_health(db: AsyncSession, *, tenant_id: uuid.UUID, limit: int = 20
             }
         )
     return out
+
+
+_TUNING_LANGUAGE = {"splunk": "spl", "elastic": "eql", "sentinel": "kql", "qradar": "aql"}
+
+
+async def record_tuning_proposal(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    author_id: uuid.UUID,
+    connector_type: str,
+    vendor_rule_id: str,
+    change: str,
+    rationale: str,
+    target_name: str,
+    proposed_content: str,
+) -> uuid.UUID:
+    """Record a SIEM-rule change as a DRAFT on the governed proposal path.
+
+    ``proposed_by_id`` is written so the promote path's author-is-not-approver
+    rule actually applies: that check is guarded by ``proposed_by_id IS NOT
+    NULL``, so a proposal created without an author silently skips it and a
+    reviewer could approve their own change to the SIEM. The caller commits.
+    """
+    scaffold = "\n".join(
+        [
+            f"# SIEM tuning proposal ({change}) for {connector_type} rule {vendor_rule_id!r}.",
+            f"# Target: {target_name}",
+            f"# Rationale: {rationale}",
+            "# Apply path: the governed sync_detection_rule verb (content read-back verified,",
+            "#   rollback from prior content). Nothing applies without review; the reviewer",
+            "#   cannot be this proposal's author.",
+            "",
+            proposed_content or "# (no proposed content supplied — the reviewer drafts it)",
+        ]
+    )
+    proposal_id = uuid.uuid4()
+    await db.execute(
+        text(
+            """
+            INSERT INTO detection_rule_proposals
+              (id, tenant_id, proposed_by_id, base_rule_id, name, description,
+               rule_language, rule_body, category, severity, confidence,
+               status, source, created_at, updated_at)
+            VALUES
+              (:id, :tid, :author, NULL, :name, :desc,
+               :lang, :body, 'siem-tuning', 'medium', 60,
+               'draft', 'siem-tuning', :now, :now)
+            """
+        ).bindparams(
+            id=proposal_id,
+            tid=tenant_id,
+            author=author_id,
+            name=f"tune({change}): {target_name}"[:200],
+            desc=rationale[:2000],
+            lang=_TUNING_LANGUAGE[connector_type],
+            body=scaffold,
+            now=datetime.now(UTC),
+        )
+    )
+    return proposal_id
