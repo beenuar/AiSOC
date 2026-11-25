@@ -153,7 +153,12 @@ class FleetDMClient:
     def _client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(
             verify=self._verify_tls,
-            follow_redirects=True,
+            # A redirect is a second URL the dispatcher's SSRF guard never
+            # validated (GHSA-hfgq-46wx-m6g5): the base_url is caller input,
+            # so a public host answering 302 could send this client to cloud
+            # metadata or an internal service. Same rule as saml_metadata,
+            # llm_model_discovery and hunt/from_report: never follow.
+            follow_redirects=False,
             timeout=httpx.Timeout(30.0),
         )
 

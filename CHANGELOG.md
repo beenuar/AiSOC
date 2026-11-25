@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A vendor redirect can no longer carry a live action past the SSRF guard**
+  (GHSA-hfgq-46wx-m6g5, high; reported by @Echore61). The dispatcher
+  validates a caller-supplied `base_url` before dispatch, but validation has
+  single-URL scope — and the osctrl and FleetDM clients created their HTTP
+  session with `follow_redirects=True`, so a public host answering 302 could
+  send the request to cloud metadata or an internal service the guard never
+  saw. Both clients now refuse redirects outright, the same rule every other
+  caller-URL outbound path already follows; a 3xx surfaces as an honest
+  vendor error. Pinned by tests through a real redirecting transport that
+  assert no second hop is ever made (both fail on the pre-fix tree).
+
+
 ### Fixed
 
 - Copilot projects alert and case evidence into allowlisted summaries instead of
