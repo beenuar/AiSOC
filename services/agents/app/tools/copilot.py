@@ -11,6 +11,7 @@ import json
 import math
 import os
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import quote
@@ -93,6 +94,18 @@ _EVENT_FIELDS = (
 
 def _is_scalar(value: Any) -> bool:
     return value is None or isinstance(value, str | bool | int) or (isinstance(value, float) and math.isfinite(value))
+
+
+def _evidence_values(value: Any) -> Iterator[str]:
+    """Only record values can establish an observation, not schema field names."""
+    if isinstance(value, dict):
+        for child in value.values():
+            yield from _evidence_values(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _evidence_values(child)
+    elif isinstance(value, str):
+        yield value
 
 
 def _project_record(row: dict[str, Any]) -> dict[str, Any]:
@@ -290,7 +303,11 @@ class CopilotReads:
                 break
             self._evidence_bytes += entry_bytes
             result.append(entry)
-            sources.append(EvidenceSource(ref=ref, kind=kind, text=json.dumps(projected), label=str(projected.get("title") or identifier)))
+            sources.append(
+                EvidenceSource(
+                    ref=ref, kind=kind, text="\n".join(_evidence_values(projected)), label=str(projected.get("title") or identifier)
+                )
+            )
         # The shared renderer slices at MAX_TOOL_MESSAGE_CHARS. Fit the entire
         # envelope before recording sources so coverage and citations describe
         # exactly the evidence that survives that boundary, including Unicode.
