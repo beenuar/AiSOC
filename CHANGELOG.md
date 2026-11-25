@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Fusion's incident and attack-story grouping is now durable** (migration
+  181). `Correlator.correlate` assigned an incident id that lived in Redis
+  under a one-hour TTL, and `AttackChainGrouper` assigned a kill-chain story
+  — chain id, 1-based position, stage — that rode along in `enrichments`
+  into Kafka and the narrative prose. Neither reached a column, so an hour
+  later nothing in Postgres could say which alerts belonged to one incident,
+  and the case attack-chain view had to re-derive relationships from scratch
+  with a depth-3 graph walk. `alerts` now carries `incident_id`, `chain_id`,
+  `chain_position` and `chain_stage`, all nullable because an alert that
+  joined no story genuinely has none — a position of 0 would read as a real
+  placement — with a CHECK refusing a position without a chain (verified
+  live in both directions) and two partial indexes for the tenant-scoped
+  "every alert of this incident/story, in order" reads.
+
+### Fixed
+
+- **The case attack-chain tab no longer labels a related alert "seed", nor
+  claims an order it does not render.** The API ranks chain links by
+  relevance and excludes the seed entirely — it scores "every non-seed
+  candidate" — while the view rendered that ranked array under a comment
+  saying the backend had sorted it oldest-first, and labelled row 0 "seed".
+  So the top-ranked *related* alert wore the seed's name and its real
+  distance from the seed was hidden behind that label, and a chip reading
+  "time since previous link" measured from the seed instead. Ranking still
+  chooses which alerts belong; the view now sorts them oldest-first and
+  labels each with a signed offset from the seed (`−30m` / `+45m`), which
+  needed the seed's own timestamp — published as `seed_event_time`, since
+  `dt_seconds` is an absolute distance and carries no direction. A payload
+  without it gets an unsigned "N from seed" rather than a guessed one.
+
+
 ### Fixed
 
 - **SIEM-content "Refresh inventory" no longer 500s.** The refresh endpoint

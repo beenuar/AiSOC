@@ -192,6 +192,12 @@ class AttackChain:
     """Full ranked chain returned to the API layer."""
 
     seed_alert_id: uuid.UUID
+    #: When the seed happened. ``ChainLink.dt_seconds`` is an *absolute*
+    #: distance, so without this a client knows how far a link sits from
+    #: the seed but not on which side of it — and cannot render an honest
+    #: chronology at all. The console previously papered over the gap by
+    #: labelling the top-ranked link "seed", which it never is.
+    seed_event_time: datetime
     tenant_id: uuid.UUID
     window: str
     chain: list[ChainLink]
@@ -203,6 +209,7 @@ class AttackChain:
     def to_dict(self) -> dict[str, Any]:
         return {
             "seed_alert_id": str(self.seed_alert_id),
+            "seed_event_time": self.seed_event_time.isoformat(),
             "tenant_id": str(self.tenant_id),
             "window": self.window,
             "chain": [link.to_dict() for link in self.chain],
@@ -498,6 +505,7 @@ async def compute_attack_chain(
 
     return AttackChain(
         seed_alert_id=seed.id,
+        seed_event_time=seed.event_time,
         tenant_id=tenant_id,
         window=window_label,
         chain=chain,

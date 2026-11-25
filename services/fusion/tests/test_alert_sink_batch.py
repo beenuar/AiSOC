@@ -193,6 +193,13 @@ def _fused(index: int):  # noqa: ANN202
         id=uuid4(),
         alert=alert,
         fusion_decision=FusionDecision.NEW_ALERT,
+        # Migration 181. The same reason a third time: the sink now writes
+        # fusion's incident and attack-story grouping, and a double missing
+        # either field raises inside the sink's own except clause so every
+        # row comes back FAILED. The real `FusedAlert` defaults these to
+        # None and `{}`, which is also what an uncorrelated alert carries.
+        incident_id=None,
+        enrichments={},
         confidence_score=0.5,
         confidence_label=SimpleNamespace(value="medium"),
         confidence_rationale=[],

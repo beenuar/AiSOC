@@ -3066,6 +3066,7 @@ export const casesApi = {
       tenantId: raw.tenant_id,
       window: raw.window,
       seedAlertId: raw.seed_alert_id,
+      seedEventTime: raw.seed_event_time ?? null,
       chainSignature: raw.chain_signature ?? null,
       confidence: typeof raw.confidence === "number" ? raw.confidence : 0,
       generatedAt: raw.generated_at ?? new Date().toISOString(),
@@ -5396,10 +5397,21 @@ export interface AttackChainTimeline {
   tenantId: string;
   window: string;
   seedAlertId: string;
+  /**
+   * When the seed alert happened, or null on a payload predating this
+   * field. `AttackChainLink.dtSeconds` is an absolute distance, so this is
+   * what tells a renderer which side of the seed a link falls on.
+   */
+  seedEventTime: string | null;
   chainSignature: string | null;
   /** 0..1 — substrate-level confidence in the chain reconstruction. */
   confidence: number;
   generatedAt: string;
+  /**
+   * In **relevance** order as the API ranked it (distance, time proximity,
+   * MITRE overlap), not chronological order. Use `orderChainChronologically`
+   * from `./attackChainChronology` to read it as a timeline.
+   */
   chain: AttackChainLink[];
   entityGraph: {
     nodes: AttackChainEntityNode[];
@@ -5413,6 +5425,7 @@ interface BackendAttackChainResponse {
   tenant_id: string;
   window: string;
   seed_alert_id: string | null;
+  seed_event_time?: string | null;
   chain_signature: string | null;
   confidence: number;
   generated_at: string;

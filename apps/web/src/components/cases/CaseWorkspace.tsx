@@ -38,6 +38,10 @@ import {
   graphApi,
   realtimeApi,
 } from "@/lib/api";
+import {
+  orderChainChronologically,
+  seedRelativeLabel,
+} from "@/lib/attackChainChronology";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -1790,28 +1794,37 @@ function AttackChainPanel({ caseId }: { caseId: string }) {
         </div>
       </div>
 
-      {/* Vertical timeline. Steps are already sorted by event_time on the
-          backend (oldest → newest); we render in that order so the analyst
-          reads the chain the same way the campaign actually unfolded. */}
+      {/* Vertical timeline. The API ranks these links by relevance and
+          truncates to the most relevant — that chooses *which* alerts are
+          here. Reading order is ours, so we sort oldest-first and label
+          each link with its signed distance from the seed. The seed itself
+          is never one of these rows: the backend scores every *non-seed*
+          candidate, which is why row 0 must not be labelled "seed". */}
+      <p className="mb-3 text-xs text-slate-500">
+        Ranked by relevance to the seed alert, read oldest-first. Deltas are
+        measured from the seed
+        {data.seedEventTime ? (
+          <>
+            {" "}
+            at{" "}
+            <span className="font-mono text-slate-400">
+              {new Date(data.seedEventTime).toLocaleString()}
+            </span>
+          </>
+        ) : null}
+        , which is not itself a step below.
+      </p>
       <ol className="relative space-y-3 border-l border-slate-800/60 pl-5">
-        {data.chain.map((link, index) => {
+        {orderChainChronologically(data.chain).map((link) => {
           const sevClass = severityChipClass(link.severity);
-          const isFirst = index === 0;
-          const dtMinutes = Math.round(link.dtSeconds / 60);
-          const dtLabel = isFirst
-            ? "seed"
-            : dtMinutes <= 0
-              ? `+${Math.max(1, Math.round(link.dtSeconds))}s`
-              : dtMinutes < 60
-                ? `+${dtMinutes}m`
-                : `+${(dtMinutes / 60).toFixed(1)}h`;
+          const dtLabel = seedRelativeLabel(link, data.seedEventTime);
           return (
             <li key={link.alertId} className="relative">
               {/* Dot anchored to the spine */}
               <span
                 className={clsx(
                   "absolute -left-[26px] top-2 inline-block h-2.5 w-2.5 rounded-full ring-2 ring-slate-950",
-                  isFirst ? "bg-rose-400" : "bg-slate-500"
+                  "bg-slate-500"
                 )}
               />
               <div className="rounded-xl border border-slate-800/80 bg-slate-900/40 p-4">
@@ -1826,11 +1839,6 @@ function AttackChainPanel({ caseId }: { caseId: string }) {
                       >
                         {link.severity}
                       </span>
-                      {isFirst && (
-                        <span className="inline-flex items-center rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-300 ring-1 ring-rose-500/30">
-                          seed
-                        </span>
-                      )}
                       {link.connectorType && (
                         <span className="inline-flex items-center rounded-full bg-slate-800 px-2 py-0.5 text-[10px] font-medium text-slate-400 ring-1 ring-slate-700/60">
                           {link.connectorType}
@@ -1838,7 +1846,7 @@ function AttackChainPanel({ caseId }: { caseId: string }) {
                       )}
                       <span
                         className="text-[10px] font-mono text-slate-500"
-                        title="time since previous link"
+                        title="offset from the seed alert, not from the row above"
                       >
                         Δt {dtLabel}
                       </span>
