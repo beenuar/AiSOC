@@ -18,6 +18,7 @@ from urllib.parse import quote
 import httpx
 
 from app.api.copilot_grounding import EvidenceSource
+from app.prompting.tool_results import MAX_TOOL_MESSAGE_CHARS
 from app.tools.registry import Tool, ToolRegistry
 
 MAX_RESPONSE_BYTES = 256_000
@@ -37,33 +38,106 @@ _RECORD_KEYS = (
     "rule_id",
     "rule_name",
     "connector_type",
-    "entities",
-    "affected_hosts",
-    "affected_ips",
-    "affected_users",
-    "mitre_techniques",
     "ai_summary",
-    "raw_event",
     "summary",
     "entity_type",
     "entity_value",
     "score",
     "alert_count",
-    "contributing_alerts",
-    "severities",
-    "contributors",
+)
+_LIST_KEYS = ("affected_hosts", "affected_ips", "affected_users", "mitre_techniques", "contributing_alerts")
+_OBJECT_LIST_KEYS = {
+    "entities": ("type", "value"),
+    "contributors": ("alert_id", "severity", "detection", "points", "at", "host"),
+}
+# Keep useful normalized facts from detail responses. Arbitrary vendor data,
+# raw logs, request bodies and headers are not model evidence. A key denylist
+# or a different string format would still forward those opaque payloads.
+_EVENT_FIELDS = (
+    "device.name",
+    "device.hostname",
+    "device.ip",
+    "src_endpoint.ip",
+    "src_endpoint.hostname",
+    "src_endpoint.port",
+    "dst_endpoint.ip",
+    "dst_endpoint.hostname",
+    "dst_endpoint.port",
+    "actor.user.name",
+    "actor.user.uid",
+    "finding.uid",
+    "finding.title",
+    "finding.desc",
+    "rule.id",
+    "rule.description",
+    "activity.action",
+    "activity.outcome",
+    "activity.actor.kind",
+    "activity.actor.name",
+    "activity.actor.id",
+    "activity.actor.on_behalf_of",
+    "activity.resource.type",
+    "activity.resource.id",
+    "activity.resource.name",
+    "activity.resource.owner",
+    "activity.location.ip",
+    "activity.location.country",
+    "activity.location.country_code",
+    "activity.location.city",
+    "activity.location.asn",
+    "activity.location.as_org",
+    "activity.location.ip_class",
+    "activity.location.device",
 )
 
 
-def _bounded(value: Any, depth: int = 0) -> Any:
+def _is_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, str | bool | int) or (isinstance(value, float) and math.isfinite(value))
+
+
+def _project_record(row: dict[str, Any]) -> dict[str, Any]:
+    """Allowlisted summaries; never stringify an unexpected nested object."""
+    selected = {key: row[key] for key in _RECORD_KEYS if key in row and _is_scalar(row[key])}
+    for key in _LIST_KEYS:
+        if isinstance(row.get(key), list):
+            selected[key] = [value for value in row[key] if _is_scalar(value)]
+    for key, fields in _OBJECT_LIST_KEYS.items():
+        if isinstance(row.get(key), list):
+            selected[key] = [
+                {field: item[field] for field in fields if field in item and _is_scalar(item[field])}
+                for item in row[key]
+                if isinstance(item, dict)
+            ]
+    severities = row.get("severities")
+    if isinstance(severities, dict):
+        selected["severities"] = {
+            key: severities[key]
+            for key in ("info", "low", "medium", "high", "critical")
+            if isinstance(severities.get(key), int | float) and math.isfinite(severities[key])
+        }
+    raw_event = row.get("raw_event")
+    if isinstance(raw_event, dict):
+        facts: dict[str, Any] = {}
+        for path in _EVENT_FIELDS:
+            value: Any = raw_event
+            for part in path.split("."):
+                value = value.get(part) if isinstance(value, dict) else None
+            if value is not None and _is_scalar(value):
+                facts[path] = value
+        if facts:
+            selected["event_summary"] = facts
+    return selected
+
+
+def _bounded(value: Any, depth: int = 0, *, max_chars: int = 2000, max_items: int = MAX_RECORDS) -> Any:
     if depth >= 5:
         return "[truncated]"
     if isinstance(value, str):
-        return value[:2000] + (" [truncated]" if len(value) > 2000 else "")
+        return value[:max_chars] + (" [truncated]" if len(value) > max_chars else "")
     if isinstance(value, list):
-        return [_bounded(v, depth + 1) for v in value[:MAX_RECORDS]]
+        return [_bounded(v, depth + 1, max_chars=max_chars, max_items=max_items) for v in value[:max_items]]
     if isinstance(value, dict):
-        return {str(k): _bounded(v, depth + 1) for k, v in list(value.items())[:30]}
+        return {str(k): _bounded(v, depth + 1, max_chars=max_chars, max_items=max_items) for k, v in list(value.items())[:40]}
     return value
 
 
@@ -175,32 +249,54 @@ class CopilotReads:
     def _records(self, operation: str, kind: str, rows: list[dict[str, Any]], **coverage: Any) -> dict[str, Any]:
         result: list[dict[str, Any]] = []
         sources: list[EvidenceSource] = []
-        truncated = len(rows) > MAX_RECORDS
-        for row in rows[:MAX_RECORDS]:
-            projected = {key: _bounded(row[key]) for key in _RECORD_KEYS if key in row}
-            truncated |= any(projected[k] != row[k] for k in projected)
-            identifier = row.get("id") if kind != "entity_risk" else f"{row.get('entity_type')}:{row.get('entity_value')}"
-            if not identifier:
-                return self._unavailable(operation, "The API returned a record without an identifier.")
-            ref = f"{kind}:{identifier}"
-            entry = {"ref": ref, **projected}
-            entry_bytes = len(json.dumps(entry, ensure_ascii=False).encode())
-            if self._evidence_bytes + entry_bytes > MAX_EVIDENCE_BYTES:
-                truncated = True
-                break
-            self._evidence_bytes += entry_bytes
-            result.append(entry)
-            sources.append(EvidenceSource(ref=ref, kind=kind, text=json.dumps(projected), label=str(row.get("title") or identifier)))
-        self.sources.extend(sources)
-        self.calls.append({"tool": operation, "status": "ok", "records": len(result), "truncated": truncated})
-        return {
+        payload: dict[str, Any] = {
             "available": True,
             "outcome": "ok",
             "records": result,
-            "truncated": truncated,
+            "truncated": len(rows) > MAX_RECORDS,
             "retrieved_at": datetime.now(UTC).isoformat(),
+            "evidence_scope": "Allowlisted record summaries and event facts only; raw payloads are omitted.",
             **coverage,
         }
+        for row in rows[:MAX_RECORDS]:
+            selected = _project_record(row)
+            identifier = row.get("id") if kind != "entity_risk" else f"{row.get('entity_type')}:{row.get('entity_value')}"
+            if not isinstance(identifier, str) or not identifier:
+                return self._unavailable(operation, "The API returned a record without an identifier.")
+            ref = f"{kind}:{identifier}"
+            max_chars, max_items = 2000, MAX_RECORDS
+            while True:
+                projected = _bounded(selected, max_chars=max_chars, max_items=max_items)
+                if "id" in selected:
+                    projected["id"] = selected["id"]
+                entry: dict[str, Any] | None = {"ref": ref, **projected}
+                candidate = {**payload, "records": [*result, entry]}
+                if len(json.dumps(candidate, default=str)) <= MAX_TOOL_MESSAGE_CHARS:
+                    break
+                # Compact a large first record instead of returning no facts.
+                # Subsequent records are omitted whole, with an explicit limit.
+                if result or max_chars <= 32:
+                    entry = None
+                    break
+                max_chars = max(32, max_chars // 2)
+                max_items = max(1, max_items // 2)
+            if entry is None:
+                payload["truncated"] = True
+                break
+            payload["truncated"] |= projected != selected
+            entry_bytes = len(json.dumps(entry, ensure_ascii=False).encode())
+            if self._evidence_bytes + entry_bytes > MAX_EVIDENCE_BYTES:
+                payload["truncated"] = True
+                break
+            self._evidence_bytes += entry_bytes
+            result.append(entry)
+            sources.append(EvidenceSource(ref=ref, kind=kind, text=json.dumps(projected), label=str(projected.get("title") or identifier)))
+        # The shared renderer slices at MAX_TOOL_MESSAGE_CHARS. Fit the entire
+        # envelope before recording sources so coverage and citations describe
+        # exactly the evidence that survives that boundary, including Unicode.
+        self.sources.extend(sources)
+        self.calls.append({"tool": operation, "status": "ok", "records": len(result), "truncated": payload["truncated"]})
+        return payload
 
     async def alerts(self, hours: int = 24, severity: str | None = None, hostname: str | None = None, page: int = 1) -> dict[str, Any]:
         now = self._now

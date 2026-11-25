@@ -529,9 +529,26 @@ Enforcement is global, default-on (`AISOC_AGENTS_LLM_CONTRACT_ENFORCED=1`), and 
 
 1. **`safe_ainvoke(llm, messages, **kwargs)`** and **`safe_astream(llm, messages, **kwargs)`** — wrap any LangChain-compatible chat model. The contract validates the materialised message list before `ainvoke` / `astream` is called.
 2. **`make_safe_chat_model(llm)`** — adapts an existing model reference so its `.ainvoke` / `.astream` enforce the contract without rewriting call sites (used for LangGraph nodes that close over `llm`).
-3. **`safe_chat_completions_request(api_key=..., model=..., messages=...)`** — the same guarantee for the two raw-HTTP call sites (`app/api/copilot.py::_get_openai_reply` and `app/nl_query/translator.py::enhance_with_llm`) that talk to an OpenAI-compatible `chat/completions` endpoint directly. The contract runs **before** the `httpx.post`, so a violation never leaves the process. The helper surfaces `httpx.HTTPStatusError` so callers can fall back to deterministic behaviour, and refuses to run with an empty API key.
+3. **`safe_chat_completions_request(api_key=..., model=..., messages=...)`** — the same guarantee for raw-HTTP callers such as `app/nl_query/translator.py::enhance_with_llm` that talk to an OpenAI-compatible `chat/completions` endpoint directly. The contract runs **before** the `httpx.post`, so a violation never leaves the process. The helper surfaces `httpx.HTTPStatusError` so callers can fall back to deterministic behaviour, and refuses to run with an empty API key.
 
-A violation raises `LLMContractViolation` and is logged as `event="llm.contract.violation"`. In `enforced=False` mode (set explicitly per-test or via env var, never by default in production) the violation is logged but the call proceeds — useful for grandfathering a legacy call site while you migrate it, never appropriate for a real deployment.
+A violation raises `LLMContractViolation` before the provider request. Disabling
+enforcement bypasses validation; it does not make raw evidence safe to transmit.
+
+Copilot uses the shared tool loop and `safe_ainvoke`. Its read tools return
+allowlisted record fields and selected scalar event facts, including endpoint,
+device, finding and normalized activity fields. They omit opaque raw payloads,
+full log lines, request bodies and headers. The complete JSON tool result is
+bounded to the shared renderer's limit, retaining coverage metadata and marking
+truncation; citation sources are built from the records and fields that remain.
+Free-form summary text still passes through the input contract and the existing
+egress privacy policy.
+
+For both chat transports, a rejected input returns `source="template"` with
+`template_reason="input_contract_rejected"`. The explanation distinguishes it
+from provider failure and retains any completed-read metadata. The reply and
+`copilot.input_contract_rejected` log event omit the rejected content. Template
+assistant replies are excluded from subsequent model history, including older
+diagnostics that contained a rejected evidence excerpt.
 
 Two intentional non-targets:
 - The MITRE embedding tool (`app/tools/mitre_full.py`) calls `openai.AsyncOpenAI.embeddings` on curated MITRE technique descriptions, not user input, so the contract does not apply.
