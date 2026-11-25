@@ -426,7 +426,11 @@ export function AlertsView({
   const viewMode = viewChoice?.searchKey === searchKey
     ? viewChoice.mode
     : drilldown?.viewMode ?? initialViewMode;
-  const autoApplyDefault = (drilldown?.viewMode ?? initialViewMode) !== 'alerts';
+  // Native history writes update the address immediately, but the App
+  // Router's useSearchParams snapshot can lag behind this filter state.
+  // Once a filter is applied locally, a late saved default must not win.
+  const [filtersChangedLocally, setFiltersChangedLocally] = useState(false);
+  const autoApplyDefault = !filtersChangedLocally && (drilldown?.viewMode ?? initialViewMode) !== 'alerts';
   const { t } = useLocale();
 
   const { data, error, isLoading } = useSWR(
@@ -449,6 +453,7 @@ export function AlertsView({
   );
 
   const handleFilterChange = useCallback((newFilters: AlertFilters) => {
+    setFiltersChangedLocally(true);
     setFilters(newFilters);
 
     const url = new URL(window.location.href);

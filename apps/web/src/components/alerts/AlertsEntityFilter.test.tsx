@@ -1,6 +1,8 @@
+import { cloneElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { SearchParamsContext } from 'next/dist/shared/lib/hooks-client-context.shared-runtime';
 import { NavigationTestProvider } from '@/test/NavigationTestProvider';
 
 const state = vi.hoisted(() => ({
@@ -108,6 +110,48 @@ describe('Alerts entity filter', () => {
     expect(state.filters.entityValue).toBe('WIN-01');
     expect(state.filters.severity).toBeUndefined();
     expect(screen.getByRole('button', { name: /Low severity fixture/, pressed: false })).toBeInTheDocument();
+  });
+
+  it('keeps an applied entity while the router is still reporting the previous URL', async () => {
+    window.history.replaceState(null, '', '/alerts');
+    const routerParams = new URLSearchParams();
+    const page = await AlertsPage({ searchParams: Promise.resolve({}) });
+    const tree = () => <SearchParamsContext.Provider value={routerParams}>{cloneElement(page)}</SearchParamsContext.Provider>;
+    const { rerender } = render(tree());
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('tab', { name: 'Alerts' }));
+    await user.selectOptions(screen.getByLabelText('Entity type'), 'host');
+    await user.type(screen.getByLabelText('Entity value'), 'WIN-01');
+    await user.click(screen.getByRole('button', { name: 'Apply entity filter' }));
+    expect(state.filters.entityValue).toBe('WIN-01');
+    expect(new URLSearchParams(window.location.search).get('entity_value')).toBe('WIN-01');
+
+    state.savedViews = [{
+      id: 'late-default', name: 'Low severity fixture', view_type: 'alerts',
+      is_default: true, filters: { severity: 'low' },
+    }];
+    rerender(tree());
+
+    expect(new URLSearchParams(window.location.search).get('entity_value')).toBe('WIN-01');
+    expect(state.filters).toMatchObject({ entityType: 'host', entityValue: 'WIN-01', page: 1 });
+    expect(state.filters.severity).toBeUndefined();
+    const defaultChip = screen.getByRole('button', { name: /Low severity fixture/, pressed: false });
+    await user.click(defaultChip);
+    expect(state.filters.severity).toBe('low');
+    expect(state.filters.entityValue).toBeUndefined();
+  });
+
+  it('still applies the saved default on an untouched queue', async () => {
+    state.savedViews = [{
+      id: 'default', name: 'Low severity fixture', view_type: 'alerts',
+      is_default: true, filters: { severity: 'low' },
+    }];
+    window.history.replaceState(null, '', '/alerts');
+    await renderUrl();
+    await userEvent.click(screen.getByRole('tab', { name: 'Alerts' }));
+    expect(state.filters.severity).toBe('low');
+    expect(new URLSearchParams(window.location.search).get('severity')).toBe('low');
+    expect(screen.getByRole('button', { name: /Low severity fixture/, pressed: true })).toBeInTheDocument();
   });
 
   it('updates the applied form on saved-view selection and browser history changes', async () => {
