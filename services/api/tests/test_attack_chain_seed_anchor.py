@@ -18,20 +18,99 @@ from __future__ import annotations
 
 import asyncio
 import uuid
-from datetime import timedelta
+from collections.abc import Iterable
+from datetime import datetime, timedelta
 
 from app.services.attack_chain import (
     DEFAULT_WINDOW,
     CandidateAlert,
     compute_attack_chain,
 )
-from tests.test_attack_chain import (
-    SEED_ID,
-    T0,
-    TENANT,
-    _build_lockbit_chain,
-    _InMemoryLoader,
-)
+
+# Self-contained on purpose. Importing the sibling suite's fixtures gives
+# mypy one file under two module names ("test_attack_chain" and
+# "tests.test_attack_chain"), which is a fatal error that stops it checking
+# the tree at all — the whole gate, not just this file.
+TENANT = uuid.UUID("00000000-0000-0000-0000-000000000777")
+T0 = datetime(2026, 5, 14, 8, 0, 0)
+SEED_ID = uuid.uuid4()
+
+
+class _InMemoryLoader:
+    """Walks a fixture list the way the Postgres loader walks the table."""
+
+    def __init__(self, alerts: list[CandidateAlert]) -> None:
+        self._by_id = {a.id: a for a in alerts}
+        self._all = alerts
+
+    async def load_seed(self, alert_id: uuid.UUID, tenant_id: uuid.UUID) -> CandidateAlert | None:
+        row = self._by_id.get(alert_id)
+        if row is None or row.tenant_id != tenant_id:
+            return None
+        return row
+
+    async def load_candidates_for_entities(
+        self,
+        tenant_id: uuid.UUID,
+        entities: Iterable[tuple[str, str]],
+        start: datetime,
+        end: datetime,
+        exclude_ids: set[uuid.UUID],
+    ) -> list[CandidateAlert]:
+        wanted = set(entities)
+        return [
+            row
+            for row in self._all
+            if row.tenant_id == tenant_id and row.id not in exclude_ids and start <= row.event_time <= end and row.entities() & wanted
+        ]
+
+
+def _build_lockbit_chain() -> list[CandidateAlert]:
+    """A seed plus two alerts linked by the same identity."""
+    return [
+        CandidateAlert(
+            id=SEED_ID,
+            title="Phishing email with malicious attachment delivered",
+            severity="medium",
+            event_time=T0,
+            mitre_techniques=("T1566.001",),
+            affected_users=("jdoe@acme.test",),
+            affected_hosts=("WIN-USR-101",),
+            affected_ips=(),
+            source_event_ids=("evt-phish-001",),
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_assets=(),
+        ),
+        CandidateAlert(
+            id=uuid.uuid4(),
+            title="Credential harvesting via fake O365 login portal",
+            severity="high",
+            event_time=T0 + timedelta(minutes=5),
+            mitre_techniques=("T1566.002",),
+            affected_users=("jdoe@acme.test",),
+            affected_hosts=("WIN-USR-101",),
+            affected_ips=(),
+            source_event_ids=("evt-cred-002",),
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_assets=(),
+        ),
+        CandidateAlert(
+            id=uuid.uuid4(),
+            title="Cloud auth anomaly: impossible-travel sign-in",
+            severity="high",
+            event_time=T0 + timedelta(hours=2),
+            mitre_techniques=("T1078.004",),
+            affected_users=("jdoe@acme.test",),
+            affected_hosts=(),
+            affected_ips=("203.0.113.42",),
+            source_event_ids=("evt-auth-003",),
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_assets=(),
+        ),
+    ]
 
 
 def _chain():
@@ -79,7 +158,6 @@ def _divergent_fixture() -> list[CandidateAlert]:
     two-hops-away informational one.
     """
     seed_id, mid_id, early_id, late_id = (uuid.uuid4() for _ in range(4))
-    common = {"tenant_id": TENANT, "affected_ips": (), "connector_type": "ci"}
     return [
         CandidateAlert(
             id=seed_id,
@@ -91,7 +169,9 @@ def _divergent_fixture() -> list[CandidateAlert]:
             affected_hosts=(),
             affected_assets=(),
             source_event_ids=("evt-seed",),
-            **common,
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_ips=(),
         ),
         CandidateAlert(
             id=mid_id,
@@ -103,7 +183,9 @@ def _divergent_fixture() -> list[CandidateAlert]:
             affected_hosts=(),
             affected_assets=("s3://acme-research",),
             source_event_ids=("evt-mid",),
-            **common,
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_ips=(),
         ),
         CandidateAlert(
             id=early_id,
@@ -115,7 +197,9 @@ def _divergent_fixture() -> list[CandidateAlert]:
             affected_hosts=(),
             affected_assets=("s3://acme-research",),
             source_event_ids=("evt-early",),
-            **common,
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_ips=(),
         ),
         CandidateAlert(
             id=late_id,
@@ -127,7 +211,9 @@ def _divergent_fixture() -> list[CandidateAlert]:
             affected_hosts=(),
             affected_assets=(),
             source_event_ids=("evt-late",),
-            **common,
+            tenant_id=TENANT,
+            connector_type="ci",
+            affected_ips=(),
         ),
     ]
 
