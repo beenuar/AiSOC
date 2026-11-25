@@ -186,3 +186,11 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # heuristic reads the pair as an api key; it is a rule identifier in a
 # generated lock file.
 
+
+# The SDK redactor's own tests build synthetic PEM private-key blocks inline
+# to prove MASKED mode removes the whole key rather than just its BEGIN
+# header (the defect #2065 fixed). The "key" bodies are repeated filler
+# (`a1B+` / `c2/D`), not key material — a fixture that did not look like a
+# real key could not test the redactor.
+packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:89
+packages/aisoc-ai-sdk/tests/test_ai_sdk.py:private-key:98
