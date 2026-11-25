@@ -207,11 +207,13 @@ function FiltersBar({
   filters,
   onChange,
   onEntityDraftEdit,
+  entityFormRevision,
   total,
 }: {
   filters: AlertFilters;
   onChange: (f: AlertFilters) => void;
   onEntityDraftEdit: () => void;
+  entityFormRevision: number;
   total: number;
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
@@ -284,7 +286,7 @@ function FiltersBar({
       )}
       <span className="ml-auto text-xs text-gray-600">{total} total</span>
       <EntityAlertFilter
-        key={JSON.stringify([filters.entityType, filters.entityValue])}
+        key={JSON.stringify([filters.entityType, filters.entityValue, entityFormRevision])}
         filters={filters}
         onChange={onChange}
         onDraftEdit={onEntityDraftEdit}
@@ -617,6 +619,7 @@ function AlertsTable({
   // actually loaded, applied filters or an entity draft must take precedence.
   const [defaultLoaded, setDefaultLoaded] = useState(false);
   const [entityDraftEdited, setEntityDraftEdited] = useState(false);
+  const [entityFormRevision, setEntityFormRevision] = useState(0);
   const { mutate } = useSWRConfig();
 
   const toggleChecked = useCallback((id: string) => {
@@ -660,19 +663,24 @@ function AlertsTable({
         filters={filters}
         autoApplyDefault={defaultLoaded || (autoApplyDefault && !entityDraftEdited)}
         onDefaultLoaded={() => setDefaultLoaded(true)}
-        onApply={(applied) =>
+        onApply={(applied) => {
+          // Preset selection replaces an unsaved draft even if the applied
+          // entity pair happens to be unchanged. A late automatic default
+          // cannot enter this path once the analyst starts editing.
+          setEntityFormRevision((revision) => revision + 1);
           onFilterChange({
             ...applied,
             page: 1,
             pageSize: filters.pageSize ?? 25,
-          })
-        }
+          });
+        }}
       />
 
       <FiltersBar
         filters={filters}
         onChange={onFilterChange}
         onEntityDraftEdit={() => setEntityDraftEdited(true)}
+        entityFormRevision={entityFormRevision}
         total={total}
       />
 

@@ -305,6 +305,26 @@ test("all-type deep links and saved entity presets restore through navigation hi
   await expectRows(page, ["reserved user high"]);
 });
 
+test("explicitly selecting a preset restores its committed entity even when the pair is unchanged", async ({ page }) => {
+  await mockBackend(page);
+  await page.goto(`/alerts?${new URLSearchParams({ view: "alerts", entity_type: "user", entity_value: RESERVED_USER })}`);
+  await expectRows(page, ["reserved user high", "reserved user low"]);
+  const entityType = page.getByLabel("Entity type", { exact: true });
+  const entityValue = page.getByLabel("Entity value", { exact: true });
+  await entityType.selectOption("host");
+  await entityValue.fill(HOST);
+  await expectRows(page, ["reserved user high", "reserved user low"]);
+
+  await page.getByRole("button", { name: "Synthetic user preset", exact: true }).click();
+  await expectRows(page, ["reserved user high"]);
+  await expect(entityType).toHaveValue("user");
+  await expect(entityValue).toHaveValue(RESERVED_USER);
+  await expect(page).toHaveURL((url) =>
+    url.searchParams.get("entity_type") === "user" && url.searchParams.get("entity_value") === RESERVED_USER &&
+    url.searchParams.get("severity") === "high",
+  );
+});
+
 test("a delayed saved default cannot replace an entity filter the analyst already applied", async ({ page }) => {
   let releaseDefault = () => {};
   const savedViewsGate = new Promise<void>((resolve) => { releaseDefault = resolve; });

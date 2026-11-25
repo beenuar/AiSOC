@@ -193,6 +193,45 @@ describe('Alerts entity filter', () => {
     expect(screen.getByRole('button', { name: /Low severity fixture/, pressed: true })).toBeInTheDocument();
   });
 
+  it.each([
+    {
+      name: 'the same committed entity',
+      query: '&entity_type=user&entity_value=ALICE',
+      preset: { entityType: 'user', entityValue: 'ALICE' },
+      expectedType: 'user',
+      expectedValue: 'ALICE',
+    },
+    {
+      name: 'a severity-only view with no committed entity',
+      query: '',
+      preset: { severity: 'high' },
+      expectedType: '',
+      expectedValue: '',
+    },
+  ])('discards an unapplied entity draft when explicitly selecting $name', async ({
+    query, preset, expectedType, expectedValue,
+  }) => {
+    state.savedViews = [{
+      id: 'preset', name: 'Explicit fixture', view_type: 'alerts',
+      is_default: false, filters: preset,
+    }];
+    window.history.replaceState(null, '', `/alerts?view=alerts${query}`);
+    await renderUrl();
+    const user = userEvent.setup();
+    await user.selectOptions(screen.getByLabelText('Entity type'), 'host');
+    const valueInput = screen.getByLabelText('Entity value');
+    await user.clear(valueInput);
+    await user.type(valueInput, 'HOST-DRAFT');
+    expect(state.filters.entityValue).toBe(expectedValue || undefined);
+
+    await user.click(screen.getByRole('button', { name: 'Explicit fixture' }));
+
+    expect(state.filters).toMatchObject({ ...preset, page: 1 });
+    expect(screen.getByLabelText('Entity type')).toHaveValue(expectedType);
+    expect(screen.getByLabelText('Entity value')).toHaveValue(expectedValue);
+    expect(new URLSearchParams(window.location.search).get('entity_value')).toBe(expectedValue || null);
+  });
+
   it('updates the applied form on saved-view selection and browser history changes', async () => {
     state.savedViews = [{
       id: 'entity-preset', name: 'Domain fixture', view_type: 'alerts',
