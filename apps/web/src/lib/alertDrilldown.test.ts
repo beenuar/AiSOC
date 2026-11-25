@@ -61,4 +61,31 @@ describe('readAlertDrilldown', () => {
       createdWithinHours: 24,
     });
   });
+
+  it('restores an exact entity value including URL punctuation and opens the Alerts tab', () => {
+    const params = new URLSearchParams({ entity_type: 'url', entity_value: 'https://example.test/a?x=1&y=two+three#part' });
+    expect(readAlertDrilldown(params)).toEqual({
+      filters: { entityType: 'url', entityValue: 'https://example.test/a?x=1&y=two+three#part' },
+      viewMode: 'alerts',
+    });
+    expect(readAlertDrilldown(new URLSearchParams({ entity_value: '  WIN-01  ' })).filters)
+      .toEqual({ entityValue: 'WIN-01' });
+  });
+
+  it.each([
+    { entity_type: 'unknown', entity_value: 'WIN-01' },
+    { entity_type: '__proto__', entity_value: 'WIN-01' },
+    { entity_type: 'host', entity_value: '  ' },
+    { entity_type: 'host', entity_value: '' },
+    { entity_type: 'host', entity_value: 'x'.repeat(2049) },
+  ])('ignores an invalid entity pair together: $entity_type', (params) => {
+    expect(readAlertDrilldown(new URLSearchParams(params)).filters).toEqual({});
+  });
+
+  it('clears both stale entity fields when removed from the live URL', () => {
+    expect(mergeAlertFiltersFromUrl(
+      { page: 1, entityType: 'host', entityValue: 'WIN-01', sort: 'priority' },
+      readAlertDrilldown(new URLSearchParams('view=alerts')),
+    )).toEqual({ page: 1, sort: 'priority' });
+  });
 });

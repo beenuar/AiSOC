@@ -89,6 +89,46 @@ only documented local path that enables them:
 | `GET/POST` | `/detections` | Detection events |
 | `GET` | `/detections/stats` | Aggregated detection metrics |
 
+#### Filter alerts by entity
+
+`GET /api/v1/alerts` accepts an exact entity filter, combined with the other
+alert filters using AND. The result rows, `total`, `pages`, and `facets` all
+describe the same filtered set within the authenticated tenant.
+
+| Query parameter | Behavior |
+|-----------------|----------|
+| `entity_value` | Complete, case-sensitive value, 1–2048 characters. Surrounding whitespace is trimmed; a blank value is rejected. |
+| `entity_type` | Optional: `host`, `user`, `ip`, `domain`, `asset`, or `url`. Omit it to search all supported kinds. Requires `entity_value`. |
+
+For example:
+
+```http
+GET /api/v1/alerts?entity_type=host&entity_value=WKS-42&severity=high&page_size=25
+```
+
+Values containing `&`, `+`, `/`, or other query-string punctuation must be
+URL-encoded. `%` and `_` are literal characters, not search wildcards. Type
+and value match the same stored entity or IOC object. The filter also covers
+the existing affected-host, user, IP, and asset arrays; IPs, domains, and URLs
+can match the typed IOC records written by fusion. It does not search arbitrary
+text in raw events or resolve aliases between different entity values.
+
+A type without a value returns 400. Unsupported types, empty or blank values,
+and values longer than the limit return 422. The existing `hostname` filter
+remains supported and composes with these parameters.
+
+In the console, open **Alerts → Alerts**, choose an **Entity type** (or **All
+types**), enter an **Entity value**, and select **Apply entity filter** or press
+Enter. Applying or removing the entity filter returns to page one. Its chip
+removes only the entity condition; the filter is retained in the page URL and
+can be saved with a saved view. Selecting a different entity clears the current
+alert selection and bulk selection.
+
+The **Entities** detail panel also offers **View all alerts for this entity**.
+That link opens the exact entity filter across retained alerts, including those
+outside the entity risk decay window, so its total may differ from the panel's
+**Alerts (window)** count.
+
 ### Detection Proposals (Detection-as-Code)
 
 The DAC lifecycle manages detection rule proposals from creation through
