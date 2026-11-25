@@ -10,17 +10,13 @@ content read-back verification. Nothing here writes to a SIEM.
 from __future__ import annotations
 
 import json
-import uuid
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy import text as sa_text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
-from app.models.connector import Connector
 from app.services import siem_content as svc
 
 router = APIRouter(prefix="/siem-content", tags=["siem-content"])
@@ -84,14 +80,7 @@ async def refresh_inventory(
     db: DBSession,
     user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
 ) -> dict[str, Any]:
-    result = await db.execute(
-        select(Connector).where(
-            Connector.tenant_id == user.tenant_id,
-            Connector.enabled.is_(True),
-            Connector.connector_type.in_(svc.CONTENT_SOURCES),
-        )
-    )
-    connectors = list(result.scalars().all())
+    connectors = await svc.content_capable_connectors(db, tenant_id=user.tenant_id)
     if not connectors:
         return {
             "tenant_id": str(user.tenant_id),
@@ -148,40 +137,16 @@ async def create_tuning_proposal(
             ),
         )
     target_name = row[0] if row else body.vendor_rule_id
-    scaffold = "\n".join(
-        [
-            f"# SIEM tuning proposal ({body.change}) for {body.connector_type} rule {body.vendor_rule_id!r}.",
-            f"# Target: {target_name}",
-            f"# Rationale: {body.rationale}",
-            "# Apply path: the governed sync_detection_rule verb (content read-back verified,",
-            "#   rollback from prior content). Nothing applies without review; the reviewer",
-            "#   cannot be this proposal's author.",
-            "",
-            body.proposed_content or "# (no proposed content supplied — the reviewer drafts it)",
-        ]
-    )
-    proposal_id = uuid.uuid4()
-    await db.execute(
-        sa_text(
-            """
-            INSERT INTO detection_rule_proposals
-              (id, tenant_id, base_rule_id, name, description,
-               rule_language, rule_body, category, severity, confidence,
-               status, source, created_at, updated_at)
-            VALUES
-              (:id, :tid, NULL, :name, :desc,
-               :lang, :body, 'siem-tuning', 'medium', 60,
-               'draft', 'siem-tuning', :now, :now)
-            """
-        ).bindparams(
-            id=proposal_id,
-            tid=user.tenant_id,
-            name=f"tune({body.change}): {target_name}"[:200],
-            desc=body.rationale[:2000],
-            lang={"splunk": "spl", "elastic": "eql", "sentinel": "kql", "qradar": "aql"}[body.connector_type],
-            body=scaffold,
-            now=datetime.now(UTC),
-        )
+    proposal_id = await svc.record_tuning_proposal(
+        db,
+        tenant_id=user.tenant_id,
+        author_id=user.user_id,
+        connector_type=body.connector_type,
+        vendor_rule_id=body.vendor_rule_id,
+        change=body.change,
+        rationale=body.rationale,
+        target_name=target_name,
+        proposed_content=body.proposed_content,
     )
     await db.commit()
     return {"id": str(proposal_id), "status": "draft", "source": "siem-tuning"}
