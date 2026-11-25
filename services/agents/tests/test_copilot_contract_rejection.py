@@ -176,7 +176,8 @@ async def test_old_failure_text_does_not_poison_the_next_question(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stream", [False, True])
-async def test_rejected_question_is_not_replayed_but_stays_in_transcript(monkeypatch, stream):
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_rejected_question_is_not_replayed_but_stays_in_transcript(monkeypatch, stream, legacy):
     monkeypatch.setenv("SECRET_KEY", SECRET)
     monkeypatch.setenv("LLM_GATEWAY_URL", "http://gateway.test/v1")
     monkeypatch.setenv("LITELLM_MASTER_KEY", "test-gateway-key")
@@ -221,18 +222,34 @@ async def test_rejected_question_is_not_replayed_but_stays_in_transcript(monkeyp
         httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://console.test") as browser,
     ):
         monkeypatch.setattr(factory, "make_chat_model", lambda *a, **kw: make_model(*a, http_async_client=provider, **kw))
-        first = await browser.post(route, headers=headers, json={"conversationId": "conversation-1", "message": rejected})
-        first_payload = json.loads(first.text.splitlines()[0])
-        assert first.status_code == 200
-        assert first_payload["template_reason"] == "input_contract_rejected"
-        assert not calls
-        assert saved[-2]["content"] == rejected
+        if legacy:
+            # Pre-#2061 versions stored the generic fallback without a reason
+            # field, even if the contract rejected a user question.
+            error = contract_rules.LLMContractViolation("message exceeds size cap", role="user")
+            saved.extend(
+                [
+                    {"role": "user", "content": rejected},
+                    {
+                        "role": "assistant",
+                        "source": "template",
+                        "content": copilot._fallback_reply(copilot.CALL_FAILED, model="aisoc-copilot", detail=str(error)),
+                    },
+                ]
+            )
+        else:
+            first = await browser.post(route, headers=headers, json={"conversationId": "conversation-1", "message": rejected})
+            first_payload = json.loads(first.text.splitlines()[0])
+            assert first.status_code == 200
+            assert first_payload["template_reason"] == "input_contract_rejected"
+            assert not calls
+            assert saved[-2]["content"] == rejected
 
         second = await browser.post(route, headers=headers, json={"conversationId": "conversation-1", "message": "A valid follow-up."})
     assert second.status_code == 200
     assert json.loads(second.text.splitlines()[0])["source"] == "llm"
     assert len(calls) == 1
-    assert saved[-3]["template_reason"] == "input_contract_rejected"
+    assert saved[-4]["content"] == rejected
+    assert saved[-3].get("template_reason") == (None if legacy else "input_contract_rejected")
     assert [m["content"] for m in calls[0]["messages"] if m["role"] != "system"] == [
         "A valid prior question.",
         "A valid prior answer.",
@@ -259,3 +276,16 @@ def test_history_preserves_other_failures_and_excludes_only_rejected_turns(legac
     ]
 
     assert copilot._model_history({"messages": messages}) == [messages[0], messages[4], messages[5]]
+
+
+def test_generic_legacy_rejection_of_other_history_does_not_drop_valid_user_turn(monkeypatch):
+    monkeypatch.setattr(contract_rules, "_ENFORCED", True)
+    error = contract_rules.LLMContractViolation("prior evidence failed contract", role="tool")
+    question = {"role": "user", "content": "A valid question."}
+    reply = {
+        "role": "assistant",
+        "source": "template",
+        "content": copilot._fallback_reply(copilot.CALL_FAILED, model="aisoc-copilot", detail=str(error)),
+    }
+
+    assert copilot._model_history({"messages": [question, reply]}) == [question]

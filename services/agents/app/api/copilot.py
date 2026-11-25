@@ -229,6 +229,36 @@ def _notice_for(reason: str | None) -> str | None:
     return None
 
 
+def _is_rejected_turn(message: dict[str, Any], reply: dict[str, Any]) -> bool:
+    if reply.get("role") != "assistant" or reply.get("source") != "template":
+        return False
+    reason = reply.get("template_reason")
+    if reason is not None:
+        return reason == INPUT_REJECTED
+
+    # The first dedicated rejection reply did not persist its reason.
+    text = reply.get("content")
+    if text == _fallback_reply(INPUT_REJECTED):
+        return True
+
+    # Earlier releases persisted the generic error, with the contract exception
+    # embedded as its detail. Don't confuse a rejection of tool evidence with
+    # rejection of a valid user question: confirm the stored user input against
+    # the same contract, without logging or reusing the legacy exception text.
+    if (
+        isinstance(text, str)
+        and text.startswith("I can't answer this: the configured model")
+        and "\n\nThe call reported: [LLMInputContract] " in text
+    ):
+        from app.llm.contract_rules import LLMContractViolation, LLMInputContract
+
+        try:
+            LLMInputContract.validate([message])
+        except LLMContractViolation:
+            return True
+    return False
+
+
 def _model_history(conversation: dict[str, Any]) -> list[dict[str, Any]]:
     """Keep the transcript intact without replaying turns rejected by the contract."""
     messages = conversation.get("messages", [])[-10:]
@@ -239,18 +269,8 @@ def _model_history(conversation: dict[str, Any]) -> list[dict[str, Any]]:
             continue
         if role == "assistant" and message.get("source") == "template":
             continue
-        if role == "user" and index + 1 < len(messages):
-            reply = messages[index + 1]
-            if (
-                reply.get("role") == "assistant"
-                and reply.get("source") == "template"
-                and (
-                    reply.get("template_reason") == INPUT_REJECTED
-                    # Compatibility with transcripts written before persisting the reason.
-                    or (reply.get("template_reason") is None and reply.get("content") == _fallback_reply(INPUT_REJECTED))
-                )
-            ):
-                continue
+        if role == "user" and index + 1 < len(messages) and _is_rejected_turn(message, messages[index + 1]):
+            continue
         history.append(message)
     return history
 
