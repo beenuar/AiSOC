@@ -62,6 +62,7 @@ const sidebars: SidebarsConfig = {
         "console/rule-library",
         "console/rule-tuning",
         "console/investigation-rail",
+        "console/incident-timeline",
         "console/public-replay",
         "console/tenant-skills",
         "console/triage-context",

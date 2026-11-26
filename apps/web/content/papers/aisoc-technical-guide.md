@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.7"
-date: "2026-11-25"
+version: "v1.8"
+date: "2026-11-26"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -57,7 +57,7 @@ connector / ingest API
         ├──────────► graph writer ──► Neo4j       (entity graph)
         │
         ▼
-    fusion  ──────── 2,966 executable detection rules, your tenant's tuning,
+    fusion  ──────── 2,973 executable detection rules, your tenant's tuning,
         │            correlation into alerts
         ▼
    Postgres ──────── the alert, the case, the audit chain
@@ -485,6 +485,36 @@ risky" and "this account is risky, and here is where to go look."*
 mapped … that is a gap in the detection's metadata rather than a statement
 about the activity." The product distinguishes what it does not know from what
 is not there.*
+
+### One chronology for an incident
+
+An alert is a moment; an incident is a sequence. Three things in the product
+turn one into the other, and they are separate on purpose.
+
+**Staged detection rules** fire on *A then B (then C) by the same entity
+inside a window* rather than on any single event — CloudTrail logging stopped
+and then IAM changed by the same principal, a Windows account created and
+then added to administrators, an Okta factor reset and then re-enrolled.
+Fusion loads 15 of these beside 78 rules that count events over a window. A
+staged rule is the only kind that can say "the order is the finding", which
+is why two of them are rated `high` while most are `medium`: either half
+alone is something an administrator legitimately does.
+
+**Incident and chain identity are written onto the alert row.** The
+correlator groups alerts by entity and tactic, and the attack-chain grouper
+orders them across 14 MITRE kill-chain stages. Both used to live only in
+Redis with a one-hour expiry, so the grouping evaporated; the alert now
+carries its `incident_id`, `chain_id`, position and stage, and an alert that
+belongs to no incident honestly carries none rather than a placeholder.
+
+**The case workspace renders the whole chronology**, interleaving the case's
+alerts with the raw lake events behind them in event-time order, grouped by
+kill-chain stage. Two honest states are built into it rather than hidden:
+a deployment with no event lake configured is told exactly that instead of
+being shown an empty timeline, and an alert that hit the 200-event provenance
+ceiling publishes the count of events omitted. The response carries its own
+disclaimer — these are times taken from the source records, a chronology of
+what was observed rather than a confirmed account of what caused what.
 
 ### AI triage
 

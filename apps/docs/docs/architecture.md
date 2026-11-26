@@ -246,22 +246,32 @@ It does not claim the rules detect attacks, only that they are reachable.
 ### Detections that need more than one event
 
 A single-event match cannot express "five failures then a success". A separate
-**windowed** engine holds 72 compiled rules plus three built-ins:
+**windowed** engine holds 90 compiled rules plus three built-ins:
 
-- **70 count** events, or distinct values, for one entity over a sliding window
+- **75 count** events, or distinct values, for one entity over a sliding window
   and fire on a threshold.
-- **2 are sequences** — A then B by the same entity, ordered in time or not.
-  Stages are disjoint, so a slow drip cannot walk a sequence forward forever,
-  and the whole sequence must fit inside one window measured from its first
-  stage.
+- **15 are sequences** — A then B (then C) by the same entity, ordered in time
+  or not. Stages are disjoint, so a slow drip cannot walk a sequence forward
+  forever, and the whole sequence must fit inside one window measured from its
+  first stage. These are the rules that can say *the order is the finding*:
+  CloudTrail logging stopped and then IAM changed is a different claim from
+  either event alone.
 
-Four of the 72 are compiled from Sigma **correlation** documents — `event_count`,
+Fifteen of the 90 are compiled from Sigma **correlation** documents — `event_count`,
 `value_count`, `temporal` and `temporal_ordered` — by
 [`scripts/sigma_correlation.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/sigma_correlation.py).
 It refuses what it cannot carry and records why on the rule: a correlation
 grouping by two fields is refused because the engine accumulates against one
-entity, and a `lt` condition is refused because firing when a count is *low*
-needs a baseline rather than a counter.
+entity, a `lt` condition is refused because firing when a count is *low*
+needs a baseline rather than a counter, and a chain over a log source no
+connector emits is refused because it could never fire.
+
+A fired windowed rule does not stop at the alert. The correlator groups alerts
+by entity and tactic, the attack-chain grouper orders them across 14 MITRE
+kill-chain stages, and both identities are **written onto the alert row** —
+`incident_id`, `chain_id`, position and stage — so the grouping survives the
+process that computed it. An alert belonging to no incident carries none of
+them rather than a placeholder.
 
 This figure is published beside the executable count rather than added to it. A
 threshold over a window and a single-event match are different kinds of claim,
