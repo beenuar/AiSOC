@@ -199,8 +199,34 @@ def _to_lc_str(value: Any) -> str:
     return str(value).lower() if value is not None else ""
 
 
+def _resolve(field: str, event: dict[str, Any]) -> Any:
+    """The event's value for a field name, traversing a dotted path.
+
+    A **literal key wins**, always and at every depth. Several connectors
+    emit flattened keys that contain a dot (`aws.region`), and those rules
+    shipped against a plain lookup — so traversal is what happens when the
+    literal key is absent, never instead of it. Without that ordering this
+    change would quietly alter what already-shipped rules match.
+
+    A path that runs into a non-object, or a key that is not there, yields
+    None: "this event does not carry that field" rather than an error.
+    """
+    if field in event:
+        return event[field]
+    if "." not in field:
+        return None
+    current: Any = event
+    for part in field.split("."):
+        if not isinstance(current, dict):
+            return None
+        if part not in current:
+            return None
+        current = current[part]
+    return current
+
+
 def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
-    actual = event.get(field)
+    actual = _resolve(field, event)
 
     if op == "eq":
         if expected is None:

@@ -48,6 +48,9 @@ from typing import Any
 # reader can see the taxonomy without reading the code.
 # --------------------------------------------------------------------------
 R_NO_EMITTER = "no connector emits this log source"
+#: No longer raised: the matcher resolves a dotted path by traversing it,
+#: preferring a literal key of that name when the event carries one. Kept
+#: so the historical refusal taxonomy still reads.
 R_NESTED_FIELD = "field is a dotted path and the matcher has no path traversal"
 R_MOD_RE = "the |re pattern does not compile, so it would silently become a substring test"
 R_MOD_CIDR = "the |cidr value is not a network Python can parse"
@@ -208,11 +211,6 @@ def compile_field(raw_key: str, value: Any) -> Leaf:
     parts = raw_key.split("|")
     name = parts[0]
     mods = [m.lower() for m in parts[1:]]
-
-    if "." in name:
-        # The matcher does a plain event.get(); `properties.message` would be
-        # read as a field whose name contains a dot, which nothing emits.
-        raise Refusal(R_NESTED_FIELD, name)
 
     for mod in mods:
         if mod in _REFUSED_MODS:

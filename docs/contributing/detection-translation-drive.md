@@ -46,13 +46,13 @@ picking an arbitrary quarantined rule is likely to land on one that was
 refused on purpose.
 
 - Sigma's `selection` / `condition` model maps closely onto the native
-  `match_when` DSL, and there are now 1,777 worked examples in-tree rather
+  `match_when` DSL, and there are now 1,830 worked examples in-tree rather
   than 77. It is mechanical, not a rewrite.
 - **The highest-leverage work is a named capability gap, not a rule.** The
   refusal table groups the refusals by cause, and several are one matcher
-  feature standing in front of a whole family: 59 rules need a dotted field
-  path, 14 need `|all` on a non-`contains` modifier, 10 use bare keywords
-  against a field-scoped matcher.
+  feature standing in front of a whole family: 14 need `|all` on a
+  non-`contains` modifier, 10 use bare keywords against a field-scoped
+  matcher, 7 need `|base64`.
 - **Closing a gap unlocks a family, but not all of it, and the honest count
   is the one measured afterwards.** The case-sensitive `|re` operator shipped
   and the modifier is no longer refused — yet of the 71 rules behind it only
@@ -64,6 +64,12 @@ refused on purpose.
   shipped and **none** of its 17 rules became executable, because 15 of them
   also need a faithful negation and 2 do not fire on their own proof event.
   The gap was real and is closed; the family behind it was never the prize.
+  **Dotted field paths are the counter-example, and the reason to keep
+  closing these gaps**: 59 rules were refused because the matcher read
+  `userIdentity.type` as one field name, and teaching it to traverse the
+  path shipped **53** of them. Three operators, three very different yields
+  — 7 of 71, 0 of 17, 53 of 59 — which is exactly why the number is measured
+  after recompiling rather than quoted from the refusal table.
 - **556 were refused because no connector emits their log source**, which is
   connector work rather than translation work, and is the largest single
   group.

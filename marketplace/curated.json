@@ -1,28 +1,28 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-26T02:06:41Z",
+  "generated": "2026-11-26T07:08:33Z",
   "stats": {
-    "considered": 2949,
-    "eligible": 2938,
-    "selected": 601,
+    "considered": 3002,
+    "eligible": 2990,
+    "selected": 606,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 122,
+    "unique_techniques": 123,
     "selected_by_tier": {
-      "imported": 98,
+      "imported": 103,
       "native": 503
     },
     "selected_by_severity": {
       "critical": 164,
       "high": 267,
-      "low": 28,
-      "medium": 142
+      "low": 30,
+      "medium": 145
     },
     "selected_by_category": {
       "application": 106,
-      "cloud": 161,
+      "cloud": 166,
       "data-exfil": 69,
       "endpoint": 156,
       "identity": 101,
@@ -32,7 +32,7 @@
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 87,
+      "count": 89,
       "rule_ids": [
         "det-application-050",
         "det-application-078",
@@ -98,6 +98,8 @@
         "sigmahq-sigma-21ff4ca9-f13a-41ad-b828-0077b2af2e40",
         "sigmahq-sigma-33d50d03-20ec-4b74-a74e-1e65a38af1c0",
         "sigmahq-sigma-39a80702-d7ca-4a83-b776-525b1f86a36d",
+        "sigmahq-sigma-410d2a41-1e6d-452f-85e5-abdd8257a823",
+        "sigmahq-sigma-46530378-f9db-4af9-a9e5-889c177d3881",
         "sigmahq-sigma-4b046706-5789-4673-b111-66f25fe99534",
         "sigmahq-sigma-570ae5ec-33dc-427c-b815-db86228ad43e",
         "sigmahq-sigma-5de03871-5d46-4539-a82d-3aa992a69a83",
@@ -235,7 +237,7 @@
     },
     "lateral": {
       "label": "Lateral Movement",
-      "count": 67,
+      "count": 69,
       "rule_ids": [
         "det-endpoint-010",
         "det-endpoint-111",
@@ -286,6 +288,7 @@
         "sigmahq-sigma-882e858a-3233-4ba8-855e-2f3d3575803d",
         "sigmahq-sigma-8a3038e8-9c9d-46f8-b184-66234a160f6f",
         "sigmahq-sigma-8e5c03fa-b7f0-11ea-b242-07e0576828d9",
+        "sigmahq-sigma-905d389b-b853-46d0-9d3d-dea0d3a3cd49",
         "sigmahq-sigma-96b9f619-aa91-478f-bacb-c3e50f8df575",
         "sigmahq-sigma-991a9744-f2f0-44f2-bd33-9092eba17dc3",
         "sigmahq-sigma-9e4b7d3a-6f2c-4e9a-8d1b-3c5e7a9f2b4d",
@@ -293,6 +296,7 @@
         "sigmahq-sigma-a197e378-d31b-41c0-9635-cfdf1c1bb423",
         "sigmahq-sigma-b0ce780f-10bd-496d-9067-066d23dc3aa5",
         "sigmahq-sigma-b1e5da3b-ca8e-4adf-915c-9921f3d85481",
+        "sigmahq-sigma-b45ab1d2-712f-4f01-a751-df3826969807",
         "sigmahq-sigma-bcfece3d-56fe-4545-9931-3b8e92927db1",
         "sigmahq-sigma-d36f87ea-c403-44d2-aa79-1a0ac7c24456",
         "sigmahq-sigma-def8b624-e08f-4ae1-8612-1ba21190da6b",
@@ -736,7 +740,7 @@
     },
     "k8s": {
       "label": "Kubernetes / Containers",
-      "count": 98,
+      "count": 99,
       "rule_ids": [
         "det-application-018",
         "det-application-023",
@@ -835,6 +839,7 @@
         "det-identity-020",
         "det-identity-151",
         "sigmahq-sigma-66c3b204-9f88-4d0a-a7f7-8a57d521ca55",
+        "sigmahq-sigma-b94bf91e-c2bf-4047-9c43-c6810f43baad",
         "sigmahq-sigma-fa5b1358-b040-4403-9868-15f7d9ab6329"
       ],
       "min_target": 25,
@@ -912,24 +917,24 @@
     "T1218": 4,
     "T1219": 2,
     "T1484.002": 2,
-    "T1485": 49,
+    "T1485": 50,
     "T1486": 9,
-    "T1489": 10,
+    "T1489": 11,
     "T1490": 19,
     "T1491": 1,
     "T1496": 6,
     "T1499.004": 1,
     "T1505.003": 8,
-    "T1525": 10,
+    "T1525": 11,
     "T1528": 20,
     "T1530": 18,
     "T1531": 9,
     "T1537": 38,
     "T1539": 2,
     "T1543.003": 2,
-    "T1548": 1,
-    "T1550": 5,
-    "T1550.001": 3,
+    "T1548": 3,
+    "T1550": 7,
+    "T1550.001": 5,
     "T1552": 5,
     "T1552.001": 2,
     "T1552.007": 4,
@@ -949,6 +954,7 @@
     "T1562.008": 7,
     "T1563.002": 1,
     "T1565": 1,
+    "T1565.001": 1,
     "T1566": 1,
     "T1567": 9,
     "T1567.002": 2,
@@ -14498,6 +14504,32 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-410d2a41-1e6d-452f-85e5-abdd8257a823",
+      "name": "Azure Application Deleted",
+      "path": "detections/sigma-imports/_quarantine/azure-application-deleted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1489"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-45545954-4016-43c6-855e-eae8f1c369dc",
       "name": "Protected Storage Service Access",
       "path": "detections/sigma-imports/_quarantine/protected-storage-service-access.yaml",
@@ -14520,6 +14552,33 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-46530378-f9db-4af9-a9e5-889c177d3881",
+      "name": "Azure Device or Configuration Modified or Deleted",
+      "path": "detections/sigma-imports/_quarantine/azure-device-or-configuration-modified-or-deleted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1485",
+        "T1565.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "ransomware",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
       "has_executable_body": true
     },
     {
@@ -15631,6 +15690,34 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-905d389b-b853-46d0-9d3d-dea0d3a3cd49",
+      "name": "AWS STS AssumeRole Misuse",
+      "path": "detections/sigma-imports/_quarantine/aws-sts-assumerole-misuse.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1548",
+        "T1550",
+        "T1550.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "cloud"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-9637e8a5-7131-4f7f-bdc7-2b05d8670c43",
       "name": "Suspicious File Characteristics Due to Missing Fields",
       "path": "detections/sigma-imports/_quarantine/suspicious-file-characteristics-due-to-missing-fields.yaml",
@@ -15960,6 +16047,60 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-b45ab1d2-712f-4f01-a751-df3826969807",
+      "name": "AWS STS GetSessionToken Misuse",
+      "path": "detections/sigma-imports/_quarantine/aws-sts-getsessiontoken-misuse.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "low",
+      "mitre_techniques": [
+        "T1548",
+        "T1550",
+        "T1550.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "lateral",
+        "cloud"
+      ],
+      "quality_score": 0.733,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:low(+0.083)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-b94bf91e-c2bf-4047-9c43-c6810f43baad",
+      "name": "AWS ECS Task Definition That Queries The Credential Endpoint",
+      "path": "detections/sigma-imports/_quarantine/aws-ecs-task-definition-that-queries-the-credential-endpoint.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1525"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "k8s"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
       "has_executable_body": true
     },
     {

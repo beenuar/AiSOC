@@ -215,3 +215,42 @@ def test_cidr_operator_behaves_and_agrees(match_when, event, expected):
     canonical = _load_canonical()
     assert vendored_matches(match_when, event) is expected
     assert canonical.matches(match_when, event) is expected
+
+
+# ---------------------------------------------------------------------------
+# Dotted field paths. Sigma writes `userIdentity.type`, meaning the `type`
+# key inside the `userIdentity` object. The matcher read the whole string as
+# one field name, so 59 rules were refused.
+#
+# The compatibility case is the one that matters: several connectors emit
+# FLATTENED keys that literally contain a dot. A literal key must keep
+# winning, or traversal would silently change what shipped rules match.
+# ---------------------------------------------------------------------------
+
+_PATH_CASES = [
+    # Traversal into a nested object.
+    ({"userIdentity.type": "Root"}, {"userIdentity": {"type": "Root"}}, True),
+    ({"userIdentity.type": "Root"}, {"userIdentity": {"type": "IAMUser"}}, False),
+    ({"a.b.c": "deep"}, {"a": {"b": {"c": "deep"}}}, True),
+    # A literal dotted key still wins, so nothing that ships today changes.
+    ({"aws.region": "eu-west-1"}, {"aws.region": "eu-west-1"}, True),
+    # ...even when a nested object of the same shape exists beside it.
+    ({"aws.region": "flat"}, {"aws.region": "flat", "aws": {"region": "nested"}}, True),
+    # Absent at every depth is no match, never an error.
+    ({"userIdentity.type": "Root"}, {"userIdentity": {}}, False),
+    ({"userIdentity.type": "Root"}, {}, False),
+    ({"userIdentity.type": "Root"}, {"userIdentity": None}, False),
+    # A non-object in the middle of a path cannot be traversed.
+    ({"userIdentity.type": "Root"}, {"userIdentity": "Root"}, False),
+    ({"a.b": "x"}, {"a": ["b"]}, False),
+    # Traversal composes with the other operators, not just equality.
+    ({"userIdentity.arn_contains_any": ["root"]}, {"userIdentity": {"arn": "arn:aws:iam::1:root"}}, True),
+    ({"src.ip_in_cidr_any": ["10.0.0.0/8"]}, {"src": {"ip": "10.1.2.3"}}, True),
+]
+
+
+@pytest.mark.parametrize(("match_when", "event", "expected"), _PATH_CASES)
+def test_dotted_paths_traverse_and_agree(match_when, event, expected):
+    canonical = _load_canonical()
+    assert vendored_matches(match_when, event) is expected
+    assert canonical.matches(match_when, event) is expected

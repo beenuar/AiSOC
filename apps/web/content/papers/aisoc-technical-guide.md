@@ -2,7 +2,7 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.8"
+version: "v1.9"
 date: "2026-11-26"
 license: "MIT (same as the AiSOC project)"
 abstract: |
@@ -57,7 +57,7 @@ connector / ingest API
         ├──────────► graph writer ──► Neo4j       (entity graph)
         │
         ▼
-    fusion  ──────── 2,973 executable detection rules, your tenant's tuning,
+    fusion  ──────── 3,026 executable detection rules, your tenant's tuning,
         │            correlation into alerts
         ▼
    Postgres ──────── the alert, the case, the audit chain

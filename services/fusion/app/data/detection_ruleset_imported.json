@@ -1,5 +1,5 @@
 {
-  "count": 1777,
+  "count": 1830,
   "rules": [
     {
       "category": "endpoint",
@@ -89,6 +89,36 @@
       "severity": "medium",
       "slug": "mssql-destructive-query",
       "upstream_status": "experimental"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-0055ad1f-be85-4798-83cf-a6da17c993b3",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Update\\ Application\\ Sucess\\-\\ Property\\ Name\\ AppAddress$"
+        ]
+      },
+      "mitre": [
+        "T1528",
+        "T1078.004"
+      ],
+      "name": "Application URI Configuration Changes",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "0055ad1f-be85-4798-83cf-a6da17c993b3",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_uri_modifications.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "application-uri-configuration-changes",
+      "upstream_status": "test"
     },
     {
       "category": "endpoint",
@@ -1005,6 +1035,35 @@
       "service": "",
       "severity": "medium",
       "slug": "file-decryption-using-gpg4win",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-039a7469-0296-4450-84c0-f6966b16dc6d",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Request\\ Approved/Denied$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "PIM Approvals And Deny Elevation",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "039a7469-0296-4450-84c0-f6966b16dc6d",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_pim_activation_approve_deny.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "pim-approvals-and-deny-elevation",
       "upstream_status": "test"
     },
     {
@@ -3512,6 +3571,35 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-0922467f-db53-4348-b7bf-dee8d0d348c6",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ conditional\\ access\\ policy$"
+        ]
+      },
+      "mitre": [
+        "T1548"
+      ],
+      "name": "New CA Policy by Non-approved Actor",
+      "product": "azure",
+      "provenance": {
+        "author": "Corissa Koopmans, '@corissalea'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "0922467f-db53-4348-b7bf-dee8d0d348c6",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_aad_secops_new_ca_policy_addedby_bad_actor.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "new-ca-policy-by-non-approved-actor",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-0944e002-e3f6-4eb5-bf69-3a3067b53d73",
@@ -3823,6 +3911,41 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-0a5177f4-6ca9-44c2-aacf-d3f3d8b6e4d2",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^CreateAccessKey$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^iam\\.amazonaws\\.com$"
+        ],
+        "userIdentity.arn_not_contains_any": [
+          "responseElements.accessKey.userName"
+        ]
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "AWS IAM Backdoor Users Keys",
+      "product": "aws",
+      "provenance": {
+        "author": "faloker",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "0a5177f4-6ca9-44c2-aacf-d3f3d8b6e4d2",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_iam_backdoor_users_keys.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "medium",
+      "slug": "aws-iam-backdoor-users-keys",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-0adc67e0-a68f-4ffd-9c43-28905aad5d6a",
@@ -3947,6 +4070,38 @@
       "service": "",
       "severity": "high",
       "slug": "time-travel-debugging-utility-usage",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-0b4b72e3-4c53-4d5b-b198-2c58cfef39a9",
+      "match_when": {
+        "Status_pattern_match_any": [
+          "^failure$"
+        ],
+        "properties.message_pattern_match_any": [
+          "^Invite\\ external\\ user$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Guest User Invited By Non Approved Inviters",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "0b4b72e3-4c53-4d5b-b198-2c58cfef39a9",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_guest_invite_failure.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "guest-user-invited-by-non-approved-inviters",
       "upstream_status": "test"
     },
     {
@@ -4630,6 +4785,33 @@
       "service": "",
       "severity": "high",
       "slug": "uncommon-network-connection-initiated-by-certutil-exe",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-0ddcff6d-d262-40b0-804b-80eb592de8e3",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ service\\ principal$"
+        ]
+      },
+      "mitre": [],
+      "name": "Azure Service Principal Created",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "0ddcff6d-d262-40b0-804b-80eb592de8e3",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_service_principal_created.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-service-principal-created",
       "upstream_status": "test"
     },
     {
@@ -5322,6 +5504,36 @@
       "service": "system",
       "severity": "high",
       "slug": "important-windows-eventlog-cleared",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-102e11e3-2db5-4c9e-bc26-357d42585d21",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Remove\\ eligible\\ member\\ \\(permanent\\)$",
+          "^Remove\\ eligible\\ member\\ \\(eligible\\)$"
+        ]
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Bulk Deletion Changes To Privileged Account Permissions",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "102e11e3-2db5-4c9e-bc26-357d42585d21",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_priviledged_role_assignment_bulk_change.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "bulk-deletion-changes-to-privileged-account-permissions",
       "upstream_status": "test"
     },
     {
@@ -8706,6 +8918,43 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-1ab3c5ed-5baf-417b-bb6b-78ca33f6c3df",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^ModifyInstanceAttribute$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^ec2\\.amazonaws\\.com$"
+        ],
+        "requestParameters.attribute_pattern_match_any": [
+          "^userData$"
+        ]
+      },
+      "mitre": [
+        "T1059.001",
+        "T1059.003",
+        "T1059.004"
+      ],
+      "name": "AWS EC2 Startup Shell Script Change",
+      "product": "aws",
+      "provenance": {
+        "author": "faloker",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "1ab3c5ed-5baf-417b-bb6b-78ca33f6c3df",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_ec2_startup_script_change.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "high",
+      "slug": "aws-ec2-startup-shell-script-change",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-1ac14d38-3dfc-4635-92c7-e3fd1c5f5bfc",
@@ -8876,6 +9125,37 @@
       "service": "",
       "severity": "medium",
       "slug": "nslookup-powershell-download-cradle-processcreation",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-1b45b0d1-773f-4f23-aedc-814b759563b1",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Update\\ Application$",
+          "^Update\\ Service\\ principal$"
+        ]
+      },
+      "mitre": [
+        "T1552",
+        "T1078.004"
+      ],
+      "name": "Application AppID Uri Configuration Changes",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "1b45b0d1-773f-4f23-aedc-814b759563b1",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_appid_uri_changes.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "application-appid-uri-configuration-changes",
       "upstream_status": "test"
     },
     {
@@ -12623,6 +12903,35 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-248649b7-d64f-46f0-9fb2-a52774166fb5",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Device\\ Code$"
+        ]
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Application Using Device Code Authentication Flow",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "248649b7-d64f-46f0-9fb2-a52774166fb5",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/signin_logs/azure_app_device_code_authentication.yml"
+      },
+      "service": "signinlogs",
+      "severity": "medium",
+      "slug": "application-using-device-code-authentication-flow",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-24c77512-782b-448a-8950-eddb0785fc71",
@@ -13292,6 +13601,36 @@
       "service": "",
       "severity": "low",
       "slug": "pua-adidnsdump-execution",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-26e7c5e2-6545-481e-b7e6-050143459635",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Delete\\ conditional\\ access\\ policy$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1556"
+      ],
+      "name": "CA Policy Removed by Non Approved Actor",
+      "product": "azure",
+      "provenance": {
+        "author": "Corissa Koopmans, '@corissalea'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "26e7c5e2-6545-481e-b7e6-050143459635",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_aad_secops_ca_policy_removedby_bad_actor.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "ca-policy-removed-by-non-approved-actor",
       "upstream_status": "test"
     },
     {
@@ -20268,6 +20607,36 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-410d2a41-1e6d-452f-85e5-abdd8257a823",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Delete\\ application$",
+          "^Hard\\ Delete\\ application$"
+        ]
+      },
+      "mitre": [
+        "T1489"
+      ],
+      "name": "Azure Application Deleted",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "410d2a41-1e6d-452f-85e5-abdd8257a823",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_application_deleted.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-application-deleted",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-411742ad-89b0-49cb-a7b0-3971b5c1e0a4",
@@ -21615,6 +21984,33 @@
       "upstream_status": "experimental"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-448fd1ea-2116-4c62-9cde-a92d120e0f08",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Remove\\ service\\ principal$"
+        ]
+      },
+      "mitre": [],
+      "name": "Azure Service Principal Removed",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "448fd1ea-2116-4c62-9cde-a92d120e0f08",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_service_principal_removed.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-service-principal-removed",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-44a22d59-b175-4f13-8c16-cbaef5b581ff",
@@ -22126,6 +22522,39 @@
       "service": "",
       "severity": "high",
       "slug": "hacktool-impacket-tools-execution",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-46530378-f9db-4af9-a9e5-889c177d3881",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Delete\\ device$",
+          "^Delete\\ device\\ configuration$",
+          "^Update\\ device$",
+          "^Update\\ device\\ configuration$"
+        ]
+      },
+      "mitre": [
+        "T1485",
+        "T1565.001"
+      ],
+      "name": "Azure Device or Configuration Modified or Deleted",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "46530378-f9db-4af9-a9e5-889c177d3881",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_device_or_configuration_modified_or_deleted.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-device-or-configuration-modified-or-deleted",
       "upstream_status": "test"
     },
     {
@@ -23053,6 +23482,36 @@
       "service": "cloudtrail",
       "severity": "low",
       "slug": "aws-glue-development-endpoint-activity",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-49a268a4-72f4-4e38-8a7b-885be690c5b5",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ eligible\\ member\\ \\(permanent\\)$",
+          "^Add\\ eligible\\ member\\ \\(eligible\\)$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "User Added To Privilege Role",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "49a268a4-72f4-4e38-8a7b-885be690c5b5",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_priviledged_role_assignment_add.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "user-added-to-privilege-role",
       "upstream_status": "test"
     },
     {
@@ -24847,6 +25306,38 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-4bb80281-3756-4ec8-a88e-523c5a6fda9e",
+      "match_when": {
+        "OperationName_pattern_match_any": [
+          "^Set\\ Company\\ Information$"
+        ],
+        "TargetResources.modifiedProperties.newValue_contains_any": [
+          "TrustedCAsForPasswordlessAuth"
+        ]
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "New Root Certificate Authority Added",
+      "product": "azure",
+      "provenance": {
+        "author": "Harjot Shah Singh, '@cyb3rjy0t'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "4bb80281-3756-4ec8-a88e-523c5a6fda9e",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_ad_new_root_ca_added.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "new-root-certificate-authority-added",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-4be8b654-0c01-4c9d-a10c-6b28467fc651",
@@ -25157,6 +25648,44 @@
       "service": "",
       "severity": "high",
       "slug": "hacktool-coercedpotato-named-pipe-creation",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-4d136857-6a1a-432a-82fc-5dd497ee5e7c",
+      "match_when": {
+        "AuthenticationRequirement_pattern_match_any": [
+          "^singleFactorAuthentication$"
+        ],
+        "DeviceDetail.deviceId_pattern_match_any": [
+          "^$"
+        ],
+        "NetworkLocationDetails_pattern_match_any": [
+          "^\\[\\]$"
+        ],
+        "ResultType_pattern_match_any": [
+          "^0$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Sign-ins by Unknown Devices",
+      "product": "azure",
+      "provenance": {
+        "author": "Michael Epping, '@mepples21'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "4d136857-6a1a-432a-82fc-5dd497ee5e7c",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/signin_logs/azure_ad_sign_ins_from_unknown_devices.yml"
+      },
+      "service": "signinlogs",
+      "severity": "low",
+      "slug": "sign-ins-by-unknown-devices",
       "upstream_status": "test"
     },
     {
@@ -25788,6 +26317,35 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-4f77e1d7-3982-4ee0-8489-abf2d6b75284",
+      "match_when": {
+        "DeviceDetail.isCompliant_pattern_match_any": [
+          "^false$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Sign-ins from Non-Compliant Devices",
+      "product": "azure",
+      "provenance": {
+        "author": "Michael Epping, '@mepples21'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "4f77e1d7-3982-4ee0-8489-abf2d6b75284",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/signin_logs/azure_ad_sign_ins_from_noncompliant_devices.yml"
+      },
+      "service": "signinlogs",
+      "severity": "high",
+      "slug": "sign-ins-from-non-compliant-devices",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-4fd6b1c7-19b8-4488-97f6-00f0924991a3",
@@ -26238,6 +26796,36 @@
       "severity": "high",
       "slug": "python-one-liners-with-base64-decoding",
       "upstream_status": "experimental"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-50a3c7aa-ec29-44a4-92c1-fce229eef6fc",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Update\\ conditional\\ access\\ policy$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1556"
+      ],
+      "name": "CA Policy Updated by Non Approved Actor",
+      "product": "azure",
+      "provenance": {
+        "author": "Corissa Koopmans, '@corissalea'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "50a3c7aa-ec29-44a4-92c1-fce229eef6fc",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_aad_secops_ca_policy_updatedby_bad_actor.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "ca-policy-updated-by-non-approved-actor",
+      "upstream_status": "test"
     },
     {
       "category": "endpoint",
@@ -27249,6 +27837,34 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-542b9912-c01f-4e3f-89a8-014c48cdca7d",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Device\\ no\\ longer\\ compliant$",
+          "^Device\\ no\\ longer\\ managed$"
+        ]
+      },
+      "mitre": [],
+      "name": "Azure Device No Longer Managed or Compliant",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "542b9912-c01f-4e3f-89a8-014c48cdca7d",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_device_no_longer_managed_or_compliant.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-device-no-longer-managed-or-compliant",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-545a5da6-f103-4919-a519-e9aec1026ee4",
@@ -27642,6 +28258,35 @@
       "service": "",
       "severity": "high",
       "slug": "driver-added-to-disallowed-images-in-hvci-registry",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-55695bc0-c8cf-461f-a379-2535f563c854",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^ROPC$"
+        ]
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Applications That Are Using ROPC Authentication Flow",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "55695bc0-c8cf-461f-a379-2535f563c854",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/signin_logs/azure_app_ropc_authentication.yml"
+      },
+      "service": "signinlogs",
+      "severity": "medium",
+      "slug": "applications-that-are-using-ropc-authentication-flow",
       "upstream_status": "test"
     },
     {
@@ -28272,6 +28917,57 @@
       "service": "",
       "severity": "medium",
       "slug": "pua-system-informer-execution",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-572b12d4-9062-11ed-a1eb-0242ac120002",
+      "match_when": {
+        "all_of": [
+          {
+            "AuthenticationRequirement_pattern_match_any": [
+              "^singleFactorAuthentication$"
+            ],
+            "RiskState_pattern_match_any": [
+              "^atRisk$"
+            ],
+            "Status_pattern_match_any": [
+              "^Success$"
+            ]
+          },
+          {
+            "any_of": [
+              {
+                "DeviceDetail.trusttype_pattern_match_any": [
+                  "^$"
+                ]
+              },
+              {
+                "DeviceDetail.trusttype": null
+              }
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Suspicious SignIns From A Non Registered Device",
+      "product": "azure",
+      "provenance": {
+        "author": "Harjot Singh, '@cyb3rjy0t'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "572b12d4-9062-11ed-a1eb-0242ac120002",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/signin_logs/azure_ad_risky_sign_ins_with_singlefactorauth_from_unknown_devices.yml"
+      },
+      "service": "signinlogs",
+      "severity": "high",
+      "slug": "suspicious-signins-from-a-non-registered-device",
       "upstream_status": "test"
     },
     {
@@ -28966,6 +29662,35 @@
       "service": "",
       "severity": "high",
       "slug": "esentutl-volume-shadow-copy-service-keys",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-5aecf3d5-f8a0-48e7-99be-3a759df7358f",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ app\\ role\\ assignment\\ to\\ service\\ principal$"
+        ]
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "App Granted Privileged Delegated Or App Permissions",
+      "product": "azure",
+      "provenance": {
+        "author": "Bailey Bercik '@baileybercik', Mark Morowczynski '@markmorow'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "5aecf3d5-f8a0-48e7-99be-3a759df7358f",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_privileged_permissions.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "app-granted-privileged-delegated-or-app-permissions",
       "upstream_status": "test"
     },
     {
@@ -31735,6 +32460,34 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-636e30d5-3736-42ea-96b1-e6e2f8429fd6",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Remove\\ owner\\ from\\ service\\ principal$",
+          "^Remove\\ owner\\ from\\ application$"
+        ]
+      },
+      "mitre": [],
+      "name": "Azure Owner Removed From Application or Service Principal",
+      "product": "azure",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "636e30d5-3736-42ea-96b1-e6e2f8429fd6",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_owner_removed_from_application_or_service_principal.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "azure-owner-removed-from-application-or-service-principal",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-6385697e-9f1b-40bd-8817-f4a91f40508e",
@@ -32516,6 +33269,36 @@
       "service": "dns-client",
       "severity": "medium",
       "slug": "dns-query-to-mega-hosting-website-dns-client",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-665e2d43-70dc-4ccc-9d27-026c9dd7ed9c",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Remove\\ member\\ from\\ group$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1556"
+      ],
+      "name": "User Removed From Group With CA Policy Modification Access",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Thomas Detzner '@tdetzner'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "665e2d43-70dc-4ccc-9d27-026c9dd7ed9c",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_group_user_removal_ca_modification.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "user-removed-from-group-with-ca-policy-modification-access",
       "upstream_status": "test"
     },
     {
@@ -35117,6 +35900,39 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-6f583da0-3a90-4566-a4ed-83c09fe18bbf",
+      "match_when": {
+        "Status_pattern_match_any": [
+          "^Success$"
+        ],
+        "properties.message_pattern_match_any": [
+          "^Add\\ user$",
+          "^Delete\\ user$"
+        ]
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Account Created And Deleted Within A Close Time Frame",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', MikeDuddington, '@dudders1', Tim Shelton",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "6f583da0-3a90-4566-a4ed-83c09fe18bbf",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_ad_account_created_deleted.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "account-created-and-deleted-within-a-close-time-frame",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-6f8b3439-a203-45dc-a88b-abf57ea15ccf",
@@ -36611,6 +37427,35 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-74298991-9fc4-460e-a92e-511aa60baec1",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ owner\\ to\\ application$"
+        ]
+      },
+      "mitre": [
+        "T1552"
+      ],
+      "name": "Added Owner To Application",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "74298991-9fc4-460e-a92e-511aa60baec1",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_owner_added.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "added-owner-to-application",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-74403157-20f5-415d-89a7-c505779585cf",
@@ -37778,6 +38623,41 @@
       "severity": "high",
       "slug": "suspicious-registry-modification-from-ads-via-regini-exe",
       "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-77caf516-34e5-4df9-b4db-20744fea0a60",
+      "match_when": {
+        "additionalEventData.MFAUsed_pattern_match_any": [
+          "^NO$"
+        ],
+        "eventName_pattern_match_any": [
+          "^ConsoleLogin$"
+        ],
+        "responseElements.ConsoleLogin_pattern_match_any": [
+          "^Success$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "AWS Successful Console Login Without MFA",
+      "product": "aws",
+      "provenance": {
+        "author": "Thuya@Hacktilizer, Ivan Saakov",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "77caf516-34e5-4df9-b4db-20744fea0a60",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_cloudtrail_console_login_success_without_mfa.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "medium",
+      "slug": "aws-successful-console-login-without-mfa",
+      "upstream_status": "experimental"
     },
     {
       "category": "endpoint",
@@ -48386,6 +49266,41 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-8a63cdd4-6207-414a-85bc-7e032bd3c1a2",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^ModifyDBInstance$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^rds\\.amazonaws\\.com$"
+        ],
+        "responseElements.pendingModifiedValues.masterUserPassword_pattern_match_any": [
+          ".*"
+        ]
+      },
+      "mitre": [
+        "T1020"
+      ],
+      "name": "AWS RDS Master Password Change",
+      "product": "aws",
+      "provenance": {
+        "author": "faloker",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "8a63cdd4-6207-414a-85bc-7e032bd3c1a2",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_rds_change_master_password.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "medium",
+      "slug": "aws-rds-master-password-change",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-8a7e90c5-fe6e-45dc-889e-057fe4378bd9",
@@ -49477,6 +50392,41 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-8dee7a0d-43fd-4b3c-8cd1-605e189d195e",
+      "match_when": {
+        "Category_pattern_match_any": [
+          "^UserManagement$"
+        ],
+        "OperationName_pattern_match_any": [
+          "^Update\\ user$"
+        ],
+        "properties.message_pattern_match_any": [
+          "^\"displayName\":\"UserType\",\"oldValue\":\"\\[\\\\\"Guest\\\\\"\\]\",\"newValue\":\"\\[\\\\\"Member\\\\\"\\]\"$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "User State Changed From Guest To Member",
+      "product": "azure",
+      "provenance": {
+        "author": "MikeDuddington, '@dudders1'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "8dee7a0d-43fd-4b3c-8cd1-605e189d195e",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_guest_to_member.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "user-state-changed-from-guest-to-member",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-8e1cb247-6cf6-42fa-b440-3f27d57e9936",
@@ -50180,6 +51130,70 @@
       "upstream_status": "test"
     },
     {
+      "category": "identity",
+      "emitter": "okta",
+      "id": "sigmahq-sigma-9058ca8b-f397-4fd1-a9fa-2b7aad4d6309",
+      "match_when": {
+        "debugContext.debugData.requestUri_contains_any": [
+          "admin"
+        ],
+        "securityContext.isProxy_pattern_match_any": [
+          "^true$"
+        ]
+      },
+      "mitre": [],
+      "name": "Okta Admin Functions Access Through Proxy",
+      "product": "okta",
+      "provenance": {
+        "author": "Muhammad Faisal @faisalusuf",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "9058ca8b-f397-4fd1-a9fa-2b7aad4d6309",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/identity/okta/okta_admin_activity_from_proxy_query.yml"
+      },
+      "service": "okta",
+      "severity": "medium",
+      "slug": "okta-admin-functions-access-through-proxy",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-905d389b-b853-46d0-9d3d-dea0d3a3cd49",
+      "match_when": {
+        "userIdentity.sessionContext.sessionIssuer.type_pattern_match_any": [
+          "^Role$"
+        ],
+        "userIdentity.type_pattern_match_any": [
+          "^AssumedRole$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1550",
+        "T1550.001"
+      ],
+      "name": "AWS STS AssumeRole Misuse",
+      "product": "aws",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "905d389b-b853-46d0-9d3d-dea0d3a3cd49",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_sts_assumerole_misuse.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "low",
+      "slug": "aws-sts-assumerole-misuse",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-9082ff1f-88ab-4678-a3cc-5bcff99fc74d",
@@ -50870,6 +51884,36 @@
       "service": "security",
       "severity": "medium",
       "slug": "suspicious-access-to-sensitive-file-extensions",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-91c95675-1f27-46d0-bead-d1ae96b97cd3",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ member\\ from\\ group$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1556"
+      ],
+      "name": "User Added To Group With CA Policy Modification Access",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Thomas Detzner '@tdetzner'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "91c95675-1f27-46d0-bead-d1ae96b97cd3",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_group_user_addition_ca_modification.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "user-added-to-group-with-ca-policy-modification-access",
       "upstream_status": "test"
     },
     {
@@ -52942,6 +53986,39 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-97fbabf8-8e1b-47a2-b7d5-a418d2b95e3d",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^UpdateFunctionConfiguration"
+        ],
+        "eventSource_pattern_match_any": [
+          "^lambda\\.amazonaws\\.com$"
+        ],
+        "requestParameters.layers_pattern_match_any": [
+          ".*"
+        ]
+      },
+      "mitre": [],
+      "name": "AWS New Lambda Layer Attached",
+      "product": "aws",
+      "provenance": {
+        "author": "Austin Songer",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "97fbabf8-8e1b-47a2-b7d5-a418d2b95e3d",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_new_lambda_layer_attached.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "low",
+      "slug": "aws-new-lambda-layer-attached",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-9801abb8-e297-4dbf-9fbd-57dde0e830ad",
@@ -54263,6 +55340,35 @@
       "severity": "medium",
       "slug": "aws-sts-getcalleridentity-enumeration-via-trufflehog",
       "upstream_status": "experimental"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-9b2cc4c4-2ad4-416d-8e8e-ee6aa6f5035a",
+      "match_when": {
+        "ConsentContext.IsAdminConsent_pattern_match_any": [
+          "^false$"
+        ]
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "End User Consent",
+      "product": "azure",
+      "provenance": {
+        "author": "Bailey Bercik '@baileybercik', Mark Morowczynski '@markmorow'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "9b2cc4c4-2ad4-416d-8e8e-ee6aa6f5035a",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_end_user_consent.yml"
+      },
+      "service": "auditlogs",
+      "severity": "low",
+      "slug": "end-user-consent",
+      "upstream_status": "test"
     },
     {
       "category": "endpoint",
@@ -56181,6 +57287,56 @@
       "upstream_status": "test"
     },
     {
+      "category": "identity",
+      "emitter": "okta",
+      "id": "sigmahq-sigma-a0b38b70-3cb5-484b-a4eb-c4d8e7bcc0a9",
+      "match_when": {
+        "all_of": [
+          {
+            "eventType_pattern_match_any": [
+              "^policy\\.evaluate_sign_on$"
+            ],
+            "target.displayName_pattern_match_any": [
+              "^Okta\\ Admin\\ Console$"
+            ]
+          },
+          {
+            "any_of": [
+              {
+                "debugContext.debugData.behaviors_contains_any": [
+                  "POSITIVE"
+                ]
+              },
+              {
+                "debugContext.debugData.logOnlySecurityData_contains_any": [
+                  "POSITIVE"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Okta New Admin Console Behaviours",
+      "product": "okta",
+      "provenance": {
+        "author": "kelnage",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "a0b38b70-3cb5-484b-a4eb-c4d8e7bcc0a9",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/identity/okta/okta_new_behaviours_admin_console.yml"
+      },
+      "service": "okta",
+      "severity": "high",
+      "slug": "okta-new-admin-console-behaviours",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-a0cb7110-edf0-47a4-9177-541a4083128a",
@@ -57373,6 +58529,41 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-a4b25073-8947-489c-a8dd-93b41c23f26d",
+      "match_when": {
+        "activityType_contains_any": [
+          "Recover device local administrator password"
+        ],
+        "additionalDetails.additionalInfo_contains_any": [
+          "Successfully recovered local credential by device id"
+        ],
+        "category_pattern_match_any": [
+          "^Device$"
+        ]
+      },
+      "mitre": [
+        "T1098.005"
+      ],
+      "name": "Windows LAPS Credential Dump From Entra ID",
+      "product": "azure",
+      "provenance": {
+        "author": "andrewdanis",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "a4b25073-8947-489c-a8dd-93b41c23f26d",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_auditlogs_laps_credential_dumping.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "windows-laps-credential-dump-from-entra-id",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-a4c90ea1-2634-4ca0-adbb-35eae169b6fc",
@@ -57810,6 +59001,35 @@
       "severity": "high",
       "slug": "aws-securityhub-findings-evasion",
       "upstream_status": ""
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-a6355fbe-f36f-45d8-8efc-ab42465cbc52",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ delegated\\ permission\\ grant$"
+        ]
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Delegated Permissions Granted For All Users",
+      "product": "azure",
+      "provenance": {
+        "author": "Bailey Bercik '@baileybercik', Mark Morowczynski '@markmorow'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "a6355fbe-f36f-45d8-8efc-ab42465cbc52",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_delegated_permissions_all_users.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "delegated-permissions-granted-for-all-users",
+      "upstream_status": "test"
     },
     {
       "category": "endpoint",
@@ -60397,6 +61617,35 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-aeaef14c-e5bf-4690-a9c8-835caad458bd",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Disable\\ PIM\\ Alert$"
+        ]
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "PIM Alert Setting Changes To Disabled",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "aeaef14c-e5bf-4690-a9c8-835caad458bd",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_pim_alerts_disabled.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "pim-alert-setting-changes-to-disabled",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-aef9d1f1-7396-4e92-a927-4567c7a495c1",
@@ -60693,6 +61942,40 @@
       "service": "",
       "severity": "low",
       "slug": "use-get-nettcpconnection-powershell-module",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-b04934b2-0a68-4845-8a19-bdfed3a68a7a",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ member\\ to\\ role$",
+          "^Add\\ eligible\\ member\\ to\\ role$",
+          "^Add\\ scoped\\ member\\ to\\ role$"
+        ],
+        "targetResources.type_pattern_match_any": [
+          "^Service\\ Principal$"
+        ]
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "App Assigned To Azure RBAC/Microsoft Entra Role",
+      "product": "azure",
+      "provenance": {
+        "author": "Bailey Bercik '@baileybercik', Mark Morowczynski '@markmorow'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "b04934b2-0a68-4845-8a19-bdfed3a68a7a",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_role_added.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "app-assigned-to-azure-rbac-microsoft-entra-role",
       "upstream_status": "test"
     },
     {
@@ -61090,6 +62373,45 @@
       "service": "",
       "severity": "medium",
       "slug": "shadow-copies-creation-using-operating-systems-utilities",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-b18454c8-0be3-41f7-86bc-9c614611b839",
+      "match_when": {
+        "Category_pattern_match_any": [
+          "^UserManagement$"
+        ],
+        "LoggedByService_pattern_match_any": [
+          "^Core\\ Directory$"
+        ],
+        "OperationName_pattern_match_any": [
+          "^Update\\ user$"
+        ],
+        "TargetResources.ModifiedProperties.DisplayName_pattern_match_any": [
+          "^StrongAuthenticationRequirement$"
+        ],
+        "TargetResources.ModifiedProperties.NewValue_contains_any": [
+          "State\":0"
+        ]
+      },
+      "mitre": [],
+      "name": "Multi Factor Authentication Disabled For User Account",
+      "product": "azure",
+      "provenance": {
+        "author": "Harjot Singh (@cyb3rjy0t)",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "b18454c8-0be3-41f7-86bc-9c614611b839",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_user_account_mfa_disable.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "multi-factor-authentication-disabled-for-user-account",
       "upstream_status": "test"
     },
     {
@@ -62560,6 +63882,43 @@
     },
     {
       "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-b45ab1d2-712f-4f01-a751-df3826969807",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^GetSessionToken$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^sts\\.amazonaws\\.com$"
+        ],
+        "userIdentity.type_pattern_match_any": [
+          "^IAMUser$"
+        ]
+      },
+      "mitre": [
+        "T1548",
+        "T1550",
+        "T1550.001"
+      ],
+      "name": "AWS STS GetSessionToken Misuse",
+      "product": "aws",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "b45ab1d2-712f-4f01-a751-df3826969807",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_sts_getsessiontoken_misuse.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "low",
+      "slug": "aws-sts-getsessiontoken-misuse",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
       "emitter": "azure_activity",
       "id": "sigmahq-sigma-b4a6d707-9430-4f5f-af68-0337f52d5c42",
       "match_when": {
@@ -63870,6 +65229,43 @@
       "service": "",
       "severity": "medium",
       "slug": "devicecredentialdeployment-execution",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-b94bf91e-c2bf-4047-9c43-c6810f43baad",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^DescribeTaskDefinition$",
+          "^RegisterTaskDefinition$",
+          "^RunTask$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^ecs\\.amazonaws\\.com$"
+        ],
+        "requestParameters.containerDefinitions.command_contains_any": [
+          "$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI"
+        ]
+      },
+      "mitre": [
+        "T1525"
+      ],
+      "name": "AWS ECS Task Definition That Queries The Credential Endpoint",
+      "product": "aws",
+      "provenance": {
+        "author": "Darin Smith",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "b94bf91e-c2bf-4047-9c43-c6810f43baad",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_ecs_task_definition_cred_endpoint_query.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "medium",
+      "slug": "aws-ecs-task-definition-that-queries-the-credential-endpoint",
       "upstream_status": "test"
     },
     {
@@ -65615,6 +67011,38 @@
       "upstream_status": "test"
     },
     {
+      "category": "identity",
+      "emitter": "okta",
+      "id": "sigmahq-sigma-bde30855-5c53-4c18-ae90-1ff79ebc9578",
+      "match_when": {
+        "eventType_pattern_match_any": [
+          "^user\\.session\\.start$"
+        ],
+        "securityContext.isProxy_pattern_match_any": [
+          "^true$"
+        ]
+      },
+      "mitre": [
+        "T1685"
+      ],
+      "name": "Okta User Session Start Via An Anonymising Proxy Service",
+      "product": "okta",
+      "provenance": {
+        "author": "kelnage",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "bde30855-5c53-4c18-ae90-1ff79ebc9578",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/identity/okta/okta_user_session_start_via_anonymised_proxy.yml"
+      },
+      "service": "okta",
+      "severity": "high",
+      "slug": "okta-user-session-start-via-an-anonymising-proxy-service",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-bde47d4b-9987-405c-94c7-b080410e8ea7",
@@ -66672,6 +68100,36 @@
       "upstream_status": "experimental"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-c1d147ae-a951-48e5-8b41-dcd0170c7213",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Add\\ delegated\\ permission\\ grant$",
+          "^Add\\ app\\ role\\ assignment\\ to\\ service\\ principal$"
+        ]
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "App Granted Microsoft Permissions",
+      "product": "azure",
+      "provenance": {
+        "author": "Bailey Bercik '@baileybercik', Mark Morowczynski '@markmorow'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "c1d147ae-a951-48e5-8b41-dcd0170c7213",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_permissions_msft.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "app-granted-microsoft-permissions",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-c1dda054-d638-4c16-afc8-53e007f3fbc5",
@@ -66758,6 +68216,38 @@
       "service": "",
       "severity": "medium",
       "slug": "enumerate-all-information-with-whoami-exe",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-c2496b41-16a9-4016-a776-b23f8910dc58",
+      "match_when": {
+        "OperationName_pattern_match_any": [
+          "^Authentication\\ Methods\\ Policy\\ Update$"
+        ],
+        "TargetResources.modifiedProperties_contains_any": [
+          "AuthenticationMethodsPolicy"
+        ]
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Certificate-Based Authentication Enabled",
+      "product": "azure",
+      "provenance": {
+        "author": "Harjot Shah Singh, '@cyb3rjy0t'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "c2496b41-16a9-4016-a776-b23f8910dc58",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_ad_certificate_based_authencation_enabled.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "certificate-based-authentication-enabled",
       "upstream_status": "test"
     },
     {
@@ -67191,6 +68681,41 @@
       "service": "",
       "severity": "high",
       "slug": "potential-persistence-via-outlook-form",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "aws_cloudtrail",
+      "id": "sigmahq-sigma-c3f265c7-ff03-4056-8ab2-d486227b4599",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^RestoreDBInstanceFromDBSnapshot$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^rds\\.amazonaws\\.com$"
+        ],
+        "responseElements.publiclyAccessible_pattern_match_any": [
+          "^true$"
+        ]
+      },
+      "mitre": [
+        "T1020"
+      ],
+      "name": "Restore Public AWS RDS Instance",
+      "product": "aws",
+      "provenance": {
+        "author": "faloker",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "c3f265c7-ff03-4056-8ab2-d486227b4599",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/aws/cloudtrail/aws_rds_public_db_restore.yml"
+      },
+      "service": "cloudtrail",
+      "severity": "high",
+      "slug": "restore-public-aws-rds-instance",
       "upstream_status": "test"
     },
     {
@@ -71099,6 +72624,36 @@
       "service": "",
       "severity": "low",
       "slug": "unmount-share-via-net-exe",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-cbb67ecc-fb70-4467-9350-c910bdf7c628",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Update\\ application\\ –\\ Certificates\\ and\\ secrets\\ management$",
+          "^Update\\ Service\\ principal/Update\\ Application$"
+        ]
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "Added Credentials to Existing Application",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Bailey Bercik '@baileybercik'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "cbb67ecc-fb70-4467-9350-c910bdf7c628",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_app_credential_added.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "added-credentials-to-existing-application",
       "upstream_status": "test"
     },
     {
@@ -75604,6 +77159,35 @@
       "severity": "medium",
       "slug": "windows-recovery-environment-disabled-via-reagentc",
       "upstream_status": "experimental"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-db6c06c4-bf3b-421c-aa88-15672b88c743",
+      "match_when": {
+        "properties.message_pattern_match_any": [
+          "^Update\\ role\\ setting\\ in\\ PIM$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Changes To PIM Settings",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "db6c06c4-bf3b-421c-aa88-15672b88c743",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_pim_change_settings.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "changes-to-pim-settings",
+      "upstream_status": "test"
     },
     {
       "category": "endpoint",
@@ -80348,6 +81932,43 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-ebbeb024-5b1d-4e16-9c0c-917f86c708a7",
+      "match_when": {
+        "ModifiedProperties{}.NewValue_pattern_match_any": [
+          "Admins$",
+          "Administrator$"
+        ],
+        "Operation_pattern_match_any": [
+          "^Add\\ member\\ to\\ role\\.$"
+        ],
+        "Workload_pattern_match_any": [
+          "^AzureActiveDirectory$"
+        ]
+      },
+      "mitre": [
+        "T1098.003",
+        "T1078"
+      ],
+      "name": "User Added to an Administrator's Azure AD Role",
+      "product": "azure",
+      "provenance": {
+        "author": "Raphaël CALVET, @MetallicHack",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "ebbeb024-5b1d-4e16-9c0c-917f86c708a7",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/activity_logs/azure_ad_user_added_to_admin_role.yml"
+      },
+      "service": "activitylogs",
+      "severity": "medium",
+      "slug": "user-added-to-an-administrator-s-azure-ad-role",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-ebdf49d8-b89c-46c9-8fdf-2c308406f6bd",
@@ -81092,6 +82713,41 @@
       "service": "",
       "severity": "high",
       "slug": "pua-ngrok-execution",
+      "upstream_status": "test"
+    },
+    {
+      "category": "identity",
+      "emitter": "okta",
+      "id": "sigmahq-sigma-ee39a9f7-5a79-4b0a-9815-d36b3cf28d3e",
+      "match_when": {
+        "eventType_pattern_match_any": [
+          "^user\\.authentication\\.auth_via_mfa$"
+        ],
+        "outcome.reason_pattern_match_any": [
+          "^FastPass\\ declined\\ phishing\\ attempt$"
+        ],
+        "outcome.result_pattern_match_any": [
+          "^FAILURE$"
+        ]
+      },
+      "mitre": [
+        "T1566"
+      ],
+      "name": "Okta FastPass Phishing Detection",
+      "product": "okta",
+      "provenance": {
+        "author": "Austin Songer @austinsonger",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "ee39a9f7-5a79-4b0a-9815-d36b3cf28d3e",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/identity/okta/okta_fastpass_phishing_detection.yml"
+      },
+      "service": "okta",
+      "severity": "high",
+      "slug": "okta-fastpass-phishing-detection",
       "upstream_status": "test"
     },
     {
@@ -84376,6 +86032,39 @@
       "upstream_status": "test"
     },
     {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-f7b5b004-dece-46e4-a4a5-f6fd0e1c6947",
+      "match_when": {
+        "Status_pattern_match_any": [
+          "^Success$"
+        ],
+        "properties.message_contains_all": [
+          "Add user",
+          "Add member to role"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Privileged Account Creation",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H', Tim Shelton",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "f7b5b004-dece-46e4-a4a5-f6fd0e1c6947",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_privileged_account_creation.yml"
+      },
+      "service": "auditlogs",
+      "severity": "medium",
+      "slug": "privileged-account-creation",
+      "upstream_status": "test"
+    },
+    {
       "category": "endpoint",
       "emitter": "windows_event",
       "id": "sigmahq-sigma-f7b5f842-a6af-4da5-9e95-e32478f3cd2f",
@@ -86553,6 +88242,38 @@
       "service": "",
       "severity": "low",
       "slug": "suspicious-get-local-groups-information-powershell",
+      "upstream_status": "test"
+    },
+    {
+      "category": "cloud",
+      "emitter": "azure_activity",
+      "id": "sigmahq-sigma-fa84aaf5-8142-43cd-9ec2-78cfebf878ce",
+      "match_when": {
+        "Status_pattern_match_any": [
+          "^Admin\\ registered\\ temporary\\ access\\ pass\\ method\\ for\\ user$"
+        ],
+        "properties.message_pattern_match_any": [
+          "^Admin\\ registered\\ security\\ info$"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Temporary Access Pass Added To An Account",
+      "product": "azure",
+      "provenance": {
+        "author": "Mark Morowczynski '@markmorow', Yochana Henderson, '@Yochana-H'",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "fa84aaf5-8142-43cd-9ec2-78cfebf878ce",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/cloud/azure/audit_logs/azure_tap_added.yml"
+      },
+      "service": "auditlogs",
+      "severity": "high",
+      "slug": "temporary-access-pass-added-to-an-account",
       "upstream_status": "test"
     },
     {

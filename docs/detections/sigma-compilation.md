@@ -8,8 +8,8 @@ translation, and — more importantly — of replaying every translated rule
 through the real connector and the real engine to check it actually fires.
 
 - **Imported Sigma rules considered:** 3,132
-- **Compiled and proven to fire:** 1,777
-- **Refused:** 1,355
+- **Compiled and proven to fire:** 1,830
+- **Refused:** 1,302
 
 A rule ships only when a vendor-shaped event replayed through its
 connector's `normalize()` and the `DetectionEngine` produces a hit for that
@@ -22,9 +22,9 @@ source; it is not a claim that the rule detects an attack.
 | Connector | Rules proven to fire |
 | --- | ---: |
 | `windows_event` | 1,694 |
-| `aws_cloudtrail` | 39 |
-| `azure_activity` | 28 |
-| `okta` | 16 |
+| `azure_activity` | 68 |
+| `aws_cloudtrail` | 48 |
+| `okta` | 20 |
 
 ## Why the rest were refused
 
@@ -35,14 +35,13 @@ that do not ship.
 | Reason | Rules | Example |
 | --- | ---: | --- |
 | no connector emits this log source | 556 | `access-of-sudoers-file-content.yaml: linux/None` |
-| negation is not faithfully expressible (missing field would flip) | 492 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
-| compiled, but did not fire on its own proof event | 185 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
-| field is a dotted path and the matcher has no path traversal | 59 | `account-created-and-deleted-within-a-close-time-frame.yaml: properties.message` |
+| negation is not faithfully expressible (missing field would flip) | 496 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
+| compiled, but did not fire on its own proof event | 186 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
 | the connector rejected the proof event | 30 | `azure-application-gateway-modified-or-deleted.yaml` |
 | \|all on a non-contains modifier has no matcher operator | 14 | `aws-iam-s3browser-templated-s3-bucket-policy-creation.yaml: requestParameters\|contains\|all with wildcards` |
 | bare keywords search the whole event; the matcher is field-scoped | 10 | `granting-of-permissions-to-an-account.yaml: keywords block` |
 | \|base64/\|base64offset has no matcher operator | 7 | `cobaltstrike-service-installations-security.yaml: ServiceFileName\|base64offset` |
-| \|fieldref compares two fields and has no matcher operator | 1 | `process-deletion-of-its-own-executable.yaml: TargetFilename\|fieldref` |
+| \|fieldref compares two fields and has no matcher operator | 2 | `aws-user-login-profile-was-modified.yaml: userIdentity.arn\|fieldref` |
 | unsupported Sigma modifier | 1 | `suspicious-copy-from-or-to-system-directory.yaml: CommandLine\|i` |
 
 ## Upstream lifecycle status
@@ -58,8 +57,8 @@ through to the rule and onto the alert so it can still be filtered:
 
 | Upstream status | Rules shipped | Treatment |
 | --- | ---: | --- |
-| `test` | 1,604 | Shipped. In SigmaHQ this means reviewed and in community use — the normal state for most of the corpus, not a warning. |
-| `experimental` | 127 | Shipped and labelled. Genuine false-positive risk, but that is a tuning problem, and hiding the rule does not help someone who wants the coverage. |
+| `test` | 1,656 | Shipped. In SigmaHQ this means reviewed and in community use — the normal state for most of the corpus, not a warning. |
+| `experimental` | 128 | Shipped and labelled. Genuine false-positive risk, but that is a tuning problem, and hiding the rule does not help someone who wants the coverage. |
 | `(none recorded)` | 46 | Shipped. No upstream status was recorded on import. |
 
 `deprecated` and `unsupported` are refused outright: upstream withdrew
@@ -77,8 +76,8 @@ requires messages produced by a match to identify the rule's author.
 
 ### Author attribution
 
-`provenance.author` names the upstream author on 1,777 of the
-1,777 compiled rules.
+`provenance.author` names the upstream author on 1,830 of the
+1,830 compiled rules.
 The author travels with the rule and into the alert: `_attribution()` in
 the detection engine renders it onto every match, so a hit on *WScript or
 CScript Dropper - File* reads *Translated from SigmaHQ/sigma by Tim

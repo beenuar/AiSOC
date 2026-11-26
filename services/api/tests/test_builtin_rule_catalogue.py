@@ -69,7 +69,9 @@ ARTEFACTS: dict[str, int] = {
     "detection_ruleset.json": 1196,
     # 1770 -> 1777 when the matcher gained a case-sensitive regex operator
     # and Sigma's `|re` stopped being refused outright.
-    "detection_ruleset_imported.json": 1777,
+    # 1777 -> 1830 when it learned to traverse a dotted field path. A literal
+    # key of that name still wins, so no rule that already shipped changed.
+    "detection_ruleset_imported.json": 1830,
     # 76 -> 79 with the three authored AI-session rules.
     # 79 -> 90 with eleven authored Sigma correlations: multi-stage chains
     # across the four log sources `EMITTERS` covers (windows, cloudtrail,
@@ -115,7 +117,11 @@ PYTHON_RESIDENT_WINDOWED = 3
 # than for a missing operator: 50 more compile but do not fire on their own
 # proof event, 13 more need a negation the matcher cannot express faithfully.
 # The family size was the ceiling, not the yield.
-FUSION_LOADED_TOTAL = 3066
+# 3066 -> 3119 with the 53 dotted-path rules, the one operator family whose
+# yield was most of it: 59 refused, 53 now executable. Verified additive —
+# no rule left the corpus and no previously-shipping rule's compiled form
+# changed, because `_resolve` prefers a literal key over traversing.
+FUSION_LOADED_TOTAL = 3119
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

@@ -1,18 +1,18 @@
 {
-  "executable": 2973,
+  "executable": 3026,
   "windowed": 90,
   "onDisk": 7408,
-  "quarantined": 4435,
+  "quarantined": 4382,
   "plugins": 91,
   "playbookPacks": 64,
   "playbooks": 89,
   "marketplaceItems": 7588,
   "categories": {
     "application": 195,
-    "cloud": 355,
+    "cloud": 404,
     "data-exfil": 72,
     "endpoint": 1985,
-    "identity": 279,
+    "identity": 283,
     "network": 63,
     "threat-anomaly": 24
   },
