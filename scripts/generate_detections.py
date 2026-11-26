@@ -84,6 +84,7 @@ from detection_specs_index import CATEGORIES  # noqa: E402  (after sys.path twea
 
 OPERATORS: list[tuple[str, str, str]] = sorted(
     [
+        ("_pattern_match_any_cs", "pattern_match_any_cs", "PATTERN_MATCH_ANY_CS"),
         ("_pattern_match_any", "pattern_match_any", "PATTERN_MATCH_ANY"),
         ("_not_startswith_any", "not_startswith_any", "NOT STARTSWITH_ANY"),
         ("_not_endswith_any", "not_endswith_any", "NOT ENDSWITH_ANY"),
@@ -272,6 +273,23 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
             except re.error:
                 # Treat as literal substring on regex compile error.
                 if str(pat).lower() in actual_str.lower():
+                    return True
+        return False
+
+    # Case-sensitive twin, the target of Sigma's `|re`. Must stay identical
+    # to `detection_matcher.pattern_match_any_cs`: this file is the replay
+    # side of the same contract and a rule is only shipped after firing
+    # through both.
+    if op == "pattern_match_any_cs":
+        if not isinstance(expected, list) or actual is None:
+            return False
+        actual_str = str(actual)
+        for pat in expected:
+            try:
+                if re.search(str(pat), actual_str):
+                    return True
+            except re.error:
+                if str(pat) in actual_str:
                     return True
         return False
 

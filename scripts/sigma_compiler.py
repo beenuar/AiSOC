@@ -48,7 +48,7 @@ from typing import Any
 # --------------------------------------------------------------------------
 R_NO_EMITTER = "no connector emits this log source"
 R_NESTED_FIELD = "field is a dotted path and the matcher has no path traversal"
-R_MOD_RE = "|re is case-sensitive upstream and the matcher forces IGNORECASE"
+R_MOD_RE = "the |re pattern does not compile, so it would silently become a substring test"
 R_MOD_CIDR = "|cidr has no matcher operator"
 R_MOD_BASE64 = "|base64/|base64offset has no matcher operator"
 R_MOD_FIELDREF = "|fieldref compares two fields and has no matcher operator"
@@ -163,9 +163,8 @@ def _scalar(value: Any) -> str | None:
     raise Refusal(R_VALUE_TYPE, type(value).__name__)
 
 
-_SUPPORTED_MODS = {"contains", "startswith", "endswith", "all", "windash"}
+_SUPPORTED_MODS = {"contains", "startswith", "endswith", "all", "windash", "re"}
 _REFUSED_MODS = {
-    "re": R_MOD_RE,
     "cidr": R_MOD_CIDR,
     "base64": R_MOD_BASE64,
     "base64offset": R_MOD_BASE64,
@@ -223,6 +222,32 @@ def compile_field(raw_key: str, value: Any) -> Leaf:
 
     want_all = "all" in mods
     values = _as_list(value)
+
+    if "re" in mods:
+        # `|re` values are regular expressions already — they are not Sigma
+        # wildcard values, so they are passed through verbatim rather than
+        # run through `sigma_value_to_regex`, and they are not anchored:
+        # upstream `|re` is an unanchored, case-SENSITIVE search, which is
+        # exactly `pattern_match_any_cs`. Combining it with a modifier that
+        # rewrites the value would mean compiling something the rule did not
+        # say, so that is refused rather than guessed at.
+        other = [m for m in mods if m != "re"]
+        if other:
+            raise Refusal(R_MOD_UNKNOWN, f"{name}|re with {'|'.join(other)}")
+        patterns: list[str] = []
+        for item in values:
+            s = _scalar(item)
+            if s is None:
+                raise Refusal(R_VALUE_TYPE, "null mixed into a |re value list")
+            try:
+                re.compile(s)
+            except re.error as exc:
+                # A pattern Python cannot compile would fall back to a literal
+                # substring at match time, which is a different rule than the
+                # one written. Refuse it instead of shipping the difference.
+                raise Refusal(R_MOD_RE, f"{name}|re: {exc}") from exc
+            patterns.append(s)
+        return Leaf(f"{name}_pattern_match_any_cs", patterns, name, faithfully_negatable=False)
 
     # `field: null` is Sigma's "field is absent", which is the matcher's bare
     # equality against None.
