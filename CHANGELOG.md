@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The matcher traverses a dotted field path, so Sigma rules naming nested
+  fields compile — the largest single gain of the three operator gaps.**
+  `userIdentity.type` was read as one field name that nothing emits, which
+  refused 59 rules; resolving it by traversal ships **53** of them and takes
+  the imported corpus 1,777 -> 1,830. A **literal key of that name still
+  wins** at every depth, because several connectors emit flattened keys
+  containing a dot, and traversal must never change what an already-shipped
+  rule matches — verified additive: no rule left the corpus and no
+  previously-shipping rule's compiled form changed. A path running into a
+  non-object or an absent key yields "this event does not carry that field"
+  rather than an error.
 - **The matcher can answer whether an address falls inside a network, so
   Sigma's `|cidr` is no longer refused.** `in_cidr_any` validates its networks
   at compile time — a rule naming one Python cannot parse is refused rather
