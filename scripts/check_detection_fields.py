@@ -158,6 +158,7 @@ _OPERATOR_SUFFIXES = (
     "contains_any",
     "contains_all",
     "pattern_match_any_cs",
+    "in_cidr_any",
     "pattern_match_any",
     "pattern_match",
     "startswith_any",

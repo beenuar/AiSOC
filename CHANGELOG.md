@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The matcher can answer whether an address falls inside a network, so
+  Sigma's `|cidr` is no longer refused.** `in_cidr_any` validates its networks
+  at compile time — a rule naming one Python cannot parse is refused rather
+  than silently skipped on every event — and treats every shape a real event
+  actually carries in an address field (absent, empty, padded, `ip:port`, the
+  other address family) as no match rather than an error.
+  **It shipped no new rules, and that is the finding**: all 17 `|cidr` rules
+  are blocked by something else — 15 need a negation the matcher cannot
+  express faithfully, 2 do not fire on their own proof event. The capability
+  is real and available to native rules; the family behind it was mislabelled
+  as waiting on this operator.
 - **The matcher can express a case-sensitive regular expression, so Sigma's
   `|re` is no longer refused outright.** `pattern_match_any_cs` is the exact
   twin of `pattern_match_any` without `re.IGNORECASE`: upstream `|re` is

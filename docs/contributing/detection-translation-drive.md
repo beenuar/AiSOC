@@ -51,8 +51,8 @@ refused on purpose.
 - **The highest-leverage work is a named capability gap, not a rule.** The
   refusal table groups the refusals by cause, and several are one matcher
   feature standing in front of a whole family: 59 rules need a dotted field
-  path, 17 need a `|cidr` operator, 14 need `|all` on a non-`contains`
-  modifier, 10 use bare keywords against a field-scoped matcher.
+  path, 14 need `|all` on a non-`contains` modifier, 10 use bare keywords
+  against a field-scoped matcher.
 - **Closing a gap unlocks a family, but not all of it, and the honest count
   is the one measured afterwards.** The case-sensitive `|re` operator shipped
   and the modifier is no longer refused — yet of the 71 rules behind it only
@@ -60,7 +60,10 @@ refused on purpose.
   blocks them: 50 more compile but do not fire on their own proof event, and
   13 more need a negation the matcher cannot express faithfully. That is the pattern
   to expect from the remaining operators: the family size is the ceiling, not
-  the yield.
+  the yield. `|cidr` is the sharper version of the same lesson — the operator
+  shipped and **none** of its 17 rules became executable, because 15 of them
+  also need a faithful negation and 2 do not fire on their own proof event.
+  The gap was real and is closed; the family behind it was never the prize.
 - **556 were refused because no connector emits their log source**, which is
   connector work rather than translation work, and is the largest single
   group.

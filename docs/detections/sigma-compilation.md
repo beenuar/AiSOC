@@ -35,11 +35,10 @@ that do not ship.
 | Reason | Rules | Example |
 | --- | ---: | --- |
 | no connector emits this log source | 556 | `access-of-sudoers-file-content.yaml: linux/None` |
-| negation is not faithfully expressible (missing field would flip) | 477 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
-| compiled, but did not fire on its own proof event | 183 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
+| negation is not faithfully expressible (missing field would flip) | 492 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
+| compiled, but did not fire on its own proof event | 185 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
 | field is a dotted path and the matcher has no path traversal | 59 | `account-created-and-deleted-within-a-close-time-frame.yaml: properties.message` |
 | the connector rejected the proof event | 30 | `azure-application-gateway-modified-or-deleted.yaml` |
-| \|cidr has no matcher operator | 17 | `communication-to-uncommon-destination-ports.yaml: DestinationIp\|cidr` |
 | \|all on a non-contains modifier has no matcher operator | 14 | `aws-iam-s3browser-templated-s3-bucket-policy-creation.yaml: requestParameters\|contains\|all with wildcards` |
 | bare keywords search the whole event; the matcher is field-scoped | 10 | `granting-of-permissions-to-an-account.yaml: keywords block` |
 | \|base64/\|base64offset has no matcher operator | 7 | `cobaltstrike-service-installations-security.yaml: ServiceFileName\|base64offset` |
