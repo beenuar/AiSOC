@@ -1,0 +1,52 @@
+title: AWS S3 bucket ACL changed
+name: aws-s3-put-bucket-acl
+id: aisoc-corr-base-aws-s3-put-acl
+status: experimental
+description: One PutBucketAcl call against an S3 bucket.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: s3.amazonaws.com
+    eventName: PutBucketAcl
+  condition: selection
+---
+title: AWS S3 bucket policy replaced
+name: aws-s3-put-bucket-policy
+id: aisoc-corr-base-aws-s3-put-policy
+status: experimental
+description: One PutBucketPolicy call against an S3 bucket.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: s3.amazonaws.com
+    eventName: PutBucketPolicy
+  condition: selection
+---
+title: One principal rewrote both the ACL and the policy of S3 storage
+id: aisoc-corr-aws-s3-acl-and-policy-rewrite
+status: experimental
+description: >-
+  The same principal changed a bucket ACL and replaced a bucket policy inside
+  thirty minutes, in either order. Each is a legitimate administrative action
+  and infrastructure-as-code performs both routinely — which is why this is
+  unordered and medium rather than high. What makes the pair worth surfacing
+  is that the two controls that decide who can read a bucket were both
+  rewritten by one actor in one short window, so a review has a single thing
+  to look at rather than two entries in an audit log a week apart.
+level: medium
+category: cloud
+tags:
+  - attack.t1530
+  - attack.t1098
+correlation:
+  type: temporal
+  rules:
+    - aws-s3-put-bucket-acl
+    - aws-s3-put-bucket-policy
+  group-by:
+    - user_arn
+  timespan: 30m

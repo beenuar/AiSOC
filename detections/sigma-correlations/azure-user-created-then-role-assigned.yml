@@ -1,0 +1,49 @@
+title: Entra user created
+name: azure-user-created
+id: aisoc-corr-base-azure-user-created
+status: experimental
+description: One Entra user creation.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Add user
+  condition: selection
+---
+title: Entra directory role assigned for the onboarding correlation
+name: azure-role-assigned-onboarding
+id: aisoc-corr-base-azure-role-assigned-onboarding
+status: experimental
+description: One Entra directory role assignment.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Add member to role
+  condition: selection
+---
+title: An actor created a user and gave it a directory role
+id: aisoc-corr-azure-user-created-then-role-assigned
+status: experimental
+description: >-
+  Add user followed by Add member to role from the same actor inside thirty
+  minutes. Onboarding looks exactly like this, so the level stays medium and
+  the alert is written to be read alongside who did it: the sequence matters
+  because a directory role on an account created minutes earlier is the
+  cheapest durable foothold in a tenant, and the ordering separates it from
+  the far more common case of an existing user being promoted.
+level: medium
+category: identity
+tags:
+  - attack.t1136.003
+  - attack.t1098.003
+correlation:
+  type: temporal_ordered
+  rules:
+    - azure-user-created
+    - azure-role-assigned-onboarding
+  group-by:
+    - actor
+  timespan: 30m

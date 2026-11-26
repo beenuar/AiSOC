@@ -80,6 +80,10 @@ def compile_corpus() -> tuple[list[dict[str, Any]], list[tuple[str, str]], int]:
         relative = str(path.relative_to(ROOT))
 
         selectors: dict[str, dict[str, Any]] = {}
+        #: Each base rule's own `logsource.product`, so the compiled
+        #: correlation inherits the product of the telemetry it reads
+        #: rather than carrying none.
+        products: dict[str, str] = {}
         base_refusals: list[str] = []
         for doc in docs:
             if doc.get("correlation"):
@@ -92,6 +96,10 @@ def compile_corpus() -> tuple[list[dict[str, Any]], list[tuple[str, str]], int]:
                 selectors[name] = compile_rule(doc).match_when
             except Refusal as exc:
                 base_refusals.append(f"base rule {name!r}: {exc}")
+                continue
+            product = str((doc.get("logsource") or {}).get("product") or "").strip().lower()
+            if product:
+                products[name] = product
 
         correlation_ids = {str(d.get("id") or "") for d in docs if d.get("correlation")}
         for doc in docs:
@@ -100,7 +108,14 @@ def compile_corpus() -> tuple[list[dict[str, Any]], list[tuple[str, str]], int]:
             try:
                 if base_refusals:
                     raise CorrelationRefusal("a referenced rule did not compile", "; ".join(base_refusals))
-                compiled.append(compile_correlation(doc, selectors=selectors, correlations=frozenset(correlation_ids)))
+                compiled.append(
+                    compile_correlation(
+                        doc,
+                        selectors=selectors,
+                        correlations=frozenset(correlation_ids),
+                        products=products,
+                    )
+                )
             except CorrelationRefusal as exc:
                 refused.append((relative, str(exc)))
     return compiled, refused, seen

@@ -3,12 +3,16 @@
 
 Why this exists
 ---------------
-The fusion detection engine loads four things and runs 2,614 rules from them:
+The fusion detection engine loads four things and runs 3,059 rules from them:
 
-    services/fusion/app/data/detection_ruleset.json            765 stateless
+    services/fusion/app/data/detection_ruleset.json           1196 stateless
     services/fusion/app/data/detection_ruleset_imported.json  1770 stateless
-    services/fusion/app/data/windowed_ruleset.json              76 (73 windowed + 3 sequence)
+    services/fusion/app/data/windowed_ruleset.json              90 (75 windowed + 15 sequence)
     services/fusion/app/services/windowed_detection.py           3 windowed, declared in Python
+
+These figures are measured, not maintained by hand: the authority is
+`services/api/tests/test_builtin_rule_catalogue.py`, which re-derives them
+by running fusion's own loaders and fails when this file drifts.
 
 The console's rule-management surface could see none of them (#1273). The
 reason is not the handlers: it is that `docker-compose.yml` builds the API

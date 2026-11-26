@@ -172,7 +172,11 @@ SCENARIO_FLOOR = 907
 #: wd-ai-identical-prompt-repetition): AI-runtime telemetry is none of the four
 #: published groups, so these are counted and held here rather than forced
 #: into a group they are not.
-MAX_WINDOWED_UNCLASSIFIED = 29
+#: 29 → 25 when compiled Sigma correlations began carrying the product of the
+#: base rules they are built from. That classified the four correlations
+#: already in the tree as well as the eleven added with it, so the ceiling
+#: falls rather than rises as the staged corpus grows.
+MAX_WINDOWED_UNCLASSIFIED = 25
 
 
 def _scenario_conditions() -> dict[str, int | dict[str, int]]:
@@ -249,6 +253,14 @@ def _scenario_conditions() -> dict[str, int | dict[str, int]]:
                 continue
             origin = rule.get("translated_from")
             product = product_by_slug.get(str(origin)) if origin else None
+            if product is None:
+                # A compiled Sigma correlation carries the product of the base
+                # rules it is built from (`scripts/sigma_correlation.py`), which
+                # is the telemetry it actually reads rather than a label typed
+                # beside it. Stages that disagree carry no product and fall
+                # through to the count below, same as a natively authored rule.
+                declared = rule.get("product")
+                product = str(declared).strip().lower() or None if declared else None
             if product is None:
                 # Natively authored windowed rules declare a category and no
                 # product, so there is nothing to group them by. They are

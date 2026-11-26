@@ -67,6 +67,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   needed the seed's own timestamp — published as `seed_event_time`, since
   `dt_seconds` is an absolute distance and carries no direction. A payload
   without it gets an unsigned "N from seed" rather than a guessed one.
+- **Eleven multi-stage detection chains, taking the staged corpus from 4 to
+  15.** A chain fires on *A then B (then C) by the same entity inside a
+  window* rather than on any single event: CloudTrail logging stopped and
+  then IAM changed by the same principal; an IAM user created and then
+  given a key; AssumeRole denied repeatedly and then succeeding; a bucket
+  opened to the world and then read; Entra app consent followed by a
+  delegated permission grant; an MFA method removed and then a sign-in; a
+  user created and then role-assigned; an Okta factor reset and then
+  re-enrolled; Okta admin role granted and an app assigned; a Windows
+  account created and then added to administrators; the Windows event log
+  cleared and a service installed. Each groups on one real entity
+  (`user_arn`, `actor`, `actor_email`, `Computer`), and every field each
+  one names is proven emitted by a connector, ingest template or the Go
+  normalizer — `scripts/check_sigma_correlations.py` holds the corpus to
+  that with no ceiling. Fusion now loads 93 sliding-window rules: 78 that
+  count across events and 15 staged chains.
+- Two further candidates were **refused with their reason recorded** rather
+  than shipped: chains over GCP audit and M365 Exchange/SharePoint log
+  sources, which no connector in this tree emits. They sit in
+  `detections/sigma-correlations/_refused/` where the gate re-checks that
+  they are genuinely refused, so a file cannot be parked there to dodge it.
+- A compiled Sigma correlation now carries the **product of the base rules it
+  is built from**, so the published cloud/identity/SaaS/code breakdown counts
+  it in the group whose telemetry it actually reads. Stages that disagree
+  carry none rather than picking one. This classified the four correlations
+  already in the tree as well as the eleven added beside them, so the ceiling
+  on unclassified windowed rules falls 29 -> 25.
 
 
 ### Fixed

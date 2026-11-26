@@ -1,5 +1,5 @@
 {
-  "count": 79,
+  "count": 90,
   "rules": [
     {
       "category": "application",
@@ -1289,6 +1289,83 @@
     {
       "category": "cloud",
       "correlates": [
+        "aws-assume-role-denied",
+        "aws-assume-role-succeeded"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-assume-denied-then-success",
+      "mitre": [
+        "T1078.004",
+        "T1548"
+      ],
+      "name": "A principal was denied a role and then assumed one",
+      "ordered": true,
+      "product": "aws",
+      "sequence": [
+        {
+          "errorCode_pattern_match_any": [
+            "^AccessDenied$"
+          ],
+          "eventName_pattern_match_any": [
+            "^AssumeRole$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^sts\\.amazonaws\\.com$"
+          ]
+        },
+        {
+          "eventName_pattern_match_any": [
+            "^AssumeRole$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^sts\\.amazonaws\\.com$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 900
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "aws-s3-put-bucket-acl",
+        "aws-s3-put-bucket-policy"
+      ],
+      "correlation_type": "temporal",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-s3-acl-and-policy-rewrite",
+      "mitre": [
+        "T1098",
+        "T1530"
+      ],
+      "name": "One principal rewrote both the ACL and the policy of S3 storage",
+      "ordered": false,
+      "product": "aws",
+      "sequence": [
+        {
+          "eventName_pattern_match_any": [
+            "^PutBucketAcl$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^s3\\.amazonaws\\.com$"
+          ]
+        },
+        {
+          "eventName_pattern_match_any": [
+            "^PutBucketPolicy$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^s3\\.amazonaws\\.com$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "cloud",
+      "correlates": [
         "aws-iam-create-access-key"
       ],
       "correlation_type": "event_count",
@@ -1306,9 +1383,46 @@
         "T1098.001"
       ],
       "name": "One principal minted several AWS access keys in a burst",
+      "product": "aws",
       "severity": "high",
       "threshold": 6,
       "window_seconds": 600
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "aws-iam-create-user",
+        "aws-iam-key-created-persist"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-user-created-then-key-minted",
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "A principal created an IAM user and minted it a key",
+      "ordered": true,
+      "product": "aws",
+      "sequence": [
+        {
+          "eventName_pattern_match_any": [
+            "^CreateUser$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^iam\\.amazonaws\\.com$"
+          ]
+        },
+        {
+          "eventName_pattern_match_any": [
+            "^CreateAccessKey$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^iam\\.amazonaws\\.com$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 900
     },
     {
       "category": "cloud",
@@ -1328,9 +1442,108 @@
         "T1580"
       ],
       "name": "One principal acting across an unusual number of AWS regions",
+      "product": "aws",
       "severity": "medium",
       "threshold": 6,
       "window_seconds": 900
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "aws-cloudtrail-stop-logging",
+        "aws-iam-attach-user-policy"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-trail-stopped-then-iam-change",
+      "mitre": [
+        "T1098",
+        "T1562.008"
+      ],
+      "name": "A principal stopped CloudTrail logging and then changed IAM",
+      "ordered": true,
+      "product": "aws",
+      "sequence": [
+        {
+          "eventName_pattern_match_any": [
+            "^StopLogging$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^cloudtrail\\.amazonaws\\.com$"
+          ]
+        },
+        {
+          "eventName_pattern_match_any": [
+            "^AttachUserPolicy$"
+          ],
+          "eventSource_pattern_match_any": [
+            "^iam\\.amazonaws\\.com$"
+          ]
+        }
+      ],
+      "severity": "high",
+      "window_seconds": 3600
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "azure-consent-to-application",
+        "azure-add-delegated-permission"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "actor",
+      "id": "aisoc-corr-azure-consent-then-delegated-grant",
+      "mitre": [
+        "T1098.003",
+        "T1550.001"
+      ],
+      "name": "An actor consented to an application and granted it permissions",
+      "ordered": true,
+      "product": "azure",
+      "sequence": [
+        {
+          "operationName_pattern_match_any": [
+            "^Consent\\ to\\ application$"
+          ]
+        },
+        {
+          "operationName_pattern_match_any": [
+            "^Add\\ delegated\\ permission\\ grant$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "azure-auth-method-deleted",
+        "azure-auth-method-registered"
+      ],
+      "correlation_type": "temporal",
+      "group_by": "actor",
+      "id": "aisoc-corr-azure-auth-method-swapped",
+      "mitre": [
+        "T1098.005"
+      ],
+      "name": "One actor removed an authentication method and registered another",
+      "ordered": false,
+      "product": "azure",
+      "sequence": [
+        {
+          "operationName_pattern_match_any": [
+            "^Delete\\ user\\ authentication\\ method$"
+          ]
+        },
+        {
+          "operationName_pattern_match_any": [
+            "^User\\ registered\\ security\\ info$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
     },
     {
       "category": "cloud",
@@ -1346,6 +1559,7 @@
       ],
       "name": "One actor both assigned a directory role and removed a resource lock",
       "ordered": false,
+      "product": "azure",
       "sequence": [
         {
           "operationName_pattern_match_any": [
@@ -1355,6 +1569,98 @@
         {
           "operationName_pattern_match_any": [
             "^Microsoft\\.Authorization/locks/delete$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "azure-user-created",
+        "azure-role-assigned-onboarding"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "actor",
+      "id": "aisoc-corr-azure-user-created-then-role-assigned",
+      "mitre": [
+        "T1098.003",
+        "T1136.003"
+      ],
+      "name": "An actor created a user and gave it a directory role",
+      "ordered": true,
+      "product": "azure",
+      "sequence": [
+        {
+          "operationName_pattern_match_any": [
+            "^Add\\ user$"
+          ]
+        },
+        {
+          "operationName_pattern_match_any": [
+            "^Add\\ member\\ to\\ role$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "okta-admin-privilege-granted",
+        "okta-app-assigned"
+      ],
+      "correlation_type": "temporal",
+      "group_by": "actor_email",
+      "id": "aisoc-corr-okta-admin-granted-and-app-assigned",
+      "mitre": [
+        "T1098"
+      ],
+      "name": "One Okta actor both gained admin privilege and assigned an application",
+      "ordered": false,
+      "product": "okta",
+      "sequence": [
+        {
+          "eventType_pattern_match_any": [
+            "^user\\.account\\.privilege\\.grant$"
+          ]
+        },
+        {
+          "eventType_pattern_match_any": [
+            "^application\\.user_membership\\.add$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "okta-factor-reset",
+        "okta-factor-enrolled"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "actor_email",
+      "id": "aisoc-corr-okta-factor-reset-then-enrolled",
+      "mitre": [
+        "T1098.005",
+        "T1556.006"
+      ],
+      "name": "An Okta account had its factors reset and a new one enrolled",
+      "ordered": true,
+      "product": "okta",
+      "sequence": [
+        {
+          "eventType_pattern_match_any": [
+            "^user\\.mfa\\.factor\\.reset_all$"
+          ]
+        },
+        {
+          "eventType_pattern_match_any": [
+            "^user\\.mfa\\.factor\\.activate$"
           ]
         }
       ],
@@ -1375,6 +1681,7 @@
       ],
       "name": "Okta MFA push followed by a session for the same account",
       "ordered": true,
+      "product": "okta",
       "sequence": [
         {
           "eventType_pattern_match_any": [
@@ -1389,6 +1696,68 @@
       ],
       "severity": "medium",
       "window_seconds": 900
+    },
+    {
+      "category": "endpoint",
+      "correlates": [
+        "windows-account-created",
+        "windows-member-added-to-group"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "Computer",
+      "id": "aisoc-corr-windows-account-created-then-group-add",
+      "mitre": [
+        "T1098",
+        "T1136.001"
+      ],
+      "name": "An account was created on a host and then added to a local group",
+      "ordered": true,
+      "product": "windows",
+      "sequence": [
+        {
+          "EventID_pattern_match_any": [
+            "^4720$"
+          ]
+        },
+        {
+          "EventID_pattern_match_any": [
+            "^4732$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 900
+    },
+    {
+      "category": "endpoint",
+      "correlates": [
+        "windows-security-log-cleared",
+        "windows-service-installed"
+      ],
+      "correlation_type": "temporal",
+      "group_by": "Computer",
+      "id": "aisoc-corr-windows-log-cleared-and-service-installed",
+      "mitre": [
+        "T1070.001",
+        "T1543.003"
+      ],
+      "name": "A host cleared its security log and had a service installed",
+      "ordered": false,
+      "product": "windows",
+      "sequence": [
+        {
+          "EventID_pattern_match_any": [
+            "^1102$"
+          ]
+        },
+        {
+          "EventID_pattern_match_any": [
+            "^4697$"
+          ]
+        }
+      ],
+      "severity": "high",
+      "window_seconds": 3600
     }
   ]
 }

@@ -22,7 +22,7 @@ LIVE_ENGINE_EXECUTABLE_RULES = 2966
 
 #: Sliding-window rules the same worker loads; they need several events, so
 #: they are published as their own figure rather than folded into the above.
-LIVE_ENGINE_WINDOWED_RULES = 79
+LIVE_ENGINE_WINDOWED_RULES = 90
 
 #: Where the two numbers came from, so a reader can re-derive them.
 LIVE_ENGINE_RULESET_SOURCE = "apps/web/src/data/corpus-stats.json"

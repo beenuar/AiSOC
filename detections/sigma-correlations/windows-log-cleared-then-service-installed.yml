@@ -1,0 +1,50 @@
+title: Windows security log cleared
+name: windows-security-log-cleared
+id: aisoc-corr-base-windows-log-cleared
+status: experimental
+description: One Windows audit-log clearing event (1102).
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 1102
+  condition: selection
+---
+title: Windows service installed
+name: windows-service-installed
+id: aisoc-corr-base-windows-service-installed
+status: experimental
+description: One Windows service installation event (4697).
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4697
+  condition: selection
+---
+title: A host cleared its security log and had a service installed
+id: aisoc-corr-windows-log-cleared-and-service-installed
+status: experimental
+description: >-
+  A log clear and a service installation on the same host inside an hour, in
+  either order. Both appear during legitimate maintenance, and a clear on its
+  own is already alerted elsewhere — what this adds is the pairing, because a
+  service that persists across reboots installed in the same window as the
+  record of it being destroyed is a different conversation from either event
+  alone. Unordered deliberately: evasion before or after persistence are both
+  the same story.
+level: high
+category: endpoint
+tags:
+  - attack.t1070.001
+  - attack.t1543.003
+correlation:
+  type: temporal
+  rules:
+    - windows-security-log-cleared
+    - windows-service-installed
+  group-by:
+    - Computer
+  timespan: 60m

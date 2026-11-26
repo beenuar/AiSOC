@@ -1,0 +1,52 @@
+title: AWS AssumeRole denied
+name: aws-assume-role-denied
+id: aisoc-corr-base-aws-assume-denied
+status: experimental
+description: One STS AssumeRole call refused for lack of permission.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: sts.amazonaws.com
+    eventName: AssumeRole
+    errorCode: AccessDenied
+  condition: selection
+---
+title: AWS AssumeRole succeeded
+name: aws-assume-role-succeeded
+id: aisoc-corr-base-aws-assume-ok
+status: experimental
+description: One STS AssumeRole call that returned a session.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: sts.amazonaws.com
+    eventName: AssumeRole
+  condition: selection
+---
+title: A principal was denied a role and then assumed one
+id: aisoc-corr-aws-assume-denied-then-success
+status: experimental
+description: >-
+  An AssumeRole denial followed by a successful AssumeRole for the same
+  principal inside fifteen minutes. The order carries the meaning: refusals
+  alone are ordinary (a misconfigured client retries all day), and a success
+  alone is the normal path, but a refusal that becomes a success in minutes is
+  either a permission that was just granted or a principal enumerating roles
+  until one works. Both are worth a question; only one is routine.
+level: medium
+category: cloud
+tags:
+  - attack.t1548
+  - attack.t1078.004
+correlation:
+  type: temporal_ordered
+  rules:
+    - aws-assume-role-denied
+    - aws-assume-role-succeeded
+  group-by:
+    - user_arn
+  timespan: 15m

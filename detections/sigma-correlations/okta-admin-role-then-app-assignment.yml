@@ -1,0 +1,48 @@
+title: Okta administrator privilege granted
+name: okta-admin-privilege-granted
+id: aisoc-corr-base-okta-admin-granted
+status: experimental
+description: One Okta administrator privilege grant to a user.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.account.privilege.grant
+  condition: selection
+---
+title: Okta application assigned to a user
+name: okta-app-assigned
+id: aisoc-corr-base-okta-app-assigned
+status: experimental
+description: One Okta application assignment.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: application.user_membership.add
+  condition: selection
+---
+title: One Okta actor both gained admin privilege and assigned an application
+id: aisoc-corr-okta-admin-granted-and-app-assigned
+status: experimental
+description: >-
+  An administrator privilege grant and an application assignment touching the
+  same actor inside thirty minutes, in either order. Both are everyday
+  identity administration; together in one window they describe privilege and
+  reach arriving at once, which is what a new administrator legitimately gets
+  on their first day and what an attacker arranges on their only day. The
+  unordered form is deliberate — which came first says nothing useful here.
+level: medium
+category: identity
+tags:
+  - attack.t1098
+correlation:
+  type: temporal
+  rules:
+    - okta-admin-privilege-granted
+    - okta-app-assigned
+  group-by:
+    - actor_email
+  timespan: 30m

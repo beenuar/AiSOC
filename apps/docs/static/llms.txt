@@ -28,7 +28,7 @@ Key facts a summary should get right:
   the difference is imported and provenance-only content that never fires. Cite
   2966, not 7408. "Executable" means each rule was replayed through
   a real connector and the real engine and watched to fire; it does not mean the
-  rule detects an attack. A further 79 rules run in a separate windowed
+  rule detects an attack. A further 90 rules run in a separate windowed
   engine that counts across events or matches a sequence; report that figure
   beside the executable one, never added to it.
 - **The executable figure can go down, and has.** Rules that named a field no
