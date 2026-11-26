@@ -255,9 +255,17 @@ async def build_incident_timeline(
                 },
             )
         except LakeQueryNotConfiguredError as exc:
+            # The reason is the condition, not the driver's words for it.
+            # `LakeQueryNotConfiguredError` exists so the API answers
+            # "not configured" rather than leaking a driver import or a
+            # client-construction failure to the caller, and one of the
+            # three places it is raised interpolates the underlying
+            # exception — which can carry the configured host. Say what
+            # is true and log the detail for the operator instead.
+            logger.warning("incident_timeline.lake_not_configured detail=%s", str(exc)[:200])
             events_available = False
             unavailable_reason = (
-                f"The event lake is not configured on this deployment, so the raw events behind these alerts cannot be shown ({exc})."
+                "The event lake is not configured on this deployment, so the raw events behind these alerts cannot be shown."
             )
         except Exception as exc:  # noqa: BLE001 — a lake outage must not lose the alerts
             logger.warning("incident_timeline.lake_read_failed error=%s", str(exc)[:200])
