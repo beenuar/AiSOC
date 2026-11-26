@@ -178,3 +178,40 @@ def test_the_case_folding_sibling_is_unchanged():
     folding = {"CommandLine_pattern_match_any": ["IEX"]}
     assert vendored_matches(folding, {"CommandLine": "powershell iex(...)"}) is True
     assert _load_canonical().matches(folding, {"CommandLine": "powershell iex(...)"}) is True
+
+
+# ---------------------------------------------------------------------------
+# `in_cidr_any` — the operator Sigma's `|cidr` compiles to. Networks are
+# validated at compile time, so the matcher only ever sees parseable ones;
+# what it must get right is the address side, where real events carry
+# whitespace, ports, empty strings and IPv6.
+# ---------------------------------------------------------------------------
+
+_CIDR_CASES = [
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "10.1.2.3"}, True),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "11.1.2.3"}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8", "192.168.0.0/16"]}, {"src_ip": "192.168.5.5"}, True),
+    # A host route and the boundary addresses of a block.
+    ({"src_ip_in_cidr_any": ["203.0.113.7/32"]}, {"src_ip": "203.0.113.7"}, True),
+    ({"src_ip_in_cidr_any": ["203.0.113.7/32"]}, {"src_ip": "203.0.113.8"}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "10.255.255.255"}, True),
+    # IPv6, including the mixed-family case: an address is never in a network
+    # of the other family.
+    ({"src_ip_in_cidr_any": ["fc00::/7"]}, {"src_ip": "fd12::1"}, True),
+    ({"src_ip_in_cidr_any": ["fc00::/7"]}, {"src_ip": "10.1.2.3"}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "fd12::1"}, False),
+    # Real-event shapes that must not raise and must not match.
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": " 10.1.2.3 "}, True),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "10.1.2.3:4444"}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": "not-an-ip"}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": ""}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {"src_ip": None}, False),
+    ({"src_ip_in_cidr_any": ["10.0.0.0/8"]}, {}, False),
+]
+
+
+@pytest.mark.parametrize(("match_when", "event", "expected"), _CIDR_CASES)
+def test_cidr_operator_behaves_and_agrees(match_when, event, expected):
+    canonical = _load_canonical()
+    assert vendored_matches(match_when, event) is expected
+    assert canonical.matches(match_when, event) is expected

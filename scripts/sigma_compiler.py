@@ -38,6 +38,7 @@ real connector and the real engine to decide whether it actually fires.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from dataclasses import dataclass, field
 from typing import Any
@@ -49,7 +50,7 @@ from typing import Any
 R_NO_EMITTER = "no connector emits this log source"
 R_NESTED_FIELD = "field is a dotted path and the matcher has no path traversal"
 R_MOD_RE = "the |re pattern does not compile, so it would silently become a substring test"
-R_MOD_CIDR = "|cidr has no matcher operator"
+R_MOD_CIDR = "the |cidr value is not a network Python can parse"
 R_MOD_BASE64 = "|base64/|base64offset has no matcher operator"
 R_MOD_FIELDREF = "|fieldref compares two fields and has no matcher operator"
 R_MOD_UNKNOWN = "unsupported Sigma modifier"
@@ -163,9 +164,8 @@ def _scalar(value: Any) -> str | None:
     raise Refusal(R_VALUE_TYPE, type(value).__name__)
 
 
-_SUPPORTED_MODS = {"contains", "startswith", "endswith", "all", "windash", "re"}
+_SUPPORTED_MODS = {"contains", "startswith", "endswith", "all", "windash", "re", "cidr"}
 _REFUSED_MODS = {
-    "cidr": R_MOD_CIDR,
     "base64": R_MOD_BASE64,
     "base64offset": R_MOD_BASE64,
     "fieldref": R_MOD_FIELDREF,
@@ -222,6 +222,28 @@ def compile_field(raw_key: str, value: Any) -> Leaf:
 
     want_all = "all" in mods
     values = _as_list(value)
+
+    if "cidr" in mods:
+        # Sigma `|cidr` asks whether the field's address falls inside a
+        # network. The networks are validated here rather than at match time:
+        # a rule naming a network Python cannot parse would otherwise be
+        # silently skipped on every event, which reads exactly like a quiet
+        # estate. Combining it with a modifier that rewrites the value would
+        # compile something the rule did not say.
+        other = [m for m in mods if m != "cidr"]
+        if other:
+            raise Refusal(R_MOD_UNKNOWN, f"{name}|cidr with {'|'.join(other)}")
+        networks: list[str] = []
+        for item in values:
+            s_val = _scalar(item)
+            if s_val is None:
+                raise Refusal(R_VALUE_TYPE, "null mixed into a |cidr value list")
+            try:
+                ipaddress.ip_network(s_val, strict=False)
+            except ValueError as exc:
+                raise Refusal(R_MOD_CIDR, f"{name}|cidr: {exc}") from exc
+            networks.append(s_val)
+        return Leaf(f"{name}_in_cidr_any", networks, name, faithfully_negatable=False)
 
     if "re" in mods:
         # `|re` values are regular expressions already — they are not Sigma

@@ -17,6 +17,7 @@ and re-sync (the parity test will fail until they match).
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from typing import Any
 
@@ -26,6 +27,7 @@ OPERATORS: list[tuple[str, str, str]] = sorted(
     [
         ("_pattern_match_any_cs", "pattern_match_any_cs", "PATTERN_MATCH_ANY_CS"),
         ("_pattern_match_any", "pattern_match_any", "PATTERN_MATCH_ANY"),
+        ("_in_cidr_any", "in_cidr_any", "IN_CIDR_ANY"),
         ("_not_startswith_any", "not_startswith_any", "NOT STARTSWITH_ANY"),
         ("_not_endswith_any", "not_endswith_any", "NOT ENDSWITH_ANY"),
         ("_not_contains_any", "not_contains_any", "NOT CONTAINS_ANY"),
@@ -155,6 +157,28 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
     # so it is honoured exactly. A pattern that does not compile falls back to
     # a literal substring test with its case intact, mirroring the sibling
     # rather than quietly matching nothing.
+    # Sigma's `|cidr`. The networks are validated when the rule is compiled,
+    # so an unparseable one never reaches here; the address is the side that
+    # arrives from a real event, where it can be absent, empty, padded, an
+    # `ip:port` pair or simply not an address. Every one of those is "no
+    # match" rather than an error — a containment question about something
+    # that is not an address has no true answer. A v4 address is never inside
+    # a v6 network, which `ipaddress` enforces for us.
+    if op == "in_cidr_any":
+        if not isinstance(expected, list) or not isinstance(actual, str):
+            return False
+        try:
+            addr = ipaddress.ip_address(actual.strip())
+        except ValueError:
+            return False
+        for net in expected:
+            try:
+                if addr in ipaddress.ip_network(str(net), strict=False):
+                    return True
+            except ValueError:
+                continue
+        return False
+
     if op == "pattern_match_any_cs":
         if not isinstance(expected, list) or actual is None:
             return False

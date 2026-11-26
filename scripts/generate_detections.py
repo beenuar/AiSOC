@@ -86,6 +86,7 @@ OPERATORS: list[tuple[str, str, str]] = sorted(
     [
         ("_pattern_match_any_cs", "pattern_match_any_cs", "PATTERN_MATCH_ANY_CS"),
         ("_pattern_match_any", "pattern_match_any", "PATTERN_MATCH_ANY"),
+        ("_in_cidr_any", "in_cidr_any", "IN_CIDR_ANY"),
         ("_not_startswith_any", "not_startswith_any", "NOT STARTSWITH_ANY"),
         ("_not_endswith_any", "not_endswith_any", "NOT ENDSWITH_ANY"),
         ("_not_contains_any", "not_contains_any", "NOT CONTAINS_ANY"),
@@ -280,6 +281,25 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
     # to `detection_matcher.pattern_match_any_cs`: this file is the replay
     # side of the same contract and a rule is only shipped after firing
     # through both.
+    # Sigma's `|cidr`. Must stay identical to
+    # `detection_matcher.in_cidr_any`: the networks are compile-validated,
+    # the address side comes from a real event and every unparseable shape is
+    # "no match" rather than an error.
+    if op == "in_cidr_any":
+        if not isinstance(expected, list) or not isinstance(actual, str):
+            return False
+        try:
+            addr = ipaddress.ip_address(actual.strip())
+        except ValueError:
+            return False
+        for net in expected:
+            try:
+                if addr in ipaddress.ip_network(str(net), strict=False):
+                    return True
+            except ValueError:
+                continue
+        return False
+
     if op == "pattern_match_any_cs":
         if not isinstance(expected, list) or actual is None:
             return False
