@@ -3038,6 +3038,53 @@ export const casesApi = {
     }>(`/api/v1/cases/${caseId}/investigations/${runId}`),
 
   /**
+   * The incident's own chronology: every linked alert at its `event_time`,
+   * interleaved with the raw lake events behind it, oldest first.
+   *
+   * Distinct from `getTimeline`, which is an *activity* stream (status
+   * changes, comments, and an "Alert linked" marker stamped when the alert
+   * row was written rather than when the activity happened).
+   *
+   * The response is honest about two kinds of incompleteness and the view
+   * must render both: `eventsAvailable: false` means the lake could not be
+   * read at all (the core profile ships no ClickHouse), which is not the
+   * same as a lake that answered with no rows; and
+   * `sourceEventIdsTruncated` means at least one alert hit the 200-event
+   * provenance ceiling, so the events listed are known not to be all of
+   * them.
+   */
+  getIncidentTimeline: async (caseId: string): Promise<IncidentTimeline> => {
+    const raw = await request<BackendIncidentTimeline>(
+      `/api/v1/cases/${encodeURIComponent(caseId)}/incident-timeline`
+    );
+    return {
+      caseId: raw.case_id,
+      alertCount: raw.alert_count ?? 0,
+      eventCount: raw.event_count ?? 0,
+      eventsAvailable: raw.events_available !== false,
+      eventsUnavailableReason: raw.events_unavailable_reason ?? null,
+      sourceEventIdsTruncated: raw.source_event_ids_truncated === true,
+      truncationNote: raw.truncation_note ?? "",
+      disclaimer: raw.disclaimer ?? "",
+      entries: (raw.entries ?? []).map((e) => ({
+        kind: e.kind === "event" ? "event" : "alert",
+        at: e.at,
+        title: e.title,
+        alertId: e.alert_id ?? null,
+        severity: e.severity ?? null,
+        chainStage: e.chain_stage ?? null,
+        chainPosition: e.chain_position ?? null,
+        connectorType: e.connector_type ?? null,
+        mitreTechniques: e.mitre_techniques ?? [],
+        action: e.action ?? null,
+        userName: e.user_name ?? null,
+        hostname: e.hostname ?? null,
+        sourceIp: e.source_ip ?? null,
+      })),
+    };
+  },
+
+  /**
    * Attack-chain timeline visualization (T3.3 — v8.0).
    *
    * Backed by `/api/v1/cases/{id}/attack-chain` which runs a graph BFS over
@@ -5342,6 +5389,64 @@ interface BackendCaseAttackPathResponse {
 // power different tabs in the case workspace.
 
 /** Severity ladder mirrors the backend five-tier scale exactly. */
+/** One moment in a case's incident chronology — an alert, or an event. */
+export interface IncidentTimelineEntry {
+  kind: "alert" | "event";
+  at: string;
+  title: string;
+  /** Both kinds carry it: an event names the alert it helped produce. */
+  alertId: string | null;
+  severity: string | null;
+  chainStage: string | null;
+  chainPosition: number | null;
+  connectorType: string | null;
+  mitreTechniques: string[];
+  action: string | null;
+  userName: string | null;
+  hostname: string | null;
+  sourceIp: string | null;
+}
+
+export interface IncidentTimeline {
+  caseId: string;
+  entries: IncidentTimelineEntry[];
+  alertCount: number;
+  eventCount: number;
+  /** False when the lake could not be read — never the same as "no rows". */
+  eventsAvailable: boolean;
+  eventsUnavailableReason: string | null;
+  /** True when an alert hit the 200-event provenance ceiling. */
+  sourceEventIdsTruncated: boolean;
+  truncationNote: string;
+  disclaimer: string;
+}
+
+interface BackendIncidentTimeline {
+  case_id: string;
+  alert_count: number;
+  event_count: number;
+  events_available: boolean;
+  events_unavailable_reason: string | null;
+  source_event_ids_truncated: boolean;
+  truncation_note: string;
+  disclaimer: string;
+  entries: Array<{
+    kind: string;
+    at: string;
+    title: string;
+    alert_id: string | null;
+    severity?: string | null;
+    chain_stage?: string | null;
+    chain_position?: number | null;
+    connector_type?: string | null;
+    mitre_techniques?: string[];
+    action?: string | null;
+    user_name?: string | null;
+    hostname?: string | null;
+    source_ip?: string | null;
+  }>;
+}
+
 export type AttackChainSeverity = "info" | "low" | "medium" | "high" | "critical";
 
 /** Allowed lookback windows. The backend rejects anything else with 400. */

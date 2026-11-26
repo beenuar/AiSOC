@@ -135,6 +135,62 @@ jobs:
           ISOLATION_REPO_ROOT: ${{ github.workspace }}
         run: python -m pytest ../../tests/isolation/test_lake_live.py -v --tb=short
 
+      # The incident timeline joins Postgres alerts to lake events through
+      # an id the lake *rewrites*: `LakeWriter` stores a UUIDv5 derivation
+      # for any ingest id that is not already a UUID. A reader that compares
+      # the stored strings matches nothing for every such producer, and does
+      # it silently — an empty result reads exactly like a quiet estate. The
+      # offline suite cannot see that at all, because a stubbed lake returns
+      # whatever the test put in it.
+      - name: The incident timeline's alert-to-event join holds on a real lake
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_incident_timeline_live.py -v --tb=short
+
+      # The negative control for the join above.
+      #
+      # Drops the id derivation so the reader compares the ingest id to the
+      # lake's stored UUID verbatim — the naive implementation. Expected:
+      # the opaque-id cases fail. The fixture derives its seed ids from the
+      # lake writer's namespace independently, so this breaks one side of
+      # the join rather than both at once.
+      - name: The timeline fails when it stops deriving the lake's event id
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          cp app/services/incident_timeline.py "$RUNNER_TEMP/incident_timeline.py"
+          trap 'cp "$RUNNER_TEMP/incident_timeline.py" app/services/incident_timeline.py' EXIT
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("app/services/incident_timeline.py")
+          text = path.read_text(encoding="utf-8")
+          derivation = '        return str(uuid.uuid5(_EVENT_ID_NAMESPACE, f"ingest:{text}"))'
+          assert text.count(derivation) == 1, "the derivation this control removes has moved"
+          path.write_text(text.replace(derivation, "        return text"), encoding="utf-8")
+          PY
+          if python -m pytest ../../tests/isolation/test_incident_timeline_live.py -q > "$RUNNER_TEMP/neg.log" 2>&1; then
+            cat "$RUNNER_TEMP/neg.log"
+            echo '::error title=timeline-join::the timeline suite passed without deriving the lake event id, so it is not testing the join'
+            exit 1
+          fi
+          # Which test broke is the evidence, not merely that something did.
+          # Without the derivation the opaque ingest id reaches ClickHouse as
+          # a non-UUID string, the read fails closed (`lake_read_failed`) and
+          # the timeline honestly reports no events — so the seeded action
+          # name never appears in the log at all, and grepping for it asserted
+          # nothing. Name the case that must fail instead.
+          cat "$RUNNER_TEMP/neg.log"
+          grep -F 'FAILED' "$RUNNER_TEMP/neg.log" \
+            | grep -F 'test_an_opaque_ingest_id_finds_its_event_through_the_derivation'
+
       # Fix-pass 4.4: the usage meter that counts lake rows. Its offline
       # cases drive a stand-in for `execute_lake_query`, which proves the
       # branching and cannot prove the SQL is valid ClickHouse or that
