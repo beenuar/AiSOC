@@ -157,6 +157,7 @@ _OPERATOR_SUFFIXES = (
     "not_endswith",
     "contains_any",
     "contains_all",
+    "pattern_match_any_cs",
     "pattern_match_any",
     "pattern_match",
     "startswith_any",

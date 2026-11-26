@@ -67,7 +67,9 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
     "detection_ruleset.json": 1196,
-    "detection_ruleset_imported.json": 1770,
+    # 1770 -> 1777 when the matcher gained a case-sensitive regex operator
+    # and Sigma's `|re` stopped being refused outright.
+    "detection_ruleset_imported.json": 1777,
     # 76 -> 79 with the three authored AI-session rules.
     # 79 -> 90 with eleven authored Sigma correlations: multi-stage chains
     # across the four log sources `EMITTERS` covers (windows, cloudtrail,
@@ -107,7 +109,13 @@ PYTHON_RESIDENT_WINDOWED = 3
 # proven emitted by a connector, ingest template or the Go normalizer by
 # `check_sigma_correlations.py` (no ceiling), and the committed artefact is
 # replayed through the real engine by `test_sigma_correlation_replay.py`.
-FUSION_LOADED_TOTAL = 3059
+# 3059 -> 3066 with the seven `|re` rules the case-sensitive regex operator
+# made expressible. The modifier accounted for 71 refusals and the other 64
+# are still refused — now for the reason that actually blocks them rather
+# than for a missing operator: 50 more compile but do not fire on their own
+# proof event, 13 more need a negation the matcher cannot express faithfully.
+# The family size was the ceiling, not the yield.
+FUSION_LOADED_TOTAL = 3066
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

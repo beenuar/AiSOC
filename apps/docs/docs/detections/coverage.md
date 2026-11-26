@@ -10,7 +10,7 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-11-22T16:36:00Z`
+Generated: `2026-11-26T02:06:41Z`
 
 This page is a **curated selection**, not the size of the corpus.
 It picks the highest-scoring rules per threat family from the set
@@ -28,7 +28,7 @@ Sigma compiler began translating rules where they sat: rules under
 ## Headline numbers
 
 - **Curated detections**: `601` (target: ≥ 300)
-- **Executable rules considered**: `2942` (quality floor: 0.55)
+- **Executable rules considered**: `2949` (quality floor: 0.55)
 - **Unique MITRE techniques covered**: `122`
 
 ## Coverage by buyer family

@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-22T16:35:53Z",
+  "generated": "2026-11-26T02:12:59Z",
   "categories": [
     {
       "id": "playbooks",
@@ -38,10 +38,10 @@
       "imported": 6113,
       "stable": 1293
     },
-    "executable": 3146,
-    "quarantined": 4442,
-    "executable_detections": 2966,
-    "reference_only_detections": 4442,
+    "executable": 3153,
+    "quarantined": 4435,
+    "executable_detections": 2973,
+    "reference_only_detections": 4435,
     "not_a_detection": 180
   },
   "mitre_coverage": {
@@ -49,7 +49,7 @@
     "techniques": {
       "T1001.003": 1,
       "T1003": 21,
-      "T1003.001": 58,
+      "T1003.001": 59,
       "T1003.002": 24,
       "T1003.003": 21,
       "T1003.004": 10,
@@ -72,7 +72,7 @@
       "T1021.005": 1,
       "T1021.006": 10,
       "T1021.007": 1,
-      "T1027": 58,
+      "T1027": 61,
       "T1027.001": 1,
       "T1027.003": 1,
       "T1027.004": 3,
@@ -117,7 +117,7 @@
       "T1056.002": 1,
       "T1057": 3,
       "T1059": 51,
-      "T1059.001": 132,
+      "T1059.001": 135,
       "T1059.002": 3,
       "T1059.003": 24,
       "T1059.004": 8,
@@ -175,7 +175,7 @@
       "T1110.002": 1,
       "T1110.003": 7,
       "T1110.004": 3,
-      "T1112": 58,
+      "T1112": 59,
       "T1113": 7,
       "T1114": 1,
       "T1114.001": 1,
@@ -222,7 +222,7 @@
       "T1203": 6,
       "T1204": 6,
       "T1204.001": 3,
-      "T1204.002": 21,
+      "T1204.002": 22,
       "T1204.004": 5,
       "T1207": 2,
       "T1210": 4,
@@ -313,7 +313,7 @@
       "T1547.015": 3,
       "T1548": 7,
       "T1548.001": 4,
-      "T1548.002": 50,
+      "T1548.002": 51,
       "T1548.003": 2,
       "T1548.004": 1,
       "T1550": 6,
@@ -443,7 +443,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2837,
+    "total_with_mitre": 2844,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -105798,9 +105798,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/hacktool-wsass-execution.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
@@ -106974,9 +106973,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/uac-bypass-via-sdclt.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Omer Yampel, Christian Burkard (Nextron Systems)",
@@ -118499,9 +118497,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/suspicious-registry-modification-from-ads-via-regini-exe.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Eli Salem, Sander Wiebing, oscd.community",
@@ -162696,9 +162693,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/invoke-obfuscation-via-use-clip-powershell.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Nikita Nazarov, oscd.community",
@@ -163344,9 +163340,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/suspicious-lnk-command-line-padding-with-whitespace-characters.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
@@ -165119,9 +165114,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/invoke-obfuscation-via-use-clip.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Nikita Nazarov, oscd.community",
@@ -169658,9 +169652,8 @@
       "source": "sigmahq",
       "tier": "imported",
       "enabled": false,
-      "executable": false,
+      "executable": true,
       "path": "detections/sigma-imports/_quarantine/invoke-obfuscation-via-use-clip-powershell-module.yaml",
-      "quarantine_reason": "imported rule; upstream query language not directly executable by the AiSOC engine yet",
       "provenance": {
         "source": "SigmaHQ/sigma",
         "author": "Nikita Nazarov, oscd.community",

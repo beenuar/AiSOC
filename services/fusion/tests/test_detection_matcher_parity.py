@@ -139,3 +139,42 @@ def test_vendored_requested_fields_match_canonical():
         {"match_when": {"actor_uid_neq_owner_uid": True, "syscall": "openat"}},
     ]
     assert vendored.requested_derived_fields(rules) == canonical.requested_derived_fields(rules)
+
+
+# ---------------------------------------------------------------------------
+# `pattern_match_any_cs` — the case-sensitive regex operator Sigma's `|re`
+# compiles to. No native fixture uses it (only imported Sigma rules do), so
+# the fixture sweep above cannot reach it and it needs its own cases: one
+# proving both implementations agree, one proving it is genuinely
+# case-sensitive, and one proving its case-folding sibling did not change.
+# ---------------------------------------------------------------------------
+
+_CS_CASES = [
+    # (match_when, event, expected)
+    ({"CommandLine_pattern_match_any_cs": ["IEX"]}, {"CommandLine": "powershell IEX(...)"}, True),
+    ({"CommandLine_pattern_match_any_cs": ["IEX"]}, {"CommandLine": "powershell iex(...)"}, False),
+    ({"CommandLine_pattern_match_any_cs": ["^Get-[A-Z]"]}, {"CommandLine": "Get-Process"}, True),
+    ({"CommandLine_pattern_match_any_cs": ["^Get-[A-Z]"]}, {"CommandLine": "get-process"}, False),
+    ({"CommandLine_pattern_match_any_cs": ["a", "B"]}, {"CommandLine": "xxBxx"}, True),
+    ({"CommandLine_pattern_match_any_cs": ["Z"]}, {"CommandLine": None}, False),
+    ({"CommandLine_pattern_match_any_cs": ["Z"]}, {}, False),
+    # An uncompilable pattern degrades to a literal substring with its case
+    # intact, mirroring the folding sibling rather than matching nothing.
+    ({"CommandLine_pattern_match_any_cs": ["*["]}, {"CommandLine": "a*[b"}, True),
+    ({"CommandLine_pattern_match_any_cs": ["*["]}, {"CommandLine": "nothing"}, False),
+]
+
+
+@pytest.mark.parametrize(("match_when", "event", "expected"), _CS_CASES)
+def test_case_sensitive_regex_operator_behaves_and_agrees(match_when, event, expected):
+    canonical = _load_canonical()
+    assert vendored_matches(match_when, event) is expected
+    assert canonical.matches(match_when, event) is expected
+
+
+def test_the_case_folding_sibling_is_unchanged():
+    """The whole point of a separate operator: `|re` gets exact case and the
+    existing one keeps folding, so no shipped rule changes meaning."""
+    folding = {"CommandLine_pattern_match_any": ["IEX"]}
+    assert vendored_matches(folding, {"CommandLine": "powershell iex(...)"}) is True
+    assert _load_canonical().matches(folding, {"CommandLine": "powershell iex(...)"}) is True

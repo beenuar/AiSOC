@@ -24,6 +24,7 @@ from typing import Any
 # is not eaten by `_in`. Kept identical to scripts/generate_detections.py.
 OPERATORS: list[tuple[str, str, str]] = sorted(
     [
+        ("_pattern_match_any_cs", "pattern_match_any_cs", "PATTERN_MATCH_ANY_CS"),
         ("_pattern_match_any", "pattern_match_any", "PATTERN_MATCH_ANY"),
         ("_not_startswith_any", "not_startswith_any", "NOT STARTSWITH_ANY"),
         ("_not_endswith_any", "not_endswith_any", "NOT ENDSWITH_ANY"),
@@ -143,6 +144,27 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
                     return True
             except re.error:
                 if str(pat).lower() in actual_str.lower():
+                    return True
+        return False
+
+    # The case-sensitive twin of the operator above, and the only one Sigma's
+    # `|re` can compile to. Upstream `|re` is case-sensitive, so folding it
+    # into `pattern_match_any` would silently widen every such rule — which
+    # is why 71 of them were refused rather than translated. Case here is the
+    # author's stated intent about a value, not a spelling of a Windows path,
+    # so it is honoured exactly. A pattern that does not compile falls back to
+    # a literal substring test with its case intact, mirroring the sibling
+    # rather than quietly matching nothing.
+    if op == "pattern_match_any_cs":
+        if not isinstance(expected, list) or actual is None:
+            return False
+        actual_str = str(actual)
+        for pat in expected:
+            try:
+                if re.search(str(pat), actual_str):
+                    return True
+            except re.error:
+                if str(pat) in actual_str:
                     return True
         return False
 

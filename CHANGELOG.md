@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The matcher can express a case-sensitive regular expression, so Sigma's
+  `|re` is no longer refused outright.** `pattern_match_any_cs` is the exact
+  twin of `pattern_match_any` without `re.IGNORECASE`: upstream `|re` is
+  case-sensitive, and folding it into the existing operator would have
+  silently widened every rule that used it, which is why all 71 were refused.
+  The compiler now emits the new operator, passing `|re` values through
+  verbatim — they are regular expressions already, not Sigma wildcard values
+  — and refusing a pattern Python cannot compile rather than letting it
+  degrade into a substring test that is a different rule than the one
+  written.
+  **The honest yield is 7, not 71**: the imported corpus moves 1,770 -> 1,777
+  rules proven to fire. The other 64 are still refused, now for the reason
+  that actually blocks them instead of a missing operator — 50 more compile
+  but do not fire on their own proof event, 13 more need a negation the
+  matcher cannot express faithfully. The family size was the ceiling, not the
+  yield, and the contributor guide now says so.
+
+
+### Added
+
 - **A case now renders one chronology of the incident** — every linked alert
   at its own `event_time`, interleaved with the raw lake events that
   produced it, oldest first, each event naming the alert it belongs to and

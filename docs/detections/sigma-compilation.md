@@ -8,8 +8,8 @@ translation, and — more importantly — of replaying every translated rule
 through the real connector and the real engine to check it actually fires.
 
 - **Imported Sigma rules considered:** 3,132
-- **Compiled and proven to fire:** 1,770
-- **Refused:** 1,362
+- **Compiled and proven to fire:** 1,777
+- **Refused:** 1,355
 
 A rule ships only when a vendor-shaped event replayed through its
 connector's `normalize()` and the `DetectionEngine` produces a hit for that
@@ -21,7 +21,7 @@ source; it is not a claim that the rule detects an attack.
 
 | Connector | Rules proven to fire |
 | --- | ---: |
-| `windows_event` | 1,687 |
+| `windows_event` | 1,694 |
 | `aws_cloudtrail` | 39 |
 | `azure_activity` | 28 |
 | `okta` | 16 |
@@ -35,9 +35,8 @@ that do not ship.
 | Reason | Rules | Example |
 | --- | ---: | --- |
 | no connector emits this log source | 556 | `access-of-sudoers-file-content.yaml: linux/None` |
-| negation is not faithfully expressible (missing field would flip) | 464 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
-| compiled, but did not fire on its own proof event | 133 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
-| \|re is case-sensitive upstream and the matcher forces IGNORECASE | 71 | `add-potential-suspicious-new-download-source-to-winget.yaml: CommandLine\|re` |
+| negation is not faithfully expressible (missing field would flip) | 477 | `a-rule-has-been-deleted-from-the-windows-firewall-exception-list.yaml: ModifyingApplication\|startswith` |
+| compiled, but did not fire on its own proof event | 183 | `abusable-dll-potential-sideloading-from-suspicious-location.yaml` |
 | field is a dotted path and the matcher has no path traversal | 59 | `account-created-and-deleted-within-a-close-time-frame.yaml: properties.message` |
 | the connector rejected the proof event | 30 | `azure-application-gateway-modified-or-deleted.yaml` |
 | \|cidr has no matcher operator | 17 | `communication-to-uncommon-destination-ports.yaml: DestinationIp\|cidr` |
@@ -45,6 +44,7 @@ that do not ship.
 | bare keywords search the whole event; the matcher is field-scoped | 10 | `granting-of-permissions-to-an-account.yaml: keywords block` |
 | \|base64/\|base64offset has no matcher operator | 7 | `cobaltstrike-service-installations-security.yaml: ServiceFileName\|base64offset` |
 | \|fieldref compares two fields and has no matcher operator | 1 | `process-deletion-of-its-own-executable.yaml: TargetFilename\|fieldref` |
+| unsupported Sigma modifier | 1 | `suspicious-copy-from-or-to-system-directory.yaml: CommandLine\|i` |
 
 ## Upstream lifecycle status
 
@@ -59,8 +59,8 @@ through to the rule and onto the alert so it can still be filtered:
 
 | Upstream status | Rules shipped | Treatment |
 | --- | ---: | --- |
-| `test` | 1,599 | Shipped. In SigmaHQ this means reviewed and in community use — the normal state for most of the corpus, not a warning. |
-| `experimental` | 125 | Shipped and labelled. Genuine false-positive risk, but that is a tuning problem, and hiding the rule does not help someone who wants the coverage. |
+| `test` | 1,604 | Shipped. In SigmaHQ this means reviewed and in community use — the normal state for most of the corpus, not a warning. |
+| `experimental` | 127 | Shipped and labelled. Genuine false-positive risk, but that is a tuning problem, and hiding the rule does not help someone who wants the coverage. |
 | `(none recorded)` | 46 | Shipped. No upstream status was recorded on import. |
 
 `deprecated` and `unsupported` are refused outright: upstream withdrew
@@ -78,8 +78,8 @@ requires messages produced by a match to identify the rule's author.
 
 ### Author attribution
 
-`provenance.author` names the upstream author on 1,770 of the
-1,770 compiled rules.
+`provenance.author` names the upstream author on 1,777 of the
+1,777 compiled rules.
 The author travels with the rule and into the alert: `_attribution()` in
 the detection engine renders it onto every match, so a hit on *WScript or
 CScript Dropper - File* reads *Translated from SigmaHQ/sigma by Tim

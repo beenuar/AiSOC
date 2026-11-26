@@ -1,5 +1,5 @@
 {
-  "count": 1770,
+  "count": 1777,
   "rules": [
     {
       "category": "endpoint",
@@ -28539,6 +28539,49 @@
     {
       "category": "endpoint",
       "emitter": "windows_event",
+      "id": "sigmahq-sigma-589ac73f-8e12-409c-964e-31a2f5775ae2",
+      "match_when": {
+        "any_of": [
+          {
+            "Image_pattern_match_any": [
+              "\\\\wsass\\.exe$"
+            ]
+          },
+          {
+            "Hashes_contains_any": [
+              "IMPHASH=32F5095C9BBDCACF28FD4060EB4DFC42"
+            ]
+          },
+          {
+            "CommandLine_pattern_match_any_cs": [
+              "(?i)\\.exe[\\\"\\']?\\s+[^\\\"]{0,64}werfaultsecure\\.exe[\\\"\\']?\\s+\\d{2,10}"
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1003.001"
+      ],
+      "name": "HackTool - WSASS Execution",
+      "product": "windows",
+      "provenance": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "589ac73f-8e12-409c-964e-31a2f5775ae2",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/process_creation/proc_creation_win_hktl_wsass.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "hacktool-wsass-execution",
+      "upstream_status": "experimental"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
       "id": "sigmahq-sigma-58c0bff0-40a0-46e8-b5e8-b734b84d2017",
       "match_when": {
         "EventID_pattern_match_any": [
@@ -29275,6 +29318,47 @@
       "service": "",
       "severity": "high",
       "slug": "file-with-suspicious-extension-downloaded-via-bitsadmin",
+      "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
+      "id": "sigmahq-sigma-5b872a46-3b90-45c1-8419-f675db8053aa",
+      "match_when": {
+        "any_of": [
+          {
+            "TargetObject_pattern_match_any": [
+              "Software\\\\Classes\\\\exefile\\\\shell\\\\runas\\\\command\\\\isolatedCommand$"
+            ]
+          },
+          {
+            "Details_pattern_match_any_cs": [
+              "-1[0-9]{3}\\\\Software\\\\Classes\\\\"
+            ],
+            "TargetObject_pattern_match_any": [
+              "Software\\\\Classes\\\\Folder\\\\shell\\\\open\\\\command\\\\SymbolicLinkValue$"
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1548.002"
+      ],
+      "name": "UAC Bypass via Sdclt",
+      "product": "windows",
+      "provenance": {
+        "author": "Omer Yampel, Christian Burkard (Nextron Systems)",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "5b872a46-3b90-45c1-8419-f675db8053aa",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/registry/registry_set/registry_set_uac_bypass_sdclt.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "uac-bypass-via-sdclt",
       "upstream_status": "test"
     },
     {
@@ -37646,6 +37730,53 @@
       "service": "",
       "severity": "medium",
       "slug": "teamviewer-domain-query-by-non-teamviewer-application",
+      "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
+      "id": "sigmahq-sigma-77946e79-97f1-45a2-84b4-f37b5c0d8682",
+      "match_when": {
+        "all_of": [
+          {
+            "any_of": [
+              {
+                "Image_pattern_match_any": [
+                  "\\\\regini\\.exe$"
+                ]
+              },
+              {
+                "OriginalFileName_pattern_match_any": [
+                  "^REGINI\\.EXE$"
+                ]
+              }
+            ]
+          },
+          {
+            "CommandLine_pattern_match_any_cs": [
+              ":[^ \\\\]"
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1112"
+      ],
+      "name": "Suspicious Registry Modification From ADS Via Regini.EXE",
+      "product": "windows",
+      "provenance": {
+        "author": "Eli Salem, Sander Wiebing, oscd.community",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "77946e79-97f1-45a2-84b4-f37b5c0d8682",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/process_creation/proc_creation_win_regini_ads.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "suspicious-registry-modification-from-ads-via-regini-exe",
       "upstream_status": "test"
     },
     {
@@ -75477,6 +75608,36 @@
     {
       "category": "endpoint",
       "emitter": "windows_event",
+      "id": "sigmahq-sigma-db92dd33-a3ad-49cf-8c2c-608c3e30ace0",
+      "match_when": {
+        "ScriptBlockText_pattern_match_any_cs": [
+          "(?i)echo.*clip.*&&.*(Clipboard|i`?n`?v`?o`?k`?e`?)"
+        ]
+      },
+      "mitre": [
+        "T1027",
+        "T1059.001"
+      ],
+      "name": "Invoke-Obfuscation Via Use Clip - Powershell",
+      "product": "windows",
+      "provenance": {
+        "author": "Nikita Nazarov, oscd.community",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "db92dd33-a3ad-49cf-8c2c-608c3e30ace0",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/powershell/powershell_script/posh_ps_invoke_obfuscation_via_use_clip.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "invoke-obfuscation-via-use-clip-powershell",
+      "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
       "id": "sigmahq-sigma-dbc1f800-0fe0-4bc0-9c66-292c2abe3f78",
       "match_when": {
         "all_of": [
@@ -75974,6 +76135,70 @@
       "severity": "medium",
       "slug": "registry-modification-of-ms-settings-protocol-handler",
       "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
+      "id": "sigmahq-sigma-dd8756e7-a3a0-4768-b47e-8f545d1a751c",
+      "match_when": {
+        "all_of": [
+          {
+            "any_of": [
+              {
+                "ParentImage_pattern_match_any": [
+                  "\\\\explorer\\.exe$"
+                ]
+              },
+              {
+                "ParentCommandLine_contains_any": [
+                  ".lnk"
+                ]
+              }
+            ]
+          },
+          {
+            "any_of": [
+              {
+                "CommandLine_contains_any": [
+                  "                 ",
+                  "\\u0009",
+                  "\\u000A",
+                  "\\u0011",
+                  "\\u0012",
+                  "\\u0013",
+                  "\\u000B",
+                  "\\u000C",
+                  "\\u000D"
+                ]
+              },
+              {
+                "CommandLine_pattern_match_any_cs": [
+                  "\\n\\n\\n\\n\\n\\n"
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "mitre": [
+        "T1204.002"
+      ],
+      "name": "Suspicious LNK Command-Line Padding with Whitespace Characters",
+      "product": "windows",
+      "provenance": {
+        "author": "Swachchhanda Shrawan Poudel (Nextron Systems)",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "dd8756e7-a3a0-4768-b47e-8f545d1a751c",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/process_creation/proc_creation_win_susp_lnk_exec_hidden_cmd.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "suspicious-lnk-command-line-padding-with-whitespace-characters",
+      "upstream_status": "experimental"
     },
     {
       "category": "endpoint",
@@ -77193,6 +77418,36 @@
       "service": "",
       "severity": "medium",
       "slug": "detected-windows-software-discovery",
+      "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
+      "id": "sigmahq-sigma-e1561947-b4e3-4a74-9bdd-83baed21bdb5",
+      "match_when": {
+        "CommandLine_pattern_match_any_cs": [
+          "(?i)echo.*clip.*&&.*(?:Clipboard|i`?n`?v`?o`?k`?e`?)"
+        ]
+      },
+      "mitre": [
+        "T1027",
+        "T1059.001"
+      ],
+      "name": "Invoke-Obfuscation Via Use Clip",
+      "product": "windows",
+      "provenance": {
+        "author": "Nikita Nazarov, oscd.community",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "e1561947-b4e3-4a74-9bdd-83baed21bdb5",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/process_creation/proc_creation_win_hktl_invoke_obfuscation_via_use_clip.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "invoke-obfuscation-via-use-clip",
       "upstream_status": "test"
     },
     {
@@ -80090,6 +80345,36 @@
       "service": "",
       "severity": "low",
       "slug": "suspicious-gpo-discovery-with-get-gpo",
+      "upstream_status": "test"
+    },
+    {
+      "category": "endpoint",
+      "emitter": "windows_event",
+      "id": "sigmahq-sigma-ebdf49d8-b89c-46c9-8fdf-2c308406f6bd",
+      "match_when": {
+        "Payload_pattern_match_any_cs": [
+          "(?i)echo.*clip.*&&.*(Clipboard|i`?n`?v`?o`?k`?e`?)"
+        ]
+      },
+      "mitre": [
+        "T1027",
+        "T1059.001"
+      ],
+      "name": "Invoke-Obfuscation Via Use Clip - PowerShell Module",
+      "product": "windows",
+      "provenance": {
+        "author": "Nikita Nazarov, oscd.community",
+        "license": "DRL-1.1",
+        "license_url": "https://github.com/SigmaHQ/Detection-Rule-License",
+        "source": "SigmaHQ/sigma",
+        "source_commit": "df5c6a6",
+        "source_id": "ebdf49d8-b89c-46c9-8fdf-2c308406f6bd",
+        "translated_by": "aisoc sigma_compiler",
+        "upstream_path": "rules/windows/powershell/powershell_module/posh_pm_invoke_obfuscation_via_use_clip.yml"
+      },
+      "service": "",
+      "severity": "high",
+      "slug": "invoke-obfuscation-via-use-clip-powershell-module",
       "upstream_status": "test"
     },
     {
