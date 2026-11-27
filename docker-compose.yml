@@ -712,6 +712,7 @@ services:
       SHODAN_API_KEY: ${SHODAN_API_KEY:-}
       URLSCAN_API_KEY: ${URLSCAN_API_KEY:-}
       IPINFO_API_KEY: ${IPINFO_API_KEY:-}
+      VPNDETECTION_API_KEY: ${VPNDETECTION_API_KEY:-}
       # Cyble Vision: config.go gates the provider on CYBLE_API_KEY and the
       # enricher is built unconditionally, so without these the credential set
       # in .env never reaches the container and boot logs cyble=false.

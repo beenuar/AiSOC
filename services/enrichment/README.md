@@ -38,10 +38,14 @@ pipeline, the AI Copilot, the case workspace, and the hunt UI.
 | GreyNoise    | IP                      | API key   | `GREYNOISE_API_KEY`                     |
 | Shodan       | IP                      | API key   | `SHODAN_API_KEY`                        |
 | IPinfo       | IP                      | API token | `IPINFO_API_KEY`                        |
+| VPNDetection | IP                      | API key   | `VPNDETECTION_API_KEY`                  |
 | URLScan      | domain, URL             | API key   | `URLSCAN_API_KEY`                       |
 
 Shodan contributes open ports, service banners, disclosed CVEs and geo/ASN.
 IPinfo adds geolocation and network ownership (context only — no risk score).
+VPNDetection flags VPN, Tor and privacy relay addresses (iCloud Private Relay
+and the like) with their country and ASN, also context only; its key is free
+([terms](https://vpndetection.io/terms), [privacy](https://vpndetection.io/privacy)).
 URLScan reports prior-scan visibility and brand-impersonation phishing. As with
 every provider here, an empty key makes that provider a no-op.
 

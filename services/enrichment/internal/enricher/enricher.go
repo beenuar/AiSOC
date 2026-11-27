@@ -15,7 +15,7 @@ import (
 // Sources are split into three tiers:
 //
 //   - open-source: VirusTotal community, AbuseIPDB, GreyNoise community
-//   - free / freemium: Shodan, IPinfo, URLscan (placeholders unless keys present)
+//   - free / freemium: Shodan, IPinfo, VPNDetection, URLscan (placeholders unless keys present)
 //   - commercial: Cyble Vision, Recorded Future, Mandiant, Anomali, IBM X-Force,
 //     Flashpoint, Intel 471, DomainTools Iris, RiskIQ / Defender XATP,
 //     Crowdstrike Falcon Intelligence
@@ -31,6 +31,7 @@ type Enricher struct {
 	gnClient      *GreyNoiseClient
 	shodanClient  *ShodanClient
 	ipinfoClient  *IPInfoClient
+	vpndClient    *VPNDetectionClient
 	urlscanClient *URLScanClient
 
 	// Commercial clients
@@ -54,12 +55,13 @@ type Config struct {
 	Cache *cache.Client
 
 	// Open-source / freemium
-	VirusTotalAPIKey string
-	AbuseIPDBAPIKey  string
-	GreyNoiseAPIKey  string
-	ShodanAPIKey     string
-	IPInfoAPIKey     string
-	URLScanAPIKey    string
+	VirusTotalAPIKey   string
+	AbuseIPDBAPIKey    string
+	GreyNoiseAPIKey    string
+	ShodanAPIKey       string
+	IPInfoAPIKey       string
+	VPNDetectionAPIKey string
+	URLScanAPIKey      string
 
 	// Commercial
 	CybleAPIKey            string
@@ -98,6 +100,7 @@ func New(cfg Config) *Enricher {
 		gnClient:      NewGreyNoiseClient(cfg.GreyNoiseAPIKey),
 		shodanClient:  NewShodanClient(cfg.ShodanAPIKey),
 		ipinfoClient:  NewIPInfoClient(cfg.IPInfoAPIKey),
+		vpndClient:    NewVPNDetectionClient(cfg.VPNDetectionAPIKey),
 		urlscanClient: NewURLScanClient(cfg.URLScanAPIKey),
 
 		cybleClient: NewCybleClient(CybleConfig{
@@ -227,6 +230,7 @@ func (e *Enricher) enrichIP(ctx context.Context, ip string) (*EnrichmentResult, 
 		{"greynoise", func() (*EnrichmentResult, error) { return e.gnClient.EnrichIP(ctx, ip) }},
 		{"shodan", func() (*EnrichmentResult, error) { return e.shodanClient.EnrichIP(ctx, ip) }},
 		{"ipinfo", func() (*EnrichmentResult, error) { return e.ipinfoClient.EnrichIP(ctx, ip) }},
+		{"vpndetection", func() (*EnrichmentResult, error) { return e.vpndClient.EnrichIP(ctx, ip) }},
 		{"cyble", func() (*EnrichmentResult, error) { return e.cybleClient.EnrichIP(ctx, ip) }},
 		{"recorded-future", func() (*EnrichmentResult, error) { return e.rfClient.EnrichIP(ctx, ip) }},
 		{"mandiant", func() (*EnrichmentResult, error) { return e.mandiantClient.EnrichIP(ctx, ip) }},

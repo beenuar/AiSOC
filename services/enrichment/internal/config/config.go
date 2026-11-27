@@ -17,12 +17,13 @@ type Config struct {
 	CacheMaxMemory string
 
 	// External Threat Intel APIs — open-source / freemium
-	AbuseIPDBAPIKey  string
-	VirusTotalAPIKey string
-	ShodanAPIKey     string
-	GreyNoiseAPIKey  string
-	URLScanAPIKey    string
-	IPInfoAPIKey     string
+	AbuseIPDBAPIKey    string
+	VirusTotalAPIKey   string
+	ShodanAPIKey       string
+	GreyNoiseAPIKey    string
+	URLScanAPIKey      string
+	IPInfoAPIKey       string
+	VPNDetectionAPIKey string
 
 	// External Threat Intel APIs — commercial
 	CybleAPIKey            string
@@ -74,6 +75,7 @@ func Load() *Config {
 		GreyNoiseAPIKey:        getEnv("GREYNOISE_API_KEY", ""),
 		URLScanAPIKey:          getEnv("URLSCAN_API_KEY", ""),
 		IPInfoAPIKey:           getEnv("IPINFO_API_KEY", ""),
+		VPNDetectionAPIKey:     getEnv("VPNDETECTION_API_KEY", ""),
 		CybleAPIKey:            getEnv("CYBLE_API_KEY", ""),
 		CybleBaseURL:           getEnv("CYBLE_BASE_URL", ""),
 		RecordedFutureAPIKey:   getEnv("RECORDED_FUTURE_API_KEY", ""),
