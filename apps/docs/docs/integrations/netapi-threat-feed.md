@@ -27,6 +27,13 @@ indicator is stored with `source: "netapi"` and a `source_ref` naming the list
 it came from, and this page credits the publisher. If you redistribute data
 derived from these lists, the same attribution requirement passes to you.
 
+The repository also redistributes a 200-line excerpt of each list as a test
+fixture, so the parser is tested against the format the publisher actually
+serves rather than one AiSOC invented. CC BY 4.0 permits that redistribution
+with attribution; provenance, capture date and licence are recorded in
+`services/threatintel/tests/fixtures/NETAPI_PROVENANCE.md`. Those excerpts are
+a point-in-time snapshot for testing and are not a mirror of the feed.
+
 The feed was [proposed by its operator](https://github.com/beenuar/AiSOC/issues/2079),
 who disclosed that affiliation when proposing it. The characterisations of
 what each list contains, below, are the publisher's own description of its

@@ -14,6 +14,8 @@ The two things this pins that are easy to get wrong:
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import httpx
 import pytest
 from app.clients.netapi import NetApiClient
@@ -24,9 +26,33 @@ pytestmark = pytest.mark.asyncio
 _IPS = "1.2.3.4\n5.6.7.8\n9.10.11.12\n"
 _DOMAINS = "evil.example\nbad.example.org\nphish.example.net\n"
 
+#: Real excerpts of the published lists — see fixtures/NETAPI_PROVENANCE.md
+#: for provenance and licence. Tests that parse these are checking the format
+#: the publisher actually serves rather than one we invented.
+_FIXTURES = Path(__file__).parent / "fixtures"
+
+
+def _fixture(name: str) -> str:
+    return (_FIXTURES / name).read_text(encoding="utf-8")
+
 
 def _transport(handler):
     return httpx.MockTransport(handler)
+
+
+class _BrokenStream(httpx.AsyncByteStream):
+    """A response body that delivers ``head`` and then dies.
+
+    What a dropped connection partway through a multi-megabyte list looks
+    like to the client.
+    """
+
+    def __init__(self, head: bytes) -> None:
+        self._head = head
+
+    async def __aiter__(self):
+        yield self._head
+        raise httpx.ReadError("connection reset mid-body")
 
 
 async def _collect(client, dataset):
@@ -83,6 +109,86 @@ class TestParsing:
             ("1.2.3.4", "ipv4-addr"),
             ("2001:db8::1", "ipv6-addr"),
         ]
+
+
+class TestAgainstTheRealPublishedFormat:
+    """Parsed against committed excerpts of the actual lists.
+
+    The synthetic bodies above pin behaviour; these pin the *format*. If the
+    publisher ever changes shape — a header line, a second column, a
+    different separator — a test that only ever saw invented data would
+    carry on passing.
+    """
+
+    @pytest.mark.parametrize(
+        ("fixture", "key", "expected_type"),
+        [
+            ("netapi_compromised_ips_sample.txt", "ips", "ipv4-addr"),
+            ("netapi_compromised_domains_short_sample.txt", "domains", "domain-name"),
+            ("netapi_compromised_domains_sample.txt", "domains", "domain-name"),
+        ],
+    )
+    async def test_every_line_of_the_real_sample_parses(self, fixture, key, expected_type):
+        body = _fixture(fixture)
+        client = NetApiClient(transport=_transport(lambda r: httpx.Response(200, text=body)))
+        ds = client.dataset(key)
+        iocs = await _collect(client, ds)
+
+        # Not "most lines": every non-empty line of a real published sample
+        # must become an indicator, or the parser disagrees with the feed.
+        assert len(iocs) == len([ln for ln in body.splitlines() if ln.strip()])
+        assert {i["type"] for i in iocs} == {expected_type}
+        assert {i["source"] for i in iocs} == {"netapi"}
+        assert client.last_status(ds) == "fetched"
+
+    async def test_real_sample_values_are_carried_verbatim(self):
+        body = _fixture("netapi_compromised_ips_sample.txt")
+        client = NetApiClient(transport=_transport(lambda r: httpx.Response(200, text=body)))
+        iocs = await _collect(client, client.dataset("ips"))
+
+        assert [i["value"] for i in iocs] == [ln.strip() for ln in body.splitlines() if ln.strip()]
+
+
+class TestTruncatedBody:
+    """A connection that drops mid-list must not be mistaken for a short list."""
+
+    async def test_truncated_stream_reports_failed(self):
+        body = _fixture("netapi_compromised_ips_sample.txt")
+        half = body[: len(body) // 2].encode()
+
+        def handler(request):
+            # Content-Length promises the whole body; the stream delivers half.
+            return httpx.Response(
+                200,
+                headers={"Content-Length": str(len(body)), "ETag": '"v1"'},
+                stream=_BrokenStream(half),
+            )
+
+        client = NetApiClient(transport=_transport(handler))
+        ds = client.dataset("ips")
+        await _collect(client, ds)
+
+        # A partial list must read as a failed poll, never as a successful
+        # one that happened to be short.
+        assert client.last_status(ds) == "failed"
+
+    async def test_truncated_stream_does_not_store_the_validator(self):
+        body = _fixture("netapi_compromised_ips_sample.txt")
+        half = body[: len(body) // 2].encode()
+        seen: list[httpx.Request] = []
+
+        def handler(request):
+            seen.append(request)
+            return httpx.Response(200, headers={"ETag": '"v1"'}, stream=_BrokenStream(half))
+
+        client = NetApiClient(transport=_transport(handler))
+        ds = client.dataset("ips")
+        await _collect(client, ds)
+        await _collect(client, ds)
+
+        # Remembering the ETag of a body we never finished reading would make
+        # the next poll a 304 against a list we only have half of.
+        assert "If-None-Match" not in seen[1].headers
 
 
 class TestConditionalRequests:
