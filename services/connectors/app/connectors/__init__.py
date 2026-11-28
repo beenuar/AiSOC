@@ -34,6 +34,7 @@ from app.connectors.base import BaseConnector, ConnectorSchema, Field, OAuthHint
 from app.connectors.box import BoxConnector
 from app.connectors.carbon_black import CarbonBlackConnector
 from app.connectors.chronicle import ChronicleConnector
+from app.connectors.cisco_meraki import CiscoMerakiConnector
 from app.connectors.cisco_secure_endpoint import CiscoSecureEndpointConnector
 from app.connectors.cisco_umbrella import CiscoUmbrellaConnector
 from app.connectors.cloudflare import CloudflareConnector
@@ -141,6 +142,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     BoxConnector,
     CarbonBlackConnector,
     ChronicleConnector,
+    CiscoMerakiConnector,
     CiscoSecureEndpointConnector,
     CiscoUmbrellaConnector,
     CloudflareConnector,
@@ -278,6 +280,7 @@ __all__ = [
     "CONNECTOR_REGISTRY",
     "CarbonBlackConnector",
     "ChronicleConnector",
+    "CiscoMerakiConnector",
     "CiscoSecureEndpointConnector",
     "CiscoUmbrellaConnector",
     "CloudflareConnector",

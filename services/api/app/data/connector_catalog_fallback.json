@@ -788,6 +788,61 @@
     "capabilities": [
       "pull_alerts"
     ],
+    "category": "network",
+    "connector_id": "cisco_meraki",
+    "connector_name": "Cisco Meraki",
+    "description": "Cisco Meraki MX security appliance events \u2014 intrusion detection alerts and files Advanced Malware Protection judged malicious \u2014 across every network in an organization, via the Dashboard API v1. Read-only.",
+    "docs_url": "/docs/connectors/cisco-meraki",
+    "fields": [
+      {
+        "help_text": "The Meraki dashboard the organization lives in.",
+        "label": "Dashboard region",
+        "name": "region",
+        "options": [
+          {
+            "label": "Most of the world (api.meraki.com)",
+            "value": "global"
+          },
+          {
+            "label": "Canada (api.meraki.ca)",
+            "value": "canada"
+          },
+          {
+            "label": "China (api.meraki.cn)",
+            "value": "china"
+          },
+          {
+            "label": "India (api.meraki.in)",
+            "value": "india"
+          },
+          {
+            "label": "US FedRAMP (api.gov-meraki.com)",
+            "value": "fedramp"
+          }
+        ],
+        "required": true,
+        "type": "select"
+      },
+      {
+        "help_text": "Shown at the foot of every dashboard page, and returned by GET /organizations.",
+        "label": "Organization ID",
+        "name": "organization_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generated under My profile \u2192 API access by an administrator of the organization. Read-only organization access is enough.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_alerts"
+    ],
     "category": "edr",
     "connector_id": "cisco_secure_endpoint",
     "connector_name": "Cisco Secure Endpoint",

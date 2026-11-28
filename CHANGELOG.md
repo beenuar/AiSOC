@@ -47,6 +47,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   but do not fire on their own proof event, 13 more need a negation the
   matcher cannot express faithfully. The family size was the ceiling, not the
   yield, and the contributor guide now says so.
+- **Cisco Meraki connector.** `cisco_meraki` reads the MX security
+  appliance's security events for every network in an organization through
+  the Dashboard API v1,
+  `GET /organizations/{organizationId}/appliance/security/events`, with a
+  dashboard API key sent as a bearer token (part of #356). The region is a
+  select of Meraki's five dashboards, and a redirect to the organization's
+  shard or a `next` link is followed only to an HTTPS host inside that
+  region's domain, so the key, which is vaulted, is only ever sent to Meraki.
+  The window is read oldest first, 1000 a page, following the `Link` header
+  until it ends; a refused or unreachable opening request fails the poll, a
+  later page failing keeps the pages already read, and the 25-page bound is
+  logged when it binds. The window opens at the persisted `ts` cursor, so a
+  read cut short by the bound or a 429 is caught up by the next poll. Meraki
+  gives an event no id, so the cursor's tie-breaker and the alert's
+  `external_id` are a digest of the whole record. Only events that rate as a
+  threat are raised: an IDS alert keeps its Snort priority (`1` → `high`
+  through `4` → `info`, nothing invented as `critical`) and a file AMP judged
+  `Malicious` is `high`; TLS decryption failures and files scanned clean are
+  skipped and counted by type. `ocsf_classes.go` files `cisco_meraki` at 2001
+  Security Finding. Setup and troubleshooting are on the new
+  [Cisco Meraki](apps/docs/docs/connectors/cisco-meraki.md) page.
 
 
 ### Added

@@ -173,6 +173,12 @@ class TestAdoptionIsCountedNotAssumed:
         # of overlap for a single skipped run with no cursor yet).
         "huntress": (("sent_at",), ("id",)),
         "cisco_secure_endpoint": (("date",), ("id",)),
+        # Same mechanism, read oldest first: a Meraki read cut short by the
+        # page bound or a 429 stops at a point in time, and the next window
+        # opens there. Meraki gives a security event no id, so the
+        # tie-breaker is `row_id`, a digest of the whole event added before
+        # the cursor is applied, as zscaler does below.
+        "cisco_meraki": (("ts",), ("row_id",)),
         # The audit-report rewrite: ZIA audit rows carry no vendor id, so
         # the row id is a digest of the identifying columns, and the time is
         # the report's admin-timezone stamp parsed to UTC where the

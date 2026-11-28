@@ -1,0 +1,35 @@
+id: cisco_meraki
+name: Cisco Meraki Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Cisco Meraki MX security appliance events via the Dashboard API v1:
+  intrusion detection alerts and files Advanced Malware Protection judged
+  malicious, across every network in an organization. The region is chosen
+  from Meraki's five dashboards, and redirects and next-page links are
+  followed only inside that dashboard's domain, so the API key is only ever
+  sent to Meraki. Severity follows the Snort priority of each IDS alert.
+  Read-only; nothing here changes a rule, a policy or a client.
+author: AiSOC Core Team
+tags: [network, firewall, ids, ips, cisco, meraki, mx, security-events]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/cisco_meraki.py
+license: MIT
+# The first release that contains this connector. The next release's PR
+# confirms or corrects this value, the same way it does for eset_protect.
+min_aisoc_version: "23.8.0"
+config_schema:
+  type: object
+  required: [region, organization_id, api_key]
+  properties:
+    region:
+      type: string
+      enum: [global, canada, china, india, fedramp]
+      description: The Meraki dashboard the organization lives in.
+    organization_id:
+      type: string
+      description: The organization's ID, shown at the foot of every dashboard page and returned by GET /organizations.
+    api_key:
+      type: string
+      description: A dashboard API key generated under My profile → API access. Read-only organization access is enough.
+      secret: true
