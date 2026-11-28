@@ -9,8 +9,8 @@ the platform already collects.
 This module closes that gap: at fuse time it extracts the alert's IOCs, calls
 the enrichment service (which fans out to the configured TI providers + CISA
 KEV), and merges the results into ``fused.enrichments`` using exactly the schema
-the confidence scorer (``misp`` / ``otx`` / ``taxii`` / ``kev`` / ``virustotal``
-hits) and ``apply_vuln_boost`` (``vulnerabilities`` list) expect.
+the confidence scorer (``misp`` / ``otx`` / ``taxii`` / ``kev`` / ``netapi`` /
+``virustotal`` hits) and ``apply_vuln_boost`` (``vulnerabilities`` list) expect.
 
 Honesty + robustness:
 
@@ -71,6 +71,10 @@ _SOURCE_TO_TI_KEY: dict[str, str] = {
     "alienvault": "otx",
     "misp": "misp",
     "taxii": "taxii",
+    # Keyless public feed polled by services/threatintel. The Go threat-intel
+    # provider surfaces a feed hit under the stored IOC's own lower-cased
+    # `source`, which that client writes as `netapi`.
+    "netapi": "netapi",
 }
 
 

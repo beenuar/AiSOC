@@ -50,6 +50,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A keyless IP and domain threat-intel feed, so a deployment with no API
+  keys at all has a source for the two IOC types alerts carry most.** Every
+  enrichment provider needs a key, OTX needs a key and the CISA KEV catalog
+  carries CVEs only, which left no keyless option for addresses and domains.
+  `services/threatintel` now polls the two public NetAPI lists (CC BY 4.0) the
+  way it polls CISA KEV, so per-IOC lookups answer locally with no outbound
+  call per indicator, and a hit reaches a verdict rather than only a store —
+  the fusion confidence scorer and the enricher's source mapping both
+  recognise `netapi`, pinned by a test that failed on the pre-change tree with
+  an identical score for an alert with and without a hit.
+  **Off by default, which is a measured choice**: the first poll embeds about
+  169k indicators and adds roughly a gigabyte of Qdrant vectors, a one-time
+  cost an operator should opt into rather than inherit from an upgrade.
+  Steady state is cheap because an unchanged list costs a `304` with no body
+  and never enters the pipeline — measured at 0.36–0.47 s per list against the
+  live endpoints, ingesting nothing. Both validators are sent, because the
+  short domain list publishes `Last-Modified` but **no** `ETag` and an
+  `If-None-Match`-only client would re-download it every single poll.
+  The **short** domain list is the default: it is the full list minus the
+  sinkholed domains at about half the ingest cost and half the storage
+  (771,420 dedup round-trips against 1,710,168; 753 MB of vectors against
+  1,670 MB), and a sinkholed domain is by definition no longer
+  attacker-controlled. The full list stays available via `NETAPI_DOMAINS_URL`.
+  Refused under `AISOC_AIRGAPPED` at registration and again at request time,
+  like the other public feeds. A CDN challenge page — `200` with an HTML body
+  — is refused wholesale by a sniff check rather than stored as 285k
+  "indicators", and its `ETag` is deliberately not remembered so the next poll
+  retries instead of getting a `304` against the junk. Measured figures and
+  the reasoning behind every default are in
+  `apps/docs/docs/integrations/netapi-threat-feed.md`.
+
 - **The matcher traverses a dotted field path, so Sigma rules naming nested
   fields compile — the largest single gain of the three operator gaps.**
   `userIdentity.type` was read as one field name that nothing emits, which

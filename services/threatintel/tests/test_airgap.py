@@ -62,6 +62,9 @@ class TestPublicFeedsBlocked:
             "https://misp.example-public.com/events/restSearch",
             "https://taxii.opencti.io/taxii2/",
             "https://feeds.example-public.net/stix",
+            "https://netapi.com/api2/netapi-compromised-ips.txt",
+            "https://netapi.com/api2/netapi-compromised-domains-short.txt",
+            "https://netapi.com/api2/netapi-compromised-domains.txt",
         ],
     )
     def test_public_feed_is_blocked(self, airgapped, url):

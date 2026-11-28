@@ -1496,6 +1496,13 @@ services:
       TAXII_URL: ${TAXII_URL:-}
       TAXII_USERNAME: ${TAXII_USERNAME:-}
       TAXII_PASSWORD: ${TAXII_PASSWORD:-}
+      # NetAPI keyless IP/domain lists. Off unless the operator opts in; the
+      # service reads these names directly, so a value that does not reach
+      # this container is a setting the deployment cannot actually set.
+      NETAPI_ENABLED: ${NETAPI_ENABLED:-false}
+      NETAPI_IPS_URL: ${NETAPI_IPS_URL:-https://netapi.com/api2/netapi-compromised-ips.txt}
+      NETAPI_DOMAINS_URL: ${NETAPI_DOMAINS_URL:-https://netapi.com/api2/netapi-compromised-domains-short.txt}
+      NETAPI_POLL_INTERVAL: ${NETAPI_POLL_INTERVAL:-3600}
     networks:
       - aisoc
     restart: unless-stopped

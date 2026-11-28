@@ -263,6 +263,31 @@ ALLOWED: tuple[Exemption, ...] = (
         ),
         enforced_by=_THREATINTEL_GUARD,
     ),
+    Exemption(
+        module="services/threatintel/app/config.py",
+        setting="NETAPI_IPS_URL",
+        host="netapi.com",
+        reason=(
+            "A keyless public IP list, and the only source of its kind the service has: every enrichment provider "
+            "needs a key, OTX needs a key, and the CISA KEV catalog carries CVEs only. The default has to name the "
+            "publisher because there is no internal mirror to point at. Unlike the other two feeds this one is also "
+            "off unless NETAPI_ENABLED is set, so the URL is inert on a deployment that did not ask for it; an "
+            "air-gapped deployment mirrors the list internally and allow-lists the mirror, and the feed is otherwise "
+            "refused at registration time and again at request time."
+        ),
+        enforced_by=_THREATINTEL_GUARD,
+    ),
+    Exemption(
+        module="services/threatintel/app/config.py",
+        setting="NETAPI_DOMAINS_URL",
+        host="netapi.com",
+        reason=(
+            "The domain half of the same keyless public feed, under the same conditions: no internal mirror exists to "
+            "default to, the setting is inert unless NETAPI_ENABLED is set, and air-gap policy refuses it at "
+            "registration time and again at request time. Defaults to the short list rather than the full one."
+        ),
+        enforced_by=_THREATINTEL_GUARD,
+    ),
 )
 
 

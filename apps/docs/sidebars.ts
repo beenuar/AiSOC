@@ -279,7 +279,13 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Integrations",
-      items: ["integrations/mcp", "integrations/siem-writeback", "integrations/misp-push", "integrations/github-action"],
+      items: [
+        "integrations/mcp",
+        "integrations/siem-writeback",
+        "integrations/misp-push",
+        "integrations/netapi-threat-feed",
+        "integrations/github-action",
+      ],
     },
     {
       type: "category",

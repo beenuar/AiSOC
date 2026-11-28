@@ -32,6 +32,7 @@ from app.api.actor_attribution import router as actor_attribution_router
 from app.api.indicators import router as indicators_router
 from app.clients.cisa_kev import CisaKevClient
 from app.clients.misp import MispClient
+from app.clients.netapi import NetApiClient
 from app.clients.opencti import OpenCtiClient
 from app.clients.otx import OtxClient
 from app.clients.taxii import TaxiiClient
@@ -40,6 +41,7 @@ from app.core.kafka_security import kafka_client_kwargs
 from app.feeds.handlers import (
     handle_cisa_kev_feed,
     handle_misp_feed,
+    handle_netapi_feed,
     handle_opencti_feed,
     handle_otx_feed,
     handle_taxii_feed,
@@ -219,6 +221,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     kev_client = CisaKevClient()
 
+    netapi_client = (
+        NetApiClient(
+            ips_url=settings.NETAPI_IPS_URL,
+            domains_url=settings.NETAPI_DOMAINS_URL,
+        )
+        if settings.NETAPI_ENABLED
+        else None
+    )
+
     # ── Scheduler ─────────────────────────────────────────────────────────────
     scheduler = FeedScheduler(pipeline)
 
@@ -276,6 +287,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             feed_name="cisa-kev",
             handler=partial(handle_cisa_kev_feed, client=kev_client, pipeline=pipeline),
             interval_seconds=settings.CISA_KEV_POLL_INTERVAL,
+        )
+
+    # NetAPI (opt-in, no key required) — the published lists are on a public
+    # host, so an air-gapped deployment must mirror them internally and
+    # allowlist the mirror, exactly as for CISA KEV. The client enforces the
+    # same policy again at request time.
+    if netapi_client and _airgap_check_feed_url("netapi", settings.NETAPI_IPS_URL):
+        scheduler.register(
+            feed_name="netapi",
+            handler=partial(handle_netapi_feed, client=netapi_client, pipeline=pipeline),
+            interval_seconds=settings.NETAPI_POLL_INTERVAL,
         )
 
     scheduler.start()
