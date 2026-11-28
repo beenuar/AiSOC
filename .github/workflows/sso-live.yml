@@ -183,12 +183,21 @@ jobs:
       # needs the `start-dev` argument and a service container has no way
       # to supply one. Digest-pinned, resolved from quay's own tag API at
       # the time this file was written.
+      #
+      # Keycloak publishes the same manifests to quay and to Docker Hub —
+      # `26.8` resolves to one index digest on both — so the pinned digest
+      # names one object that either registry can serve. The shared helper
+      # tries both rather than letting one of them red the build.
       - name: Start Keycloak
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            docker.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc)"
           docker run -d --name keycloak -p 8080:8080 \
             -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            "$image" \
             start-dev
           for _ in $(seq 1 60); do
             curl -sf http://localhost:8080/realms/master >/dev/null && exit 0
@@ -290,13 +299,18 @@ jobs:
       # `docker run`, not a `services:` container: Keycloak's entrypoint
       # needs the `start-dev` argument and a service container has no way
       # to supply one. Same digest as the OIDC job above, so the two
-      # cannot drift onto different providers.
+      # cannot drift onto different providers, and the same pair of
+      # registries behind the shared retry helper.
       - name: Start Keycloak
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            docker.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc)"
           docker run -d --name keycloak -p 8080:8080 \
             -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
             -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
-            quay.io/keycloak/keycloak:26.8@sha256:b0f60d489d51c5d113390bdf5461d4c06e6051be026c05549f2e1e10ec352bcc \
+            "$image" \
             start-dev
           for _ in $(seq 1 60); do
             curl -sf http://127.0.0.1:8080/realms/master >/dev/null && exit 0

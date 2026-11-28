@@ -80,16 +80,25 @@ jobs:
 
       - name: Start ClickHouse
         run: |
+          set -euo pipefail
+          # Docker Hub is the only registry ClickHouse publishes this to, so
+          # the shared helper buys the retries rather than a mirror.
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/clickhouse/clickhouse-server:24.3-alpine)"
           docker run -d --name rh-clickhouse -p 9000:9000 -p 8123:8123 \
             -e CLICKHOUSE_SKIP_USER_SETUP=1 \
-            clickhouse/clickhouse-server:24.3-alpine
+            "$image"
 
       # Redpanda rather than Kafka, matching `isolation-live.yml`: same
       # Kafka API, one container, no ZooKeeper.
       - name: Start Redpanda (Kafka API)
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/redpandadata/redpanda:v24.2.7 \
+            docker.redpanda.com/redpandadata/redpanda:v24.2.7)"
           docker run -d --name rh-redpanda -p 9092:9092 \
-            redpandadata/redpanda:v24.2.7 \
+            "$image" \
             redpanda start --mode dev-container --smp 1 \
             --kafka-addr PLAINTEXT://0.0.0.0:9092 \
             --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092

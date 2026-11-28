@@ -262,7 +262,13 @@ jobs:
           cleanup() { [ -n "$cid" ] && docker rm -f "$cid" >/dev/null 2>&1 || true; }
           trap cleanup EXIT
 
-          docker pull --quiet "${{ matrix.image }}"
+          # Through the shared retry helper rather than a bare pull: the
+          # distro bases come from whichever registry the matrix names, and a
+          # transient denial there says nothing about the installer. No
+          # mirror is passed because the mirror differs per leg (six of these
+          # are Docker Official Images, `opensuse/leap` is not), so this buys
+          # the retries only.
+          "${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" "${{ matrix.image }}" >/dev/null
           # Outer shell is POSIX `sh` (not `bash`) on purpose — the alpine
           # base image doesn't ship bash, so `bash -lc '...'` would fail
           # at container-init *before* the bootstrap step even runs (the
@@ -441,9 +447,13 @@ jobs:
           # silently turns "I refused to delete this" into "all clean!"
           # for any CI/scripted caller.
           set -e
+          # Ubuntu is a Docker Official Image, so ECR Public mirrors it.
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/library/ubuntu:24.04 \
+            public.ecr.aws/docker/library/ubuntu:24.04)"
           docker run --rm \
             -v "$PWD:/aisoc-src:ro" \
-            ubuntu:24.04 \
+            "$image" \
             bash -lc '
               set -e
               apt-get update >/dev/null

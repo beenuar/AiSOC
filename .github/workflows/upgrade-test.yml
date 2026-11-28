@@ -97,6 +97,18 @@ jobs:
       - name: Install a psql client
         run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
 
+      # Three steps below run this image. Pull it once, through the shared
+      # retry helper, so a transient GHCR denial costs a retry rather than a
+      # required check — the three `docker run`s then hit the local cache.
+      # GHCR is the only registry that carries it, so there is no mirror to
+      # fall back to; the retries are the whole benefit here.
+      - name: Pull the released image the upgrade starts from
+        env:
+          IMAGE: ghcr.io/beenuar/aisoc-core-api:${{ steps.from.outputs.version }}
+        run: |
+          set -euo pipefail
+          "${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" "$IMAGE" >/dev/null
+
       # `check_runtime_db_role.py --dsn` connects with asyncpg. Without it the
       # check refuses rather than reporting a pass it did not earn, which is
       # the right behaviour and is how this was found — so install it here
@@ -357,6 +369,10 @@ jobs:
           IMAGE: ghcr.io/beenuar/aisoc-core-api:${{ matrix.from_version }}
         run: |
           set -euo pipefail
+          # GHCR is the only registry carrying this image, so the shared
+          # helper buys retries rather than a mirror — enough to ride out the
+          # transient denials that have reddened `main`.
+          "${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" "$IMAGE" >/dev/null
           # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
           docker run --rm --network host \
             -e DATABASE_MIGRATION_URL='postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc' \

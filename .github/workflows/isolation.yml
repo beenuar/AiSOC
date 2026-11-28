@@ -334,7 +334,13 @@ jobs:
 
       - name: Start Redis for the two-tenant route replay
         run: |
-          docker run -d --name route-iso-redis -p 6379:6379 redis:7-alpine
+          set -euo pipefail
+          # Redis is a Docker Official Image, so ECR Public mirrors it. Same
+          # retry loop `.github/actions/start-postgres` uses.
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/library/redis:7-alpine \
+            public.ecr.aws/docker/library/redis:7-alpine)"
+          docker run -d --name route-iso-redis -p 6379:6379 "$image"
           for _ in $(seq 1 30); do
             if docker exec route-iso-redis redis-cli PING 2>/dev/null | grep -q PONG; then
               echo "redis up"; exit 0
