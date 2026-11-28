@@ -346,7 +346,7 @@ class TestFailureIsNotSilence:
 class TestDatasetSelection:
     async def test_domains_default_to_the_short_list(self):
         # The default is the short list; see the measured justification in
-        # docs/threat-intel/netapi.md. The full list stays available by URL.
+        # apps/docs/docs/integrations/netapi-threat-feed.md. The full list stays available by URL.
         client = NetApiClient()
         assert client.dataset("domains").url.endswith("netapi-compromised-domains-short.txt")
 

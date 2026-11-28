@@ -78,7 +78,7 @@ class Settings(BaseSettings):
     # first poll of the default datasets embeds ~169k indicators and grows the
     # Qdrant IOC collection by roughly a gigabyte. Both are one-time costs an
     # operator should opt into rather than inherit from an upgrade. The
-    # figures and the reasoning are in apps/docs/docs/threat-intel/netapi.md.
+    # figures and the reasoning are in apps/docs/docs/integrations/netapi-threat-feed.md.
     NETAPI_ENABLED: bool = False
     NETAPI_IPS_URL: str = "https://netapi.com/api2/netapi-compromised-ips.txt"
     # The short domain list is the default: it is the full list minus the

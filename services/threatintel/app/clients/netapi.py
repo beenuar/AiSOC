@@ -60,7 +60,7 @@ IPS_URL = "https://netapi.com/api2/netapi-compromised-ips.txt"
 DOMAINS_FULL_URL = "https://netapi.com/api2/netapi-compromised-domains.txt"
 
 #: The same list with the sinkholed domains removed. This is the default —
-#: see ``apps/docs/docs/threat-intel/netapi.md`` for the measurements behind
+#: see ``apps/docs/docs/integrations/netapi-threat-feed.md`` for the measurements behind
 #: that choice. The full list stays available by setting ``NETAPI_DOMAINS_URL``.
 DOMAINS_SHORT_URL = "https://netapi.com/api2/netapi-compromised-domains-short.txt"
 
