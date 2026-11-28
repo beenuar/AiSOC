@@ -52,6 +52,7 @@ func main() {
 		GreyNoiseAPIKey:        cfg.GreyNoiseAPIKey,
 		ShodanAPIKey:           cfg.ShodanAPIKey,
 		IPInfoAPIKey:           cfg.IPInfoAPIKey,
+		VPNDetectionAPIKey:     cfg.VPNDetectionAPIKey,
 		URLScanAPIKey:          cfg.URLScanAPIKey,
 		CybleAPIKey:            cfg.CybleAPIKey,
 		CybleBaseURL:           cfg.CybleBaseURL,
@@ -82,6 +83,7 @@ func main() {
 		Bool("greynoise", cfg.GreyNoiseAPIKey != "").
 		Bool("shodan", cfg.ShodanAPIKey != "").
 		Bool("ipinfo", cfg.IPInfoAPIKey != "").
+		Bool("vpndetection", cfg.VPNDetectionAPIKey != "").
 		Bool("urlscan", cfg.URLScanAPIKey != "").
 		Bool("cyble", cfg.CybleAPIKey != "").
 		Bool("recorded_future", cfg.RecordedFutureAPIKey != "").
