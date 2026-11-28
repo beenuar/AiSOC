@@ -131,6 +131,18 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "SPLUNK_VERIFY_SSL": "a boolean, and the secure default",
     "OPENCTI_VERIFY_SSL": "a boolean, and the secure default",
     "OPENCTI_POLL_INTERVAL": "a duration in seconds, matching the other feed poll intervals",
+    "NETAPI_ENABLED": (
+        "a boolean, and off is the correct value to ship: a first poll embeds ~169k "
+        "indicators and adds roughly a gigabyte of vectors, which is a one-time cost an "
+        "operator should opt into rather than inherit from an upgrade"
+    ),
+    "NETAPI_IPS_URL": "the published URL of the keyless list; there is no internal mirror to default to",
+    "NETAPI_DOMAINS_URL": (
+        "the published URL of the short domain list, which is the full list minus the "
+        "sinkholed domains at about half the ingest cost and half the storage; the full "
+        "list is the documented override"
+    ),
+    "NETAPI_POLL_INTERVAL": "a duration in seconds; hourly is cheap because an unchanged list answers 304 with no body",
     "AWS_REGION": "a region",
 }
 
