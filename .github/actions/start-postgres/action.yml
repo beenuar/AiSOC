@@ -49,37 +49,14 @@ runs:
           exit 1
         fi
 
-        ecr="public.ecr.aws/docker/library/postgres:${POSTGRES_TAG}"
-        hub="docker.io/library/postgres:${POSTGRES_TAG}"
-
-        # Spread first attempts across both mirrors instead of sending every
-        # concurrent job to the same anonymous quota. Each round still tries
-        # both, so either registry may be unavailable without taking out CI.
-        if (( ${GITHUB_RUN_ID:-0} % 2 )); then
-          candidates=("$ecr" "$hub")
-        else
-          candidates=("$hub" "$ecr")
-        fi
-
-        image=""
-        for round in 1 2 3; do
-          for candidate in "${candidates[@]}"; do
-            echo "Pulling $candidate (round $round/3; 60-second limit)"
-            # A registry that accepts the connection but stops responding must
-            # not prevent the alternate registry from being attempted.
-            if timeout --kill-after=10s 60s docker pull "$candidate"; then
-              image="$candidate"
-              break 2
-            fi
-            echo "::warning::Could not pull $candidate; trying the other official mirror"
-          done
-          sleep $((round * 5))
-        done
-
-        if [[ -z "$image" ]]; then
-          echo "::error::PostgreSQL could not be pulled from ECR Public or Docker Hub"
-          exit 1
-        fi
+        # The retry, rotation and mirror-fallback loop this action used to
+        # carry inline now lives in scripts/ci/pull_image.sh, so that every
+        # step standing up a container shares one implementation rather than
+        # each growing its own. It exits non-zero, naming both references, if
+        # neither registry answers.
+        image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+          "public.ecr.aws/docker/library/postgres:${POSTGRES_TAG}" \
+          "docker.io/library/postgres:${POSTGRES_TAG}")"
 
         docker rm -f aisoc-ci-postgres >/dev/null 2>&1 || true
         docker run --detach --name aisoc-ci-postgres \

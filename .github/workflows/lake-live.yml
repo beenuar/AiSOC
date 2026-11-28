@@ -60,9 +60,14 @@ jobs:
 
       - name: Start ClickHouse
         run: |
+          set -euo pipefail
+          # Docker Hub is the only registry ClickHouse publishes this to, so
+          # the shared helper buys the retries rather than a mirror.
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/clickhouse/clickhouse-server:24.3-alpine)"
           docker run -d --name lake-clickhouse -p 9000:9000 -p 8123:8123 \
             -e CLICKHOUSE_SKIP_USER_SETUP=1 \
-            clickhouse/clickhouse-server:24.3-alpine
+            "$image"
 
       # The service's own lockfile, not a hand-curated pip list.
       #

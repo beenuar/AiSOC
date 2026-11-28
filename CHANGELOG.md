@@ -35,6 +35,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A registry's transient denial could take down the build, because only one
+  of CI's image pulls was hardened against it.** `.github/actions/start-postgres`
+  has pulled through a retry-and-mirror-fallback loop for a long time — three
+  rounds, 60 seconds an attempt, ECR Public and Docker Hub in rotation — and
+  on 2026-11-26 and again on 2026-11-28 it earned that: ECR Public answered
+  `Data limit exceeded` during the migrations job on `main`, postgres rode it
+  out, and the LocalStack pull a few steps later, a bare `docker run`, failed
+  the job. The loop was right; it was just not reachable from anywhere else.
+  It now lives in `scripts/ci/pull_image.sh` with the PostgreSQL action as one
+  of its callers, so there is **one** implementation rather than a second one
+  growing beside it, and every workflow step that starts a container from a
+  registry goes through it: the archive tier's LocalStack and ClickHouse, the
+  disaster-recovery S3 gateway, all four cross-store isolation stores, both
+  Keycloak jobs, the graph, lake and retro-hunt stores, the two-tenant Redis
+  replay, the released images both upgrade jobs start from, and the
+  installer's distro bases. Four of those sit in required checks.
+  **A mirror is named only where one was confirmed to exist.** Redis, Neo4j
+  and Ubuntu are Docker Official Images with an ECR Public mirror; LocalStack
+  publishes to both ECR Public and Docker Hub; Redpanda to Docker Hub and its
+  own registry; Keycloak's `26.8` resolves to one index digest on both quay
+  and Docker Hub, so the pinned digest names a single object either can
+  serve. ClickHouse, versitygw and our own GHCR images are carried by exactly
+  one registry each and are passed alone — they get the retries and the
+  comments say so, rather than inventing a fallback that would 404.
+  The helper still fails loudly: after every reference in every round it
+  exits non-zero naming all of them, so a genuinely missing image is as
+  obvious as it was. `tests/test_pull_image_helper.py` drives the real script
+  against a stub registry to pin the attempt counts, the fallback, the
+  rotation, the stdout contract every caller depends on, and that failure.
+  The devcontainer cold-start pull is deliberately left bare: that step times
+  the pull against a published KPI budget, and a retry inside the measurement
+  would report a number that is not the thing being measured.
+
 - **Two commercial enrichment providers wrote their API key into any log line
   that printed a connection failure.** Anomali ThreatStream and DomainTools
   Iris both carry credentials in the query string, and Go's `*url.Error`

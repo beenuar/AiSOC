@@ -1212,20 +1212,28 @@ jobs:
         run: |
           set -euo pipefail
           docker network create archive-net || true
-          # MinIO's image lives on quay with a hub mirror, and BOTH registries
-          # have answered transient denials on hosted runners (quay a 401 on
-          # the manifest HEAD, hub a rate-limit shaped "repository does not
-          # exist"). Try each, three times, before concluding anything.
-          # The S3 store is LocalStack from AWS's own public ECR: MinIO's
+          # The S3 store is LocalStack, which stands in for MinIO: MinIO's
           # public images vanished from quay (401) and hub (not-found) in the
-          # same week, and public.ecr.aws is the registry hosted runners pull
-          # without rate limits — the same reasoning the postgres steps use.
+          # same week. It was pulled from AWS's public ECR alone on the
+          # reasoning that hosted runners reach that registry without rate
+          # limits — which is not true. ECR Public answered "Data limit
+          # exceeded" here and reddened `main` twice in two days, while the
+          # postgres pull in this same job survived the identical error
+          # because it goes through the retry-and-fallback helper. So both of
+          # LocalStack's registries are named and both pulls go through that
+          # helper. ClickHouse publishes to Docker Hub only — it gets the
+          # retries, with nowhere to fall back to.
+          s3_image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            public.ecr.aws/localstack/localstack:3 \
+            docker.io/localstack/localstack:3)"
+          ch_image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/clickhouse/clickhouse-server:23.8)"
           docker run -d --name archive-s3 --network archive-net -p 59000:4566 \
             -e SERVICES=s3 -e EAGER_SERVICE_LOADING=1 \
-            public.ecr.aws/localstack/localstack:3
+            "$s3_image"
           docker run -d --name archive-ch --network archive-net -p 59124:9000 \
             -e CLICKHOUSE_USER=aisoc -e CLICKHOUSE_PASSWORD=clickhouse_ci_secret -e CLICKHOUSE_DB=aisoc \
-            clickhouse/clickhouse-server:23.8
+            "$ch_image"
           for i in $(seq 1 30); do
             docker exec archive-ch clickhouse-client --user aisoc --password clickhouse_ci_secret -q 'SELECT 1' >/dev/null 2>&1 && break
             sleep 2
@@ -1826,10 +1834,16 @@ jobs:
           # The posix backend chdirs into its root, so the directory has to
           # exist before the server starts; a named volume creates it.
           docker volume create aisoc-dr-s3 >/dev/null
+          # No second coordinate to fall back to — versitygw is published to
+          # GHCR and nowhere else — so this buys the retries only. A required
+          # check should not lose a disaster-recovery rehearsal to one
+          # registry hiccup.
+          s3_image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499)"
           docker run -d --name s3 -p 9000:7070 -v aisoc-dr-s3:/data \
             -e ROOT_ACCESS_KEY="${AWS_ACCESS_KEY_ID}" \
             -e ROOT_SECRET_KEY="${AWS_SECRET_ACCESS_KEY}" \
-            ghcr.io/versity/versitygw@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 \
+            "$s3_image" \
             --port 0.0.0.0:7070 posix /data
 
       # `docker run -d` succeeding only means the container was created. If the

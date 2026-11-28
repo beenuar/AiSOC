@@ -116,27 +116,53 @@ jobs:
 
       # Single-container stores run as `services:`-style `docker run` so we can
       # pass the commands the images need (Redpanda especially). Same pattern as
-      # integration.yml's MinIO step.
+      # integration.yml's archive-tier step.
+      #
+      # Every pull goes through scripts/ci/pull_image.sh, the loop
+      # `.github/actions/start-postgres` uses: three rounds, 60 seconds an
+      # attempt, rotating across the registries that carry the image. This is
+      # a required check and a transient registry denial on any one of four
+      # images would otherwise block every open pull request. Redis and Neo4j
+      # are Docker Official Images, so AWS's ECR Public mirror carries them;
+      # Redpanda publishes to its own registry as well as Docker Hub;
+      # ClickHouse publishes to Docker Hub alone, so it gets the retries with
+      # nowhere to fall back to.
       - name: Start Redis
-        run: docker run -d --name iso-redis -p 6379:6379 redis:7-alpine
+        run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/library/redis:7-alpine \
+            public.ecr.aws/docker/library/redis:7-alpine)"
+          docker run -d --name iso-redis -p 6379:6379 "$image"
 
       - name: Start Neo4j
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/library/neo4j:5.15-community \
+            public.ecr.aws/docker/library/neo4j:5.15-community)"
           docker run -d --name iso-neo4j -p 7687:7687 \
             -e NEO4J_AUTH=neo4j/testpassword123 \
             -e NEO4J_dbms_security_auth__minimum__password__length=8 \
-            neo4j:5.15-community
+            "$image"
 
       - name: Start ClickHouse
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/clickhouse/clickhouse-server:23.8)"
           docker run -d --name iso-clickhouse -p 9000:9000 \
             --ulimit nofile=262144:262144 \
-            clickhouse/clickhouse-server:23.8
+            "$image"
 
       - name: Start Redpanda (Kafka API)
         run: |
+          set -euo pipefail
+          image="$("${GITHUB_WORKSPACE}/scripts/ci/pull_image.sh" \
+            docker.io/redpandadata/redpanda:v24.2.7 \
+            docker.redpanda.com/redpandadata/redpanda:v24.2.7)"
           docker run -d --name iso-redpanda -p 9092:9092 \
-            redpandadata/redpanda:v24.2.7 \
+            "$image" \
             redpanda start --mode dev-container --smp 1 \
             --kafka-addr PLAINTEXT://0.0.0.0:9092 \
             --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092
