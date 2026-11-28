@@ -58,10 +58,29 @@ every provider here, an empty key makes that provider a no-op.
 | Flashpoint                        | IP, domain, hash         | Bearer token         | `FLASHPOINT_API_KEY`                                  |
 | Intel 471                         | IP, domain, hash         | Basic (user + key)   | `INTEL471_USERNAME`, `INTEL471_API_KEY`               |
 | DomainTools Iris                  | Domain, IP               | Basic (user + key)   | `DOMAINTOOLS_USERNAME`, `DOMAINTOOLS_API_KEY`         |
-| RiskIQ PassiveTotal               | Domain, IP               | Basic (user + key)   | `RISKIQ_USERNAME`, `RISKIQ_API_KEY`                   |
 
 Configure only the providers you have access to. The orchestrator logs which
 providers are active at startup.
+
+### Retired providers
+
+**RiskIQ PassiveTotal** (`RISKIQ_USERNAME`, `RISKIQ_API_KEY`) was removed. The
+API it called no longer answers: RiskIQ was acquired by Microsoft, and
+`api.passivetotal.org` is now a CNAME to `www.riskiq.com` behind Azure Front
+Door, which presents a `*.azureedge.net` certificate. Every request failed the
+TLS handshake before the credentials were sent, so the provider had been
+contributing nothing but an error to each fan-out.
+
+Microsoft's named successor is Defender Threat Intelligence, reached through
+the Microsoft Graph `security/threatIntelligence` APIs. It is **not** a
+drop-in replacement — it authenticates with Entra ID OAuth2 and the
+`ThreatIntelligence.Read.All` permission rather than Basic auth, returns a
+different schema, and requires a Defender XDR or Sentinel licence. AiSOC does
+not implement it today; that remains an open gap rather than a quiet
+substitution.
+
+If either `RISKIQ_*` variable is still set, the service logs a warning at
+startup naming the retirement instead of ignoring it.
 
 ---
 

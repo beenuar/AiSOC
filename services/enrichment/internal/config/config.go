@@ -40,8 +40,6 @@ type Config struct {
 	Intel471APIKey         string
 	DomainToolsUsername    string
 	DomainToolsAPIKey      string
-	RiskIQUsername         string
-	RiskIQAPIKey           string
 	CrowdstrikeIntelID     string
 	CrowdstrikeIntelSecret string
 
@@ -89,8 +87,6 @@ func Load() *Config {
 		Intel471APIKey:         getEnv("INTEL471_API_KEY", ""),
 		DomainToolsUsername:    getEnv("DOMAINTOOLS_USERNAME", ""),
 		DomainToolsAPIKey:      getEnv("DOMAINTOOLS_API_KEY", ""),
-		RiskIQUsername:         getEnv("RISKIQ_USERNAME", ""),
-		RiskIQAPIKey:           getEnv("RISKIQ_API_KEY", ""),
 		CrowdstrikeIntelID:     getEnv("CROWDSTRIKE_INTEL_CLIENT_ID", ""),
 		CrowdstrikeIntelSecret: getEnv("CROWDSTRIKE_INTEL_CLIENT_SECRET", ""),
 		ThreatIntelURL:         getEnv("THREATINTEL_SERVICE_URL", ""),

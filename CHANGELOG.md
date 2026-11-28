@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **The RiskIQ PassiveTotal enrichment provider is gone, because the API it
+  called cannot answer and has not been able to for some time.** RiskIQ was
+  acquired by Microsoft and folded into Defender Threat Intelligence;
+  `api.passivetotal.org` is now a CNAME to `www.riskiq.com` behind Azure
+  Front Door, which presents a `*.azureedge.net` certificate, so every
+  request died in the TLS handshake **before the Basic credentials were
+  sent** — `tls: failed to verify certificate: x509: certificate is valid for
+  *.azureedge.net, not api.passivetotal.org`. A deployment with
+  `RISKIQ_USERNAME` and `RISKIQ_API_KEY` set was paying a fan-out slot and a
+  timeout per IOC to collect an error, while the README, `.env.example` and
+  the startup provider log all advertised a working integration.
+  **Removal is the honest outcome, not a URL swap.** Microsoft's named
+  successor is the Microsoft Graph `security/threatIntelligence` APIs, which
+  authenticate with Entra ID OAuth2 and `ThreatIntelligence.Read.All` instead
+  of Basic auth, return a different schema and need a Defender XDR or
+  Sentinel licence — a different integration, recorded as an open gap rather
+  than written blind against an API nobody here can exercise.
+  **The removal announces itself**: `internal/config.RetiredProviders` keeps
+  the record, and a service started with either variable still set logs a
+  warning naming the retirement and the successor, so the change cannot turn
+  a loud per-request failure into an absence that reads like a clean IOC. A
+  test walks the service's shipped Go source and fails if anything builds a
+  URL against a retired host again.
+
+### Fixed
+
+- **Two commercial enrichment providers wrote their API key into any log line
+  that printed a connection failure.** Anomali ThreatStream and DomainTools
+  Iris both carry credentials in the query string, and Go's `*url.Error`
+  stringifies the URL it failed on in full, so a single refused connection
+  produced `anomali request failed: Get ".../intelligence/?api_key=<the real
+  key>&...": dial tcp ...`. Both error paths now blank the whole query before
+  wrapping — the whole string rather than the named parameters, so a
+  parameter added later cannot quietly become the next leak — matching the
+  guard Shodan already had. Each is pinned by a regression test asserting a
+  transport error never carries the key. Found while validating the RiskIQ
+  report; no evidence either key was actually exposed anywhere, but the path
+  was open.
+
 ### Added
 
 - **The matcher traverses a dotted field path, so Sigma rules naming nested
