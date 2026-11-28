@@ -236,6 +236,13 @@ var connectorOCSFClass = map[string]connectorClass{
 	// incidents. Policy updates, scans and installs carry no severity and
 	// are dropped in the connector, so what reaches ingest is a finding.
 	"cisco_secure_endpoint": {classUID: classSecurityFinding},
+	// cisco_meraki is network-shaped and a finding for the reason extrahop
+	// is: it reads the MX appliance's security events and returns only the
+	// rated ones — IDS alerts, carrying a Snort priority, and files AMP
+	// judged malicious. TLS decryption failures and files scanned clean are
+	// dropped in the connector, so what reaches ingest is a finding, and
+	// 4001 would archive every intrusion alert to the lake and raise none.
+	"cisco_meraki": {classUID: classSecurityFinding},
 	// huntress reads /v1/incident_reports: each record is an incident a
 	// Huntress SOC analyst confirmed and delivered — a foothold, a tripped
 	// ransomware canary, a malicious process — and undelivered reports are

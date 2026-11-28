@@ -1,5 +1,5 @@
 {
-  "count": 97,
+  "count": 98,
   "categories": {
     "ai": 1,
     "cloud": 18,
@@ -8,7 +8,7 @@
     "iam": 7,
     "mdm": 1,
     "ndr": 4,
-    "network": 7,
+    "network": 8,
     "saas": 22,
     "siem": 17,
     "vcs": 3
