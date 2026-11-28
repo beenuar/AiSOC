@@ -17,8 +17,8 @@ import (
 //   - open-source: VirusTotal community, AbuseIPDB, GreyNoise community
 //   - free / freemium: Shodan, IPinfo, VPNDetection, URLscan (placeholders unless keys present)
 //   - commercial: Cyble Vision, Recorded Future, Mandiant, Anomali, IBM X-Force,
-//     Flashpoint, Intel 471, DomainTools Iris, RiskIQ / Defender XATP,
-//     Crowdstrike Falcon Intelligence
+//     Flashpoint, Intel 471, DomainTools Iris, Crowdstrike Falcon
+//     Intelligence
 //
 // Every client gracefully no-ops (returns nil, nil) when not configured, so
 // the orchestrator can fan out without branching on capability checks.
@@ -43,7 +43,6 @@ type Enricher struct {
 	flashpointClient  *FlashpointClient
 	intel471Client    *Intel471Client
 	domainToolsClient *DomainToolsClient
-	riskIQClient      *RiskIQClient
 	csIntelClient     *CrowdstrikeIntelClient
 
 	// Internal: the platform's own threat-intel feed store (services/threatintel)
@@ -79,8 +78,6 @@ type Config struct {
 	Intel471APIKey         string
 	DomainToolsUsername    string
 	DomainToolsAPIKey      string
-	RiskIQUsername         string
-	RiskIQAPIKey           string
 	CrowdstrikeIntelID     string
 	CrowdstrikeIntelSecret string
 
@@ -118,7 +115,6 @@ func New(cfg Config) *Enricher {
 		flashpointClient:  NewFlashpointClient(cfg.FlashpointAPIKey),
 		intel471Client:    NewIntel471Client(cfg.Intel471Username, cfg.Intel471APIKey),
 		domainToolsClient: NewDomainToolsClient(cfg.DomainToolsUsername, cfg.DomainToolsAPIKey),
-		riskIQClient:      NewRiskIQClient(cfg.RiskIQUsername, cfg.RiskIQAPIKey),
 		csIntelClient:     NewCrowdstrikeIntelClient(cfg.CrowdstrikeIntelID, cfg.CrowdstrikeIntelSecret),
 		tiClient:          NewThreatIntelClient(cfg.ThreatIntelURL, cfg.ServiceToken),
 	}
@@ -238,7 +234,6 @@ func (e *Enricher) enrichIP(ctx context.Context, ip string) (*EnrichmentResult, 
 		{"xforce", func() (*EnrichmentResult, error) { return e.xforceClient.EnrichIP(ctx, ip) }},
 		{"flashpoint", func() (*EnrichmentResult, error) { return e.flashpointClient.EnrichIP(ctx, ip) }},
 		{"intel471", func() (*EnrichmentResult, error) { return e.intel471Client.EnrichIP(ctx, ip) }},
-		{"riskiq", func() (*EnrichmentResult, error) { return e.riskIQClient.EnrichIP(ctx, ip) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichIP(ctx, ip) }},
 		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichIP(ctx, ip) }},
 	}
@@ -257,7 +252,6 @@ func (e *Enricher) enrichDomain(ctx context.Context, domain string) (*Enrichment
 		{"flashpoint", func() (*EnrichmentResult, error) { return e.flashpointClient.EnrichDomain(ctx, domain) }},
 		{"intel471", func() (*EnrichmentResult, error) { return e.intel471Client.EnrichDomain(ctx, domain) }},
 		{"domaintools", func() (*EnrichmentResult, error) { return e.domainToolsClient.EnrichDomain(ctx, domain) }},
-		{"riskiq", func() (*EnrichmentResult, error) { return e.riskIQClient.EnrichDomain(ctx, domain) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichDomain(ctx, domain) }},
 		{"threatintel", func() (*EnrichmentResult, error) { return e.tiClient.EnrichDomain(ctx, domain) }},
 	}

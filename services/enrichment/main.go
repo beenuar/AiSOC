@@ -69,8 +69,6 @@ func main() {
 		Intel471APIKey:         cfg.Intel471APIKey,
 		DomainToolsUsername:    cfg.DomainToolsUsername,
 		DomainToolsAPIKey:      cfg.DomainToolsAPIKey,
-		RiskIQUsername:         cfg.RiskIQUsername,
-		RiskIQAPIKey:           cfg.RiskIQAPIKey,
 		CrowdstrikeIntelID:     cfg.CrowdstrikeIntelID,
 		CrowdstrikeIntelSecret: cfg.CrowdstrikeIntelSecret,
 		ThreatIntelURL:         cfg.ThreatIntelURL,
@@ -93,10 +91,15 @@ func main() {
 		Bool("flashpoint", cfg.FlashpointAPIKey != "").
 		Bool("intel471", cfg.Intel471APIKey != "").
 		Bool("domaintools", cfg.DomainToolsAPIKey != "").
-		Bool("riskiq", cfg.RiskIQAPIKey != "").
 		Bool("crowdstrike_intel", cfg.CrowdstrikeIntelID != "" && cfg.CrowdstrikeIntelSecret != "").
 		Bool("threatintel_feed_lookup", cfg.ThreatIntelURL != "" && cfg.ServiceToken != "").
 		Msg("Threat intelligence providers configured")
+
+	// A provider removed because its vendor API stopped answering must say so
+	// rather than ignore credentials an operator is still carrying.
+	for _, notice := range config.RetiredProviderNotices() {
+		log.Warn().Msg(notice)
+	}
 
 	// Initialize handler and server
 	// Depth plan wave 2, item 8.3. RATE_LIMIT_RPS and RATE_LIMIT_BURST were

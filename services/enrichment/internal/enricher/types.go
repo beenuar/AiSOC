@@ -73,7 +73,7 @@ type VulnerabilityRef struct {
 	Description string  `json:"description,omitempty"`
 }
 
-// BrandRisk surfaces brand-protection signals (Cyble, RiskIQ, DomainTools).
+// BrandRisk surfaces brand-protection signals (Cyble, DomainTools).
 type BrandRisk struct {
 	Score       int      `json:"score"` // 0-100
 	LookalikeOf string   `json:"lookalike_of,omitempty"`

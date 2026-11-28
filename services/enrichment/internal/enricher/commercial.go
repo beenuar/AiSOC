@@ -12,16 +12,19 @@
 //   - Flashpoint                      (Bearer token)
 //   - Intel 471                       (HTTP Basic: username:key)
 //   - DomainTools Iris                (api_username + api_key signed query)
-//   - RiskIQ / Defender External ATP  (HTTP Basic: username:key)
 //   - Crowdstrike Falcon Intelligence (OAuth2 client-credentials)
 //
 // For Cyble, Recorded Future, and Mandiant — see their dedicated files which
 // implement richer schemas (dark web, evidence rules, mscore + threat-rating).
+//
+// A RiskIQ PassiveTotal client used to live here. It was removed once the
+// vendor API stopped answering — see internal/config.RetiredProviders.
 package enricher
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -47,6 +50,23 @@ func clamp(v, lo, hi float64) float64 {
 		return hi
 	}
 	return v
+}
+
+// redactQuery strips the query string from a transport error before it is
+// wrapped. A *url.Error stringifies the URL it failed on, so for the providers
+// whose contract puts credentials in the query string — Anomali and
+// DomainTools here — the raw error carries the API key into any log line that
+// prints it. The whole query is replaced rather than individual keys so a
+// future parameter cannot quietly become the leak.
+func redactQuery(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		if u, perr := url.Parse(uerr.URL); perr == nil && u.RawQuery != "" {
+			u.RawQuery = "REDACTED"
+			uerr.URL = u.String()
+		}
+	}
+	return err
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -143,7 +163,7 @@ func (c *AnomaliClient) lookup(ctx context.Context, iocType IOCType, kind, value
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("anomali request failed: %w", err)
+		return nil, fmt.Errorf("anomali request failed: %w", redactQuery(err))
 	}
 	defer resp.Body.Close()
 
@@ -609,11 +629,17 @@ const (
 type DomainToolsClient struct {
 	username   string
 	apiKey     string
+	baseURL    string
 	httpClient *http.Client
 }
 
 func NewDomainToolsClient(username, apiKey string) *DomainToolsClient {
-	return &DomainToolsClient{username: username, apiKey: apiKey, httpClient: defaultHTTPClient()}
+	return &DomainToolsClient{
+		username:   username,
+		apiKey:     apiKey,
+		baseURL:    domainToolsBaseURL,
+		httpClient: defaultHTTPClient(),
+	}
 }
 
 func (c *DomainToolsClient) configured() bool {
@@ -650,7 +676,7 @@ func (c *DomainToolsClient) EnrichDomain(ctx context.Context, domain string) (*E
 		"api_key":      {c.apiKey},
 		"domain":       {domain},
 	}
-	endpoint := fmt.Sprintf("%s/iris-investigate/?%s", domainToolsBaseURL, q.Encode())
+	endpoint := fmt.Sprintf("%s/iris-investigate/?%s", c.baseURL, q.Encode())
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
@@ -660,7 +686,7 @@ func (c *DomainToolsClient) EnrichDomain(ctx context.Context, domain string) (*E
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("domaintools request failed: %w", err)
+		return nil, fmt.Errorf("domaintools request failed: %w", redactQuery(err))
 	}
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(resp.Body)
@@ -701,94 +727,6 @@ func (c *DomainToolsClient) EnrichDomain(ctx context.Context, domain string) (*E
 	}
 	if res.Registrar.Value != "" {
 		r.Whois = map[string]string{"registrar": res.Registrar.Value}
-	}
-	return r, nil
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// RiskIQ / Microsoft Defender External ATP (PassiveTotal)
-// ──────────────────────────────────────────────────────────────────────────────
-
-const (
-	riskIQBaseURL    = "https://api.passivetotal.org/v2"
-	riskIQSourceName = "riskiq-passivetotal"
-)
-
-// RiskIQClient queries the RiskIQ PassiveTotal / Defender External ATP API.
-type RiskIQClient struct {
-	username   string
-	apiKey     string
-	httpClient *http.Client
-}
-
-func NewRiskIQClient(username, apiKey string) *RiskIQClient {
-	return &RiskIQClient{username: username, apiKey: apiKey, httpClient: defaultHTTPClient()}
-}
-
-func (c *RiskIQClient) configured() bool {
-	return c != nil && c.username != "" && c.apiKey != ""
-}
-
-type riskIQReputation struct {
-	Score          int    `json:"score"` // 0-100
-	Classification string `json:"classification"`
-	Rules          []struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Severity    int    `json:"severity"`
-	} `json:"rules"`
-}
-
-func (c *RiskIQClient) EnrichIP(ctx context.Context, ip string) (*EnrichmentResult, error) {
-	if !c.configured() {
-		return nil, nil
-	}
-	return c.reputation(ctx, IOCTypeIP, ip)
-}
-
-func (c *RiskIQClient) EnrichDomain(ctx context.Context, domain string) (*EnrichmentResult, error) {
-	if !c.configured() {
-		return nil, nil
-	}
-	return c.reputation(ctx, IOCTypeDomain, domain)
-}
-
-func (c *RiskIQClient) reputation(ctx context.Context, iocType IOCType, value string) (*EnrichmentResult, error) {
-	endpoint := fmt.Sprintf("%s/reputation?query=%s", riskIQBaseURL, url.QueryEscape(value))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
-	if err != nil {
-		return nil, err
-	}
-	req.SetBasicAuth(c.username, c.apiKey)
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("riskiq request failed: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode == http.StatusNotFound {
-		return nil, nil
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("riskiq HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var rep riskIQReputation
-	if err := json.Unmarshal(body, &rep); err != nil {
-		return nil, fmt.Errorf("riskiq parse error: %w", err)
-	}
-	r := &EnrichmentResult{
-		IOCType:        iocType,
-		Value:          value,
-		RiskScore:      float64(rep.Score),
-		Confidence:     float64(rep.Score),
-		ThreatCategory: rep.Classification,
-		Sources:        []EnrichmentSource{{Name: riskIQSourceName, Tier: "commercial", Timestamp: time.Now()}},
-		EnrichedAt:     time.Now(),
-	}
-	for _, rule := range rep.Rules {
-		r.Tags = append(r.Tags, "riskiq:"+rule.Name)
 	}
 	return r, nil
 }
