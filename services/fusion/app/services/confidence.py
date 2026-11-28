@@ -182,7 +182,7 @@ def _ti_contribution(enrichments: dict | None) -> tuple[float, str]:
         return -0.3, "no TI match"
     hits = 0
     sources: list[str] = []
-    for source in ("misp", "otx", "taxii", "kev", "virustotal"):
+    for source in ("misp", "otx", "taxii", "kev", "netapi", "virustotal"):
         match = enrichments.get(source)
         if isinstance(match, dict) and (match.get("hit") or match.get("matches")):
             hits += 1

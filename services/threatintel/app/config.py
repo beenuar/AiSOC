@@ -72,6 +72,21 @@ class Settings(BaseSettings):
     # CISA KEV
     CISA_KEV_URL: str = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
+    # NetAPI — keyless public IP and domain lists, CC BY 4.0.
+    #
+    # Off by default, and that is a measured choice rather than caution: a
+    # first poll of the default datasets embeds ~169k indicators and grows the
+    # Qdrant IOC collection by roughly a gigabyte. Both are one-time costs an
+    # operator should opt into rather than inherit from an upgrade. The
+    # figures and the reasoning are in apps/docs/docs/threat-intel/netapi.md.
+    NETAPI_ENABLED: bool = False
+    NETAPI_IPS_URL: str = "https://netapi.com/api2/netapi-compromised-ips.txt"
+    # The short domain list is the default: it is the full list minus the
+    # sinkholed domains, and it measured roughly half the ingest cost and half
+    # the storage of the full one. Point this at
+    # netapi-compromised-domains.txt for the full list.
+    NETAPI_DOMAINS_URL: str = "https://netapi.com/api2/netapi-compromised-domains-short.txt"
+
     # OpenCTI
     OPENCTI_URL: str = ""
     OPENCTI_TOKEN: str = ""
@@ -85,6 +100,11 @@ class Settings(BaseSettings):
     CISA_KEV_POLL_INTERVAL: int = 86400  # 24 h
     # Legacy alias
     CISA_POLL_INTERVAL: int = 86400
+    # The lists are rebuilt on the publisher's schedule, and an unchanged one
+    # costs a 304 with no body and no pipeline work, so polling hourly is
+    # cheap. See the client docstring for the measured conditional-request
+    # behaviour of each list.
+    NETAPI_POLL_INTERVAL: int = 3600  # 1 h
 
     # Air-gap egress policy (Tier 3.1).
     # When enabled, public threat-intel feeds (OTX, CISA KEV, MISP/TAXII/
